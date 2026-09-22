@@ -184,10 +184,14 @@ async def test_resolver_emits_a_durable_harness_with_its_brief() -> None:
             {
                 "description": "A citation-first research persona",
                 "artifactName": "citation-researcher",
+                "coordinator": {
+                    "brief": "Own the research conversation and synthesize specialist findings",
+                    "systemPrompt": "Answer with traceable evidence.",
+                },
                 "workers": [
                     {
                         "as": "researcher",
-                        "agent": "Raven",
+                        "agent": "Raven-Research",
                         "brief": "Find primary sources",
                         "systemPrompt": "Cite primary sources only.",
                     }
@@ -198,7 +202,7 @@ async def test_resolver_emits_a_durable_harness_with_its_brief() -> None:
 
     result = await PersonaPlaybookGenerator(provider, "stub").resolve(
         "Create a citation-first research digital persona",
-        ["Raven"],
+        ["Raven", "Raven-Research"],
         ["web_search"],
     )
 
@@ -206,10 +210,12 @@ async def test_resolver_emits_a_durable_harness_with_its_brief() -> None:
     assert result.artifact_name == "citation-researcher"
     assert not result.capture_workflow
     assert result.spec is not None
+    assert result.spec.coordinator is not None
+    assert result.spec.coordinator.brief.startswith("Own the research conversation")
     assert result.spec.delegate[0].brief == "Find primary sources"
     assert result.table and result.table.get("researcher").brief == "Find primary sources"
     instructions = provider.calls[0]["messages"][0]["content"]
-    assert "Workers are operating components of the persona" in instructions
+    assert "The coordinator is the main Raven identity" in instructions
     assert "Do not design a Workflow" in instructions
 
 

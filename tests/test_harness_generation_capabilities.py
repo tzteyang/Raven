@@ -157,9 +157,10 @@ def test_persona_generator_assembles_judge_rules_and_known_tools() -> None:
 
 
 def test_persona_generator_requires_object_workers_and_known_tools() -> None:
-    with pytest.raises(ValueError, match="workers must be a non-empty list"):
-        _persona_spec_from_args({"workers": []}, {"worker"})
-    with pytest.raises(ValueError, match="worker must be an object"):
+    coordinator_only, _ = _persona_spec_from_args({"coordinator": {"brief": "Handle it"}, "workers": []}, {"worker"})
+    assert coordinator_only.coordinator is not None
+    assert coordinator_only.delegate == []
+    with pytest.raises(ValueError, match="seat must be an object"):
         _persona_spec_from_args({"workers": ["worker"]}, {"worker"})
     with pytest.raises(ValueError, match="unknown tool"):
         _persona_spec_from_args(

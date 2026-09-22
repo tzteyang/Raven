@@ -627,6 +627,10 @@ class WiringMixin:
         marking that claims we looked when we did not.
         """
         self._session_bindings.pop(session_key, None)
+        # The Persona goes with the session for the same reason the binding
+        # does: a deleted session has nothing left to run as, and this is the
+        # one place that says a session is over.
+        self._session_personas.pop(session_key, None)
 
     def _forget_transport_verdicts(self) -> None:
         """Drop the capability verdicts a new provider may answer differently.
@@ -679,6 +683,31 @@ class WiringMixin:
         last one, and a resumable instance takes many turns on one session.
         """
         return self._session_charters.pop(session_key, None)
+
+    def adopt_session_persona(self, session_key: str, resolution: Any) -> None:
+        """Make this session run as the Persona that was just generated.
+
+        The generating turn itself does not run as it -- that turn saves the
+        artifact and reports it, and a coordinator whose ``intake`` gates on
+        trip dates would refuse to answer that. What is adopted here is read by
+        every *later* turn of the session, which is the experience the Persona
+        was written for.
+        """
+        charter = getattr(resolution, "coordinator_charter", None)
+        if charter is None:
+            self._session_personas.pop(session_key, None)
+            return
+        self._session_personas[session_key] = (charter, resolution.table)
+        logger.info(
+            "agent playbook: session adopted Persona {} ({} worker(s){})",
+            resolution.artifact_name or "?",
+            len(resolution.table.workers) if resolution.table else 0,
+            ", judge" if charter.code else "",
+        )
+
+    def session_persona(self, session_key: str) -> "tuple[Charter, Any] | None":
+        """The Persona this session runs as, or ``None`` for an ordinary one."""
+        return self._session_personas.get(session_key)
 
     async def _resolve_playbook_turn(self, req: Any, session_key: str, binding: Any):
         """Generate, persist and bind the Harness selected by this turn's mode."""

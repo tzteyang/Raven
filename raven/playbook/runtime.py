@@ -448,19 +448,28 @@ class PlaybookRuntime:
         cid = self._context.get("session_key") or ""
         key = (cid, name)
         execution_table = None
+        coordinator = None
         if isinstance(spec, UnifiedPlaybookSpec):
             if spec.harness is not None:
+                from raven.agent.subagent.charter import bind_charter_for_turn
                 from raven.agent.subagent.delegate import bind_delegate_for_turn
-                from raven.playbook.agent_generator import build_table
+                from raven.playbook.agent_generator import build_coordinator_charter, build_table
 
                 execution_table = build_table(spec.harness, {})
                 bind_delegate_for_turn(execution_table)
+                # The main seat is bound the same way and in the same call: a
+                # Persona whose workers activate while its own operating rules
+                # stay on disk is the half that reads as the feature working.
+                coordinator = build_coordinator_charter(spec.harness)
+                if coordinator is not None:
+                    bind_charter_for_turn(coordinator)
             executable = spec.as_legacy_workflow()
             if executable is None:
                 self._gap_rounds.pop(key, None)
+                seats = "Its coordinator and workers are" if coordinator is not None else "Its workers are"
                 return ExecutionPlan(
                     kind="guidance",
-                    reply=f"Loaded Harness-only playbook '{name}'. Its workers are active for this turn; continue using spawn or run_subagent_dag.",
+                    reply=f"Loaded Harness-only playbook '{name}'. {seats} active for this turn; continue using spawn or run_subagent_dag.",
                 )
             spec = executable
 

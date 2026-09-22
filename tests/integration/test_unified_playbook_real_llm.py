@@ -105,7 +105,7 @@ async def test_live_generators_keep_task_and_persona_contracts_separate(
         profiles,
     )
     assert persona.disposition == "artifact"
-    assert persona.spec is not None and persona.spec.delegate
+    assert persona.spec is not None and persona.spec.coordinator is not None
     assert persona.artifact_name
     assert not persona.capture_workflow
 
@@ -270,12 +270,15 @@ async def test_live_whole_turn_infers_a_travel_assistant_harness_from_user_needs
     saved = PlaybookStore(playbook_root).load(names[0])
     assert isinstance(saved, UnifiedPlaybookSpec)
     assert saved.harness is not None and saved.workflow is None
+    coordinator = saved.harness.coordinator
+    assert coordinator is not None and coordinator.playbook is not None
     workers = saved.harness.delegate
     assert workers
     assert {"Raven-Research", "Raven-Design", "Raven-OnCall"} <= {worker.name for worker in workers}
+    assert "Raven" not in {worker.name for worker in workers}
     assert any(worker.label != worker.name for worker in workers)
-    assert any(worker.playbook and worker.playbook.memory.functions.get("intake") for worker in workers)
-    assert any(
+    assert coordinator.playbook.memory.functions.get("intake")
+    assert (coordinator.playbook.action.checks and coordinator.playbook.action.checks.code) or any(
         worker.playbook and worker.playbook.action.checks and worker.playbook.action.checks.code for worker in workers
     )
     assert all("save the assistant" not in worker.brief.lower() for worker in workers)

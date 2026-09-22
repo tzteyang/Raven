@@ -483,10 +483,15 @@ def test_the_roster_and_the_tools_are_enums_not_prose() -> None:
 
 def test_persona_tool_exposes_rich_harness_fields_and_one_function_surface() -> None:
     schema = persona_tool(["Raven-Research"], ["web_search"])[0]["function"]["parameters"]
+    coordinator = schema["properties"]["coordinator"]["properties"]
     worker = schema["properties"]["workers"]["items"]["properties"]
 
+    assert {"brief", "systemPrompt", "stopWhen", "functions"} <= set(coordinator)
+    assert "agent" not in coordinator and "as" not in coordinator
+    assert "coordinator" in schema["required"]
     assert {"agent", "brief", "systemPrompt", "stopWhen", "functions"} <= set(worker)
     assert set(worker["functions"]["properties"]) == {"intake", "advise", "judge", "salvage"}
+    assert set(coordinator["functions"]["properties"]) == set(worker["functions"]["properties"])
     assert "code" not in worker
 
 

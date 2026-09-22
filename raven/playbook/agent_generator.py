@@ -23,6 +23,7 @@ from raven.playbook.agent_spec import AgentPlaybookSpec
 if TYPE_CHECKING:
     from collections.abc import Mapping
 
+    from raven.agent.subagent.charter import Charter
     from raven.playbook.agent_spec import SubPlaybook
 
 if TYPE_CHECKING:
@@ -50,6 +51,10 @@ class HarnessResolution:
     disposition: HarnessDisposition = "none"
     spec: AgentPlaybookSpec | None = None
     table: DelegateTable | None = None
+    coordinator_charter: "Charter | None" = None
+    """The main seat's charter, for the host to adopt. Carried beside ``table``
+    rather than inside it: the table resolves a dispatch label, and the
+    coordinator is not a label anything dispatches to."""
     selected_playbook: str | None = None
     artifact_name: str | None = None
     capture_workflow: bool = False
@@ -73,12 +78,17 @@ TASK_SYSTEM_PROMPT = (
 PERSONA_SYSTEM_PROMPT = (
     "Create a durable digital-person Harness. Call create_persona_playbook and emit no prose.\n\n"
     "Treat the user text as requirements for the persona's future capabilities, behavior, style, and constraints. "
-    "Workers are operating components of the persona, not temporary authors asked to design or save it. Write "
+    "The coordinator is the main Raven identity the user will converse with. Put cross-cutting behavior, input "
+    "gates, orchestration policy, and user-facing output rules on it. Workers are specialist delegates the "
+    "coordinator may dispatch, not peer main agents or temporary authors asked to design or save the persona. Write "
     "every brief, system prompt, stop condition, check, and function for future runtime behavior; remove creation-"
-    "time commands. Choose distinct specialist owners for materially different responsibilities, and never let a "
-    "generic agent absorb work a specialist explicitly owns. Do not design a Workflow or invent a DAG for the act "
+    "time commands. Choose distinct specialist owners for materially different responsibilities, and never create "
+    "a generic Raven worker merely to repeat the coordinator's job. Do not design a Workflow or invent a DAG for the act "
     "of creating the persona. Generate participant functions only for concrete long-lived runtime rules that "
-    "ordinary instructions cannot enforce, following the supplied contracts and participantFunctionSyntax exactly. "
+    "ordinary instructions cannot enforce. When requirements name inputs that must be present before work starts, "
+    "the coordinator must implement that gate with intake; stating it only in systemPrompt is insufficient. When a "
+    "hard boundary depends on tool-call arguments, the seat making the call must implement it with judge. Follow the "
+    "supplied contracts and participantFunctionSyntax exactly. "
     "Never use for/while statements, try/except, imports, append, or an unlisted call in generated functions."
 )
 
@@ -441,6 +451,37 @@ def persona_tool(
     reason: a name the host cannot resolve is worth refusing at the boundary
     rather than diagnosing after.
     """
+    seat_properties: dict[str, Any] = {
+        "brief": {
+            "type": "string",
+            "minLength": 1,
+            "description": "One line defining this seat's durable responsibility.",
+        },
+        "systemPrompt": {
+            "type": "string",
+            "description": "Durable persona instructions appended to this seat's existing identity. Omit when the brief is enough.",
+        },
+        "stopWhen": {"type": "string", "description": "Optional: what, once obtained, means this seat is done."},
+        "tools": {
+            "type": "array",
+            "items": {"type": "string", "enum": tool_names},
+            "description": "Optional: the tools this seat calls for. Guidance, not a permission.",
+        },
+        "checks": {
+            "type": "array",
+            "items": _RULE_SCHEMA,
+            "description": (
+                "Optional: rules judged before each of this seat's tool calls. A rule that "
+                "refuses replaces the call with its message, so the seat can try again correctly. "
+                "Write one only where the job has a boundary the brief alone cannot hold."
+            ),
+        },
+        "timeoutSeconds": {
+            "type": "integer",
+            "minimum": 1,
+            "description": "Optional: a tightening-only deadline for this seat, in seconds.",
+        },
+    }
     worker: dict[str, Any] = {
         "type": "object",
         "properties": {
@@ -454,45 +495,12 @@ def persona_tool(
                 "enum": agent_names,
                 "description": _roster_description(agent_names, agent_notes),
             },
-            "brief": {
-                "type": "string",
-                "minLength": 1,
-                "description": "One line on what this worker is for, read by the agent that dispatches it.",
-            },
-            "systemPrompt": {
-                "type": "string",
-                "description": "Durable persona instructions appended to the worker's existing identity. Omit when the brief is enough.",
-            },
-            "stopWhen": {"type": "string", "description": "Optional: what, once obtained, means this worker is done."},
-            "tools": {
-                "type": "array",
-                "items": {"type": "string", "enum": tool_names},
-                "description": "Optional: the tools this job calls for. Guidance, not a permission.",
-            },
-            "checks": {
-                "type": "array",
-                "items": _RULE_SCHEMA,
-                "description": (
-                    "Optional: rules judged before each of this worker's tool calls. A rule that "
-                    "refuses replaces the call with its message, so the worker can try again "
-                    "correctly. Write one only where the job has a boundary the brief alone "
-                    "cannot hold -- 'stay under this directory', 'read it before writing it'."
-                ),
-            },
-            "timeoutSeconds": {
-                "type": "integer",
-                "minimum": 1,
-                "description": (
-                    "Optional: a deadline for this worker, in seconds. Tightening only -- it "
-                    "cannot lengthen a limit an operator set. Give one only when the job is "
-                    "genuinely bounded; a long job is a long job."
-                ),
-            },
+            **seat_properties,
         },
         "required": ["as", "agent", "brief"],
         "additionalProperties": False,
     }
-    properties = worker["properties"]
+    properties = seat_properties
     for module, name, field in (
         ("memory", "systemPrompt", "systemPrompt"),
         ("memory", "stopWhen", "stopWhen"),
@@ -516,12 +524,17 @@ def persona_tool(
         if function_enabled(module, "participant", name)
     }
     if function_properties:
-        properties["functions"] = {
+        seat_properties["functions"] = {
             "type": "object",
             "properties": function_properties,
             "additionalProperties": False,
             "description": "Optional generated participant functions, keyed by their loop verb.",
         }
+    worker["properties"] = {
+        "as": worker["properties"]["as"],
+        "agent": worker["properties"]["agent"],
+        **seat_properties,
+    }
     description = {
         "type": "string",
         "minLength": 1,
@@ -563,15 +576,23 @@ def persona_tool(
                 "prompts, tools, functions, checks, and stop conditions; remove creation-time commands such "
                 "as save it, do not run now, or only plan later. A single named persona may still use several "
                 "workers when different offered specialists own materially different behavior. Use intake "
-                "for an enforceable missing-input gate, not merely to repeat requirements. This branch never "
-                "captures a Workflow."
+                "on the coordinator for an enforceable named missing-input gate; prose alone is insufficient. "
+                "Use judge on the calling seat for hard tool-argument boundaries. This branch never captures "
+                "a Workflow."
             ),
             {
                 "description": description,
                 "artifactName": artifact_name,
-                "workers": {"type": "array", "items": worker, "minItems": 1},
+                "coordinator": {
+                    "type": "object",
+                    "properties": seat_properties,
+                    "required": ["brief"],
+                    "additionalProperties": False,
+                    "description": "The main Raven identity that owns the conversation and dispatches delegates.",
+                },
+                "workers": {"type": "array", "items": worker},
             },
-            ["artifactName", "description", "workers"],
+            ["artifactName", "description", "coordinator", "workers"],
         ),
     ]
 
@@ -681,6 +702,15 @@ def build_table(spec: AgentPlaybookSpec, briefs: dict[str, str]) -> DelegateTabl
     return DelegateTable(workers=workers)
 
 
+def build_coordinator_charter(spec: AgentPlaybookSpec) -> "Charter | None":
+    """Turn a Persona's main seat into the Charter the host already scopes."""
+    if spec.coordinator is None:
+        return None
+    from raven.agent.subagent.charter import parse
+
+    return parse(build_payload(spec.coordinator.brief, spec.coordinator.playbook))
+
+
 def _short_description(value: Any) -> str:
     """Keep generated index prose readable when a provider misses maxLength."""
     text = " ".join(str(value or "").split())
@@ -746,19 +776,33 @@ def _persona_spec_from_args(
     available_tools: set[str] | None = None,
 ) -> tuple[AgentPlaybookSpec, dict[str, str]]:
     """Build a rich Persona Harness, or raise with what to repair."""
+    raw_coordinator = args.get("coordinator")
+    if raw_coordinator is None:
+        # Older callers emitted only workers. Preserve their payload while
+        # normalizing it into the new topology; the model-facing tool requires
+        # an explicit coordinator, so newly generated Personas never rely on
+        # this compatibility path.
+        raw_coordinator = {
+            "brief": _short_description(args.get("description"))
+            or "Own the user conversation and coordinate specialists."
+        }
+    if not isinstance(raw_coordinator, dict):
+        raise ValueError("coordinator must be an object")
     rows = args.get("workers")
-    if not isinstance(rows, list) or not rows:
-        raise ValueError("workers must be a non-empty list")
+    if not isinstance(rows, list):
+        raise ValueError("workers must be a list")
+    seats: list[tuple[str, dict[str, Any]]] = [("coordinator", raw_coordinator)]
+    seats.extend((str(index), row) for index, row in enumerate(rows, 1))
+    coordinator: dict[str, Any] | None = None
     delegate: list[dict[str, Any]] = []
     briefs: dict[str, str] = {}
     errors: list[str] = []
-    for index, row in enumerate(rows, 1):
+    for index, row in seats:
         if not isinstance(row, dict):
-            errors.append(f"{index}. a worker must be an object")
+            errors.append(f"{index}. a seat must be an object")
             continue
+        is_coordinator = index == "coordinator"
         allowed = {
-            "as",
-            "agent",
             "brief",
             "systemPrompt",
             "stopWhen",
@@ -767,20 +811,23 @@ def _persona_spec_from_args(
             "functions",
             "timeoutSeconds",
         }
+        if not is_coordinator:
+            allowed.update({"as", "agent"})
         unexpected = sorted(set(row) - allowed)
         if unexpected:
-            errors.append(f"{index}. Persona worker field(s) not allowed: {', '.join(unexpected)}")
+            kind = "coordinator" if is_coordinator else "worker"
+            errors.append(f"{index}. Persona {kind} field(s) not allowed: {', '.join(unexpected)}")
             continue
-        name = str(row.get("agent") or "")
-        if name not in roster:
+        name = str(row.get("agent") or "") if not is_coordinator else ""
+        if not is_coordinator and name not in roster:
             # Dropped rather than repaired: the roster was an enum, so a name
             # outside it is a shape the request could not express, and spending
             # a round on it teaches the model nothing it was not already told.
             logger.info("agent playbook: dropping worker {!r} -- not on the roster", name)
             continue
-        label = str(row.get("as") or "").strip()
+        label = str(row.get("as") or "").strip() if not is_coordinator else ""
         brief = str(row.get("brief") or "").strip()
-        if not label:
+        if not is_coordinator and not label:
             errors.append(f"{index}. as must be non-empty")
         if not brief:
             errors.append(f"{index}. brief must be non-empty")
@@ -868,11 +915,16 @@ def _persona_spec_from_args(
                 errors.append(f"{index}. timeoutSeconds must be a positive integer")
                 continue
             sub["timeoutSeconds"] = timeout
-        delegate.append({"as": label, "name": name, "brief": brief, "playbook": sub or None})
-        briefs[label] = brief
+        if is_coordinator:
+            if sub:
+                sub["role"] = "coordinator"
+            coordinator = {"brief": brief, "playbook": sub or None}
+        else:
+            delegate.append({"as": label, "name": name, "brief": brief, "playbook": sub or None})
+            briefs[label] = brief
     if errors:
         raise ValueError("; ".join(errors))
-    payload = {"delegate": delegate}
+    payload = {"coordinator": coordinator, "delegate": delegate}
     if args.get("description"):
         payload["description"] = _short_description(args["description"])
     return AgentPlaybookSpec.model_validate(payload), briefs
@@ -933,7 +985,7 @@ class _PlaybookGenerator:
         user_payload: dict[str, Any],
         tools: list[dict[str, Any]],
     ) -> HarnessResolution:
-        if not query.strip() or not agent_names:
+        if not query.strip() or (self.mode == "task" and not agent_names):
             return HarnessResolution()
         messages: list[dict[str, Any]] = [
             {"role": "system", "content": self.prompt},
@@ -974,6 +1026,7 @@ class _PlaybookGenerator:
                 artifact_name = slugify(str(args.get("artifactName") or description))
                 spec = spec.model_copy(update={"name": artifact_name, "description": description})
                 table = build_table(spec, briefs)
+                coordinator_charter = build_coordinator_charter(spec)
             except Exception as exc:  # noqa: BLE001 - the message is the repair prompt
                 logger.info("agent playbook: rejected {} Harness, repairing once ({})", self.mode, exc)
                 messages.append({"role": "user", "content": f"That Harness was rejected: {exc}\nEmit a corrected one."})
@@ -983,6 +1036,7 @@ class _PlaybookGenerator:
                 active=True,
                 spec=spec,
                 table=table,
+                coordinator_charter=coordinator_charter,
                 artifact_name=artifact_name,
                 capture_workflow=self.mode == "task",
                 description=description,
@@ -1049,7 +1103,12 @@ class PersonaPlaybookGenerator(_PlaybookGenerator):
         existing_artifact_names: list[str] | None = None,
     ) -> HarnessResolution:
         inventory = _tool_inventory(tool_catalog)
-        profiles = {name: _profile_payload((agent_profiles or {}).get(name)) for name in sorted(agent_names)}
+        # The main Raven is represented by ``coordinator``. Offering it again
+        # as a worker lets the model create a peer that cannot dispatch the
+        # actual specialists, recreating the nesting problem this topology is
+        # designed to remove. Task mode still offers Raven normally.
+        delegate_names = sorted(name for name in agent_names if name != "Raven")
+        profiles = {name: _profile_payload((agent_profiles or {}).get(name)) for name in delegate_names}
         payload = {
             "personaRequirements": query,
             "agentProfiles": profiles,
@@ -1061,10 +1120,10 @@ class PersonaPlaybookGenerator(_PlaybookGenerator):
         }
         return await self._resolve(
             query=query,
-            agent_names=agent_names,
+            agent_names=delegate_names,
             user_payload=payload,
             tools=persona_tool(
-                sorted(agent_names),
+                delegate_names,
                 [item["name"] for item in inventory],
                 profiles,
             ),
@@ -1116,6 +1175,7 @@ __all__ = [
     "TaskPlaybookGenerator",
     "WorkerTableGenerator",
     "build_payload",
+    "build_coordinator_charter",
     "build_table",
     "emit_tool",
     "participant_function_guide",

@@ -638,6 +638,12 @@ class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
         # session on a connection.
         self._session_charters: dict[str, Any] = {}
 
+        # The Persona a session is running as, by session. Held rather than
+        # consumed, which is the whole difference from the dict above: a staged
+        # charter describes one dispatch, and a Persona is what the session is
+        # until another one replaces it.
+        self._session_personas: dict[str, tuple[Any, Any]] = {}
+
         # ``self.subagents``, ``self.context_engine`` and
         # ``self.memory_consolidator`` were each handed ``provider`` earlier in
         # this constructor. Inside a turn they read the turn's binding; the
@@ -953,6 +959,14 @@ class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
                         "Harness is for and whether it was saved."
                     )
                 )
+                self.adopt_session_persona(session_key, resolution)
+                # The workers go with the coordinator, to the turns that will
+                # dispatch them. This turn was just told not to.
+                delegate_table = None
+            elif charter is None and (persona := self.session_persona(session_key)) is not None:
+                charter, persona_table = persona
+                if delegate_table is None:
+                    delegate_table = persona_table
             with (
                 use_binding(binding),
                 self.tools.session_scope_for(session_key),

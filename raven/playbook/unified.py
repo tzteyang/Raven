@@ -81,8 +81,8 @@ class UnifiedPlaybookSpec(CamelBase):
     def _has_an_artifact(self) -> "UnifiedPlaybookSpec":
         if self.harness is None and self.workflow is None:
             raise ValueError("a playbook must contain a harness, a workflow, or both")
-        if self.harness is not None and not self.harness.delegate:
-            raise ValueError("a durable harness must contain at least one worker")
+        if self.harness is not None and self.harness.coordinator is None and not self.harness.delegate:
+            raise ValueError("a durable harness must contain a coordinator or at least one worker")
         return self
 
     @property

@@ -8,11 +8,11 @@ from typing import Any
 import pytest
 
 from raven.agent.loop import AgentLoop
-from raven.agent.loop.bundles import EngineWiring, ToolWiring, TurnPolicy
+from raven.agent.loop.bundles import EngineWiring, SubagentWiring, ToolWiring, TurnPolicy
 from raven.agent.subagent.dag_graph import DagNodeSpec
 from raven.agent.tools.load_playbook import LoadPlaybookTool
 from raven.config.raven import CheckpointConfig, RuntimeConfig
-from raven.config.schema import PlaybookConfig
+from raven.config.schema import BuiltinAgentConfig, PlaybookConfig
 from raven.playbook.agent_generator import PERSONA_TOOL, TASK_TOOL
 from raven.playbook.agent_spec import AgentPlaybookSpec, DelegateEntry
 from raven.playbook.store import PlaybookStore
@@ -349,15 +349,11 @@ class _PersonaProvider(LLMProvider):
                         arguments={
                             "description": "A skeptical claim-checking digital persona",
                             "artifactName": "skeptical-fact-checker",
-                            "workers": [
-                                {
-                                    "as": "fact-checker",
-                                    "agent": "Raven",
-                                    "brief": "Challenge unsupported claims and require primary evidence",
-                                    "systemPrompt": "Be skeptical, concise, and cite primary evidence.",
-                                    "stopWhen": "Every material claim is supported or flagged",
-                                }
-                            ],
+                            "coordinator": {
+                                "brief": "Own the claim-checking conversation and synthesize specialist findings",
+                                "systemPrompt": "Be skeptical, concise, and cite primary evidence.",
+                            },
+                            "workers": [],
                         },
                     )
                 ],
@@ -401,7 +397,9 @@ async def test_digital_persona_saves_harness_only_without_inventing_a_dag(tmp_pa
     assert isinstance(saved, UnifiedPlaybookSpec)
     assert saved.harness is not None
     assert saved.workflow is None
-    assert saved.harness.delegate[0].brief.startswith("Challenge unsupported")
+    assert saved.harness.coordinator is not None
+    assert saved.harness.coordinator.brief.startswith("Own the claim-checking conversation")
+    assert saved.harness.delegate == []
     assert provider.setup_calls == provider.main_calls == 1
     assert provider.compiler_calls == 0
 
@@ -558,3 +556,258 @@ async def test_master_switch_off_has_no_resolution_record_or_library_side_effect
     assert provider.setup_calls == 0
     assert provider.main_calls == 1
     assert not playbook_root.exists()
+
+
+class _PersonaSessionProvider(LLMProvider):
+    """One Persona turn, then ordinary ones, recording what each main call bound."""
+
+    def __init__(self) -> None:
+        super().__init__(api_key="test")
+        self.setup_calls = 0
+        self.seen: list[tuple[str, str, tuple[str, ...]]] = []
+
+    def get_default_model(self) -> str:
+        return "stub"
+
+    async def chat(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer(tools)
+
+    async def chat_with_retry(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer(tools)
+
+    async def _answer(self, tools) -> LLMResponse:
+        names = _names(tools)
+        if PERSONA_TOOL in names:
+            self.setup_calls += 1
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id="persona",
+                        name=PERSONA_TOOL,
+                        arguments={
+                            "description": "A travel concierge that plans walkable days",
+                            "artifactName": "travel-concierge",
+                            "coordinator": {
+                                "brief": "Own the travel conversation and synthesize the daily plan",
+                                "systemPrompt": "Refuse to plan before destination and dates are known.",
+                            },
+                            "workers": [
+                                {
+                                    "as": "planner",
+                                    "agent": "Raven-Research",
+                                    "brief": "Route each day within the walking limit",
+                                }
+                            ],
+                        },
+                    )
+                ],
+                finish_reason="tool_calls",
+            )
+        from raven.agent.subagent.charter import current_charter
+        from raven.agent.subagent.delegate import current_delegate
+
+        charter = current_charter()
+        table = current_delegate()
+        self.seen.append(
+            (
+                charter.prompt if charter else "",
+                charter.instruction_addendum if charter else "",
+                tuple(table.labels()) if table else (),
+            )
+        )
+        return LLMResponse(content="OK", finish_reason="stop")
+
+
+def _persona_session_loop(tmp_path, provider: LLMProvider) -> AgentLoop:
+    return AgentLoop(
+        provider=provider,
+        workspace=tmp_path,
+        model="stub",
+        policy=TurnPolicy(max_iterations=3),
+        tools=ToolWiring(restrict_to_workspace=True),
+        engine=EngineWiring(
+            runtime_config=RuntimeConfig(checkpoint=CheckpointConfig(policy="never")),
+            playbook_config=PlaybookConfig(
+                enabled=True,
+                dir=str(tmp_path / "playbooks"),
+                agentHarness="generate",
+            ),
+        ),
+        subagents=SubagentWiring(
+            agents=[
+                BuiltinAgentConfig(
+                    name="Raven-Research",
+                    description="Researches current external facts and verifies primary sources.",
+                    owns="opening hours, local restrictions, and route feasibility",
+                )
+            ]
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_a_generated_persona_runs_the_session_from_the_turn_after_it(tmp_path) -> None:
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider)
+
+    await loop.run_turn(
+        _request("Create a travel concierge persona", "persona-session", playbook_mode="persona"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+    await loop.run_turn(
+        _request("Four days in Kyoto", "persona-session", playbook_mode="off"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+
+    generating, following = provider.seen
+    # The turn that wrote it answers about the artifact, not as it: a coordinator
+    # that refuses to plan without dates would refuse to report what it saved.
+    assert "has generated and saved" in generating[0]
+    assert generating[1] == ""
+    assert generating[2] == ()
+    assert following[0] == "Own the travel conversation and synthesize the daily plan"
+    assert following[1] == "Refuse to plan before destination and dates are known."
+    assert following[2] == ("planner",)
+    assert provider.setup_calls == 1
+
+
+@pytest.mark.asyncio
+async def test_an_unadopted_session_is_untouched_by_another_sessions_persona(tmp_path) -> None:
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider)
+
+    await loop.run_turn(
+        _request("Create a travel concierge persona", "adopted", playbook_mode="persona"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+    await loop.run_turn(
+        _request("Four days in Kyoto", "bystander", playbook_mode="off"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+
+    assert provider.seen[1] == ("", "", ())
+
+
+def _saved_persona() -> UnifiedPlaybookSpec:
+    harness = AgentPlaybookSpec(
+        name="travel-concierge",
+        description="A travel concierge that plans walkable days",
+        coordinator={
+            "brief": "Own the travel conversation and synthesize the daily plan",
+            "playbook": {"memory": {"systemPrompt": "Refuse to plan before destination and dates are known."}},
+        },
+        delegate=[
+            DelegateEntry(
+                **{
+                    "as": "planner",
+                    "name": "Raven",
+                    "brief": "Route each day within the walking limit",
+                }
+            )
+        ],
+    )
+    return UnifiedPlaybookSpec(
+        name="travel-concierge",
+        description="Plan walkable days from a destination and dates",
+        match=PlaybookMatch(summary="Plan a trip", keywords=["trip", "itinerary"]),
+        harness=harness,
+    )
+
+
+class _LoadPersonaProvider(LLMProvider):
+    """Calls ``load_playbook`` once, then records what the rest of the turn runs as."""
+
+    def __init__(self) -> None:
+        super().__init__(api_key="test")
+        self.loaded = False
+        self.seen: list[tuple[str, str, tuple[str, ...]]] = []
+
+    def get_default_model(self) -> str:
+        return "stub"
+
+    async def chat(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer()
+
+    async def chat_with_retry(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer()
+
+    async def _answer(self) -> LLMResponse:
+        from raven.agent.subagent.charter import current_charter
+        from raven.agent.subagent.delegate import current_delegate
+
+        charter = current_charter()
+        table = current_delegate()
+        self.seen.append(
+            (
+                charter.prompt if charter else "",
+                charter.instruction_addendum if charter else "",
+                tuple(table.labels()) if table else (),
+            )
+        )
+        if not self.loaded:
+            self.loaded = True
+            return LLMResponse(
+                content="",
+                tool_calls=[ToolCallRequest(id="load", name="load_playbook", arguments={"name": "travel-concierge"})],
+                finish_reason="tool_calls",
+            )
+        return LLMResponse(content="OK", finish_reason="stop")
+
+
+@pytest.mark.asyncio
+async def test_loading_a_stored_persona_binds_its_coordinator_for_the_rest_of_the_turn(tmp_path) -> None:
+    playbook_root = tmp_path / "playbooks"
+    PlaybookStore(playbook_root).save(_saved_persona())
+    provider = _LoadPersonaProvider()
+    loop = AgentLoop(
+        provider=provider,
+        workspace=tmp_path,
+        model="stub",
+        policy=TurnPolicy(max_iterations=4),
+        tools=ToolWiring(plugin_tools=[LoadPlaybookTool()], restrict_to_workspace=True),
+        engine=EngineWiring(
+            runtime_config=RuntimeConfig(checkpoint=CheckpointConfig(policy="never")),
+            playbook_config=PlaybookConfig(enabled=True, dir=str(playbook_root), agentHarness="generate"),
+        ),
+    )
+
+    await loop.run_turn(
+        _request("Four days in Kyoto", "load-persona", playbook_mode="off"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+
+    before, after = provider.seen[0], provider.seen[-1]
+    assert before == ("", "", ())
+    assert after[0] == "Own the travel conversation and synthesize the daily plan"
+    assert after[1] == "Refuse to plan before destination and dates are known."
+    assert after[2] == ("planner",)
+
+
+@pytest.mark.asyncio
+async def test_deleting_a_session_drops_the_persona_it_was_running_as(tmp_path) -> None:
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider)
+
+    await loop.run_turn(
+        _request("Create a travel concierge persona", "disposable", playbook_mode="persona"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+    session_key = next(iter(loop._session_personas))
+    assert loop.session_persona(session_key) is not None
+
+    loop.clear_session_binding(session_key)
+
+    assert loop.session_persona(session_key) is None
