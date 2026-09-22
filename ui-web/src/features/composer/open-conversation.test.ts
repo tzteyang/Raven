@@ -45,8 +45,8 @@ function harness(startAsDraft: boolean) {
   let pointer: string | null = startAsDraft ? null : 'already-open'
   let minted = 0
   const rpc = {
-    call: vi.fn(async (method: string) => {
-      log.push(`rpc:${method}`)
+    call: vi.fn(async (method: string, params?: Record<string, unknown>) => {
+      log.push(`rpc:${method}${params && params.harness ? `:harness=${String(params.harness)}` : ''}`)
       minted += 1
       return { session_id: `made-${minted}`, info: { cwd: '/w' } }
     }),
@@ -59,10 +59,11 @@ function harness(startAsDraft: boolean) {
     'applyStagedModel', 'applyStagedTier', 'applyStagedPerm', 'sessionDraw',
     'subscribe', 'wsSetRoot', 'startAsDraft', 'touchSession', 'beginNaming',
     'mediaOf', 'namingDeclined', 'setSessionWorkdir',
-    `let draft = startAsDraft; let viewGen = 7; let turnOwner = null; let pendingWorkdir = null;\n${fnSource}\n`
+    `let draft = startAsDraft; let viewGen = 7; let turnOwner = null; let pendingWorkdir = null; let pendingHarness = null;\n${fnSource}\n`
     + 'return { openConversation, sendOnSession, isDraft: () => draft, '
     + 'turnOwner: () => turnOwner, setDraft: (on) => { draft = on; }, '
-    + 'stageWorkdir: (dir) => { pendingWorkdir = dir; }, stagedWorkdir: () => pendingWorkdir };',
+    + 'stageWorkdir: (dir) => { pendingWorkdir = dir; }, stagedWorkdir: () => pendingWorkdir, '
+    + 'stageHarness: (name) => { pendingHarness = name; } };',
   ) as (...args: unknown[]) => {
     openConversation: (preview?: string, atPointer?: (id: string) => void) => Promise<string | null>
     sendOnSession: (text: string, failed: (e: unknown) => void) => void
@@ -71,6 +72,7 @@ function harness(startAsDraft: boolean) {
     setDraft: (on: boolean) => void
     stageWorkdir: (dir: string | null) => void
     stagedWorkdir: () => string | null
+    stageHarness: (name: string | null) => void
   }
   const built = build(
     rpc,
@@ -237,5 +239,25 @@ describe('getting a conversation to work in', () => {
     const h = harness(true)
     await h.openConversation()
     expect(h.log).toContain('staged:model:7')
+  })
+
+  it('creates the conversation on the Persona the wall staged', async () => {
+    /* Staged rather than created on the spot: a reader who opens the wall and
+       changes their mind leaves no empty conversation behind, and the Harness
+       reaches the engine on the call that mints the session. */
+    const h = harness(true)
+    h.stageHarness('travel-concierge')
+    await h.openConversation()
+    expect(h.log).toContain('rpc:session.create:harness=travel-concierge')
+  })
+
+  it('does not carry a Persona into the next conversation', async () => {
+    const h = harness(true)
+    h.stageHarness('travel-concierge')
+    await h.openConversation()
+    h.setDraft(true)
+    await h.openConversation()
+    expect(h.log.filter(l => l.startsWith('rpc:session.create')))
+      .toEqual(['rpc:session.create:harness=travel-concierge', 'rpc:session.create'])
   })
 })

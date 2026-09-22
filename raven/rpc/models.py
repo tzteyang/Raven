@@ -1115,6 +1115,13 @@ class SessionCreateParams(_Strict):
             "How a client attached to a shared gateway keeps its launch directory."
         ),
     )
+    harness: str | None = Field(
+        default=None,
+        description=(
+            "Name of a stored Harness to open this session on. A snapshot of it is frozen onto the session, "
+            "so the window keeps the Harness it was opened on after the library entry changes."
+        ),
+    )
 
 
 class SessionCreateResult(_Strict):
@@ -2332,6 +2339,19 @@ class SubagentsInstanceSetModelResult(_Strict):
     )
 
 
+class SessionSetHarnessParams(_Strict):
+    session_key: str
+    harness: str | None = Field(
+        None,
+        description="A stored Harness name to bind. Null unbinds. Omit the key entirely to report without changing.",
+    )
+
+
+class SessionSetHarnessResult(_Strict):
+    session_key: str
+    harness: str | None = Field(None, description="The Harness now bound to this session.")
+
+
 class SessionSetModeParams(_Strict):
     session_key: str
     mode: str | None = Field(None, description="The tier id to switch to. Omit it to report without changing.")
@@ -2616,6 +2636,7 @@ class SessionInitInfo(_Strict):
     version: str
     cwd: str
     mcp_servers: list[JsonValue]
+    harness: str | None = Field(default=None, description="The Harness this session is bound to, if any.")
     update_available: bool | None = None
     update_command: str | None = Field(default=None, description="The command that would install the newer release.")
     config_notices: list[str] | None = Field(
@@ -3959,6 +3980,10 @@ class PlaybookRow(_Strict):
     task_summary: str
     schema_version: int
     artifact_kind: Literal["legacy", "workflow", "harness", "composite"]
+    coordinator: bool = Field(
+        default=False,
+        description="True when the Harness carries a coordinator seat, which is what makes it a Persona.",
+    )
     workers: list[PlaybookWorkerShape]
     mode: Literal["dag", "prompt"]
     confirm: bool
@@ -4046,6 +4071,10 @@ class PlaybookDetail(_Strict):
     version: int
     schema_version: int
     artifact_kind: Literal["legacy", "workflow", "harness", "composite"]
+    coordinator: bool = Field(
+        default=False,
+        description="True when the Harness carries a coordinator seat, which is what makes it a Persona.",
+    )
     workers: list[PlaybookWorker]
     mode: Literal["dag", "prompt"]
     confirm: bool
@@ -4466,6 +4495,7 @@ METHOD_MODELS: dict[str, tuple[type[BaseModel], type[BaseModel]]] = {
     "session.branch": (SessionBranchParams, SessionBranchResult),
     "session.compress": (SessionCompressParams, SessionCompressResult),
     "session.status": (SessionStatusParams, SessionStatusResult),
+    "session.set_harness": (SessionSetHarnessParams, SessionSetHarnessResult),
     "session.set_mode": (SessionSetModeParams, SessionSetModeResult),
     # ext.list / cron.* / settings.* / channels.status / fs.* -- the console
     "ext.list": (ExtListParams, ExtListResult),

@@ -693,21 +693,74 @@ class WiringMixin:
         every *later* turn of the session, which is the experience the Persona
         was written for.
         """
-        charter = getattr(resolution, "coordinator_charter", None)
-        if charter is None:
-            self._session_personas.pop(session_key, None)
+        if getattr(resolution, "coordinator_charter", None) is None:
+            self.bind_session_harness(session_key, None)
             return
-        self._session_personas[session_key] = (charter, resolution.table)
-        logger.info(
-            "agent playbook: session adopted Persona {} ({} worker(s){})",
-            resolution.artifact_name or "?",
-            len(resolution.table.workers) if resolution.table else 0,
-            ", judge" if charter.code else "",
-        )
+        self.bind_session_harness(session_key, resolution.artifact_name or "", spec=resolution.spec)
+
+    def bind_session_harness(self, session_key: str, name: str | None, *, spec: Any = None) -> str | None:
+        """Freeze a Harness onto this session, for every turn it takes.
+
+        A snapshot rather than a name to look up later: the window the user
+        opened keeps the Harness they chose, so editing the library entry --
+        or deleting it -- does not rewrite or break a conversation already
+        running on it. It rides the session's own metadata, so it survives a
+        restart the way a pinned workdir does.
+
+        ``None`` unbinds. ``spec`` is for a caller that already holds the
+        Harness; everything else names one in the library.
+        """
+        self._session_personas.pop(session_key, None)
+        session = self.sessions.get_or_create(session_key)
+        if name is None:
+            session.metadata.pop("harness", None)
+            return None
+        if spec is None:
+            stored = self._playbooks.spec(name) if self._playbooks is not None else None
+            spec = getattr(stored, "harness", None)
+            if spec is None:
+                raise ValueError(f"no stored Harness named {name!r}")
+        # ``exclude_unset`` for the reason ``UnifiedPlaybookSpec.block_dump``
+        # gives: a nested default re-emitted here reads back as an explicit
+        # choice, and ``Checks.impl`` then fails validation as a disabled field.
+        session.metadata["harness"] = {
+            "name": name,
+            "spec": spec.model_dump(by_alias=True, exclude_none=True, exclude_unset=True),
+        }
+        logger.info("agent playbook: session bound to Harness {} ({} worker(s))", name or "?", len(spec.delegate))
+        return name
+
+    def session_harness_name(self, session_key: str) -> str | None:
+        """The Harness this session is bound to, by name, for a client to show."""
+        held = self.sessions.get_or_create(session_key).metadata.get("harness")
+        return str(held.get("name") or "") or None if isinstance(held, dict) else None
 
     def session_persona(self, session_key: str) -> "tuple[Charter, Any] | None":
-        """The Persona this session runs as, or ``None`` for an ordinary one."""
-        return self._session_personas.get(session_key)
+        """This session's bound Harness as seats, or ``None`` for an ordinary one.
+
+        Rebuilt from the frozen snapshot rather than from the library, and
+        cached per session because it is asked once a turn.
+        """
+        held = self._session_personas.get(session_key)
+        if held is not None:
+            return held
+        raw = self.sessions.get_or_create(session_key).metadata.get("harness")
+        if not isinstance(raw, dict) or not isinstance(raw.get("spec"), dict):
+            return None
+        try:
+            from raven.playbook.agent_generator import build_coordinator_charter, build_table
+            from raven.playbook.agent_spec import AgentPlaybookSpec
+
+            spec = AgentPlaybookSpec.model_validate(raw["spec"])
+            charter = build_coordinator_charter(spec)
+        except Exception:  # noqa: BLE001 - a Harness this build cannot read is not a reason to lose the turn
+            logger.opt(exception=True).warning("agent playbook: session Harness could not be rebuilt; running plain")
+            return None
+        if charter is None:
+            return None
+        seats = (charter, build_table(spec, {}))
+        self._session_personas[session_key] = seats
+        return seats
 
     async def _resolve_playbook_turn(self, req: Any, session_key: str, binding: Any):
         """Generate, persist and bind the Harness selected by this turn's mode."""

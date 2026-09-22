@@ -117,6 +117,7 @@ $('#skillBtn').onclick = () => openSkills();
 $('#plugBtn').onclick = () => openPlugins();
 /* wrapper, not the reference: live.js replaces openMem with the RPC loader */
 $('#memBtn').onclick = () => openMem();
+$('#personaBtn').onclick = () => openPersona();
 $('#pbBtn').onclick = () => openPb();
 $('#kbBtn').onclick = () => openKb();
 

@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import asyncio
+import shutil
 from typing import Any
 
 import pytest
@@ -795,7 +796,7 @@ async def test_loading_a_stored_persona_binds_its_coordinator_for_the_rest_of_th
 
 
 @pytest.mark.asyncio
-async def test_deleting_a_session_drops_the_persona_it_was_running_as(tmp_path) -> None:
+async def test_unbinding_a_session_puts_it_back_on_the_plain_path(tmp_path) -> None:
     provider = _PersonaSessionProvider()
     loop = _persona_session_loop(tmp_path, provider)
 
@@ -805,9 +806,33 @@ async def test_deleting_a_session_drops_the_persona_it_was_running_as(tmp_path) 
         lambda: [],
         stream=False,
     )
-    session_key = next(iter(loop._session_personas))
-    assert loop.session_persona(session_key) is not None
+    key = "test:disposable"
+    assert loop.session_harness_name(key) == "travel-concierge"
+    assert loop.session_persona(key) is not None
 
-    loop.clear_session_binding(session_key)
+    loop.bind_session_harness(key, None)
 
-    assert loop.session_persona(session_key) is None
+    assert loop.session_harness_name(key) is None
+    assert loop.session_persona(key) is None
+
+
+@pytest.mark.asyncio
+async def test_a_bound_harness_is_a_snapshot_the_library_can_no_longer_move(tmp_path) -> None:
+    """The window the user opened keeps the Harness they chose."""
+    playbook_root = tmp_path / "playbooks"
+    PlaybookStore(playbook_root).save(_saved_persona())
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider)
+    key = "test:frozen"
+
+    loop.bind_session_harness(key, "travel-concierge")
+    bound = loop.session_persona(key)
+    assert bound is not None and bound[0].prompt.startswith("Own the travel conversation")
+
+    shutil.rmtree(PlaybookStore(playbook_root).user_directory("travel-concierge"))
+    loop._session_personas.pop(key, None)
+
+    still = loop.session_persona(key)
+    assert still is not None
+    assert still[0].prompt == bound[0].prompt
+    assert still[1].labels() == ["planner"]

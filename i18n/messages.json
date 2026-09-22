@@ -3139,6 +3139,46 @@
       "en": "Settings",
       "zh": "设置"
     },
+    "gui.nav.persona": {
+      "en": "Personas",
+      "zh": "数字人"
+    },
+    "gui.persona.disabled": {
+      "en": "Disabled",
+      "zh": "已禁用"
+    },
+    "gui.persona.empty": {
+      "en": "No personas yet. Ask Raven to build you one.",
+      "zh": "还没有数字人。让 Raven 给你捏一个。"
+    },
+    "gui.persona.loading": {
+      "en": "Reading the library...",
+      "zh": "正在读取..."
+    },
+    "gui.persona.no_description": {
+      "en": "No description.",
+      "zh": "没有描述。"
+    },
+    "gui.persona.no_match": {
+      "en": "No persona matches that.",
+      "zh": "没有匹配的数字人。"
+    },
+    "gui.persona.no_workers": {
+      "en": "Works alone.",
+      "zh": "独自工作。"
+    },
+    "gui.persona.search": {
+      "en": "Search personas",
+      "zh": "搜索数字人"
+    },
+    "gui.persona.start": {
+      "en": "Start a chat",
+      "zh": "开始对话"
+    },
+    "gui.persona.start_failed": {
+      "en": "Cannot start {name} here",
+      "zh": "这里无法启动 {name}"
+    },
     "gui.new_task": {
       "en": "New task",
       "zh": "新任务"

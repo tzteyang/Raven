@@ -182,7 +182,7 @@ export function markNew(): void {
      whichever of the two it could not see. The list is therefore something a new
      page has to be added to, and rail-nav-registry.test.mjs is what makes
      forgetting it a failing test rather than a page with no selected state. */
-  for (const id of ['newBtn', 'skillBtn', 'plugBtn', 'pbBtn', 'kbBtn', 'memBtn', 'moreBtn']) {
+  for (const id of ['newBtn', 'skillBtn', 'plugBtn', 'personaBtn', 'pbBtn', 'kbBtn', 'memBtn', 'moreBtn']) {
     const b = el(id)
     if (b) b.setAttribute('aria-current', String(id === top))
   }

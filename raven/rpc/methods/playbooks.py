@@ -62,7 +62,7 @@ def _artifact_fields(spec: Any, *, detail: bool = False) -> dict[str, Any]:
     from raven.playbook.unified import UnifiedPlaybookSpec
 
     if not isinstance(spec, UnifiedPlaybookSpec):
-        return {"schema_version": 1, "artifact_kind": "legacy", "workers": []}
+        return {"schema_version": 1, "artifact_kind": "legacy", "workers": [], "coordinator": False}
     kind = "composite" if spec.harness and spec.workflow else "harness" if spec.harness else "workflow"
     workers = []
     for entry in spec.harness.delegate if spec.harness else []:
@@ -70,7 +70,12 @@ def _artifact_fields(spec: Any, *, detail: bool = False) -> dict[str, Any]:
         if detail:
             worker["brief"] = entry.brief
         workers.append(worker)
-    return {"schema_version": spec.schema_version, "artifact_kind": kind, "workers": workers}
+    return {
+        "schema_version": spec.schema_version,
+        "artifact_kind": kind,
+        "workers": workers,
+        "coordinator": bool(spec.harness and spec.harness.coordinator),
+    }
 
 
 def _row(store: PlaybookStore, name: str, disabled: set[str]) -> dict[str, Any]:
@@ -87,6 +92,7 @@ def _row(store: PlaybookStore, name: str, disabled: set[str]) -> dict[str, Any]:
         "schema_version": 1,
         "artifact_kind": "legacy",
         "workers": [],
+        "coordinator": False,
         "error": "",
     }
     try:

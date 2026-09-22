@@ -3,7 +3,7 @@
 // Source of truth: rpc-schema/openrpc.json (OpenRPC 1.2.6).
 // Drift check: `npm run gen:check` (CI runs this; a stale file fails the build).
 //
-// 179 methods, 99 component schemas.
+// 180 methods, 99 component schemas.
 
 /* eslint-disable */
 /**
@@ -120,6 +120,10 @@ export interface SessionInitInfo {
   version: string;
   cwd: string;
   mcp_servers: JsonValue[];
+  /**
+   * The Harness this session is bound to, if any.
+   */
+  harness?: string | null;
   update_available?: boolean;
   /**
    * The command that would install the newer release.
@@ -1536,6 +1540,10 @@ export interface PlaybookRow {
   task_summary: string;
   schema_version: number;
   artifact_kind: 'legacy' | 'workflow' | 'harness' | 'composite';
+  /**
+   * True when the Harness carries a coordinator seat, which is what makes it a Persona.
+   */
+  coordinator?: boolean;
   workers: PlaybookWorkerShape[];
   mode: 'dag' | 'prompt';
   confirm: boolean;
@@ -1590,6 +1598,10 @@ export interface PlaybookDetail {
   version: number;
   schema_version: number;
   artifact_kind: 'legacy' | 'workflow' | 'harness' | 'composite';
+  /**
+   * True when the Harness carries a coordinator seat, which is what makes it a Persona.
+   */
+  coordinator?: boolean;
   workers: PlaybookWorker[];
   mode: 'dag' | 'prompt';
   confirm: boolean;
@@ -1678,6 +1690,10 @@ export interface SessionCreateParams {
    * Absolute directory this session's turns run in, persisted as the session's workdir override. How a client attached to a shared gateway keeps its launch directory.
    */
   workdir?: string;
+  /**
+   * Name of a stored Harness to open this session on. A snapshot of it is frozen onto the session, so the window keeps the Harness it was opened on after the library entry changes.
+   */
+  harness?: string;
 }
 /**
  * The key is minted lazily -- no file is written until the first save.
@@ -2278,6 +2294,20 @@ export interface SubagentsInstanceSetModelResult {
      */
     group?: string;
   }[];
+}
+export interface SessionSetHarnessParams {
+  session_key: string;
+  /**
+   * A stored Harness name to bind. Null unbinds.
+   */
+  harness?: string;
+}
+export interface SessionSetHarnessResult {
+  session_key: string;
+  /**
+   * The Harness now bound to this session.
+   */
+  harness?: string | null;
 }
 export interface SessionSetModeParams {
   session_key: string;
@@ -4171,6 +4201,7 @@ export interface RpcMethods {
   'subagents.instance.steer': { params: SubagentsInstanceSteerParams; result: SubagentsInstanceSteerResult };
   'subagents.instance.set_mode': { params: SubagentsInstanceSetModeParams; result: SubagentsInstanceSetModeResult };
   'subagents.instance.set_model': { params: SubagentsInstanceSetModelParams; result: SubagentsInstanceSetModelResult };
+  'session.set_harness': { params: SessionSetHarnessParams; result: SessionSetHarnessResult };
   'session.set_mode': { params: SessionSetModeParams; result: SessionSetModeResult };
   'system.hello': { params: SystemHelloParams; result: SystemHelloResult };
   'system.ping': { params: SystemPingParams; result: SystemPingResult };
@@ -4424,6 +4455,7 @@ export const RPC_METHODS = [
   "session.pin",
   "session.resume",
   "session.save",
+  "session.set_harness",
   "session.set_mode",
   "session.status",
   "session.steer",

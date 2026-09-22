@@ -20,6 +20,8 @@ import { OnboardApp } from './features/onboard/OnboardPage'
 import * as onboard from './features/onboard/store'
 import { MemoryApp } from './features/memory/MemoryPage'
 import { KnowledgeApp } from './features/knowledge/KnowledgePage'
+import { PersonaApp } from './features/persona/PersonaPage'
+import * as persona from './features/persona/store'
 import { PlaybooksApp } from './features/playbooks/PlaybooksPage'
 import * as playbooks from './features/playbooks/store'
 import * as knowledge from './features/knowledge/store'
@@ -422,6 +424,8 @@ const memHost = document.getElementById('memBody')
 if (memHost) createRoot(memHost).render(<MemoryApp />)
 const kbHost = document.getElementById('kbBody')
 if (kbHost) createRoot(kbHost).render(<KnowledgeApp />)
+const personaHost = document.getElementById('personaBody')
+if (personaHost) createRoot(personaHost).render(<PersonaApp />)
 const pbHost = document.getElementById('pbBody')
 if (pbHost) createRoot(pbHost).render(<PlaybooksApp />)
 const connHost = document.getElementById('connBody')
@@ -446,6 +450,9 @@ window.RavenIslands = {
   knowledge: { open: knowledge.open, close: knowledge.close, redraw: knowledge.redraw },
   /* Same three verbs as knowledge: the rail opens it, Escape closes it, a
      language flip redraws it. */
+  /* Same three verbs as playbooks: the rail opens it, Escape closes it, a
+     language flip redraws it. */
+  persona: { open: persona.openPage, close: persona.closePage, redraw: persona.redraw },
   playbooks: { open: playbooks.openPage, close: playbooks.closePage, redraw: playbooks.redraw },
   workspace: {
     draw: workspace.draw,

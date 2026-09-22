@@ -114,6 +114,14 @@
             "type": "string",
             "description": "Absolute directory this session's turns run in, persisted as the session's workdir override. How a client attached to a shared gateway keeps its launch directory."
           }
+        },
+        {
+          "name": "harness",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "description": "Name of a stored Harness to open this session on. A snapshot of it is frozen onto the session, so the window keeps the Harness it was opened on after the library entry changes."
+          }
         }
       ],
       "result": {
@@ -2689,6 +2697,50 @@
           "$ref": "#/components/errors/ConfigValidationError"
         }
       ]
+    },
+    {
+      "name": "session.set_harness",
+      "summary": "Report, bind or unbind the Harness this session runs as. Omitting the harness key reports; a name binds a frozen snapshot of that stored Harness; null unbinds. A window keeps the Harness it was bound to even after the library entry is edited or removed.",
+      "params": [
+        {
+          "name": "session_key",
+          "required": true,
+          "schema": {
+            "type": "string"
+          }
+        },
+        {
+          "name": "harness",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "description": "A stored Harness name to bind. Null unbinds."
+          }
+        }
+      ],
+      "result": {
+        "name": "SessionSetHarnessResult",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "session_key"
+          ],
+          "properties": {
+            "session_key": {
+              "type": "string"
+            },
+            "harness": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "description": "The Harness now bound to this session."
+            }
+          }
+        }
+      },
+      "errors": []
     },
     {
       "name": "session.set_mode",
@@ -8348,6 +8400,13 @@
             },
             "type": "array"
           },
+          "harness": {
+            "type": [
+              "string",
+              "null"
+            ],
+            "description": "The Harness this session is bound to, if any."
+          },
           "update_available": {
             "type": "boolean"
           },
@@ -11993,6 +12052,10 @@
             ],
             "type": "string"
           },
+          "coordinator": {
+            "type": "boolean",
+            "description": "True when the Harness carries a coordinator seat, which is what makes it a Persona."
+          },
           "workers": {
             "items": {
               "$ref": "#/components/schemas/PlaybookWorkerShape"
@@ -12153,6 +12216,10 @@
               "composite"
             ],
             "type": "string"
+          },
+          "coordinator": {
+            "type": "boolean",
+            "description": "True when the Harness carries a coordinator seat, which is what makes it a Persona."
           },
           "workers": {
             "items": {

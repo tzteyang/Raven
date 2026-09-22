@@ -119,6 +119,8 @@ let pendingPerm = null;
    the gateway refuses (a folder inside raven's own data) leaves the draft
    standing with its pick still on the chip, which is where the reader changes it. */
 let pendingWorkdir = null;
+/* The Harness a Persona start staged, applied once at session.create. */
+let pendingHarness = null;
 
 /* Apply a staged draft pick to the session the first message just minted.
    Awaited before that turn is sent, so the turn runs on the chosen model rather
@@ -227,7 +229,7 @@ function startDraft() {
      rather than waiting to be spent by whichever conversation is sent next. */
   pendingTier = null; void loadTier();
   pendingPerm = null; void loadPermMode(null, gen);
-  pendingWorkdir = null; setDraftWorkdir();
+  pendingWorkdir = null; pendingHarness = null; setDraftWorkdir();
   $('#title').textContent = T('gui.new_task');
   pitch(); sessionDraw(); ta.focus();
 }
@@ -266,7 +268,7 @@ async function openLiveSession(s) {
      conversation is the open one, so the row has done its job and a badge left
      behind would outlive the sheet it was pointing at. */
   if (row && (row.status === 'done' || row.status === 'ask')) row.status = null;
-  pendingWorkdir = null; setSessionWorkdir((row && row.workdir) || s.workdir || null);
+  pendingWorkdir = null; pendingHarness = null; setSessionWorkdir((row && row.workdir) || s.workdir || null);
   markNewCurrent();
   resetView();
   $('#title').textContent = plainTitle(s.title);
@@ -433,8 +435,10 @@ async function promote(preview, atPointer) {
      the reader has opened since. */
   const gen = viewGen;
   const workdir = pendingWorkdir;
-  const r = await rpc.call('session.create', workdir ? { workdir } : {});
+  const harness = pendingHarness;
+  const r = await rpc.call('session.create', { ...(workdir ? { workdir } : {}), ...(harness ? { harness } : {}) });
   pendingWorkdir = null;
+  pendingHarness = null;
   wsSetRoot(r.info && r.info.cwd);
   const s = { id: r.session_id, title: T('gui.new_task'), last: preview || T('gui.sess.not_started'),
     when: T('gui.sess.just_now'), at: Math.floor(Date.now() / 1000), run: null, live: true, persisted: false,
@@ -577,6 +581,7 @@ DS.composer.startConversation = () => openConversation();
    the promotion they feed: the draft's pick, held for the create above, and
    the gateway's directory walk behind "Open folder...". */
 DS.composer.stageWorkdir = (dir) => { pendingWorkdir = dir || null; };
+DS.composer.stageHarness = (name) => { pendingHarness = name || null; };
 DS.composer.browseDirs = (path) => rpc.call('fs.dirs', path ? { path } : {});
 DS.composer.stop = function () {
   /* A runtime turn (a delegated result re-entering) is NOT cancellable:

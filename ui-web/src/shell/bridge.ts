@@ -51,6 +51,11 @@ export interface Shell {
      verb because rail/store imports that module, so calling rail's markNew
      from it directly would close an import cycle. */
   markNew?(): void
+  /* Opens a conversation that will be created on this Persona, by staging the
+     Harness on the composer. False when this build has no composer to stage it
+     on, so the wall can say so instead of opening an ordinary conversation the
+     reader would take for a Persona. */
+  startPersona?(name: string): boolean
   /* Redraws the capabilities page, but only while it is open on the plugin
      tab: a plugin write that lands with the page shut, or on another tab, has
      nothing to repaint. */

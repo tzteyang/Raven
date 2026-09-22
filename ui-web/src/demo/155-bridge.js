@@ -18,6 +18,18 @@ window.RavenShell = {
   attNotes: () => Object.values(I18N.ui['gui.att.note'] || {}),
   navState: () => ({ pages: Object.keys(NAV_OF), btnOf: (p) => (typeof NAV_OF[p] === 'function' ? NAV_OF[p]() : NAV_OF[p]) }),
   openWebsearch: () => { openPlugins(); RavenIslands.plugins.openMarket('websearch'); },
+  /* Starts a conversation ON a Persona: a fresh draft with the Harness staged
+     on the composer, so the engine freezes it onto the session when the first
+     message promotes it. Answers false where no composer can stage one, which
+     is what the wall reports rather than opening a conversation that will come
+     up as an ordinary one. */
+  startPersona: (name) => {
+    const stage = DS.composer && DS.composer.stageHarness;
+    $('#newBtn').click();
+    if (!stage) return false;
+    stage(name);
+    return true;
+  },
   markNew: () => markNewCurrent(),
   plugRedraw: () => { if ($('#capsPage').dataset.open === 'true' && extTab === 'plugin') drawCaps(); },
 };
