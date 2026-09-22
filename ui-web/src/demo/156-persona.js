@@ -18,7 +18,7 @@ function drawPersona() {
 const PERSONA_FIXTURE = [
   {
     name: 'travel-concierge',
-    description: '给定目的地、日期、预算、同行人和节奏，出一份能照着走的六段式旅行简报',
+    description: 'Turns a destination, dates, a budget, companions and a pace into a six-part brief you can walk',
     artifact_kind: 'harness',
     coordinator: true,
     workers: [
@@ -33,7 +33,7 @@ const PERSONA_FIXTURE = [
   },
   {
     name: 'skeptical-fact-checker',
-    description: '对每条主张先找一手证据，找不到就说找不到，不替你圆',
+    description: 'Finds a primary source for every claim, and says so plainly when there is none',
     artifact_kind: 'harness',
     coordinator: true,
     workers: [{ label: 'evidence', agent: 'Raven-Research' }],
