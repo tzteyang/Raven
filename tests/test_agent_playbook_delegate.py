@@ -741,15 +741,15 @@ def test_a_persona_is_told_to_converse_before_it_is_told_to_gate() -> None:
     phrasings that went wrong: a Persona converses, and its inputs gate the
     work.
     """
-    from raven.playbook.agent_generator import PERSONA_SYSTEM_PROMPT as prompt
+    from raven.playbook.agent_generator import PERSONA_SYSTEM_PROMPT
 
-    assert "preconditions on the WORK, not a filter on the conversation" in prompt
-    assert "raises missing inputs at no other time" in prompt
+    assert "preconditions on the WORK, not a filter on the conversation" in PERSONA_SYSTEM_PROMPT
+    assert "raises missing inputs at no other time" in PERSONA_SYSTEM_PROMPT
     # The mandate that produced the gate is gone, and stays gone.
-    assert "must implement that gate with intake" not in prompt
+    assert "must implement that gate with intake" not in PERSONA_SYSTEM_PROMPT
     # Functions are still demanded where prose cannot hold: a tool-argument
     # boundary is judge's, and that is the distinction the rule turns on.
-    assert "belongs in judge on the seat making the call" in prompt
+    assert "belongs in judge on the seat making the call" in PERSONA_SYSTEM_PROMPT
 
 
 def test_the_intake_contract_states_when_it_runs() -> None:

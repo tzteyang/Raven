@@ -796,10 +796,10 @@ def _unwrapped(text: str) -> str:
     this line.
     """
     body = text.strip()
-    opened = re.match(r'^<\s*parameter\b[^>]*>', body, re.I)
+    opened = re.match(r"^<\s*parameter\b[^>]*>", body, re.I)
     if opened:
-        body = body[opened.end():]
-    body = re.sub(r'</\s*parameter\s*>\s*$', "", body, flags=re.I)
+        body = body[opened.end() :]
+    body = re.sub(r"</\s*parameter\s*>\s*$", "", body, flags=re.I)
     return body.strip()
 
 

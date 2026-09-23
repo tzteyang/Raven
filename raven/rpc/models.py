@@ -4571,8 +4571,7 @@ class PlaybookRow(_Strict):
     coordinator_brief: str | None = Field(
         None,
         description=(
-            "What the main Raven is in this Persona's words, empty when the Harness carries no "
-            "coordinator seat."
+            "What the main Raven is in this Persona's words, empty when the Harness carries no coordinator seat."
         ),
     )
     workers: list[PlaybookWorkerShape]
@@ -4669,8 +4668,7 @@ class PlaybookDetail(_Strict):
     coordinator_brief: str | None = Field(
         None,
         description=(
-            "What the main Raven is in this Persona's words, empty when the Harness carries no "
-            "coordinator seat."
+            "What the main Raven is in this Persona's words, empty when the Harness carries no coordinator seat."
         ),
     )
     workers: list[PlaybookWorker]
@@ -4801,8 +4799,7 @@ class PlaybooksDraftParams(_Strict):
     session_key: str = Field(
         ...,
         description=(
-            "The conversation whose generated Persona this is. A draft belongs to the session that "
-            "asked for it."
+            "The conversation whose generated Persona this is. A draft belongs to the session that asked for it."
         ),
     )
 
