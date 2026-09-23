@@ -74,7 +74,13 @@ class PlaybookStore:
 
     @property
     def root(self) -> Path:
-        """Writable user-library root, also home to local Run Records."""
+        """The writable layer, for a caller that writes a file this class does not.
+
+        `save` is for a spec this class serialised; the stint skeleton is a file
+        with comments in it, and a round trip through the model would strip every
+        one of them -- the comments are the whole point of a skeleton. Local Run
+        Records are written under this root for the same reason.
+        """
         return self._root
 
     def path_for(self, name: str) -> Path:

@@ -15,6 +15,7 @@ import asyncio
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -527,8 +528,9 @@ async def cron_runs(params: dict, *, agent_loop_factory=None) -> dict:
 
     Every fire writes the job prompt as a user message into that session, so
     one user message = one run; a run counts as ok once its turn produced a
-    non-empty assistant reply. The job state's last_error names the newest
-    failure (per-run errors are not stored anywhere else).
+    non-empty assistant reply and did not then say it had failed. The job
+    state's last_error names the newest failure (per-run errors are not stored
+    anywhere else).
     """
     from datetime import datetime
 
@@ -566,6 +568,16 @@ async def cron_runs(params: dict, *, agent_loop_factory=None) -> dict:
             cur = {"at_ms": _iso_ms(m.get("timestamp")), "ok": False, "preview": ""}
             runs.append(cur)
         elif role == "assistant" and cur is not None:
+            ended = m.get("turn_ended")
+            if isinstance(ended, dict):
+                # Read before the text, and the last word on this run: the marker
+                # is an assistant message too, and so is the half-answer that
+                # streamed before the turn broke, so both read as a reply here.
+                cur["ok"] = False
+                reason = str(ended.get("reason") or "").strip()
+                if reason:
+                    cur["preview"] = reason[:140]
+                continue
             text = _msg_text(m.get("content")).strip()
             if text:
                 cur["ok"] = True
@@ -1841,6 +1853,96 @@ def _walk_dirs(target: Path, agent_home: Path) -> dict:
     }
 
 
+# The native folder dialog, per host. Each prints the chosen folder on stdout
+# and exits non-zero (macOS) or prints nothing (the other two) when dismissed.
+# Only the first tool found on PATH is offered on Linux, where no dialog ships
+# with every desktop.
+_PICK_DIR_PROMPT = "Choose the folder this conversation will work in"
+
+
+def _pick_dir_argv() -> list[str] | None:
+    """The command that opens this host's folder dialog, or None where none is known."""
+    if sys.platform == "darwin":
+        return ["osascript", "-e", f'POSIX path of (choose folder with prompt "{_PICK_DIR_PROMPT}")']
+    if sys.platform.startswith("win"):
+        return [
+            "powershell",
+            "-NoProfile",
+            "-Command",
+            "Add-Type -AssemblyName System.Windows.Forms;"
+            "$d=New-Object System.Windows.Forms.FolderBrowserDialog;"
+            f"$d.Description='{_PICK_DIR_PROMPT}';"
+            "if($d.ShowDialog() -eq 'OK'){Write-Output $d.SelectedPath}",
+        ]
+    for argv in (
+        ["zenity", "--file-selection", "--directory", f"--title={_PICK_DIR_PROMPT}"],
+        ["kdialog", "--getexistingdirectory", str(Path.home()), "--title", _PICK_DIR_PROMPT],
+    ):
+        if shutil.which(argv[0]):
+            return argv
+    return None
+
+
+async def _run_pick_dir(argv: list[str]) -> str | None:
+    """Run the dialog and read the folder back, or None when it was dismissed.
+
+    A thread and a blocking run, not an asyncio subprocess: under the event
+    loop's child handling the macOS dialog closed itself after about three
+    seconds with "user canceled" (-128) and nobody at the keyboard, and the
+    same command run synchronously stays up until the person answers
+    (measured 2026-09-22). One thread held for as long as the dialog is up is
+    the price, and the page opens one dialog at a time.
+
+    A dismissed dialog is not an error -- `choose folder` exits 1 with "User
+    canceled", the others print nothing -- and both read as no folder.
+    """
+
+    def run() -> str | None:
+        done = subprocess.run(argv, capture_output=True, check=False)
+        text = done.stdout.decode("utf-8", errors="replace").strip()
+        return text or None
+
+    return await asyncio.to_thread(run)
+
+
+async def fs_pick_dir(params: dict, *, agent_loop_factory=None) -> dict:
+    """``fs.pick_dir`` -- a folder chosen in the host's own folder dialog.
+
+    The other half of the page's working-directory picker: ``fs.dirs`` walks
+    the tree in the page, this opens Finder (or the platform's equivalent) on
+    the gateway's host and hands the choice back. Only sensible where that host
+    is the reader's own desktop, which is the page's call to make -- it knows
+    where it is being served from -- so the method itself does not refuse a
+    remote caller; it would merely open a dialog nobody sees, and a host with
+    no dialog says so instead.
+
+    The answer carries the same ``ok`` ``fs.dirs`` puts on every entry, so the
+    page can decline a folder the create would refuse without a second call.
+    """
+    from raven.agent.workdir import validate_override
+    from raven.config.loader import load_config
+
+    argv = _pick_dir_argv()
+    if argv is None:
+        raise ConfigValidationError("no folder dialog is available on this host")
+    try:
+        chosen = await _run_pick_dir(argv)
+    except OSError as e:
+        raise ConfigValidationError(f"folder dialog failed: {e}") from None
+    if not chosen:
+        return {"ok": False}
+    target = Path(chosen).expanduser()
+    if not target.is_absolute() or not target.is_dir():
+        raise ConfigValidationError(f"not a directory: {chosen}")
+    target = target.resolve()
+    try:
+        validate_override(target, load_config().workspace_path)
+        ok = True
+    except ValueError:
+        ok = False
+    return {"path": str(target), "ok": ok}
+
+
 _UPLOAD_DIR = "uploads"
 
 
@@ -1944,6 +2046,28 @@ async def fs_upload(params: dict, *, agent_loop_factory=None) -> dict:
     }
 
 
+def _reader_language() -> str:
+    """The language the page is in, which is the language its templates speak.
+
+    One setting, not a parameter on every call: the picker's covers, the pages
+    behind them and the file a pick hands over are the same reader's, and a
+    caller that could disagree with the page about which language that is would
+    be a way to get a Chinese cover over an English gallery.
+    """
+    from raven.config.loader import load_config
+
+    try:
+        return load_config().language
+    except Exception:  # noqa: BLE001 - an unreadable config is the shipped language
+        return deck_templates_source_language()
+
+
+def deck_templates_source_language() -> str:
+    from raven.rpc import deck_templates
+
+    return deck_templates.SOURCE_LANGUAGE
+
+
 async def deck_templates_list(params: dict, *, agent_loop_factory=None) -> dict:
     """The bundled deck templates, with a cover each where this host has drawn one.
 
@@ -1954,7 +2078,9 @@ async def deck_templates_list(params: dict, *, agent_loop_factory=None) -> dict:
     """
     from raven.rpc import deck_templates
 
-    rows, pending = await deck_templates.listing(with_covers=bool(params.get("covers", True)))
+    rows, pending = await deck_templates.listing(
+        with_covers=bool(params.get("covers", True)), language=_reader_language()
+    )
     return {"templates": rows, "available": deck_templates.templates_dir() is not None, "pending": pending}
 
 
@@ -1966,7 +2092,7 @@ async def deck_templates_pages(params: dict, *, agent_loop_factory=None) -> dict
     template = deck_templates.find(name)
     if template is None:
         raise ConfigValidationError(f"no bundled deck template named {name!r}")
-    pages = await deck_templates.pages_for(template)
+    pages = await deck_templates.pages_for(template, _reader_language())
     return {"pages": [deck_templates.data_url(p) for p in pages]}
 
 
@@ -1985,7 +2111,7 @@ async def deck_templates_pick(params: dict, *, agent_loop_factory=None) -> dict:
     if template is None:
         raise ConfigValidationError(f"no bundled deck template named {name!r}")
     try:
-        target = deck_templates.deposit(template, _upload_root() / _UPLOAD_DIR)
+        target = deck_templates.deposit(template, _upload_root() / _UPLOAD_DIR, _reader_language())
     except OSError as e:
         raise ConfigValidationError(f"cannot place the template under uploads: {e}") from None
     return {"path": f"{_UPLOAD_DIR}/{target.name}", "abs_path": str(target), "size": target.stat().st_size}
@@ -2208,6 +2334,7 @@ def register_console_methods(dispatcher, *, agent_loop_factory=None) -> None:
     dispatcher.register("channels.qr", channels_qr)
     dispatcher.register("fs.list", bind(fs_list))
     dispatcher.register("fs.dirs", bind(fs_dirs))
+    dispatcher.register("fs.pick_dir", bind(fs_pick_dir))
     dispatcher.register("fs.read", bind(fs_read))
     dispatcher.register("fs.upload", bind(fs_upload))
     dispatcher.register("deck.templates.list", bind(deck_templates_list))

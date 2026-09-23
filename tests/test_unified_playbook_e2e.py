@@ -24,6 +24,18 @@ from raven.spine.message import ChatType, Source
 from raven.spine.turn import Origin, TurnRequest
 
 
+def _saved(root: Any) -> list[str]:
+    """The names a reader kept, which is the user layer alone.
+
+    ``list_ids`` unions that layer with the packaged one, so a builtin playbook
+    nobody saved would otherwise read as evidence that the turn wrote something.
+    """
+    if not root.exists():
+        return []
+    store = PlaybookStore(root)
+    return [name for name in store.list_ids() if store.origin_of(name) == "user"]
+
+
 def _names(tools: Any) -> set[str]:
     return {(tool.get("function", tool) or {}).get("name", "") for tool in tools or []}
 
@@ -396,7 +408,7 @@ async def test_digital_persona_is_a_draft_until_it_is_saved(tmp_path) -> None:
 
     # The turn writes nothing: a generated Persona is an answer on screen, and
     # the library is what a reader decided to keep.
-    assert not playbook_root.exists() or PlaybookStore(playbook_root).list_ids() == []
+    assert _saved(playbook_root) == []
     draft = loop.session_draft("test:persona")
     assert draft is not None
     assert draft.name == "skeptical-fact-checker"
@@ -440,7 +452,7 @@ async def test_saving_two_drafts_under_one_name_gets_a_deterministic_numeric_suf
         )
         loop.save_session_draft(f"test:{chat_id}")
 
-    assert PlaybookStore(playbook_root).list_ids() == ["skeptical-fact-checker", "skeptical-fact-checker-2"]
+    assert _saved(playbook_root) == ["skeptical-fact-checker", "skeptical-fact-checker-2"]
     suffixed = PlaybookStore(playbook_root).load("skeptical-fact-checker-2")
     assert isinstance(suffixed, UnifiedPlaybookSpec)
     assert suffixed.harness is not None and suffixed.harness.name == "skeptical-fact-checker-2"
@@ -768,7 +780,7 @@ async def test_a_maker_turn_writes_nothing_when_the_design_cannot_be_made(tmp_pa
     assert provider.setup_calls == 2
     # And wrote nothing, because it could not reach a tool that writes.
     assert provider.wrote == 0
-    assert not playbook_root.exists() or PlaybookStore(playbook_root).list_ids() == []
+    assert _saved(playbook_root) == []
     assert loop.session_draft("test:maker") is None
     # The tool table is the narrowing, not the wording. Naming one tool would
     # prove nothing -- a build without it registered passes by accident -- so

@@ -13,7 +13,7 @@
  * C11 (features/desk/store.ts's registered `desk.escapeOpen()`, for its own
  * fullscreen -> node -> pane -> collapse retreat). What is asserted against
  * it is now the table, every entry's own predicate and action against a
- * fixture page, and all twenty-eight pairs of layers. The three
+ * fixture page, and all fifty-five pairs of layers. The three
  * capture-phase handlers
  * each open sheet registers run *before* the table and two of them act on
  * Escape without stopping propagation, so one Escape can both deny an approval
@@ -33,16 +33,22 @@ import { _resetForTests as sessionReset, setCurrent } from '../lib/session'
 import * as escapeOrder from './escapeOrder'
 import * as find from './find'
 import { installEscapeOrder } from './globalListeners'
+import * as perm from './perm'
+import * as plus from './plus'
 import * as settingsDialog from './settings'
 import * as sheets from './sheetRack'
 import { resetSources, sources } from './sources'
+import * as workdir from './workdir'
 
 import type { ComposerSource } from '../features/composer/types'
 
-/* The eight, in the order Escape reaches them. Each item is the text the chain
-   tests to decide whether that layer is on screen -- a selector for the five
-   elements, the predicate's own name for the last three, which have no element
-   of their own to look at. */
+/* The ten, in the order Escape reaches them. Each item is the text the chain
+   tests to decide whether that layer is on screen -- a selector for the seven
+   elements, the predicate's own name for the three that have no element of
+   their own to look at.
+
+   The composer bar's three sit next to last: every layer above them covers the
+   bar, and the turn below them is the last resort. */
 const LAYER_IDS = [
   '.lightbox',
   '#veil',
@@ -51,6 +57,9 @@ const LAYER_IDS = [
   '#personaPage',
   'setIsOpen()',
   'desk.escapeOpen()',
+  '#permPop',
+  '#plusPop',
+  '#wdPop',
   'turn.busy()',
 ] as const
 
@@ -65,7 +74,10 @@ const PAGE = [
   '<button id="newBtn"></button>',
   '<div class="find" id="findBox" hidden><input id="sfind"></div>',
   '<div class="chat"><div class="dock"><div class="sheets" id="sheetRack"></div>',
-  '<div class="dock-in"><textarea id="ta"></textarea></div></div></div>',
+  '<div class="dock-in"><textarea id="ta"></textarea>',
+  '<div class="pop" id="permPop" data-open="false"></div>',
+  '<div class="pop" id="plusPop" data-open="false"></div>',
+  '<div class="pop" id="wdPop" data-open="false"></div></div></div></div>',
   '<section class="page" id="extAgentsPage" data-open="false"></section>',
   '<section class="page" id="personaPage" data-open="false"></section>',
   '<aside class="detail" id="detail" data-open="false"><div class="body" id="dBody"></div></aside>',
@@ -81,7 +93,10 @@ const PAGE = [
    is visible. */
 const spies = {
   extAgentsClose: vi.fn(),
+  permClose: vi.fn(),
   personaClose: vi.fn(),
+  plusClose: vi.fn(),
+  wdClose: vi.fn(),
   stop: vi.fn(),
 }
 
@@ -118,6 +133,12 @@ const LAYERS: Record<string, { up: () => void; taken: () => boolean }> = {
     up: () => desk.set({ paletteOpen: true }),
     taken: () => !desk.get().paletteOpen,
   },
+  /* The three on the composer bar. Their flag is the component's to write from
+     the store, and nothing renders in this fixture, so the flag goes up by hand
+     and what says the close ran is the store verb the table calls. */
+  '#permPop': { up: flag('permPop'), taken: called(spies.permClose) },
+  '#plusPop': { up: flag('plusPop'), taken: called(spies.plusClose) },
+  '#wdPop': { up: flag('wdPop'), taken: called(spies.wdClose) },
   'turn.busy()': { up: () => turn.dispatch({ type: 'send' }), taken: called(spies.stop) },
 }
 
@@ -137,7 +158,10 @@ beforeEach(() => {
   /* Each layer's own close, stood in for one export at a time: what is under
      test is which one the key reaches, not what any of them does. */
   vi.spyOn(extAgents, 'close').mockImplementation(spies.extAgentsClose)
+  vi.spyOn(perm, 'close').mockImplementation(spies.permClose)
   vi.spyOn(persona, 'closePage').mockImplementation(spies.personaClose)
+  vi.spyOn(plus, 'close').mockImplementation(spies.plusClose)
+  vi.spyOn(workdir, 'close').mockImplementation(spies.wdClose)
   sources.composer = { stop: spies.stop } as unknown as ComposerSource
   settingsDialog.close()
   /* The row's flag outlives a case now that it is a store's rather than the
@@ -170,11 +194,11 @@ const key = (k: string, over: Partial<KeyboardEventInit> = {}): KeyboardEvent =>
 }
 
 describe('the Escape priority order', () => {
-  it('is the order the table reaches the fourteen layers in', () => {
+  it('is the order the table reaches the eleven layers in', () => {
     expect(escapeOrder.ESCAPE_ORDER.map((layer) => layer.id)).toEqual([...LAYER_IDS])
   })
 
-  it('has no fifteenth entry, and every entry is in the fixture', () => {
+  it('has no twelfth entry, and every entry is in the fixture', () => {
     expect(escapeOrder.ESCAPE_ORDER).toHaveLength(LAYER_IDS.length)
     expect(Object.keys(LAYERS)).toEqual([...LAYER_IDS])
   })
@@ -197,8 +221,8 @@ describe('the Escape priority order', () => {
   const pairs = LAYER_IDS.flatMap((first, i) =>
     LAYER_IDS.slice(i + 1).map((second) => ({ first, second })))
 
-  it('has twenty-eight pairs to answer for', () => {
-    expect(pairs).toHaveLength(28)
+  it('has fifty-five pairs to answer for', () => {
+    expect(pairs).toHaveLength(55)
   })
 
   it.each(pairs)('takes back $first and leaves $second alone', ({ first, second }) => {
