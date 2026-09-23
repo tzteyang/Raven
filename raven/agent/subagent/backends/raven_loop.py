@@ -7,10 +7,11 @@ and ``_build_subagent_prompt``, extracted verbatim so a spawned sub-agent's
 
 from __future__ import annotations
 
+import difflib
 import json
 from collections.abc import Awaitable, Callable, Collection, Mapping, Sequence
 from pathlib import Path
-from typing import Any
+from typing import TYPE_CHECKING, Any
 
 from loguru import logger
 
@@ -26,11 +27,13 @@ from raven.agent.subagent.mcp_grant import (
     raven_loop_target,
     resolve_grant,
 )
+from raven.agent.subagent.tool_vocabulary import RAVEN_NAME
 from raven.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from raven.agent.tools.registry import ToolRegistry, call_failed
+from raven.agent.tools.removals import RemovalWatch
 from raven.agent.tools.shell import ExecTool
 from raven.agent.tools.web import ImageSearchTool, WebFetchTool, WebSearchTool, image_search_vendor, resolve_vendor_key
-from raven.config.live import LiveConfig, exec_extra_deny_patterns
+from raven.config.live import LiveConfig, exec_extra_deny_patterns, live_vendor_key
 from raven.config.schema import LLM_ERROR_RETRY_DELAYS_DEFAULT, ExecToolConfig
 from raven.contracts.llm_provider import LLMProvider
 from raven.contracts.participant import StepView
@@ -42,6 +45,9 @@ from raven.providers.tool_calls import openai_tool_call
 from raven.security.trust import wrap_untrusted
 from raven.spine.message import Media
 from raven.utils.messages import build_assistant_message
+
+if TYPE_CHECKING:
+    from raven.providers.binding import ModelBinding
 
 _LIVE_CONFIG = LiveConfig()
 #: The ladder a spawn waits out when its caller passed none. Only a rig that
@@ -71,6 +77,70 @@ def _append_participant_note(messages: list[dict[str, Any]], note: str) -> None:
         messages[-1]["content"] = [*body, {"type": "text", "text": note}]
     elif body is None:
         messages[-1]["content"] = note
+
+
+def _withheld_here(tools: ToolRegistry, mcp_source: "McpSource | None") -> frozenset[str]:
+    """Which of this run's tools are not on offer right now.
+
+    Two sources, asked per assembly the way ``AgentLoop._withheld_tool_names``
+    asks them: the operator's MCP blacklist, and every registered tool that
+    says it is unconfigured. This lane builds its own registry, so without the
+    second source a source install without the browser extra advertised eight
+    ``browser_*`` tools to a delegated run that could only watch them fail --
+    the main loop withholds exactly those, and a delegated run is not a
+    different deployment.
+    """
+    withheld: set[str] = set(mcp_source.disabled_tools()) if mcp_source is not None else set()
+    for name in tools.names():
+        spec = tools.spec_of(name)
+        if spec is None or spec.configured is None:
+            continue
+        try:
+            offered = bool(spec.configured())
+        except Exception as exc:
+            logger.warning("tool {} could not say whether it is configured: {}", name, exc)
+            continue
+        if not offered:
+            withheld.add(name)
+    return frozenset(withheld)
+
+
+def _file_change_counts(file_change: Any, diff: str | None) -> tuple[int, int]:
+    """Added/removed line counts for one file change, preferring the tool's own diff.
+
+    A unified diff, when the tool produced one, is counted directly. A rewrite
+    the tool dropped for being too large to render (or a write with no prior
+    content to diff against) has no ``diff``, so the two contents are compared
+    directly: a new file (``before is None``) counts every line of ``after`` as
+    added, and an existing file is compared line-by-line with ``difflib``.
+    """
+    if diff:
+        lines = diff.splitlines()
+        add = sum(1 for line in lines if line.startswith("+") and not line.startswith("+++"))
+        delete = sum(1 for line in lines if line.startswith("-") and not line.startswith("---"))
+        return add, delete
+    after_lines = file_change.after.splitlines()
+    if file_change.before is None:
+        return len(after_lines), 0
+    before_lines = file_change.before.splitlines()
+    add = delete = 0
+    for tag, i1, i2, j1, j2 in difflib.SequenceMatcher(None, before_lines, after_lines).get_opcodes():
+        if tag in ("insert", "replace"):
+            add += j2 - j1
+        if tag in ("delete", "replace"):
+            delete += i2 - i1
+    return add, delete
+
+
+def _workspace_relative(path: str, workspace: Path) -> str:
+    """The path a file record carries: relative to the run's workspace when the
+    file is under it (the file endpoint anchors relative paths there, and the
+    panel reads ``work/notes.md`` where an absolute path says nothing), absolute
+    otherwise."""
+    try:
+        return str(Path(path).resolve().relative_to(Path(workspace).resolve()))
+    except (ValueError, OSError):
+        return path
 
 
 def build_subagent_prompt(
@@ -172,9 +242,14 @@ class RavenLoopBackend:
         mcp_allow: Collection[str] | None = None,
         retry_delays: "Sequence[float] | None" = None,
         retry_after_output: bool = False,
+        pin: Callable[[], ModelBinding | None] | None = None,
     ) -> None:
         self.provider = provider
         self.model = model
+        # The row's own model paired with its own credential, resolved per run
+        # (`SubagentManager.build_builtin_backend`); None means this agent runs
+        # on whatever pair the dispatch brings.
+        self._pin = pin
         # Global, unlike the per-run ``workspace``: memory and skills are the
         # agent's identity and stay in one place whatever directory a session
         # works in.
@@ -298,6 +373,14 @@ class RavenLoopBackend:
         # for callers that drive a backend directly.
         provider = provider or self.provider
         model = model or self.model
+        # The row's own model, when it has one, over the pair the dispatch
+        # brought: a per-agent model is a fact about this agent, and the turn's
+        # binding is the fallback it was always meant to be. Read per run
+        # because this backend is cached across bindings; a pin that resolves
+        # to nothing usable leaves the pair alone (see `live_pin_resolver`).
+        pinned = self._pin() if self._pin is not None else None
+        if pinned is not None:
+            provider, model = pinned.provider, pinned.model
         # Build subagent tools (no message tool, no spawn tool). The gate is
         # unattended by construction: a spawned task inherits the parent turn's
         # context -- responder included -- and a sub-agent must never pop an
@@ -343,8 +426,7 @@ class RavenLoopBackend:
 
         _verifier = DefaultAction()
         tools = ToolRegistry(permission_gate=gate, verifier_provider=lambda: _verifier)
-        if self.mcp_source is not None:
-            tools.set_withheld_source(self.mcp_source.disabled_tools)
+        tools.set_withheld_source(lambda: _withheld_here(tools, self.mcp_source))
         for wrapper, origin in grant.for_registry():
             tools.register(wrapper, origin=origin)
 
@@ -379,6 +461,14 @@ class RavenLoopBackend:
                     follow_binding=False,
                 )
             )
+
+        def live_key(vendor: str) -> Callable[[], str]:
+            # Read on every call, as the main loop's are: a refused key pauses
+            # the tool and points the user at the config slot, so the slot has
+            # to be what the next call reads -- for all three tools, since all
+            # three carry that advice.
+            return lambda: live_vendor_key(_LIVE_CONFIG, vendor, boot=self._web_key(vendor))
+
         # Withheld without a key, same as the main loop: a sub-agent that reaches
         # for a search it cannot run reports the failure to its caller, and that
         # text ends up in the parent turn. The whitelist stacks on top: a
@@ -386,14 +476,14 @@ class RavenLoopBackend:
         if allowed("web_search"):
             search_provider = self.web_search_provider
             web_search = WebSearchTool(
-                api_key=self._web_key(search_provider), proxy=self.web_proxy, provider=search_provider
+                api_key=live_key(search_provider), proxy=self.web_proxy, provider=search_provider
             )
             if web_search.api_key:
                 tools.register(web_search)
         if self.image_search and allowed("image_search"):
             picture_vendor = image_search_vendor(self.web_search_provider, self._web_key)
             image_search = ImageSearchTool(
-                api_key=self._web_key(picture_vendor), proxy=self.web_proxy, provider=picture_vendor
+                api_key=live_key(picture_vendor), proxy=self.web_proxy, provider=picture_vendor
             )
             if image_search.api_key:
                 tools.register(image_search)
@@ -402,8 +492,16 @@ class RavenLoopBackend:
                 self.web_fetch_provider, self._web_key(self.web_fetch_provider)
             )
             tools.register(
-                WebFetchTool(api_key=self._web_key(fetch_provider), proxy=self.web_proxy, provider=fetch_provider)
+                WebFetchTool(api_key=live_key(fetch_provider), proxy=self.web_proxy, provider=fetch_provider)
             )
+        # The same browser the parent drives, in a tab of this run's own: the
+        # tools name the run in flight as their owner, so two sub-agents
+        # browsing at once are two tabs, never one page typed into twice.
+        from raven.agent.tools.browser import browser_tools
+
+        for tool in browser_tools():
+            if allowed(tool.name):
+                tools.register(tool)
 
         # A resumed instance brings its own history, system prompt included;
         # rebuilding the prompt here would append a second system turn. A
@@ -468,6 +566,10 @@ class RavenLoopBackend:
         # in full delivered its answer, and the verdict reading this is asking
         # what the run has to show for itself.
         cut_at_ceiling = False
+        # What this run has written, so a command of its own that removes one of
+        # those files reaches the record. Per run, like everything else here: the
+        # backend object is shared and other runs write beside this one.
+        removal_watch = RemovalWatch()
         while iteration < self._MAX_ITERATIONS:
             iteration += 1
             if participants:
@@ -480,6 +582,19 @@ class RavenLoopBackend:
                     tools=tools.get_definitions(),
                     model=model,
                 )
+                if response.finish_reason == "error" and not response.has_tool_calls:
+                    # The ladder was chat_with_retry's own, so an error here is
+                    # one it already gave up on. Raised rather than returned: the
+                    # error text would otherwise be the run's answer and the
+                    # record would read completed (see SubagentNoAnswerError).
+                    activity.note_usage(response.usage)
+                    verdict = response.error_classification
+                    raise SubagentNoAnswerError(
+                        "sub-agent's model call failed"
+                        + (f" ({verdict.category})" if verdict is not None else "")
+                        + ": "
+                        + (response.content or "")[:200]
+                    )
             else:
                 # A spawned run keeps the retry ladder; only a caller that asked
                 # to watch the reply form gives it up (a stream that already
@@ -565,6 +680,36 @@ class RavenLoopBackend:
                     activity.note_tool_call(tool_call.name)
                     set_current_tool_call_id(tool_call.id)
                     result = await tools.execute(tool_call.name, tool_call.arguments, run_meta=tool_call.run_meta)
+                    # Settled before this call's own write is noted, so the file
+                    # it just wrote is not stat'ed to say it exists.
+                    for removal in removal_watch.settle(getattr(result, "removed", ())):
+                        # No add, and no size: the file is gone, and a zero there
+                        # would read as a file that is present and empty.
+                        activity.note_file_change(
+                            _workspace_relative(removal.path, workspace),
+                            "delete",
+                            0,
+                            len((removal.before or "").splitlines()),
+                            None,
+                        )
+                    removal_watch.note_write(getattr(result, "file_change", None))
+                    if (file_change := getattr(result, "file_change", None)) is not None:
+                        # The op is the tool's, except that a write onto nothing
+                        # is a creation: `before is None` is the only record that
+                        # the file did not exist, and a reader draws an added file
+                        # differently from a rewritten one.
+                        add, delete = _file_change_counts(file_change, getattr(result, "diff", None))
+                        if "edit" in RAVEN_NAME.get(tool_call.name, tool_call.name):
+                            op = "edit"
+                        else:
+                            op = "add" if file_change.before is None else "write"
+                        activity.note_file_change(
+                            _workspace_relative(file_change.path, workspace),
+                            op,
+                            add,
+                            delete,
+                            len(file_change.after.encode("utf-8")),
+                        )
                     # Recorded beside the call, so the run's account says how
                     # its calls went and not only that it made them. Through the
                     # registry's own predicate: a call refused before dispatch
@@ -645,6 +790,9 @@ class RavenLoopBackend:
                 ],
                 model=model,
             )
+            if wrap_up.finish_reason == "error":
+                activity.note_usage(wrap_up.usage)
+                raise SubagentNoAnswerError("sub-agent's wrap-up model call failed: " + (wrap_up.content or "")[:200])
             final_result = (wrap_up.content or "").strip() or None
             activity.note_usage(wrap_up.usage)
             cut_at_ceiling = wrap_up.truncated

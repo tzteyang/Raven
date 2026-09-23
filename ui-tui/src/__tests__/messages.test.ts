@@ -64,7 +64,9 @@ describe('toTranscriptMessages', () => {
     const out = toTranscriptMessages(rows)
 
     expect(out.map(msg => msg.role)).toEqual(['user', 'system', 'assistant'])
-    expect(out[1]?.text).toContain('subagent')
+    // What opened the turn, worded: the raw origin is a wire value, and the
+    // line is read by a person.
+    expect(out[1]?.text).toBe('Sub-agent report')
     expect(out[1]?.text).not.toContain('UNTRUSTED')
     expect(out[1]?.text).not.toContain('raven-1')
   })
@@ -210,7 +212,7 @@ describe('toTranscriptMessages: resumed tool calls', () => {
       }
     ])
 
-    expect(msgs[0]!.text).toBe('↩ raven-code — finished; its result just joined this conversation')
+    expect(msgs[0]!.text).toBe('↩ raven-code — finished')
   })
 
   it('draws the failed variant of the delivered-arrow line for an error status', () => {
@@ -223,7 +225,7 @@ describe('toTranscriptMessages: resumed tool calls', () => {
       }
     ])
 
-    expect(msgs[0]!.text).toBe('↩ raven-research — failed; the error just joined this conversation')
+    expect(msgs[0]!.text).toBe('↩ raven-research — failed')
   })
 
   it('draws the waiting variant of the delivered-arrow line for a suspended node, not the finished one', () => {
@@ -239,9 +241,7 @@ describe('toTranscriptMessages: resumed tool calls', () => {
       }
     ])
 
-    expect(msgs[0]!.text).toBe(
-      '↩ stuck-node — hit an exception and is waiting on a decision; its report just joined this conversation'
-    )
+    expect(msgs[0]!.text).toBe('↩ stuck-node — waiting on a decision')
   })
 
   it('restores delivered and changed files after a restart', () => {
@@ -764,5 +764,27 @@ describe('withoutSpentIntro', () => {
     const rows = [{ role: 'user' as const, text: 'hello' }]
 
     expect(withoutSpentIntro(rows)).toEqual(rows)
+  })
+})
+
+describe('a stopped or died turn replays as the line the live path wrote', () => {
+  it('draws the failed marker as a system line, not as the model speaking', () => {
+    const reason = 'Error calling LLM (first_byte_timeout): no first byte'
+    const msgs = toTranscriptMessages([
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: `(turn failed: ${reason})`, turn_ended: { reason, status: 'failed' } }
+    ])
+
+    expect(msgs.some(m => m.role === 'system' && m.text === `Turn failed - ${reason}`)).toBe(true)
+    expect(msgs.some(m => m.text.includes('(turn failed'))).toBe(false)
+  })
+
+  it('draws the cancelled marker as the stop line', () => {
+    const msgs = toTranscriptMessages([
+      { role: 'user', text: 'hello' },
+      { role: 'assistant', text: '(turn cancelled by the user)', turn_ended: { status: 'cancelled' } }
+    ])
+
+    expect(msgs.at(-1)).toMatchObject({ role: 'system', text: 'Stopped by user' })
   })
 })

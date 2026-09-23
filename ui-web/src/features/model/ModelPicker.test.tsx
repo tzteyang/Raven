@@ -2,16 +2,20 @@
 import { act, cleanup, fireEvent, render } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { ModelPickerApp } from './ModelPicker'
-import * as store from './store'
+import { resetTranslator, setTranslator } from '../../i18n/t'
+import * as confirmStore from '../../state/confirm'
+import * as pageStore from '../../state/page'
+import { resetSources, setSources } from '../../state/sources'
+import { domSnapshot } from '../../test/domSnapshot'
+import { ModelApp } from './ModelPicker'
+import * as store from './store';
 
-import type { Shell } from '../../shell/bridge'
 import type { ModelSource, Provider } from './types'
 
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const toastWriter = vi.hoisted(() => ({ items: [] as string[] }))
-vi.mock('../../shell/toast', () => ({
+vi.mock('../../state/toast', () => ({
   show: (text: string) => { toastWriter.items.push(text) },
 }))
 
@@ -32,6 +36,9 @@ interface Harness {
   local: string[]
   settings: number
   providerSettings: string[]
+  /* [model, provider, kind] per call: what the typed-id row asked the source to
+     add, and what kind it stated for it. */
+  added: Array<[string, string, string | undefined]>
   after: number
   model: () => string
 }
@@ -39,7 +46,7 @@ interface Harness {
 function install(over: Partial<ModelSource> = {}, providers = PROVIDERS): Harness {
   const h: Harness = {
     toasts: [], persisted: [], persistedProviders: [], persistedScopes: [],
-    local: [], settings: 0, providerSettings: [], after: 0, model: store.current,
+    local: [], settings: 0, providerSettings: [], added: [], after: 0, model: store.current,
   }
   toastWriter.items = h.toasts
   let last = store.current()
@@ -54,6 +61,9 @@ function install(over: Partial<ModelSource> = {}, providers = PROVIDERS): Harnes
       h.persistedProviders.push(provider)
       h.persistedScopes.push(scope)
     },
+    addModel: async (m, provider, kind) => {
+      h.added.push([m, provider, kind])
+    },
     openSettings: () => {
       h.settings += 1
     },
@@ -62,24 +72,26 @@ function install(over: Partial<ModelSource> = {}, providers = PROVIDERS): Harnes
     },
     ...over,
   }
-  const shell: Shell = {
-    T: (key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key),
-    confirmAsk: () => {},
-    showPage: () => {},
-  }
-  window.RavenShell = shell
-  window.DS = { model: source }
+  setTranslator((key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key))
+  vi.spyOn(pageStore, 'show').mockImplementation(() => {})
+  vi.spyOn(confirmStore, 'ask').mockImplementation(() => {})
+  setSources({ model: source })
   document.body.innerHTML = '<button id="modelChip">chip</button>'
   return h
 }
 
-const mount = () => render(<ModelPickerApp />, { container: document.body.appendChild(document.createElement('div')) })
+const mount = () => render(<ModelApp />, { container: document.body.appendChild(document.createElement('div')) })
 
 const pick = (): HTMLElement | null => document.querySelector('.mpick')
-const rows = (col: string): HTMLElement[] => [...document.querySelectorAll<HTMLElement>(`.mpick .${col} .row`)]
+/* The rows of a column, which since 2026-09-20 means the models in it: the
+   typed-id row lives in the same list and is reached by `typedRow` instead, so
+   every case that counts models keeps counting models. */
+const rows = (col: string): HTMLElement[] =>
+  [...document.querySelectorAll<HTMLElement>(`.mpick .${col} .row:not(.model-typed)`)]
+const typedRow = (): HTMLElement | null => document.querySelector<HTMLElement>('.mpick .model-typed')
 const field = (): HTMLInputElement => document.querySelector('.mpick .find input')!
 const providerSelected = (index: number): string | null | undefined =>
-  rows('provs')[index]?.querySelector('.provider-choice-action')?.getAttribute('aria-selected')
+  rows('provs')[index]?.querySelector('.model-provider-action')?.getAttribute('aria-selected')
 
 const openIt = (anchor?: HTMLElement | null, after?: () => void) =>
   act(() => {
@@ -97,8 +109,8 @@ const type = (text: string) =>
 afterEach(() => {
   act(() => store._resetForTests())
   cleanup()
-  delete window.RavenShell
-  delete window.DS
+  resetTranslator()
+  resetSources()
   document.body.innerHTML = ''
 })
 describe('the model picker', () => {
@@ -108,11 +120,16 @@ describe('the model picker', () => {
     expect(pick()).toBeNull()
   })
 
-  it('offers only providers with an account and something to offer', () => {
+  it('offers every provider with an account, including one with nothing added', () => {
+    /* Reversed 2026-09-20: a provider with a working key and an empty list used
+       to be dropped here, which told a reader it was not connected and left a
+       model set by onboarding with no column to be marked in. */
     install()
     mount()
     openIt()
-    expect(rows('provs').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['MiniMax (Global)', 'Anthropic'])
+    /* 'NNothing': a provider the mark table has no drawing for gets a lettered
+       tile, and the tile's letter sits inside the name element. */
+    expect(rows('provs').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['MiniMax (Global)', 'Anthropic', 'NNothing'])
     expect(rows('provs')[0]!.querySelector('.nm')?.firstElementChild?.getAttribute('src')).toBe('assets/providers/minimax.svg')
     /* A name, not a link: the row's whole job is to change the column beside
        it, and an anchor in the middle of it sent the reader out to a marketing
@@ -157,7 +174,7 @@ describe('the model picker', () => {
     openIt()
     type('m2')
     const provs = rows('provs')
-    expect(provs.map((b) => b.querySelector('.ct')!.textContent)).toEqual(['1', '0'])
+    expect(provs.map((b) => b.querySelector('.ct')!.textContent)).toEqual(['1', '0', '0'])
     /* The provider with no hits dims rather than disappearing: what is installed
        must not move around while the reader types. */
     expect(provs[1]!.className).toContain('dim')
@@ -218,16 +235,77 @@ describe('the model picker', () => {
     expect(document.querySelector('.mpick .models .empty')!.textContent).toBe('gui.picker.no_match')
   })
 
-  it('distinguishes an empty search result from an empty provider', () => {
+  it('distinguishes an empty search result from a column with nothing of the kind', () => {
     install({}, [
       { id: 'a', name: 'A', models: ['one'], on: true },
       { id: 'b', name: 'B', models: [], on: true },
     ])
     mount()
     openIt()
-    /* The second provider is filtered out of the columns entirely, so the only
-       empty message reachable here is the search one. */
-    expect(rows('provs').length).toBe(1)
+    expect(rows('provs').length).toBe(2)
+    /* Two different empty columns, and the words are the whole difference: one
+       is a term to delete, the other a list to go and build. */
+    type('nothing-like-this')
+    expect(document.querySelector('.mpick .models .empty')!.textContent).toBe('gui.picker.no_match')
+    type('')
+    act(() => { fireEvent.click(rows('provs')[1]!.querySelector('.model-provider-action')!) })
+    expect(document.querySelector('.mpick .models .empty')!.textContent).toBe(
+      'gui.picker.empty_kind {"kind":"gui.model.type.text"}',
+    )
+  })
+
+  it('offers a typed id beside the matches, and adds it to the provider before picking it', async () => {
+    const h = install()
+    mount()
+    openIt()
+    type('m2')
+    /* The term matches a model AND is not one: both rows are right, because
+       the reader may mean either. */
+    expect(rows('models').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['minimax-m2'])
+    expect(typedRow()!.querySelector('.nm')!.textContent).toBe('gui.model.pick_use {"id":"m2"}')
+    await act(async () => { fireEvent.click(typedRow()!) })
+    expect(h.added).toEqual([['m2', 'minimax', 'text']])
+    expect(h.persisted).toEqual(['m2'])
+  })
+
+  it('leaves the typed row out once the term is a model exactly', () => {
+    install()
+    mount()
+    openIt()
+    type('minimax-m2')
+    expect(typedRow()).toBeNull()
+  })
+
+  it('states the kind on the chip, cycles it, and sends what it says', async () => {
+    const h = install()
+    mount()
+    openIt()
+    type('my-team/bge-reranker-x')
+    const chip = (): HTMLElement => typedRow()!.querySelector<HTMLElement>('.model-kind')!
+    /* The name's own guess, the way registry_data.inferred_tags would read it. */
+    expect(chip().textContent).toBe('gui.model.type.reranker')
+    act(() => { fireEvent.click(chip()) })
+    expect(chip().textContent).toBe('gui.model.type.audio')
+    await act(async () => { fireEvent.click(typedRow()!) })
+    expect(h.added).toEqual([['my-team/bge-reranker-x', 'minimax', 'audio']])
+  })
+
+  it('a slot opening starts the chip on the slot kind, not on the name', () => {
+    install({}, [{ id: 'p', name: 'P', on: true, models: ['emb-1'], labels: { 'emb-1': { kind: 'embedding' } } }])
+    mount()
+    act(() => {
+      store.open(document.getElementById('modelChip'), undefined, undefined,
+        { kind: 'embedding', title: 'Embedding', pick: async () => {} })
+    })
+    type('plain-name')
+    expect(typedRow()!.querySelector('.model-kind')!.textContent).toBe('gui.model.type.embedding')
+  })
+
+  it('keeps its rendered shape', () => {
+    install()
+    const view = mount()
+    openIt()
+    expect(domSnapshot(view.container)).toMatchSnapshot()
   })
 })
 
@@ -444,7 +522,7 @@ describe('the model picker, closing', () => {
 
   it('does nothing at all on a page with no source installed', () => {
     install()
-    delete window.DS
+    resetSources()
     mount()
     expect(() => openIt()).not.toThrow()
     expect(pick()).toBeNull()
@@ -511,6 +589,13 @@ describe('the capability icons', () => {
        dead markup repeated on every open. */
     expect(document.querySelectorAll('.mpick .model-tag-defs').length).toBe(1)
   })
+
+  it('keeps its rendered shape', () => {
+    install({}, TAGGED)
+    const view = mount()
+    openIt()
+    expect(domSnapshot(view.container)).toMatchSnapshot()
+  })
 })
 
 describe('what the picker offers', () => {
@@ -527,15 +612,79 @@ describe('what the picker offers', () => {
     expect(rows('models').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['opus'])
   })
 
-  it('leaves out a provider that has an account but nothing added yet', () => {
-    /* It would otherwise sit in the rail as a column that opens empty. */
+  it('lists a provider that has an account but nothing added yet', () => {
+    /* Counted 1 and 1: the first has nothing added, so a text opening offers
+       the registry's shortlist (see the wizard case above); the second offers
+       what was added. Zero is for a provider with neither. */
     install({}, [
       { id: 'anthropic', name: 'Anthropic', on: true, models: ['opus'], configured: [] },
       { id: 'openai', name: 'OpenAI', on: true, models: ['gpt'], configured: ['gpt'] },
+      { id: 'empty', name: 'Nothing', on: true, models: [], configured: [] },
     ])
     mount()
     openIt()
-    expect(rows('provs').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['OpenAI'])
+    expect(rows('provs').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['Anthropic', 'OpenAI', 'NNothing'])
+    expect(rows('provs').map((b) => b.querySelector('.ct')!.textContent)).toEqual(['1', '1', '0'])
+  })
+
+  it('lists the current model in its provider column even when the list does not carry it', () => {
+    /* onboarding and the CLI set agents.defaults.model without adding it to
+       the provider, so the model the chip names has to be somewhere it can be
+       seen marked. */
+    install({}, [{ id: 'p1', name: 'P1', on: true, models: ['a'], configured: ['a'], current: true }])
+    store.setCurrent('b')
+    mount()
+    openIt()
+    expect(rows('models').map((x) => x.querySelector('.nm')!.textContent)).toEqual(['b', 'a'])
+    expect(rows('models')[0]!.querySelector('.tick')).not.toBeNull()
+  })
+
+  it('does not list the current model twice when its two spellings differ', () => {
+    /* A role stores the spelling it was handed; `model.add_model` stores the
+       one it derived. Comparing the strings drew one model as two rows, both
+       reading the same because the provider half is not shown. */
+    install({}, [{
+      id: 'openrouter', name: 'OpenRouter', on: true,
+      models: ['openrouter/my-embedder'], configured: ['openrouter/my-embedder'],
+      labels: { 'openrouter/my-embedder': { kind: 'embedding' } },
+    }])
+    mount()
+    act(() => {
+      store.open(document.getElementById('modelChip'), undefined, undefined, {
+        kind: 'embedding', title: 'Embedding', pick: async () => {},
+        current: { model: 'my-embedder', provider: 'openrouter' },
+      })
+    })
+    expect(rows('models').map((x) => x.querySelector('.nm')!.textContent)).toEqual(['my-embedder'])
+  })
+
+  it('offers the registry shortlist for a text opening on a provider with nothing added', () => {
+    /* The first-run wizard's whole model step: a vendor is connected and a
+       chat model picked before anyone has built a list. An empty column there
+       is the step. */
+    install({}, [{ id: 'anthropic', name: 'Anthropic', on: true, models: ['opus', 'sonnet'], configured: [] }])
+    mount()
+    openIt()
+    expect(rows('models').map((b) => b.querySelector('.nm')!.textContent)).toEqual(['opus', 'sonnet'])
+  })
+
+  it('does not fall back for a kind the wizard never asks for', () => {
+    /* An embedding slot on a provider with nothing added should say so, not
+       offer the vendor's whole catalogue filtered to whatever happens to be
+       tagged -- "nothing here yet, type an id" is the honest answer. */
+    install({}, [{
+      id: 'anthropic', name: 'Anthropic', on: true, configured: [],
+      models: ['emb-1'], labels: { 'emb-1': { kind: 'embedding' } },
+    }])
+    mount()
+    act(() => {
+      store.open(document.getElementById('modelChip'), undefined, undefined,
+        { kind: 'embedding', title: 'Embedding', pick: async () => {} })
+    })
+    expect(rows('models')).toHaveLength(0)
+    expect(document.querySelector('.mpick .models .empty')!.textContent).toBe(
+      'gui.picker.empty_kind {"kind":"gui.model.type.embedding"}',
+    )
   })
 
   it('falls back to the offer for a source that never learned the difference', () => {
@@ -549,15 +698,30 @@ describe('what the picker offers', () => {
 })
 
 describe('the picker with nothing to offer', () => {
-  it('tells a connected account with no models added where to go', () => {
-    /* Two different dead ends. Saying "no account" to somebody whose keys all
-       work sends them to fix what is not broken. */
-    const h = install({}, [{ id: 'anthropic', name: 'Anthropic', on: true, models: ['opus'], configured: [] }])
+  it('opens for a connected account with no models added, rather than refusing', () => {
+    /* Reversed 2026-09-20 with the rule above: "go and build a list" is now
+       answered inside the picker -- an empty column that says so, and a row to
+       type an id into -- so it is no longer a dead end. */
+    const h = install({}, [{ id: 'anthropic', name: 'Anthropic', on: true, models: [], configured: [] }])
     mount()
     openIt()
+    expect(pick()).not.toBeNull()
+    expect(h.providerSettings).toEqual([])
+    expect(h.toasts).toEqual([])
+    expect(document.querySelector('.mpick .models .empty')!.textContent).toBe(
+      'gui.picker.empty_kind {"kind":"gui.model.type.text"}',
+    )
+  })
+
+  it('says "no models for" when the one vendor a slot allows is not connected', () => {
+    /* The remaining shape of that message: a media role may only run on
+       OpenRouter, so "no account" would send the reader to add any key at all. */
+    const h = install({}, [{ id: 'openrouter', name: 'OpenRouter', on: false, models: ['x'], configured: ['x'] }])
+    mount()
+    act(() => { store.open(undefined, undefined, undefined, { kind: 'image', providers: ['openrouter'] }) })
     expect(pick()).toBeNull()
-    expect(h.providerSettings).toEqual(['anthropic'])
-    expect(h.toasts).toEqual(['gui.picker.no_models_for {"name":"Anthropic"}'])
+    expect(h.providerSettings).toEqual(['openrouter'])
+    expect(h.toasts).toEqual(['gui.picker.no_models_for {"name":"OpenRouter"}'])
   })
 
   it('still says "no account" when nothing is connected at all', () => {

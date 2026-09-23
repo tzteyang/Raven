@@ -1,16 +1,20 @@
 import { useEffect, useRef, useState, useSyncExternalStore } from 'react'
 
-import { shell, t } from '../../shell/bridge'
-import { show as toast } from '../../shell/toast'
-import { current, setCurrent } from '../../shell/session'
+import { t } from '../../i18n/t'
+import { current, setCurrent } from '../../lib/session'
+import { term as findTerm } from '../../state/find'
+import * as lang from '../../state/lang'
+import * as page from '../../state/page'
+import { askingIn, askingVersion, watchAsking } from '../../state/sheetRack'
+import { show as toast } from '../../state/toast'
 import { open as openCron } from '../cron/store'
 import * as store from './store'
 import { plainTitle } from './title'
+import './styles.css'
 
-import type { MenuItem } from '../../shell/menu'
+import type { MenuItem } from '../../state/menu'
 import type { SessRow } from './types'
 import type { JSX, KeyboardEvent, MouseEvent } from 'react'
-import { term as findTerm } from '../../shell/find'
 
 /* The row's context/⋯ menu. Opening and acting on a session go through the
    source, while the current pointer is page-scoped modern state, so
@@ -27,7 +31,6 @@ function archiveSession(s: SessRow): void {
 }
 
 function sessItems(s: SessRow): Array<MenuItem | '-'> {
-  const sh = shell()
   return [
     {
       label: t('gui.sess.rename'),
@@ -78,7 +81,14 @@ function Row({ s, cur, busy }: { s: SessRow; cur: string | null; busy: boolean }
      still has a turn open, so it is busy -- and reading as merely working is
      what let a request that only lives for 30 seconds expire behind a row that
      looked like every other one. */
-  const live = s.status === 'ask' ? 'ask' : s.id === cur && busy ? 'run' : s.status
+  /* Or a question of this conversation's is standing right now: the stored
+     mark is cleared by opening the row and overwritten by leaving it, and the
+     line above the composer that used to announce another conversation's
+     question is gone, so this row is the whole of the notice. The rack knows
+     which conversations have an unanswered sheet, on screen or parked. */
+  const live = s.status === 'ask' || askingIn(s.id) > 0
+    ? 'ask'
+    : s.id === cur && busy ? 'run' : s.status
   // run/done/err all speak from the tail slot (see .sess .w[data-sig]). A turn
   // that failed is the outcome of the same turn `run` was reporting, so it
   // belongs in the slot the reader is already watching; splitting it onto a
@@ -95,8 +105,7 @@ function Row({ s, cur, busy }: { s: SessRow; cur: string | null; busy: boolean }
     : undefined
   const go = (): void => {
     if (editing) return
-    const sh = shell()
-    sh.showPage(null)
+    page.show(null)
     const now = current()
     if (s.id !== now) {
       setCurrent(s.id)
@@ -191,7 +200,7 @@ function Row({ s, cur, busy }: { s: SessRow; cur: string | null; busy: boolean }
           <span key="txt">{plainTitle(s.title)}</span>
         )}
         {s.workdir && !editing ? (
-          <span key="wd" className="wdt" title={s.workdir}>{folderName(s.workdir)}</span>
+          <span key="wd" className="rail-wdt" title={s.workdir}>{folderName(s.workdir)}</span>
         ) : null}
       </div>
       {/* The stamp is always rendered -- it is what gives the tail its width.
@@ -274,13 +283,15 @@ function Group({
         onKeyDown={enterOrSpace(flip)}
       >
         <span className="lab">{label}</span>
-        <span className="n">{String(items.length)}</span>
+        {/* No count and no rule beside it. The rows under the heading ARE the
+            count, and a hairline running to the edge drew a box around a list
+            that is already bounded by its own whitespace. What is left is the
+            name and the caret that folds it. */}
         <span className="car">
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <path d="M8.5 5.5 15 12l-6.5 6.5" />
           </svg>
         </span>
-        <span className="rule" />
         {action ? (
           <button
             className="grp-go"
@@ -312,7 +323,14 @@ function Group({
 }
 
 export function RailApp(): JSX.Element | null {
-  const s = useSyncExternalStore(store.subscribe, store.getState)
+  const s = useSyncExternalStore(store.subscribe, store.get)
+  /* The rows read `askingIn` below, and the rack is the only one who knows when
+     that moves -- the close paths repaint through `notify` while the sheet is
+     still docked and take it down after. */
+  useSyncExternalStore(watchAsking, askingVersion)
+  /* The language the page resolved, so a pick repaints this island: every word
+     below is a t(key) read at render time (state/lang/store.ts). */
+  useSyncExternalStore(lang.subscribe, lang.get)
   if (s.skel) {
     /* The live boot's skeleton rows, exactly the shapes the boot guard drew. */
     return (
@@ -328,7 +346,7 @@ export function RailApp(): JSX.Element | null {
   }
   const snap = s.snap
   if (!snap) return null
-  /* Not a snapshot field: the search row owns the term (shell/find.ts), and
+  /* Not a snapshot field: the search row owns the term (state/find.ts), and
      neither the demo nor the live source can produce it. */
   const query = findTerm()
   const hit = (x: SessRow): boolean =>

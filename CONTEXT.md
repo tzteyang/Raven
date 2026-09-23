@@ -314,11 +314,17 @@ before it writes the flag, and refuses the enable in the agent's own words when 
 answers (`force: true` is the operator's override). The two layers therefore ask
 different questions: readiness decides how the row is listed and spends nothing, the
 switch spends one call on that agent's quota before it writes a yes. Neither validates
-retroactively — a folder that ships enabled, and a row already switched on, stay on the
-roster unpinged — because the gate is on the act that turns an agent on, and not on
-membership. That act is the switch, or an add that writes a preset in already enabled:
-`subagents.add` proves a pinged kind the same way and stores nothing when it does not
-answer, so a preset cannot arrive on the roster unproved either.
+retroactively — a folder that ships enabled stays on the roster unpinged — because the
+gate is on the act that turns an agent on, and not on membership. Three acts qualify.
+The switch. An add that writes a preset in already enabled: `subagents.add` proves a
+pinged kind the same way and stores nothing when it does not answer, so a preset cannot
+arrive on the roster unproved either. And a `subagents.update` that changes the key or
+the model of a row that is already on — that is a connect nobody gated, since the row
+goes on serving dispatches with something nothing has tried — so it is asked the same
+question, and only when one of those two fields actually moved; every other field the
+call can write is presentation or policy, and a row that is off is left to the switch.
+Every kind but `builtin` is pinged, that one being this process, with no backend to
+reach.
 Not deletable through config — removing one means removing its folder, or setting
 `"enabled": false` in its own `subagent.json`. On the RPC wire the row source is still
 spelled `vendored`; renaming that is a schema change.
@@ -438,6 +444,15 @@ the same obligation for one node of a graph, and the node row's subject. Blank s
 parsing so a playbook can leave it for the model to fill, and `validate_and_order` refuses
 it before any node runs. It replaces the first-line-of-the-template guess a row used to
 make.
+
+**Task** (`tasks.list`, `raven/rpc/methods/tasks.py`):
+one unit of delegated work a conversation started, as the wire lists it: a `spawn` call, or
+a `run_subagent_dag` run (a playbook run is one), each as a run-level row carrying its nodes.
+Built from the run dir, the session node registry (`subagents/nodes.json`) and the Instance
+Registry, without the live graph tool; the row's status is derived from its nodes'
+(`docs/specs/2026-09-18-desk-tasks-list-design.md`).
+_Avoid_: "task" for a spine `TurnRequest`, an asyncio task, or the `task` text handed to a
+sub-agent -- those are a Turn, a coroutine, and a prompt.
 
 **Instance Title** / **Run Title** (`InstanceRow.title` / `InstanceRow.runTitle`):
 what one instance was asked, and what the graph it belongs to was asked. Computed by
@@ -623,6 +638,14 @@ Reasoning | Notice | ToolEvent`. Routed to delivery outlets by the `DeliveryHub`
 Replaces the old `OutboundMessage`.
 _Avoid_: conflating Deliverable with lifecycle events (`TurnStarted`/`TurnFailed`/`TurnEnded`) —
 those are emitted by the Spine worker, not a runner.
+
+**AnswerlessTurnError**:
+The exception a runner raises to say the turn it ran ended with no answer and that its message is
+already the report a reader should see — the model call the loop gave up on, in the loop's own words.
+`describe_failure` passes its text through unchanged, and the `turn_ended` marker that says so is
+filed before the failure leaves the loop.
+_Avoid_: conflating AnswerlessTurnError with `TurnFailed`, the lifecycle event the Spine worker
+emits for any exception a runner lets out, this one included.
 
 **OriginPools**:
 Per-origin concurrency gates: a `USER` pool, a `system` pool for proactive origins
@@ -1039,6 +1062,33 @@ injected into the `# Memory` segment) and the agent track (skills/cases, one of
 SkillForge's three sources at RRF weight 0.9). The name refers to the external package
 [EverMind-AI/EverOS](https://github.com/EverMind-AI/EverOS); the in-tree code is only an
 adapter. The same plugin also contributes the `understand_media` multimodal-parsing tool.
+
+**EverOS role**:
+One of the four models EverOS talks to: `llm` (reads each conversation and extracts
+what matters), `embedding` (what recall matches meaning with), `rerank` (sharpens
+recall ordering) and `multimodal` (what `understand_media` parses with). Named as a
+set because every surface reasons about all four at once -- the settings slots, the
+wizard, the spawn environment, the migration.
+
+**role pin**:
+What raven records for a role: a model id and the **provider** serving it, never a
+credential. The address and key are resolved from that provider at the moment the
+call goes out, so rotating a key is one edit and every role on that provider
+follows. Two homes, one reader (`role_pin`): `embedding`'s pin is raven's own
+top-level `embedding` block, because a knowledge base embeds with it too and must
+keep working when the memory plugin is not the configured backend; the other three
+live in the plugin's `plugins.config["everos-memory"]` slice.
+_Avoid_: "role block" and "role section" -- `[llm]` and friends in `everos.toml` are
+sections, and raven does not write them.
+
+**rerank protocol**:
+EverOS's `rerank.provider` field: which client implementation it builds, i.e. the
+shape of the request. `deepinfra` posts to `{base}/{model}`, `vllm` to
+`{base}/rerank`. Derived from the vendor table for a vendor raven knows, and
+recorded on the role only for a self-hosted endpoint no table can answer for.
+_Avoid_: calling it a provider -- raven's `provider` names a vendor, and the two
+meanings sharing one word is how reranking came to be configured against the wrong
+endpoint.
 
 **Memory Engine face** (`memory_engine/__init__.py`):
 The one address the rest of the tree reaches memory machinery by: `MemoryStore`,
@@ -1639,9 +1689,14 @@ the click two ways. `allow_session` remembers the still-asking parts of the
 action on the conversation (`permissions/session.py`: for `exec` one key per
 segment no rule covers, with the machine and the directory it runs in; for a
 file tool its path), and a later call whose every such part was granted runs
-without asking. `allow_always` also writes the prefix rule the human confirmed
--- suggested by the gate, editable, validated the same way -- into
-`permissions.tools.exec`, which the gate reads live. One tool defaults to allow without being
+without asking. `allow_always` writes the prefix rule the human confirmed --
+suggested by the gate, validated the same way, and editable before it is sent
+on the terminal while the page sends the suggestion as it stands -- into
+`permissions.tools.exec`,
+which the gate reads live, and adds no session grant beside it: the rule alone
+carries the grant, so taking it back (`approval.revoke`) means being asked
+again, and the session grant is the fallback only when the rule could not be
+written. One tool defaults to allow without being
 a read: `deliver_files`, whose recipient is the user themself and which is the
 only route a finished file has to them, so asking there loses the file rather
 than guarding it. A user rule still outranks the default in both directions.
@@ -1667,8 +1722,15 @@ _Avoid_: calling `zh_lexicon` a catalog -- one is what raven says, the other is
 what raven recognises.
 
 **Browser** (`browser/`):
-Browser automation (`driver.py`) and its outbound policy (`policy.py`).
-Consumed by surfaces only; a surface-side feature library like `importer`.
+Browser automation (`driver.py`) and its outbound policy (`policy.py`). One Chromium
+per process, reached from two sides: the panel's `browser.*` RPC (the reader's hands)
+and the model's `browser_*` tools (`agent/tools/browser.py`). A tool call names an
+**owner** -- the sub-agent run in flight, else the conversation -- and the driver binds
+each owner to a tab, so concurrent agents work in separate tabs and an owner's act
+brings its tab to the front of the panel. Calls with no owner are the reader's and are
+stamped as a **touch**, which the owner's readbacks report until the owner acts again.
+_Avoid_: calling the owner a session -- a sub-agent run inside one conversation is a
+second owner, and that distinction is what keeps it off its parent's tab.
 
 ### Execution & Evaluation
 
@@ -2384,7 +2446,9 @@ which is right for the caller receiving it and wrong for a transcript, where eac
 belongs on the step it preceded. So the Instance Log carries narration on the calling rows
 and closes with this. `""` (the turn ended on a step and said nothing after) is deliberately
 different from `None` (this lane cannot tell the two apart), which falls back to the whole
-output.
+output. The record keeps it as `<node_id>.closing.md` beside `out.md` (a spawn's
+`SpawnRecord.finish`, a dag node's runner), and the two context reads (`subagent.context`,
+`dag.node`) draw it as the answer row when it is there, the whole output when it is not.
 _Avoid_: calling it the answer - the answer is what the run returns, and for a narrating
 agent the two differ.
 
@@ -2510,7 +2574,8 @@ this instance that the client never sent and so has no row of its own to anchor 
 those two lanes this read is the only thing that carries any of it (the wire tags an instance
 on the four events of a *direct* turn and nothing else). Addressed by
 `(session_key, agent, handle)` through a second live index, because the first one is keyed by
-the record's directory - a task id no reader of a *conversation* ever sees.
+the record's address - the conversation's node root plus a node id no reader of a
+*conversation* ever sees.
 _Avoid_: reading the absence of live rows as "the turn ended" - a transport with no per-step
 visibility reports none for the whole of every turn.
 
@@ -2655,7 +2720,9 @@ under `agent_memory/profile/` (soul.md, agent.md) and `user_memory/profile/` (us
 
 **Onboarding** (`raven onboard` → `run_wizard`):
 The first-run wizard (LLM provider → sandbox → channel → EverOS memory → web access → sub-agents → cold-start import) that also seeds
-Agent home via `sync_workspace_templates()`; gated at startup by `ensure_configured_or_onboard()`.
+Agent home via `sync_workspace_templates()`; gated at startup by `ensure_configured_or_onboard()`. The web page has its own
+four-step wizard (model → search → agents → data sync, `ui-web/src/features/onboard/`) that opens when `setup.status` reports no
+provider; its data-sync step drives the same cold-start import over `import.*` (`raven/rpc/methods/import_sync.py`).
 
 **Bootstrap Files**:
 The identity files concatenated into every prompt — `soul.md` + `agent.md` + `TOOLS.md` —

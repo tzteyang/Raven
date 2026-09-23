@@ -1,24 +1,30 @@
 // @vitest-environment happy-dom
-import { afterEach, beforeEach, describe, expect, it } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest'
 
-import { open as approveOpen } from './approve'
+import { resetTranslator, setTranslator } from '../../i18n/t'
+import { _resetForTests as sessionReset, setCurrent } from '../../lib/session'
+import * as confirmStore from '../../state/confirm'
+import * as pageStore from '../../state/page'
+import { _resetForTests as draftsReset, read, slot } from '../../state/sheetDrafts'
+import { _resetForTests, forget, sync } from '../../state/sheetRack'
+import { mountPageRoot } from '../../test/pageRoot'
+import { open as approveOpen, openApproval } from './approve'
 import { close, open } from './clarify'
-import { _resetForTests, forget, sync } from './sheets'
-import { _resetForTests as sessionReset, setCurrent } from '../../shell/session'
 
-import type { Shell } from '../../shell/bridge'
 
 function wire(): void {
-  const shell: Shell = {
-    T: (key) => key,
-    confirmAsk: () => {},
-    showPage: () => {},
-  }
-  window.RavenShell = shell
+  setTranslator((key) => key)
+  vi.spyOn(pageStore, 'show').mockImplementation(() => {})
+  vi.spyOn(confirmStore, 'ask').mockImplementation(() => {})
   document.body.innerHTML =
     '<div class="chat"><div class="dock"><div class="sheets" id="sheetRack"></div>'
     + '<div class="dock-in"></div></div></div>'
+  /* The sheets render from the page's own root (src/chrome/SheetRack.tsx), so it
+     has to be standing before one is raised. */
+  unmount = mountPageRoot()
 }
+
+let unmount: (() => void) | null = null
 
 const rack = (): HTMLElement => document.getElementById('sheetRack')!
 const sheets = (): HTMLElement[] => [...rack().querySelectorAll<HTMLElement>('.csheet')]
@@ -38,12 +44,15 @@ beforeEach(() => {
   sessionReset()
   setCurrent('a')
   _resetForTests()
+  draftsReset()
   wire()
 })
 
 afterEach(() => {
+  if (unmount) unmount()
+  unmount = null
   sessionReset()
-  delete window.RavenShell
+  resetTranslator()
   document.body.innerHTML = ''
 })
 
@@ -169,8 +178,8 @@ describe('the clarify sheet', () => {
 
   /* Number picking is for a reader whose caret has left the field, which is
      where the sheet puts it on arrival -- so a number typed straight after the
-     question appears is part of the typed answer, not a pick. Carried over from
-     the legacy sheet unchanged; blurring is what the two cases apart. */
+     question appears is part of the typed answer, not a pick. Blurring is what
+     tells the two cases apart. */
   it('picks a choice by number once the focus has left the field', () => {
     const said: string[] = []
     open({ question: 'q', choices: ['one', 'two'] }, (a) => said.push(a))
@@ -202,6 +211,37 @@ describe('the clarify sheet', () => {
     expect(said).toEqual([])
   })
 
+  /* The Enter that commits a candidate is not the Enter that answers: the whole
+     handler stands back while an input method is composing, the way the
+     composer's own field does (features/composer/store.ts). */
+  it('leaves an input method alone in the field', () => {
+    const said: string[] = []
+    open({ question: 'q' }, (a) => said.push(a))
+    type('typed')
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, isComposing: true }))
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true, keyCode: 229 }))
+    expect(said).toEqual([])
+    field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }))
+    expect(said).toEqual(['typed'])
+  })
+
+  /* What is typed into the field is not the page's to read: the chrome owns
+     Escape and the slash palette's keys, and a document handler seeing them
+     would act on an answer being written. */
+  it('keeps what is typed in the field away from the page', () => {
+    open({ question: 'q' }, () => {})
+    let heard = 0
+    const sentinel = (): void => { heard += 1 }
+    document.addEventListener('keydown', sentinel)
+    try {
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }))
+      field().dispatchEvent(new KeyboardEvent('keydown', { key: '/', bubbles: true }))
+      expect(heard).toBe(0)
+    } finally {
+      document.removeEventListener('keydown', sentinel)
+    }
+  })
+
   /* A sheet parked with another conversation still holds a document handler,
      because the rack detaches the element rather than destroying it. */
   it('is not answerable by number while it is parked', () => {
@@ -212,6 +252,58 @@ describe('the clarify sheet', () => {
     sync()
     key('1')
     expect(said).toEqual([])
+  })
+
+  /* The half-typed answer is state, not a DOM leftover: the sheet's interior is
+     unmounted while the reader is in another conversation, so what they typed
+     has to be somewhere else by then. */
+  it('keeps the half-typed answer in the draft store', () => {
+    open({ question: 'q', request_id: 'q1' }, () => {})
+    type('half a sen')
+    expect(read(slot('a', 'q1')).text).toBe('half a sen')
+  })
+
+  it('still has the half-typed answer after a conversation switch and back', () => {
+    open({ question: 'q', request_id: 'q1' }, () => {})
+    type('half a sen')
+    setCurrent('b')
+    sync()
+    setCurrent('a')
+    sync()
+    expect(field().value).toBe('half a sen')
+    /* And the submit button is live for it, rather than waiting for one more
+       keystroke to notice there is an answer. */
+    expect(submit().disabled).toBe(false)
+  })
+
+  /* A pending approval has no deadline behind it: taken down unanswered, its
+     call waits until somebody presses stop. So a question docks above it
+     rather than over it, and a landed approval -- answered, only saying so --
+     goes the way any other sheet does. */
+  it('leaves a pending approval standing and sweeps only what is not waiting', () => {
+    const said: string[] = []
+    openApproval({ approvalId: 'ap-1', command: 'rm file.txt', description: 'Delete' }, { onChoice: (c) => { said.push(c) } })
+    open({ question: 'q1' }, () => {})
+    expect(sheets().length).toBe(2)
+    expect(sheets().map((el) => el.classList.contains('perm'))).toEqual([false, true])
+    expect(said).toEqual([])
+
+    /* Answered, the approval is a landed line, which the next question does replace. */
+    sheets()[1]!.querySelector<HTMLButtonElement>('.cp-acts .opt:last-child')!.click()
+    expect(said).toEqual(['allow'])
+    open({ question: 'q2' }, () => {})
+    expect(sheets().length).toBe(1)
+    expect(sheets()[0]!.classList.contains('perm')).toBe(false)
+  })
+
+  /* A question that replaces the pending one starts empty: the draft belonged to
+     the question the reader was answering, not to the conversation. */
+  it('does not hand a new question the retired one\'s draft', () => {
+    open({ question: 'q1' }, () => {})
+    type('half a sen')
+    open({ question: 'q2' }, () => {})
+    expect(field().value).toBe('')
+    expect(submit().disabled).toBe(true)
   })
 
   it('folds and unfolds, and the question unfolds it too', () => {
@@ -227,15 +319,17 @@ describe('the clarify sheet', () => {
     expect(sheet.dataset.fold).toBe('false')
   })
 
-  /* One pending question per conversation, and the sweep is by class: an
-     approval wears `.csheet` too, and two sheets stacked over the composer is
-     two things to answer for one blocked turn. */
-  it('replaces whatever was pending in its conversation, approval included', () => {
+  /* One pending question per conversation -- but an approval waiting beside it
+     is not its to take down: nothing behind an approval ends it if nobody
+     answers, so the question docks above and the approval keeps its place. The
+     preview variant wears the same mark and gets the same treatment. */
+  it('docks above a pending approval rather than replacing it, the preview variant too', () => {
     approveOpen('rm -rf build/', () => {}, () => {})
     expect(sheets().length).toBe(1)
     open({ question: 'q' }, () => {})
-    expect(sheets().length).toBe(1)
+    expect(sheets().length).toBe(2)
     expect(sheets()[0]!.querySelector('.hd .q')!.textContent).toBe('q')
+    expect(sheets()[1]!.querySelector('.what')!.textContent).toBe('rm -rf build/')
   })
 
   /* The takedown the rack runs. Every exit has to reach it, including the one

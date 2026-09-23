@@ -2,28 +2,33 @@
 import { act, cleanup, fireEvent, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { RailApp } from './RailPage'
-import * as store from './store'
+import { setTranslator } from '../../i18n/t'
 import {
   _resetForTests as sessionReset,
   current as sessionCurrent,
   onChange,
   setCurrent,
-} from '../../shell/session'
+} from '../../lib/session'
+import * as confirmStore from '../../state/confirm'
+import * as pageStore from '../../state/page'
+import { add as rackAdd, remove as rackRemove } from '../../state/sheetRack'
+import { resetSources, setSources, sources } from '../../state/sources'
+import { domSnapshot } from '../../test/domSnapshot'
+import { RailApp } from './RailPage'
+import * as store from './store'
 
-import type { Shell } from '../../shell/bridge'
-import type { MenuItem } from '../../shell/menu'
-import type { ToastAction } from '../../shell/toast'
+import type { MenuItem } from '../../state/menu'
+import type { ToastAction } from '../../state/toast'
 import type { RailSnapshot, RailSource, SessRow } from './types'
 
 /* The search term is the find row's, not the snapshot's, so the island reads it
-   straight out of shell/find. Stubbed here rather than mounting that row's
+   straight out of state/find. Stubbed here rather than mounting that row's
    markup: this file asks what the LIST does with a term, and find.test.ts asks
    how the row produces one. */
 const found = vi.hoisted(() => ({ term: '' }))
 const toastWriter = vi.hoisted(() => ({ items: [] as Array<{ text: string; action?: ToastAction }> }))
-vi.mock('../../shell/find', () => ({ term: () => found.term }))
-vi.mock('../../shell/toast', () => ({
+vi.mock('../../state/find', () => ({ term: () => found.term }))
+vi.mock('../../state/toast', () => ({
   show: (text: string, action?: ToastAction) => { toastWriter.items.push({ text, action }) },
 }))
 
@@ -40,63 +45,52 @@ interface Harness {
   toasts: Array<{ text: string; action?: ToastAction }>
 }
 
-/* The island runs against the same two seams production wires: a fake shell
-   on window.RavenShell (T returns its key, so tests assert catalogue keys)
-   and a snapshot source on window.DS.sessions. */
+/* The island runs against the same two seams production wires: a stand-in
+   translator on setTranslator (it returns its key, so tests assert catalogue
+   keys) and a snapshot source on sources.rail. */
 function install(over: Partial<RailSnapshot> = {}): Harness {
   const state: RailSnapshot = { rows: [row()], cur: 'a', busy: false, ...over }
   const calls: Array<[string, unknown]> = []
   const toasts: Array<{ text: string; action?: ToastAction }> = []
   toastWriter.items = toasts
-  const fakeShell: Shell = {
-    T: (key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key),
-    confirmAsk: (_t, _b, _l, fn) => fn(),
-    showPage: id => calls.push(['showPage', id]),
-    navState: () => ({ pages: [], btnOf: () => undefined })
-  }
-  window.RavenShell = fakeShell
+  setTranslator((key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key))
+  vi.spyOn(confirmStore, 'ask').mockImplementation((_t, _b, _l, fn) => fn())
+  vi.spyOn(pageStore, 'show').mockImplementation(id => calls.push(['showPage', id]))
+  vi.spyOn(pageStore, 'navState').mockImplementation(() => ({ pages: [], btnOf: () => undefined }))
   sessionReset()
   setCurrent(state.cur)
   onChange((id) => {
     state.cur = id
     store.draw()
   })
-  window.DS = { sessions: {
+  setSources({ rail: {
     snapshot: () => state,
     replace: (rows: SessRow[]) => { state.rows = rows },
     open: (s: SessRow) => calls.push(['openSession', s.id]),
-  } }
+  } as unknown as RailSource })
   document.body.innerHTML =
     '<div class="app" data-page="off">' +
-    '<button id="newBtn"></button><button id="skillBtn"></button>' +
-    '<button id="plugBtn"></button><button id="memBtn"></button><button id="moreBtn"></button>' +
-    '<div id="moreFly" data-open="false"></div>' +
+    '<button id="newBtn"></button><button id="agentsBtn"></button>' +
     PAGES.map(p => `<div id="${p}" data-open="false"></div>`).join('') +
     '<div id="list"></div><h1 id="title">t</h1><button id="renameBtn"></button></div>'
   return { state, calls, toasts }
 }
 
 /* The installed source, for the cases that add a write verb to it. */
-const src = (): RailSource => window.DS!.sessions as RailSource
+const src = (): RailSource => sources.rail as RailSource
 
-/* The nav the assembled page hands over (demo/155-bridge.js reads it off
-   NAV_OF and MORE_ROWS): every module page, the rail button each one lights
-   up, and the More group's rows in their drawn order. The default fake above
-   hands over an empty one, which is the whole page shut. */
-const PAGES = ['capsPage', 'xaPage', 'connPage', 'memPage', 'cronPage']
+/* The nav the assembled page hands over (state/page.ts's navState, off the
+   page table): every module page and the rail button each one lights up. The
+   default fake above hands over an empty one, which is the whole page shut. */
+const PAGES = ['extAgentsPage']
 const BTN_OF: Record<string, string> = {
-  capsPage: 'skillBtn',
-  xaPage: 'moreBtn',
-  connPage: 'moreBtn',
-  memPage: 'memBtn',
-  cronPage: 'moreBtn'
+  extAgentsPage: 'agentsBtn',
 }
 
 function navUp(open: string): void {
-  window.RavenShell!.navState = () => ({
+  vi.spyOn(pageStore, 'navState').mockReturnValue({
     pages: PAGES,
-    btnOf: p => BTN_OF[p],
-    morePages: ['xaPage', 'connPage', 'cronPage']
+    btnOf: (p: string) => BTN_OF[p]
   })
   document.querySelector<HTMLElement>('.app')!.dataset.page = 'on'
   PAGES.forEach(p => {
@@ -124,6 +118,7 @@ afterEach(() => {
   sessionReset()
   found.term = ''
   localStorage.clear()
+  resetSources()
 })
 
 describe('rail island', () => {
@@ -147,6 +142,34 @@ describe('rail island', () => {
     ).rows
     expect(next?.status).toBe('done')
     expect(next?.pin).toBe(false)
+  })
+
+  it('lets the server end a run badge while keeping the reader\'s own marks', () => {
+    /* The page subscribes to the conversation it is showing, so no
+       message.complete is coming for any other row: a `run` kept against the
+       server's answer would never come off. */
+    const cleared = store.reconcileRows(
+      [row({ id: 'a', persisted: true, status: 'run' })],
+      [row({ id: 'a', persisted: true, status: null })],
+      null
+    ).rows[0]
+    expect(cleared?.status).toBeNull()
+
+    const stillRunning = store.reconcileRows(
+      [row({ id: 'a', persisted: true, status: 'run' })],
+      [row({ id: 'a', persisted: true, status: 'run' })],
+      null
+    ).rows[0]
+    expect(stillRunning?.status).toBe('run')
+
+    for (const mark of ['done', 'ask'] as const) {
+      const kept = store.reconcileRows(
+        [row({ id: 'a', persisted: true, status: mark })],
+        [row({ id: 'a', persisted: true, status: null })],
+        null
+      ).rows[0]
+      expect(kept?.status).toBe(mark)
+    }
   })
 
   it('describes the complete state transition after deleting a session', () => {
@@ -196,7 +219,7 @@ describe('rail island', () => {
     expect(groups).toEqual(['gui.rail.pinned', 'gui.rail.from_cron', 'gui.rail.workdir', 'gui.rail.no_workdir'])
     /* Each pinned row wears its folder's name, with the whole path on hover;
        either separator. A pinned session stays in the pinned group. */
-    const tags = [...host.querySelectorAll('.sess .wdt')].map((n) => [n.textContent, n.getAttribute('title')])
+    const tags = [...host.querySelectorAll('.sess .rail-wdt')].map((n) => [n.textContent, n.getAttribute('title')])
     expect(tags).toEqual([['thesis', '/Users/me/thesis'], ['thesis', '/Users/me/thesis'], ['notes', 'C:\\work\\notes']])
     expect(host.querySelectorAll('.sess').length).toBe(4)
   })
@@ -237,8 +260,8 @@ describe('rail island', () => {
 
   /* A conversation that is asking something says so from the same slot, and says
      it even while its turn is busy. Its sheet only mounts on its own screen, so
-     the row is the only place the reader can learn a request is waiting -- and an
-     approval expires 35s after it was raised. */
+     this row is the whole of the notice, and the turn behind it waits for the
+     person rather than expiring. */
   it('shows the asking tail, and it outranks a busy turn', () => {
     const h = install({ rows: [row({ status: 'ask' })], busy: true })
     const host = mount()
@@ -246,6 +269,30 @@ describe('rail island', () => {
     const w = rowByTitle(host, 'GTM research').querySelector('.w')!
     expect(w.getAttribute('data-sig')).toBe('ask')
     expect(w.getAttribute('aria-label')).toBe('gui.sess.asking')
+    expect(h).toBeTruthy()
+  })
+
+  it('shows it for a standing question even when no mark was stored, and clears it when the question goes', () => {
+    /* The stored mark is cleared by opening the row and overwritten by leaving
+       it, so a reader who watched the question appear and then walked away
+       would have been left with a row reading like any other running turn. What
+       the rack is holding answers that without a mark to defend -- but only if
+       the rail hears the rack move: `approval.closed` resumes the turn first,
+       which repaints while the sheet is still docked, and removes the sheet
+       after, so a rail sampling on its own schedule would keep showing a
+       question that is over. */
+    const h = install({ rows: [row()], busy: true })
+    const sheet = document.createElement('div')
+    sheet.dataset.asks = '1'
+    rackAdd(sheet, 'a')
+
+    const host = mount()
+    const sig = () => rowByTitle(host, 'GTM research').querySelector('.w')!.getAttribute('data-sig')
+    expect(sig()).toBe('ask')
+
+    act(() => { rackRemove(sheet) })
+
+    expect(sig()).toBe('run')
     expect(h).toBeTruthy()
   })
 
@@ -356,13 +403,13 @@ describe('rail island', () => {
     install()
     const host = mount()
     expect(screen.getByText('GTM research')).toBeTruthy()
-    window.DS = {
-      sessions: {
+    setSources({
+      rail: {
         snapshot: () => {
           throw new Error('gone')
         }
-      }
-    }
+      } as unknown as RailSource
+    })
     act(() => store.draw())
     expect(host.querySelectorAll('.sess').length).toBe(1)
     expect(screen.getByText('GTM research')).toBeTruthy()
@@ -564,7 +611,7 @@ describe('rail island', () => {
      still has focus -- could slip past entirely. Telling the source from
      inside the commit is what closes that. */
   describe('renaming the current session', () => {
-    function edit(h: Harness): HTMLInputElement {
+    function edit(): HTMLInputElement {
       const host = mount()
       const it_ = rowItems(host, 'second task').find(x => x !== '-' && x.label === 'gui.sess.rename') as MenuItem
       act(() => it_.fn())
@@ -584,9 +631,9 @@ describe('rail island', () => {
     }
 
     it('tells the source on Enter, which is the case a blur listener missed', () => {
-      const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
+      install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
       const said = wire()
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'renamed by hand'
       key(inp, 'Enter')
       expect(said).toEqual([['b', 'renamed by hand']])
@@ -596,24 +643,24 @@ describe('rail island', () => {
     })
 
     it('tells the source on blur too', () => {
-      const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
+      install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
       const said = wire()
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'renamed by leaving'
       act(() => inp.dispatchEvent(new FocusEvent('blur')))
       expect(said).toEqual([['b', 'renamed by leaving']])
     })
 
     it('says nothing on escape, or when the title did not change', () => {
-      const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
+      install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
       const said = wire()
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'thrown away'
       key(inp, 'Escape')
       expect(said).toEqual([])
       expect(document.getElementById('title')!.textContent).toBe('second task')
 
-      const again = edit(h)
+      const again = edit()
       again.value = 'second task'
       key(again, 'Enter')
       expect(said).toEqual([])
@@ -621,7 +668,7 @@ describe('rail island', () => {
 
     it('renames with no source verb at all', () => {
       const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'offline rename'
       expect(() => key(inp, 'Enter')).not.toThrow()
       expect(h.state.rows[1]!.title).toBe('offline rename')
@@ -634,9 +681,9 @@ describe('rail island', () => {
        first had already put the heading back, so recovering was down to which
        of the two won. One commit per editor closes all of it. */
     it('ignores the blur that committing with Enter itself causes', () => {
-      const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
+      install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
       const said = wire()
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'named once'
       key(inp, 'Enter')
 
@@ -661,7 +708,7 @@ describe('rail island', () => {
     it('hands the heading back when a conversation switch needs it', () => {
       const h = install({ rows: [row(), row({ id: 'b', title: 'second task' })], cur: 'b' })
       const said = wire()
-      const inp = edit(h)
+      const inp = edit()
       inp.value = 'named on the way out'
       expect(document.getElementById('title')).toBeNull()
 
@@ -689,7 +736,7 @@ describe('rail island', () => {
     const host = mount()
     const grp = [...host.querySelectorAll<HTMLElement>('.grp')]
       .find(g => g.textContent!.includes('gui.rail.recent'))!
-    expect([...grp.children].map(c => c.className)).toEqual(['lab', 'n', 'car', 'rule'])
+    expect([...grp.children].map(c => c.className)).toEqual(['lab', 'car'])
   })
 
   it('folds a group on its eyebrow and unfolds it again', () => {
@@ -715,34 +762,10 @@ describe('rail island', () => {
     /* Nothing covering the chat and no session: the draft row is current. */
     act(() => store.markNew())
     expect(current('newBtn')).toBe('true')
-    navUp('memPage')
+    navUp('extAgentsPage')
     act(() => store.markNew())
-    expect(current('memBtn')).toBe('true')
+    expect(current('agentsBtn')).toBe('true')
     expect(current('newBtn')).toBe('false')
-    /* The capabilities page lights whichever capability button is showing;
-       btnOf is the shell's answer, not a table the island keeps. */
-    navUp('capsPage')
-    act(() => store.markNew())
-    expect(current('skillBtn')).toBe('true')
-    expect(current('memBtn')).toBe('false')
-  })
-
-  it('hands the mark to the More row while the group is open, and takes it back when folded', () => {
-    install({ cur: 'a' })
-    mount()
-    const fly = document.getElementById('moreFly')!
-    fly.innerHTML = '<button class="navi"></button><button class="navi"></button><button class="navi"></button>'
-    navUp('cronPage')
-    fly.dataset.open = 'true'
-    act(() => store.markNew())
-    const rows = [...fly.querySelectorAll('.navi')].map(b => b.getAttribute('aria-current'))
-    /* morePages is [xa, conn, cron]: the third row is the page that is up. */
-    expect(rows).toEqual(['false', 'false', 'true'])
-    expect(current('moreBtn')).toBe('false')
-    /* Folded, the group has to stand in for the page it hides. */
-    fly.dataset.open = 'false'
-    act(() => store.markNew())
-    expect(current('moreBtn')).toBe('true')
   })
 
   it('caps the recent group and expands the tail behind one row', () => {
@@ -758,5 +781,18 @@ describe('rail island', () => {
     expect(fold.textContent).toBe('gui.rail.collapse')
     act(() => fold.click())
     expect(host.querySelectorAll('.sess').length).toBe(15)
+  })
+
+  it('keeps its rendered shape', () => {
+    install({
+      rows: [
+        row(),
+        row({ id: 'p', title: 'pinned one', pin: true }),
+        row({ id: 'k', title: 'daily digest', from: 'cron' }),
+        row({ id: 'e', title: '🚀 Ship it' })
+      ]
+    })
+    const host = mount()
+    expect(domSnapshot(host)).toMatchSnapshot()
   })
 })

@@ -1,24 +1,24 @@
 import { useEffect, useState, useSyncExternalStore } from 'react'
 
-import { shell, t } from '../../shell/bridge'
-import { show as menuAt } from '../../shell/menu'
-import { show as toast } from '../../shell/toast'
+import { t } from '../../i18n/t'
+import { toUnified } from '../../lib/hunks'
+import * as lang from '../../state/lang'
+import { show as menuAt } from '../../state/menu'
+import { show as toast } from '../../state/toast'
+import * as deliveries from './deliveries'
 import {
-  RENDERED, appFor, canOpenInApp, copyToClip, extOf, fileURL,
+  RENDERED, appFor, canOpenInApp, copyToClip, extOf, fileURL, framedRenderURL,
   hostPlatform, mdHtml, openInApp, renderURL, runURL, setAppFor,
 } from './store'
-import * as deliveries from './deliveries'
 import * as store from './store'
 
-import type { MenuItem } from '../../shell/menu'
+import type { MenuItem } from '../../state/menu'
 import type { WsChange, WsFile, WsShared } from './types'
 import type { JSX, PointerEvent as ReactPointerEvent } from 'react'
 
-/* Copies of the icon paths the legacy renderers drew with (ICO in
-   demo/100-workspace.js, ACT_ICO.chev in demo/070-transcript.js): those
-   tables stay in the demo shell for the views that never left it, and the
-   island carries its own strings the same way the cron island carries its
-   FREQ table. */
+/* The icon paths this view draws with. The island carries its own strings the
+   same way the cron island carries its FREQ table, rather than reading a
+   shared table: every one of them is used here and nowhere else. */
 const ICO = {
   diff: 'M4 4h16v16H4zM12 8.5v7M8.5 12h7',
   file: 'M4 7.5c0-1.1.9-2 2-2h3.5l2 2.5H18c1.1 0 2 .9 2 2v7c0 1.1-.9 2-2 2H6c-1.1 0-2-.9-2-2v-9.5Z',
@@ -52,8 +52,11 @@ const ctxRef = (items: () => MenuItem[]) => (el: HTMLElement | null): void => {
   if (el) (el as CtxHost)._ctx = items
 }
 
-export function WsApp(): JSX.Element {
-  const s = useSyncExternalStore(store.subscribe, store.getState)
+export function WorkspaceApp(): JSX.Element {
+  const s = useSyncExternalStore(store.subscribe, store.get)
+  /* The language the page resolved, so a pick repaints this island: every word
+     below is a t(key) read at render time (state/lang/store.ts). */
+  useSyncExternalStore(lang.subscribe, lang.get)
   const ws = store.shared()
   if (s.route === 'launch') return <Launch />
   if (s.route === 'file') return <FileView ws={ws} />
@@ -83,8 +86,7 @@ function Launch(): JSX.Element {
 
 function Changes({ ws }: { ws: WsShared }): JSX.Element {
   /* The flash class rides one render and the flag drops once painted, so
-     the next arrival can raise it again -- the legacy renderer cleared it
-     while rebuilding the row. */
+     the next arrival can raise it again. */
   useEffect(() => {
     ws.changes.forEach((c) => { c.flash = false })
   })
@@ -176,7 +178,12 @@ function DLine({ numbered, kind, text, oldNo, newNo }: {
   )
 }
 
-export function ChgDiff({ c }: { c: WsChange }): JSX.Element {
+export function ChgDiff({ c, patch }: { c: WsChange; patch?: boolean }): JSX.Element {
+  /* The desk pane draws the raw patch text the prototype's diffBody does; this
+     row's own inline expand keeps its structured, foldable view either way --
+     `patch` is what tells the two apart, so a caller that never passes it (the
+     row) renders exactly as it always has. */
+  if (patch) return <PatchDiff c={c} />
   /* One gutter decision per file, not per hunk: a mixed card must not
      zigzag its left edge between the two layouts. */
   const numbered = c.hunks.some((h) => h.rows.some((r) => r.length > 2))
@@ -213,6 +220,40 @@ export function ChgDiff({ c }: { c: WsChange }): JSX.Element {
     })
   })
   return <div className="diff">{out}</div>
+}
+
+/* The desk pane's look for a change: the same path bar and numbered code
+   block FileView draws for a file, fed the raw unified text instead of a
+   file's own bytes -- one fbar/fpane/fbody/fview shape for both, rather than
+   a second one for a patch. */
+function PatchDiff({ c }: { c: WsChange }): JSX.Element {
+  const path = c.dir + c.name
+  return (
+    <div className="fwrap">
+      <div className="fbar">
+        <span className="nm" title={path}>
+          {c.dir ? <i>{c.dir}</i> : null}
+          <b>{c.name}</b>
+        </span>
+        <button
+          className="ghost-ic fcopy tipdn"
+          data-tip={t('gui.ws.copy_path_do')}
+          aria-label={t('gui.ws.copy_path_do')}
+          onClick={() => copyToClip(path, t('gui.ws.copy_path'))}
+        >
+          <Ico d={ICO.doc} />
+        </button>
+        <span className="fsp" />
+      </div>
+      <div className="fpane">
+        <div className="fbody">
+          <div className="fview">
+            <CodeLines text={toUnified(path, c.hunks)} kind="diff" />
+          </div>
+        </div>
+      </div>
+    </div>
+  )
 }
 
 /* ── the file view ─────────────────────────────────────────────────── */
@@ -341,6 +382,34 @@ export function FileView({ ws, file = ws.file }: { ws: WsShared; file?: WsFile |
   )
 }
 
+/* `data.detail` first: on a refused fs call `message` is the wire CODE
+   (`config_validation_error`), and the sentence the reader can act on -- the
+   host has no `xdg-open`, the path is outside the fence -- rides in the detail.
+   A dropped socket has a message and no detail, hence the fallback. */
+const whySaid = (e: unknown): string => {
+  const said = e as { data?: { detail?: string }; message?: string } | null
+  return said?.data?.detail || said?.message || String(e)
+}
+
+/* Two controls for a deck, in words: its own file, and the folder it sits
+   in. Nothing else -- no application picker, no viewer toolbar in the frame
+   below. The deck is read here and changed by talking to the agent; what a
+   reader still needs from the bar is the bytes, or the file among the others
+   in the file manager. Reveal runs where the GATEWAY runs, like every fs call,
+   so on a remote serve it shows the file on that host. */
+function DeckActions({ f, revealTip }: { f: WsFile; revealTip: string }): JSX.Element {
+  const saveAt = deliveries.byPath(f.path)?.downloadPath || fileURL(f.path)
+  const reveal = (): void => {
+    store.source().reveal?.(f.path).then(() => {}, (e: unknown) => toast(whySaid(e)))
+  }
+  return (
+    <span className="workspace-deck-acts">
+      <a className="mini" href={saveAt} download={f.path.split('/').pop() || ''}>{t('gui.ws.download')}</a>
+      <button className="mini ghost" onClick={reveal}>{revealTip}</button>
+    </span>
+  )
+}
+
 function Fbar({ f, running }: { f: WsFile | null; running: boolean }): JSX.Element {
   const platform = hostPlatform()
   /* Subscribed for the same reason BinNote is: the delivery row a save link
@@ -397,7 +466,7 @@ function Fbar({ f, running }: { f: WsFile | null; running: boolean }): JSX.Eleme
           ))}
         </div>
       ) : null}
-      {f && (f.kind === 'pdf' || f.kind === 'html' || f.kind === 'pptx') ? (
+      {f && (f.kind === 'pdf' || f.kind === 'html') ? (
         <button
           className="ghost-ic tipdn"
           data-tip={t('gui.ws.file_newtab')}
@@ -413,28 +482,14 @@ function Fbar({ f, running }: { f: WsFile | null; running: boolean }): JSX.Eleme
           <Ico d={ICO.ext} />
         </button>
       ) : null}
-      {/* The frame shows a PDF of the deck, so the deck itself is reachable
-          from here: the delivery route when this session delivered it, the
-          viewer route otherwise. */}
-      {f && f.kind === 'pptx' ? (
-        <a
-          className="ghost-ic tipdn"
-          data-tip={t('gui.ws.save_copy')}
-          aria-label={t('gui.ws.save_copy')}
-          href={deliveries.byPath(f.path)?.downloadPath || fileURL(f.path)}
-          download={f.path.split('/').pop() || ''}
-        >
-          <Ico d={ICO.save} />
-        </a>
-      ) : null}
-      {f ? (
+      {f && f.kind === 'pptx' ? <DeckActions f={f} revealTip={revealTip} /> : null}
+      {f && f.kind !== 'pptx' ? (
         <button
           className="ghost-ic tipdn"
           data-tip={revealTip}
           aria-label={revealTip}
           onClick={() => {
-            store.source().reveal?.(f.path).then(() => {}, (e: unknown) =>
-              toast(((e as Error) && (e as Error).message) || String(e)))
+            store.source().reveal?.(f.path).then(() => {}, (e: unknown) => toast(whySaid(e)))
           }}
         >
           <Ico d={ICO.reveal} />
@@ -526,7 +581,7 @@ function FileBody({ f, running, onRun }: { f: WsFile; running: boolean; onRun: (
     const parsed = f.kind === 'json' && !asSource ? parseJsonCapped(f.text) : null
     body = parsed ? <JsonView v={parsed.v} /> : <CodeLines text={f.text} kind={f.kind} />
   }
-  return <div className="fview">{body}</div>
+  return <div className={asFrame || asDeck ? 'fview workspace-fill' : 'fview'}>{body}</div>
 }
 
 /* A deck is shown as the PDF the gateway renders of it. The render is asked
@@ -539,8 +594,14 @@ function FileBody({ f, running, onRun }: { f: WsFile; running: boolean; onRun: (
 function DeckBody({ f }: { f: WsFile }): JSX.Element {
   const [stage, setStage] = useState<'convert' | 'frame' | 'shown'>('convert')
   const [failed, setFailed] = useState<string | null>(null)
-  const url = renderURL(f.path)
+  /* A deck the agent rebuilt and delivered again keeps its path; the delivery's
+     own stamp is what tells this frame the bytes behind the path moved. */
+  useSyncExternalStore(deliveries.subscribe, deliveries.getVersion)
+  const version = (deliveries.byPath(f.path) as { when?: number | null } | null)?.when ?? null
+  const url = renderURL(f.path) + (version ? '&v=' + version : '')
   useEffect(() => {
+    setStage('convert')
+    setFailed(null)
     let alive = true
     const said = (e: unknown): string => ((e as Error) && (e as Error).message) || String(e)
     fetch(url, { credentials: 'same-origin' }).then(async (r) => {
@@ -572,7 +633,7 @@ function DeckBody({ f }: { f: WsFile }): JSX.Element {
     <>
       {stage !== 'shown' ? <div className="vspin">{t('gui.ws.file_rendering')}</div> : null}
       {stage !== 'convert'
-        ? <iframe referrerPolicy="no-referrer" src={url} onLoad={() => setStage('shown')} />
+        ? <iframe key={url} referrerPolicy="no-referrer" src={framedRenderURL(f.path, version)} onLoad={() => setStage('shown')} />
         : null}
     </>
   )

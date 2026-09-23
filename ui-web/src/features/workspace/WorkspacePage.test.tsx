@@ -2,21 +2,27 @@
 import { act, cleanup, render, screen } from '@testing-library/react'
 import { afterEach, describe, expect, it, vi } from 'vitest'
 
-import { WsApp } from './WorkspacePage'
+import catalogue from '../../../../i18n/messages.json'
+import { setTranslator } from '../../i18n/t'
+import * as confirmStore from '../../state/confirm'
+import * as pageStore from '../../state/page'
+import { resetSources, setSources } from '../../state/sources'
+import { domSnapshot } from '../../test/domSnapshot'
+import { installWsPane } from '../../test/wsPaneHarness'
 import * as deliveries from './deliveries'
 import * as store from './store'
+import { WorkspaceApp } from './WorkspacePage';
 
-import type { Shell } from '../../shell/bridge'
 import type { WorkspaceSnapshot, WorkspaceSource, WsChange } from './types'
 
 /* React refuses act() outside a test runner it recognizes unless told. */
 ;(globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }).IS_REACT_ACT_ENVIRONMENT = true
 
 const writers = vi.hoisted(() => ({ calls: [] as Array<[string, unknown]> }))
-vi.mock('../../shell/toast', () => ({
+vi.mock('../../state/toast', () => ({
   show: (text: string) => { writers.calls.push(['toast', text]) },
 }))
-vi.mock('../../shell/menu', () => ({
+vi.mock('../../state/menu', () => ({
   show: (_x: number, _y: number, items: unknown) => { writers.calls.push(['menuAt', items]) },
 }))
 
@@ -40,9 +46,9 @@ function emptyWs(over: Partial<WorkspaceSnapshot> = {}): WorkspaceSnapshot {
   return { changes: [], urls: [], file: null, turn: 1, unseen: 0, deliveries: [], ...over }
 }
 
-/* The island runs against the same two seams production wires up: a fake
-   shell on window.RavenShell (T returns its key) and a source on
-   window.DS.workspace -- the fixture shape for demo behaviour, a list/reveal
+/* The island runs against the same two seams production wires up: a stand-in
+   translator on setTranslator (it returns its key) and a source on
+   sources.workspace -- the fixture shape for offline behaviour, a list/reveal
    shape for live behaviour. */
 function install(ws: WorkspaceSnapshot, over: Partial<WorkspaceSource> = {}, view = { tab: 'diff', open: true, picked: true }) {
   store.restore(ws)
@@ -54,24 +60,27 @@ function install(ws: WorkspaceSnapshot, over: Partial<WorkspaceSource> = {}, vie
     openPath: (p) => shellCalls.push(['openPath', p]),
     ...over,
   }
-  const fakeShell: Shell = {
-    T: (key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key),
-    confirmAsk: (_t, _b, _l, fn) => fn(),
-    showPage: (id) => shellCalls.push(['showPage', id]),
-    wsView: () => view,
-    showWorkspace: (tab) => {
+  setTranslator((key, vars) => (vars ? `${key} ${JSON.stringify(vars)}` : key))
+  /* The panel's own viewer, which is what this file is about: with a desk
+     opener wired the store hands every open to the floating window instead
+     (features/workspace/store.ts's showFile). */
+  store.setDeskOpener(null)
+  vi.spyOn(confirmStore, 'ask').mockImplementation((_t, _b, _l, fn) => fn())
+  vi.spyOn(pageStore, 'show').mockImplementation((id) => shellCalls.push(['showPage', id]))
+  installWsPane({
+    view: () => view,
+    show: (tab) => {
       shellCalls.push(['showWorkspace', tab])
       view.tab = tab
       view.picked = true
       store.sync()
     },
-    wsPick: (tab) => shellCalls.push(['wsPick', tab]),
-  }
-  window.RavenShell = fakeShell
+    pick: (tab) => { shellCalls.push(['wsPick', tab]) },
+  })
   /* The file view renders markdown through the bundle's renderer, which reads
-     DS.prose for what counts as an openable path -- the page installs it in
-     demo/020-prose.js, so the harness does too. */
-  window.DS = { workspace: source, prose: { pathOf: () => null, linkTargetOf: () => null } }
+     sources.prose for what counts as an openable path -- the page installs it
+     from features/workspace/source.ts, so the harness does too. */
+  setSources({ workspace: source, prose: { pathOf: () => null, linkTargetOf: () => null } })
   /* The viewer fetches /file for text kinds; a pending promise keeps the
      spinner up instead of letting happy-dom dial a real socket. */
   vi.stubGlobal('fetch', () => new Promise(() => {}))
@@ -80,7 +89,7 @@ function install(ws: WorkspaceSnapshot, over: Partial<WorkspaceSource> = {}, vie
 }
 
 async function mount() {
-  const view = render(<WsApp />, { container: document.getElementById('wsBody')! })
+  const view = render(<WorkspaceApp />, { container: document.getElementById('wsBody')! })
   await act(async () => {
     store.sync()
   })
@@ -92,10 +101,11 @@ afterEach(() => {
     store.reset()
   })
   localStorage.clear()
-  store._resetAppsForTests()
+  store._resetForTests()
   cleanup()
   vi.unstubAllGlobals()
   vi.restoreAllMocks()
+  resetSources()
 })
 
 describe('workspace island', () => {
@@ -143,6 +153,20 @@ describe('workspace island', () => {
     expect(screen.getByText('README.md')).toBeTruthy()
     expect(screen.getByText('+2')).toBeTruthy()
     expect(screen.getByText('−1')).toBeTruthy()
+  })
+
+  /* The chip takes its word by building the key out of the kind
+     (`gui.ws.chip.` + c.kind), and the catalogue gate reads literal keys only
+     -- so a kind with no pair of words of its own renders its own key at the
+     reader, untranslated and in both languages, with nothing red. Written as a
+     record of the union so a fifth kind fails to compile until it is listed. */
+  it('carries a catalogue word and tooltip for every kind a change row can be', () => {
+    const kinds: Record<WsChange['kind'], true> = { add: true, write: true, edit: true, delete: true }
+    const ui = (catalogue as { ui: Record<string, unknown> }).ui
+    const missing = Object.keys(kinds)
+      .flatMap((kind) => [`gui.ws.chip.${kind}`, `gui.ws.chip.${kind}_t`])
+      .filter((key) => !(key in ui))
+    expect(missing).toEqual([])
   })
 
   it('shows the empty note once a view was picked but nothing changed', async () => {
@@ -392,17 +416,42 @@ describe('workspace island', () => {
     expect(cancel).toHaveBeenCalled()
     const frame = document.querySelector('.fview iframe') as HTMLIFrameElement
     expect(frame).not.toBeNull()
-    expect(frame.getAttribute('src')).toBe('/file?path=%2Frepo%2Fdeck.pptx&render=pdf')
+    /* Framed without the browser viewer's toolbar: the bar above is the deck's
+       one set of controls. */
+    expect(frame.getAttribute('src')).toBe('/file?path=%2Frepo%2Fdeck.pptx&render=pdf#toolbar=0&navpanes=0&view=FitH')
     expect(frame.hasAttribute('sandbox')).toBe(false)
+    expect(frame.closest('.fview')!.classList.contains('workspace-fill')).toBe(true)
     expect(screen.queryByText('gui.ws.file_rendering')).not.toBeNull()
     await act(async () => { frame.dispatchEvent(new Event('load')) })
     expect(screen.queryByText('gui.ws.file_rendering')).toBeNull()
-    /* The deck itself stays reachable from the header: its PDF in a tab, its
-       own bytes as a download. */
-    expect(screen.getByLabelText('gui.ws.file_newtab')).toBeTruthy()
-    const save = screen.getByLabelText('gui.ws.save_copy') as HTMLAnchorElement
+    /* Two controls, in words: the deck's own bytes, and its folder. */
+    expect(screen.queryByLabelText('gui.ws.file_newtab')).toBeNull()
+    const save = screen.getByText('gui.ws.download') as HTMLAnchorElement
     expect(save.getAttribute('href')).toBe('/file?path=%2Frepo%2Fdeck.pptx')
     expect(save.getAttribute('download')).toBe('deck.pptx')
+    expect(screen.getByRole('button', { name: /gui\.ws\.reveal_/ })).toBeTruthy()
+    expect(screen.queryByText('gui.ws.open')).toBeNull()
+  })
+
+  it('reframes a deck delivered again under the same path', async () => {
+    install(emptyWs({ file: { ...deckFile } }), { canBrowse: true }, { tab: 'file', open: true, picked: true })
+    vi.stubGlobal('fetch', () => Promise.resolve({ ok: true, status: 200, statusText: 'OK', body: { cancel: vi.fn() } }))
+    const delivered = (token: string, size: number, at: number): unknown => ({ raven_delivery: {
+      files: [{ path: '/repo/deck.pptx', name: 'deck.pptx', title: 'Deck', download_path: `/files/download?token=${token}`, size }],
+      delivered_at: at,
+    } })
+    deliveries.record(deliveries.SESSION, 1, delivered('one', 9, 1000))
+    await mount()
+    await act(async () => { await Promise.resolve() })
+    const first = (document.querySelector('.fview iframe') as HTMLIFrameElement).getAttribute('src')
+    expect(first).toContain('&v=1000#')
+    await act(async () => {
+      deliveries.record(deliveries.SESSION, 2, delivered('two', 11, 2000))
+      await Promise.resolve()
+    })
+    await act(async () => { await Promise.resolve() })
+    const again = (document.querySelector('.fview iframe') as HTMLIFrameElement).getAttribute('src')
+    expect(again).toContain('&v=2000#')
   })
 
   it('prefers the delivery route for saving a delivered deck', async () => {
@@ -410,8 +459,37 @@ describe('workspace island', () => {
     deliveries.seed([{ path: '/repo/deck.pptx', name: 'deck.pptx', title: 'Deck',
                        download_path: '/files/download?token=deck', size: 9 }])
     await mount()
-    const save = screen.getByLabelText('gui.ws.save_copy') as HTMLAnchorElement
+    const save = screen.getByText('gui.ws.download') as HTMLAnchorElement
     expect(save.getAttribute('href')).toBe('/files/download?token=deck')
+  })
+
+  it('keeps the deck bar to download and the folder even when the gateway is this desktop', async () => {
+    install(emptyWs({ file: { ...deckFile } }), {
+      canBrowse: true,
+      hostIsLocal: () => true,
+      openIn: async () => ({}),
+    }, { tab: 'file', open: true, picked: true })
+    await mount()
+    expect(screen.getByText('gui.ws.download')).toBeTruthy()
+    expect(screen.getByRole('button', { name: /gui\.ws\.reveal_/ })).toBeTruthy()
+    expect(screen.queryByText('gui.ws.open')).toBeNull()
+    expect(screen.queryByLabelText('gui.ws.open_with_pick')).toBeNull()
+  })
+
+  it('says why a reveal was refused, not the wire code', async () => {
+    const refused = Object.assign(new Error('config_validation_error'), {
+      data: { detail: "reveal failed: [Errno 2] No such file or directory: 'xdg-open'" },
+    })
+    const state = install(emptyWs({ file: { ...deckFile } }), { canBrowse: true, reveal: async () => { throw refused } },
+      { tab: 'file', open: true, picked: true })
+    await mount()
+    await act(async () => {
+      screen.getByRole('button', { name: /gui\.ws\.reveal_/ }).click()
+      await Promise.resolve()
+    })
+    await act(async () => { await Promise.resolve() })
+    const toasts = state.shellCalls.filter((c) => c[0] === 'toast').map((c) => String(c[1]))
+    expect(toasts).toEqual(["reveal failed: [Errno 2] No such file or directory: 'xdg-open'"])
   })
 
   /* A frame cannot say why its document did not come, so the answer to the
@@ -626,11 +704,11 @@ describe('workspace island', () => {
      else, or somebody editing the key by hand, must not reach a command line. */
   it('refuses a stored application name that is not one', async () => {
     localStorage.setItem('raven.openWith', JSON.stringify({ pptx: '/bin/sh', xlsx: 'Numbers' }))
-    store._resetAppsForTests()
+    store._resetForTests()
     expect(store.appFor('/x/a.pptx')).toBeNull()
     expect(store.appFor('/x/a.xlsx')).toBe('Numbers')
     localStorage.setItem('raven.openWith', 'not json at all')
-    store._resetAppsForTests()
+    store._resetForTests()
     expect(store.appFor('/x/a.xlsx')).toBeNull()
   })
 
@@ -671,11 +749,11 @@ describe('workspace island', () => {
     }, { tab: 'file', open: true, picked: true })
     await mount()
     const prose = document.querySelector('.prose')!
-    /* Real prose.ts output, so the heading cap and the emphasis are its own;
-       the shell has no md verb to stub, which is the point of the test. */
+    /* Real prose.ts output, so the heading cap and the emphasis are its own:
+       nothing between the panel and the renderer can stub the markdown, which
+       is the point of the test. */
     expect(prose.querySelector('h2')?.textContent).toBe('Title')
     expect(prose.querySelector('strong')?.textContent).toBe('this')
-    expect('md' in (window.RavenShell as object)).toBe(false)
   })
 
   it('shows the viewer error when the file read failed', async () => {
@@ -686,5 +764,18 @@ describe('workspace island', () => {
     }, { tab: 'file', open: true, picked: true })
     await mount()
     expect(await screen.findByText('gone for good')).toBeTruthy()
+  })
+
+  it('keeps its rendered shape', async () => {
+    install(emptyWs({
+      changes: [
+        change({ turn: 2, open: false }),
+        change({ key: '/repo/README.md', dir: '', name: 'README.md', kind: 'write', turn: 1, add: 5, del: 0 }),
+      ],
+      turn: 2,
+    }))
+    await mount()
+    await screen.findByText('app.py')
+    expect(domSnapshot(document.getElementById('wsBody')!)).toMatchSnapshot()
   })
 })
