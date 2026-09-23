@@ -1027,6 +1027,10 @@
       "en": "opens outside",
       "zh": "交给应用打开"
     },
+    "gui.arts.browser": {
+      "en": "Open in browser",
+      "zh": "在浏览器中打开"
+    },
     "gui.arts.changed": {
       "en": "Files changed this turn",
       "zh": "本轮文件变更"
@@ -1038,6 +1042,10 @@
     "gui.arts.delivered": {
       "en": "Delivered this turn",
       "zh": "本轮交付"
+    },
+    "gui.arts.download": {
+      "en": "Download",
+      "zh": "下载"
     },
     "gui.arts.edit": {
       "en": "Edited",
@@ -9128,8 +9136,8 @@
       "zh": "已思考"
     },
     "gui.think.live": {
-      "en": "thinking",
-      "zh": "思考中"
+      "en": "Thinking…",
+      "zh": "思考中…"
     },
     "gui.tier.failed": {
       "en": "Could not switch to {name}",
@@ -9294,6 +9302,14 @@
     "gui.tpl.use": {
       "en": "Use this template",
       "zh": "用这个模板"
+    },
+    "gui.transcript.date_today": {
+      "en": "Today {t}",
+      "zh": "今天 {t}"
+    },
+    "gui.transcript.date_yesterday": {
+      "en": "Yesterday {t}",
+      "zh": "昨天 {t}"
     },
     "gui.turn_died": {
       "en": "Turn failed - {e}",
