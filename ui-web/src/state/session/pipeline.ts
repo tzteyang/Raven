@@ -21,6 +21,7 @@ import { draw as sessionDraw } from '../../features/rail/store'
 import { t } from '../../i18n/t'
 import { current as sessionCurrent } from '../../lib/session'
 import { gateway } from '../../rpc/gateway'
+import { claimantFor } from '../clarifyClaim'
 import { show as toast } from '../toast'
 import { bySubscriptionRuntime, dispatchTo, refreshList, viewRuntime } from './registry'
 import { sess } from './rows'
@@ -210,15 +211,26 @@ export function approvalClosed(frame: unknown): void {
  defect, kept because this refactor changes no behaviour. See the design's
  issue list. */
 export function clarifyRequest(frame: unknown): void {
-  const p = frame as { request_id: string; conversation_id?: string }
+  const p = frame as { request_id: string; conversation_id?: string; question?: string; choices?: string[] }
   const owner = p.conversation_id || sessionCurrent()!
   notify(owner, { type: 'wait' })
-  clarifySheet(p, (answer: string) => {
+  const respond = (answer: string): void => {
     notify(owner, { type: 'resume' })
     gateway().call('clarify.respond', { request_id: p.request_id, answer }).catch(() => {})
     const open = viewRuntime().st
     if (open) open.hasQA = true
-  })
+  }
+  /* A page running a conversation of its own answers its own questions
+     (state/clarifyClaim.ts); everything else is the sheet's. */
+  const claimant = claimantFor(owner)
+  if (claimant) {
+    claimant.ask(
+      { requestId: p.request_id, question: p.question || '', choices: p.choices || [] },
+      respond,
+    )
+    return
+  }
+  clarifySheet(p, respond)
 }
 
 /* The question is over and nobody answered it: it timed out, its turn was
@@ -228,7 +240,13 @@ export function clarifyRequest(frame: unknown): void {
  same reason it resumes on an answer: it is no longer blocked on the reader. */
 export function clarifyClosed(frame: unknown): void {
   const p = frame as { request_id: string; conversation_id?: string }
-  notify(p.conversation_id || sessionCurrent()!, { type: 'resume' })
+  const owner = p.conversation_id || sessionCurrent()!
+  notify(owner, { type: 'resume' })
+  const claimant = claimantFor(owner)
+  if (claimant) {
+    claimant.close(p.request_id)
+    return
+  }
   clarifyClose(p.request_id)
 }
 

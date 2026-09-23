@@ -6408,6 +6408,107 @@
       ]
     },
     {
+      "name": "playbooks.draft",
+      "summary": "The Persona this session generated and has not saved, or null. A generated Harness is held as a draft rather than written to the library, so a turn that generates one leaves nothing behind until a reader saves it.",
+      "params": [
+        {
+          "name": "session_key",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "description": "The conversation whose generated Persona this is. A draft belongs to the session that asked for it."
+          }
+        }
+      ],
+      "result": {
+        "name": "PlaybooksDraftResult",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [],
+          "properties": {
+            "draft": {
+              "$ref": "#/components/schemas/PlaybookRow",
+              "description": "The unsaved Persona, in the row shape the library answers, with origin 'draft'. Absent when this session has generated none."
+            }
+          }
+        }
+      }
+    },
+    {
+      "name": "playbooks.draft_save",
+      "summary": "Write this session's generated Persona to the library and adopt it. An optional name renames it on the way in; a collision takes the first free numeric suffix.",
+      "params": [
+        {
+          "name": "session_key",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "description": "The conversation whose generated Persona this is. A draft belongs to the session that asked for it."
+          }
+        },
+        {
+          "name": "name",
+          "required": false,
+          "schema": {
+            "type": "string",
+            "pattern": "^[a-z0-9][a-z0-9-]*$",
+            "description": "The name to keep it under. Kebab-case, because the name resolves a directory under the library root. Omitted keeps the generated one."
+          }
+        }
+      ],
+      "result": {
+        "name": "PlaybooksDraftSaveResult",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "name"
+          ],
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "The name it was saved under, which a collision may have suffixed."
+            }
+          }
+        }
+      },
+      "errors": [
+        {
+          "$ref": "#/components/errors/ConfigValidationError"
+        }
+      ]
+    },
+    {
+      "name": "playbooks.draft_discard",
+      "summary": "Let this session's unsaved Persona go. Answers whether there was one.",
+      "params": [
+        {
+          "name": "session_key",
+          "required": true,
+          "schema": {
+            "type": "string",
+            "description": "The conversation whose generated Persona this is. A draft belongs to the session that asked for it."
+          }
+        }
+      ],
+      "result": {
+        "name": "PlaybooksDraftDiscardResult",
+        "schema": {
+          "type": "object",
+          "additionalProperties": false,
+          "required": [
+            "discarded"
+          ],
+          "properties": {
+            "discarded": {
+              "type": "boolean"
+            }
+          }
+        }
+      }
+    },
+    {
       "name": "approval.respond",
       "summary": "Answer a pending approval request.",
       "params": [
@@ -6498,7 +6599,9 @@
               "type": "boolean"
             }
           },
-          "required": ["ok"],
+          "required": [
+            "ok"
+          ],
           "type": "object"
         }
       }
@@ -6540,7 +6643,9 @@
               "type": "array"
             }
           },
-          "required": ["requests"],
+          "required": [
+            "requests"
+          ],
           "type": "object"
         }
       }
@@ -9118,7 +9223,10 @@
               }
             },
             "current": {
-              "type": ["object", "null"],
+              "type": [
+                "object",
+                "null"
+              ],
               "additionalProperties": false,
               "required": [
                 "platform",
@@ -9127,10 +9235,18 @@
                 "total"
               ],
               "properties": {
-                "platform": { "type": "string" },
-                "source_key": { "type": "string" },
-                "sent": { "type": "integer" },
-                "total": { "type": "integer" }
+                "platform": {
+                  "type": "string"
+                },
+                "source_key": {
+                  "type": "string"
+                },
+                "sent": {
+                  "type": "integer"
+                },
+                "total": {
+                  "type": "integer"
+                }
               }
             },
             "phase": {
@@ -13392,6 +13508,10 @@
           },
           "error": {
             "type": "string"
+          },
+          "coordinator_brief": {
+            "type": "string",
+            "description": "What the main Raven is in this Persona's words, empty when the Harness carries no coordinator seat."
           }
         },
         "required": [
@@ -13578,6 +13698,10 @@
               "$ref": "#/components/schemas/PlaybookMcpServer"
             },
             "type": "object"
+          },
+          "coordinator_brief": {
+            "type": "string",
+            "description": "What the main Raven is in this Persona's words, empty when the Harness carries no coordinator seat."
           }
         },
         "required": [

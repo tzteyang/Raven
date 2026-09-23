@@ -874,10 +874,21 @@ class WiringMixin:
         cfg = self._playbook_config
         if cfg is None or not cfg.enabled or getattr(cfg, "agent_harness", "default") != "generate":
             return HarnessResolution()
-        mode = getattr(req, "playbook_mode", None) or getattr(cfg, "default_generation_mode", "task")
+        asked = getattr(req, "playbook_mode", None)
+        mode = asked or getattr(cfg, "default_generation_mode", "task")
         if mode == "off":
             return HarnessResolution()
         if is_subagent_process() or getattr(req, "direct_target", None) is not None:
+            return HarnessResolution()
+        # A Persona is minted only for a turn that asked for one. The config's
+        # default says what this deployment generates, not that every message
+        # is a request to be given an identity -- and read as the latter it
+        # was: a reader typing "hi" spent a model call minting a Persona,
+        # bound the conversation to it, and heard the assistant volunteer a
+        # draft nobody had asked about. A Task artifact configures workers for
+        # the turn in hand and carries no identity, so the default still
+        # reaches it.
+        if mode == "persona" and asked != "persona":
             return HarnessResolution()
         try:
             from raven.playbook.agent_generator import (
@@ -912,7 +923,14 @@ class WiringMixin:
                     profiles,
                 )
             if resolution.active:
-                resolution = self._persist_generated_harness(resolution, query)
+                # Only a Persona is a draft. A Task artifact is the record of
+                # a graph the turn is about to run and its Workflow is compiled
+                # into it when the turn ends (``_finish_playbook_turn``), so
+                # holding one back would leave that compile nothing to update.
+                if getattr(resolution, "generation_mode", None) == "persona":
+                    resolution = self._hold_generated_harness(resolution, query, session_key)
+                else:
+                    resolution = self._persist_generated_harness(resolution, query)
         except Exception:  # noqa: BLE001 - setup must not cost the turn
             logger.opt(exception=True).warning("agent playbook: resolution failed; running unconfigured")
             return HarnessResolution()
@@ -921,37 +939,106 @@ class WiringMixin:
             logger.info("agent playbook: {} worker(s) for this turn: {}", len(table.workers), table.labels())
         return resolution
 
-    def _persist_generated_harness(self, resolution: Any, query: str):
-        """Save a validated Harness now; persistence failure never blocks binding."""
-        if self._playbooks is None or resolution.spec is None:
+    def _hold_generated_harness(self, resolution: Any, query: str, session_key: str):
+        """Hold a validated Harness as this session's draft; nothing is written.
+
+        A generated Persona is an answer on screen, not a library entry. The
+        page that asked for it saves it by name (``playbooks.draft_save``) or
+        lets it go, and until then the library is untouched -- which is the
+        whole difference from what this did before: a row was written on every
+        turn that generated one, so a reader who asked twice ended up with
+        ``travel-planner`` and ``travel-planner-2`` and nothing saying which of
+        the two they had meant to keep.
+
+        The draft still binds to the session (``adopt_session_persona`` runs on
+        the resolution this returns), because running as the Persona you just
+        described is the point of describing it; saving is what makes it
+        outlive the conversation.
+        """
+        if resolution.spec is None:
             return resolution
-        import re
         from dataclasses import replace
+
+        artifact = self._generated_artifact(resolution, query)
+        self._session_drafts[session_key] = artifact
+        logger.info("playbook: holding generated Harness {!r} as {}'s draft", artifact.name, session_key)
+        return replace(resolution, artifact_name=artifact.name, persisted=False)
+
+    def _generated_artifact(self, resolution: Any, query: str):
+        """The library artifact a generated Harness would be saved as."""
+        import re
 
         from raven.playbook.unified import PlaybookMatch, UnifiedPlaybookSpec
 
         description = (resolution.description or query.strip().splitlines()[0])[:200]
         keywords = [word.lower() for word in re.findall(r"[A-Za-z0-9][A-Za-z0-9_-]{2,}", query)[:8]]
-        artifact = UnifiedPlaybookSpec(
+        return UnifiedPlaybookSpec(
             name=resolution.artifact_name or resolution.spec.name,
             description=description,
             match=PlaybookMatch(summary=description, keywords=keywords or [description[:80]]),
             harness=resolution.spec,
         )
+
+    def _persist_generated_harness(self, resolution: Any, query: str):
+        """Save a validated Harness now; persistence failure never blocks binding.
+
+        The Task path's own. A Persona goes through ``_hold_generated_harness``
+        instead, because a Persona is something a reader decides to keep.
+        """
+        if self._playbooks is None or resolution.spec is None:
+            return resolution
+        from dataclasses import replace
+
+        artifact = self._generated_artifact(resolution, query)
         try:
             artifact, path = self._save_generated_artifact(artifact)
             self._playbooks.adopt(artifact.name)
-            harness = artifact.harness
             logger.info("playbook: saved generated Harness {!r} at {}", artifact.name, path)
             return replace(
                 resolution,
-                spec=harness,
+                spec=artifact.harness,
                 artifact_name=artifact.name,
                 persisted=True,
             )
         except Exception:  # noqa: BLE001 - persistence must not cost the turn
             logger.opt(exception=True).warning("playbook: generated Harness could not be saved; using it in memory")
             return resolution
+
+    def session_draft(self, session_key: str):
+        """The Persona this session generated and has not saved, or ``None``."""
+        return self._session_drafts.get(session_key)
+
+    def save_session_draft(self, session_key: str, name: str | None = None) -> str:
+        """Write this session's draft to the library, and answer its saved name.
+
+        The name is the reader's to choose: the generator proposes one, and the
+        page may send another. A collision takes the first free numeric suffix,
+        the way every other generated artifact does -- but now only when a
+        reader asked for the save, so the suffix means two Personas were kept,
+        not two turns were taken.
+        """
+        artifact = self._session_drafts.get(session_key)
+        if artifact is None:
+            raise ValueError("this session has no generated Persona to save")
+        if self._playbooks is None:
+            raise RuntimeError("Playbook runtime is unavailable")
+        wanted = (name or artifact.name).strip()
+        if not wanted:
+            raise ValueError("a Persona needs a name")
+        if wanted != artifact.name:
+            harness = artifact.harness
+            if harness is not None:
+                harness = harness.model_copy(update={"name": wanted})
+            artifact = artifact.model_copy(update={"name": wanted, "harness": harness})
+        saved, path = self._save_generated_artifact(artifact)
+        self._playbooks.adopt(saved.name)
+        self._session_drafts.pop(session_key, None)
+        logger.info("playbook: saved Persona {!r} at {}", saved.name, path)
+        return saved.name
+
+    def discard_session_draft(self, session_key: str) -> bool:
+        """Drop this session's unsaved Persona; ``True`` when there was one."""
+        return self._session_drafts.pop(session_key, None) is not None
 
     def _save_generated_artifact(self, artifact: Any):
         """Atomically save under the requested name or the first numeric suffix."""

@@ -4568,6 +4568,13 @@ class PlaybookRow(_Strict):
         default=False,
         description="True when the Harness carries a coordinator seat, which is what makes it a Persona.",
     )
+    coordinator_brief: str | None = Field(
+        None,
+        description=(
+            "What the main Raven is in this Persona's words, empty when the Harness carries no "
+            "coordinator seat."
+        ),
+    )
     workers: list[PlaybookWorkerShape]
     mode: Literal["dag", "prompt"]
     confirm: bool
@@ -4658,6 +4665,13 @@ class PlaybookDetail(_Strict):
     coordinator: bool = Field(
         default=False,
         description="True when the Harness carries a coordinator seat, which is what makes it a Persona.",
+    )
+    coordinator_brief: str | None = Field(
+        None,
+        description=(
+            "What the main Raven is in this Persona's words, empty when the Harness carries no "
+            "coordinator seat."
+        ),
     )
     workers: list[PlaybookWorker]
     mode: Literal["dag", "prompt"]
@@ -4781,6 +4795,46 @@ class PlaybooksValidateResult(_Strict):
         description=("Every finding, in the order the validator reports them. Empty when the playbook is sound."),
     )
     path: str = Field(..., description="The file the findings refer to.")
+
+
+class PlaybooksDraftParams(_Strict):
+    session_key: str = Field(
+        ...,
+        description=(
+            "The conversation whose generated Persona this is. A draft belongs to the session that "
+            "asked for it."
+        ),
+    )
+
+
+class PlaybooksDraftResult(_Strict):
+    draft: PlaybookRow | None = Field(
+        None,
+        description="The unsaved Persona, in the row shape the library answers, with origin 'draft'.",
+    )
+
+
+class PlaybooksDraftSaveParams(_Strict):
+    session_key: str
+    name: str | None = Field(
+        None,
+        description=(
+            "The name to keep it under. Kebab-case, because the name resolves a directory under the "
+            "library root. Omitted keeps the generated one."
+        ),
+    )
+
+
+class PlaybooksDraftSaveResult(_Strict):
+    name: str = Field(..., description="The name it was saved under, which a collision may have suffixed.")
+
+
+class PlaybooksDraftDiscardParams(_Strict):
+    session_key: str
+
+
+class PlaybooksDraftDiscardResult(_Strict):
+    discarded: bool
 
 
 class PlaybooksDeleteParams(_Strict):
@@ -5050,6 +5104,9 @@ METHOD_MODELS: dict[str, tuple[type[BaseModel], type[BaseModel]]] = {
     "playbooks.set_enabled": (PlaybooksSetEnabledParams, PlaybooksSetEnabledResult),
     "playbooks.validate": (PlaybooksValidateParams, PlaybooksValidateResult),
     "playbooks.delete": (PlaybooksDeleteParams, PlaybooksDeleteResult),
+    "playbooks.draft": (PlaybooksDraftParams, PlaybooksDraftResult),
+    "playbooks.draft_save": (PlaybooksDraftSaveParams, PlaybooksDraftSaveResult),
+    "playbooks.draft_discard": (PlaybooksDraftDiscardParams, PlaybooksDraftDiscardResult),
     "playbooks.run": (PlaybooksRunParams, PlaybooksRunResult),
     "playbooks.create": (PlaybooksCreateParams, PlaybooksCreateResult),
     # plughub.* / plug.* / skillhub.* — the market

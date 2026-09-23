@@ -10,6 +10,7 @@ allowed, after which the ordinary unconfigured turn continues.
 from __future__ import annotations
 
 import json
+import re
 import textwrap
 from dataclasses import dataclass
 from typing import TYPE_CHECKING, Any, Literal
@@ -84,10 +85,18 @@ PERSONA_SYSTEM_PROMPT = (
     "every brief, system prompt, stop condition, check, and function for future runtime behavior; remove creation-"
     "time commands. Choose distinct specialist owners for materially different responsibilities, and never create "
     "a generic Raven worker merely to repeat the coordinator's job. Do not design a Workflow or invent a DAG for the act "
-    "of creating the persona. Generate participant functions only for concrete long-lived runtime rules that "
-    "ordinary instructions cannot enforce. When requirements name inputs that must be present before work starts, "
-    "the coordinator must implement that gate with intake; stating it only in systemPrompt is insufficient. When a "
-    "hard boundary depends on tool-call arguments, the seat making the call must implement it with judge. Follow the "
+    "of creating the persona.\n\n"
+    "A Persona is someone the user talks to, and it behaves like one: it answers a greeting, says what it is and "
+    "what it can do, and holds an ordinary conversation without being handed anything first. Requirements that "
+    "name inputs are preconditions on the WORK, not a filter on the conversation: the persona asks for what is "
+    "missing when it is asked to do the work, and raises missing inputs at no other time. Write that as the "
+    "coordinator's own instructions. When it must collect more inputs than ask_user accepts in one call, say to "
+    "gather them over several turns.\n\n"
+    "Generate participant functions only for rules ordinary instructions cannot enforce -- a boundary that depends "
+    "on tool-call arguments belongs in judge on the seat making the call, and a limit that must hold even when the "
+    "model is argued out of it belongs in a function rather than in prose. An input requirement is neither: a "
+    "function that runs on every inbound message cannot tell a request for the work from a greeting, and writing "
+    "one turns the persona into a form nobody can talk to. Follow the "
     "supplied contracts and participantFunctionSyntax exactly. "
     "Never use for/while statements, try/except, imports, append, or an unlisted call in generated functions."
 )
@@ -142,7 +151,12 @@ _STEP_FIELDS = (
 
 _FUNCTION_CONTRACTS: dict[str, dict[str, str]] = {
     "intake": {
-        "when": "Runs once on inbound user text, before any model call.",
+        "when": (
+            "Runs once on EVERY inbound user text, before any model call -- a greeting, a question about who "
+            "the assistant is, and a request for the work all reach it alike. A reply here ends the turn with "
+            "no model call at all, so anything this does not positively recognize must return None and be left "
+            "to the model."
+        ),
         "returns": (
             "None for no opinion; otherwise a dict. text replaces the inbound text, reply ends the turn "
             "before a model call, and note is diagnostic. Across participants, text changes are threaded "
@@ -770,6 +784,25 @@ def _task_spec_from_args(
     return AgentPlaybookSpec.model_validate(payload), briefs
 
 
+def _unwrapped(text: str) -> str:
+    """A field value with the call's own markup peeled off it.
+
+    Models sometimes emit a tool argument as the wire fragment that would carry
+    it -- ``<parameter name="brief">Be the travel concierge...`` -- and the
+    fragment is the value as far as the parser is concerned. Six of six
+    generated coordinators carried it in, so the brief the Persona ran on began
+    with an XML tag, and so did the card that drew it. Peeled here, at the one
+    place a seat's prose is read, because every seat reads its brief through
+    this line.
+    """
+    body = text.strip()
+    opened = re.match(r'^<\s*parameter\b[^>]*>', body, re.I)
+    if opened:
+        body = body[opened.end():]
+    body = re.sub(r'</\s*parameter\s*>\s*$', "", body, flags=re.I)
+    return body.strip()
+
+
 def _persona_spec_from_args(
     args: dict[str, Any],
     roster: set[str],
@@ -786,8 +819,18 @@ def _persona_spec_from_args(
             "brief": _short_description(args.get("description"))
             or "Own the user conversation and coordinate specialists."
         }
+    if isinstance(raw_coordinator, str):
+        # The seat written as its own brief. The tool asks for an object and
+        # says so, and models still send the sentence -- six generations in a
+        # row did, each one rejected, repaired once, rejected again and thrown
+        # away. Reading it as the brief costs nothing and is what the sender
+        # plainly meant.
+        raw_coordinator = {"brief": raw_coordinator}
     if not isinstance(raw_coordinator, dict):
-        raise ValueError("coordinator must be an object")
+        raise ValueError(
+            'coordinator must be an object with a "brief", like '
+            '{"brief": "Own the conversation and dispatch the specialists"}'
+        )
     rows = args.get("workers")
     if not isinstance(rows, list):
         raise ValueError("workers must be a list")
@@ -826,7 +869,7 @@ def _persona_spec_from_args(
             logger.info("agent playbook: dropping worker {!r} -- not on the roster", name)
             continue
         label = str(row.get("as") or "").strip() if not is_coordinator else ""
-        brief = str(row.get("brief") or "").strip()
+        brief = _unwrapped(str(row.get("brief") or ""))
         if not is_coordinator and not label:
             errors.append(f"{index}. as must be non-empty")
         if not brief:

@@ -266,6 +266,9 @@ const LEGACY_LOCAL = {
   /* Up from 6 with the playbooks page gone: `.empty` was shared with it. */
   model: 7,
   onboard: 0,
+  /* A domain that arrived after the rule: every class it names carries its
+     own prefix, with its rules in features/persona/styles.css. */
+  persona: 0,
   rail: 11,
   settings: 0,
   /* Up one the same way: `.chev` was shared with the schedules island's run
@@ -324,6 +327,7 @@ const LEGACY_EXPR = {
   memory: 1,
   model: 2,
   onboard: 0,
+  persona: 0,
   rail: 2,
   settings: 0,
   /* Down from 5: `.task` moved to `LEGACY_LOCAL` and `.hl` went, with the

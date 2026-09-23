@@ -368,7 +368,7 @@ class _PersonaProvider(LLMProvider):
 
 
 @pytest.mark.asyncio
-async def test_digital_persona_saves_harness_only_without_inventing_a_dag(tmp_path) -> None:
+async def test_digital_persona_is_a_draft_until_it_is_saved(tmp_path) -> None:
     playbook_root = tmp_path / "playbooks"
     provider = _PersonaProvider()
     loop = AgentLoop(
@@ -394,6 +394,16 @@ async def test_digital_persona_saves_harness_only_without_inventing_a_dag(tmp_pa
         stream=False,
     )
 
+    # The turn writes nothing: a generated Persona is an answer on screen, and
+    # the library is what a reader decided to keep.
+    assert not playbook_root.exists() or PlaybookStore(playbook_root).list_ids() == []
+    draft = loop.session_draft("test:persona")
+    assert draft is not None
+    assert draft.name == "skeptical-fact-checker"
+
+    assert loop.save_session_draft("test:persona") == "skeptical-fact-checker"
+    assert loop.session_draft("test:persona") is None
+
     saved = PlaybookStore(playbook_root).load("skeptical-fact-checker")
     assert isinstance(saved, UnifiedPlaybookSpec)
     assert saved.harness is not None
@@ -406,7 +416,7 @@ async def test_digital_persona_saves_harness_only_without_inventing_a_dag(tmp_pa
 
 
 @pytest.mark.asyncio
-async def test_persona_name_collision_gets_a_deterministic_numeric_suffix(tmp_path) -> None:
+async def test_saving_two_drafts_under_one_name_gets_a_deterministic_numeric_suffix(tmp_path) -> None:
     playbook_root = tmp_path / "playbooks"
     provider = _PersonaProvider()
     loop = AgentLoop(
@@ -428,6 +438,7 @@ async def test_persona_name_collision_gets_a_deterministic_numeric_suffix(tmp_pa
             lambda: [],
             stream=False,
         )
+        loop.save_session_draft(f"test:{chat_id}")
 
     assert PlaybookStore(playbook_root).list_ids() == ["skeptical-fact-checker", "skeptical-fact-checker-2"]
     suffixed = PlaybookStore(playbook_root).load("skeptical-fact-checker-2")
@@ -620,7 +631,13 @@ class _PersonaSessionProvider(LLMProvider):
         return LLMResponse(content="OK", finish_reason="stop")
 
 
-def _persona_session_loop(tmp_path, provider: LLMProvider) -> AgentLoop:
+def _persona_session_loop(tmp_path, provider: LLMProvider, *, default_mode: str | None = None) -> AgentLoop:
+    playbook_config = PlaybookConfig(
+        enabled=True,
+        dir=str(tmp_path / "playbooks"),
+        agentHarness="generate",
+        **({"defaultGenerationMode": default_mode} if default_mode else {}),
+    )
     return AgentLoop(
         provider=provider,
         workspace=tmp_path,
@@ -629,11 +646,7 @@ def _persona_session_loop(tmp_path, provider: LLMProvider) -> AgentLoop:
         tools=ToolWiring(restrict_to_workspace=True),
         engine=EngineWiring(
             runtime_config=RuntimeConfig(checkpoint=CheckpointConfig(policy="never")),
-            playbook_config=PlaybookConfig(
-                enabled=True,
-                dir=str(tmp_path / "playbooks"),
-                agentHarness="generate",
-            ),
+            playbook_config=playbook_config,
         ),
         subagents=SubagentWiring(
             agents=[
@@ -666,15 +679,210 @@ async def test_a_generated_persona_runs_the_session_from_the_turn_after_it(tmp_p
     )
 
     generating, following = provider.seen
-    # The turn that wrote it answers about the artifact, not as it: a coordinator
-    # that refuses to plan without dates would refuse to report what it saved.
-    assert "has generated and saved" in generating[0]
+    # The turn that generated it answers about the artifact, not as it: a
+    # coordinator that refuses to plan without dates would refuse to report what
+    # it just made. It reports a draft, because nothing has been saved.
+    assert "is holding it as a draft" in generating[0]
     assert generating[1] == ""
     assert generating[2] == ()
     assert following[0] == "Own the travel conversation and synthesize the daily plan"
     assert following[1] == "Refuse to plan before destination and dates are known."
     assert following[2] == ("planner",)
     assert provider.setup_calls == 1
+
+
+class _UndesignableProvider(LLMProvider):
+    """A model that cannot produce a valid Harness, and would rather write a file.
+
+    Both halves matter. The persona tool answers with a coordinator the
+    validator refuses, twice, so generation is thrown away -- and the main turn
+    then reaches for ``create_playbook``, which is exactly what a reader whose
+    own words said "create and save it" got when the turn kept its full tool
+    table.
+    """
+
+    def __init__(self) -> None:
+        super().__init__(api_key="test")
+        self.setup_calls = 0
+        self.wrote = 0
+        self.offered: list[tuple[str, ...]] = []
+
+    def get_default_model(self) -> str:
+        return "stub"
+
+    async def chat(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer(tools)
+
+    async def chat_with_retry(self, messages, tools=None, model=None, **kwargs) -> LLMResponse:
+        return await self._answer(tools)
+
+    async def _answer(self, tools) -> LLMResponse:
+        names = _names(tools)
+        if PERSONA_TOOL in names:
+            self.setup_calls += 1
+            return LLMResponse(
+                content="",
+                tool_calls=[
+                    ToolCallRequest(
+                        id=f"bad-{self.setup_calls}",
+                        name=PERSONA_TOOL,
+                        # Neither a seat nor a sentence: nothing the validator
+                        # can read, so the repair round fails the same way.
+                        arguments={"description": "d", "artifactName": "a", "coordinator": 7, "workers": []},
+                    )
+                ],
+            )
+        self.offered.append(tuple(sorted(names)))
+        writing = next((n for n in ("create_playbook", "write_file", "edit_file") if n in names), None)
+        if writing:
+            self.wrote += 1
+            return LLMResponse(
+                content="",
+                tool_calls=[ToolCallRequest(id="w", name=writing, arguments={"name": "travel-concierge"})],
+            )
+        return LLMResponse(content="I could not design one.")
+
+
+@pytest.mark.asyncio
+async def test_a_maker_turn_writes_nothing_when_the_design_cannot_be_made(tmp_path) -> None:
+    """Generation failing must not turn the maker into an ordinary turn.
+
+    Caught in the app. The Harness came back invalid, was repaired once, came
+    back invalid again and was dropped -- and the turn behind it still held
+    every tool, so the reader's own "create and save it" was carried out by
+    ``create_playbook``: a library row they never asked for, under a name that
+    already existed, and a question about overwriting it.
+    """
+    playbook_root = tmp_path / "playbooks"
+    provider = _UndesignableProvider()
+    loop = _persona_session_loop(tmp_path, provider)
+
+    await loop.run_turn(
+        _request("Create and save a travel concierge called travel-concierge", "maker", playbook_mode="persona"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+
+    # Tried and failed, twice: generated once and repaired once.
+    assert provider.setup_calls == 2
+    # And wrote nothing, because it could not reach a tool that writes.
+    assert provider.wrote == 0
+    assert not playbook_root.exists() or PlaybookStore(playbook_root).list_ids() == []
+    assert loop.session_draft("test:maker") is None
+    # The tool table is the narrowing, not the wording. Naming one tool would
+    # prove nothing -- a build without it registered passes by accident -- so
+    # what is asserted is the whole table: talking to the reader, and nothing
+    # that writes a file, runs a command or dispatches work. Unnarrowed, this
+    # turn was offered twenty-six of them.
+    from raven.agent.loop.main import MAKER_TOOLS
+
+    assert provider.offered, "the main turn never ran"
+    for offered in provider.offered:
+        assert set(offered) <= set(MAKER_TOOLS), f"a maker turn reached {sorted(set(offered) - set(MAKER_TOOLS))}"
+
+
+@pytest.mark.asyncio
+async def test_a_coordinator_written_as_its_own_brief_is_read_not_refused(tmp_path) -> None:
+    """The tool asks for an object; models send the sentence. Read it.
+
+    Six generations in a row sent ``coordinator`` as a string, and every one was
+    rejected, repaired once, rejected again and thrown away -- which is what
+    left the maker with no draft and the turn free to write a playbook instead.
+    """
+    from raven.playbook.agent_generator import _persona_spec_from_args
+
+    spec, _ = _persona_spec_from_args(
+        {
+            "description": "A travel concierge",
+            "artifactName": "travel-concierge",
+            "coordinator": "Own the trip conversation and dispatch the specialists",
+            "workers": [{"as": "scout", "agent": "Raven-Research", "brief": "Find what is open"}],
+        },
+        {"Raven-Research"},
+    )
+    assert spec.coordinator is not None
+    assert spec.coordinator.brief.startswith("Own the trip conversation")
+
+
+def test_a_brief_wrapped_in_the_call_s_own_markup_is_peeled() -> None:
+    """The value a model sent as a wire fragment is still the value.
+
+    Caught in the app: six of six generated coordinators arrived as
+    ``<parameter name="brief">Be the travel concierge...``, so the Persona ran
+    on a systemPrompt that opened with an XML tag and the card drew one too.
+    Delegates were clean, which is why this is peeled where every seat's prose
+    is read rather than on the coordinator alone.
+    """
+    from raven.playbook.agent_generator import _persona_spec_from_args
+
+    spec, briefs = _persona_spec_from_args(
+        {
+            "description": "A travel concierge",
+            "artifactName": "travel-concierge",
+            "coordinator": {"brief": '<parameter name="brief">Own the trip conversation'},
+            "workers": [
+                {
+                    "as": "scout",
+                    "agent": "Raven-Research",
+                    "brief": '<parameter name="brief">Find what is open</parameter>',
+                }
+            ],
+        },
+        {"Raven-Research"},
+    )
+    assert spec.coordinator is not None
+    assert spec.coordinator.brief == "Own the trip conversation"
+    assert briefs["scout"] == "Find what is open"
+
+
+@pytest.mark.asyncio
+async def test_an_ordinary_turn_mints_no_persona_even_with_the_default_set(tmp_path) -> None:
+    """`defaultGenerationMode: persona` enables the capability, not every message.
+
+    Caught in the app rather than here. With that default shipped, a reader
+    typing "hi" spent a model call minting a Persona, bound the conversation to
+    it, and heard the assistant volunteer a draft they had not asked about --
+    and a conversation started ON a saved Persona was rebound to the new one,
+    so the Persona they picked lasted a single turn.
+    """
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider, default_mode="persona")
+
+    await loop.run_turn(
+        _request("Four days in Kyoto", "ordinary-chat"),
+        _emit,
+        lambda: [],
+        stream=False,
+    )
+
+    assert provider.setup_calls == 0
+    assert loop.session_harness_name("test:ordinary-chat") is None
+    assert loop.session_draft("test:ordinary-chat") is None
+
+
+@pytest.mark.asyncio
+async def test_asking_again_in_the_maker_replaces_the_draft_it_is_refining(tmp_path) -> None:
+    """The maker is a conversation: saying "make it smaller" generates again.
+
+    The opposite of the case above, and the reason the guard is on what the
+    turn ASKED for rather than on whether the session already carries one: the
+    page that describes a Persona keeps one conversation, so its second turn
+    would otherwise be refused by its own first.
+    """
+    provider = _PersonaSessionProvider()
+    loop = _persona_session_loop(tmp_path, provider, default_mode="persona")
+
+    for text in ("Create a travel concierge persona", "Give it fewer workers"):
+        await loop.run_turn(
+            _request(text, "maker", playbook_mode="persona"),
+            _emit,
+            lambda: [],
+            stream=False,
+        )
+
+    assert provider.setup_calls == 2
+    assert loop.session_draft("test:maker") is not None
 
 
 @pytest.mark.asyncio

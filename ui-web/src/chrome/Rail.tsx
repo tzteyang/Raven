@@ -39,6 +39,7 @@ import { useSyncExternalStore } from 'react'
 
 import { RavenMark } from '../components/RavenMark'
 import { open as openExtAgents } from '../features/extAgents/store'
+import { openPage as openPersona } from '../features/persona/store'
 import { open as openSettings } from '../features/settings/store'
 import { t } from '../i18n/t'
 import * as find from '../state/find'
@@ -112,6 +113,16 @@ const NAV_ROWS: ReadonlyArray<{
     icon: (
       <>
         <rect x="3.5" y="4" width="7" height="7" rx="1.6" /><rect x="13.5" y="13" width="7" height="7" rx="1.6" /><path d="M10.5 7.5h3.5a3 3 0 0 1 3 3v2.5" />
+      </>
+    ),
+  },
+  {
+    button: 'personaBtn',
+    key: 'gui.nav.persona',
+    open: () => openPersona(),
+    icon: (
+      <>
+        <path d="M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z" /><path d="M4.5 20a7.5 7.5 0 0 1 15 0" />
       </>
     ),
   },

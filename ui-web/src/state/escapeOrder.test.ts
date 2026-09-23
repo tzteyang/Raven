@@ -27,6 +27,7 @@ import { openApproval } from '../features/composer/approve'
 import * as turn from '../features/composer/turn'
 import * as desk from '../features/desk/store'
 import * as extAgents from '../features/extAgents/store'
+import * as persona from '../features/persona/store'
 import { resetTranslator, setTranslator } from '../i18n/t'
 import { _resetForTests as sessionReset, setCurrent } from '../lib/session'
 import * as escapeOrder from './escapeOrder'
@@ -47,6 +48,7 @@ const LAYER_IDS = [
   '#veil',
   '#detail',
   '#extAgentsPage',
+  '#personaPage',
   'setIsOpen()',
   'desk.escapeOpen()',
   'turn.busy()',
@@ -65,6 +67,7 @@ const PAGE = [
   '<div class="chat"><div class="dock"><div class="sheets" id="sheetRack"></div>',
   '<div class="dock-in"><textarea id="ta"></textarea></div></div></div>',
   '<section class="page" id="extAgentsPage" data-open="false"></section>',
+  '<section class="page" id="personaPage" data-open="false"></section>',
   '<aside class="detail" id="detail" data-open="false"><div class="body" id="dBody"></div></aside>',
   '<div class="veil setveil" id="setVeil" data-open="false"><div id="setModal"></div></div>',
   '<div class="veil" id="veil" data-open="false"><button id="cfNo"></button></div>',
@@ -78,6 +81,7 @@ const PAGE = [
    is visible. */
 const spies = {
   extAgentsClose: vi.fn(),
+  personaClose: vi.fn(),
   stop: vi.fn(),
 }
 
@@ -104,6 +108,7 @@ const LAYERS: Record<string, { up: () => void; taken: () => boolean }> = {
   '#veil': { up: flag('veil'), taken: () => cancelled.includes('cfNo') },
   '#detail': { up: flag('detail'), taken: lowered('detail') },
   '#extAgentsPage': { up: flag('extAgentsPage'), taken: called(spies.extAgentsClose) },
+  '#personaPage': { up: flag('personaPage'), taken: called(spies.personaClose) },
   'setIsOpen()': { up: () => settingsDialog.open(), taken: () => !settingsDialog.isOpen() },
   /* Its four-rung retreat (fullscreen -> node -> pane -> collapse) is
      store.test.ts's to prove; this fixture only needs one rung on screen and
@@ -132,6 +137,7 @@ beforeEach(() => {
   /* Each layer's own close, stood in for one export at a time: what is under
      test is which one the key reaches, not what any of them does. */
   vi.spyOn(extAgents, 'close').mockImplementation(spies.extAgentsClose)
+  vi.spyOn(persona, 'closePage').mockImplementation(spies.personaClose)
   sources.composer = { stop: spies.stop } as unknown as ComposerSource
   settingsDialog.close()
   /* The row's flag outlives a case now that it is a store's rather than the
@@ -164,11 +170,11 @@ const key = (k: string, over: Partial<KeyboardEventInit> = {}): KeyboardEvent =>
 }
 
 describe('the Escape priority order', () => {
-  it('is the order the table reaches the thirteen layers in', () => {
+  it('is the order the table reaches the fourteen layers in', () => {
     expect(escapeOrder.ESCAPE_ORDER.map((layer) => layer.id)).toEqual([...LAYER_IDS])
   })
 
-  it('has no fourteenth entry, and every entry is in the fixture', () => {
+  it('has no fifteenth entry, and every entry is in the fixture', () => {
     expect(escapeOrder.ESCAPE_ORDER).toHaveLength(LAYER_IDS.length)
     expect(Object.keys(LAYERS)).toEqual([...LAYER_IDS])
   })
@@ -191,8 +197,8 @@ describe('the Escape priority order', () => {
   const pairs = LAYER_IDS.flatMap((first, i) =>
     LAYER_IDS.slice(i + 1).map((second) => ({ first, second })))
 
-  it('has twenty-one pairs to answer for', () => {
-    expect(pairs).toHaveLength(21)
+  it('has twenty-eight pairs to answer for', () => {
+    expect(pairs).toHaveLength(28)
   })
 
   it.each(pairs)('takes back $first and leaves $second alone', ({ first, second }) => {

@@ -71,6 +71,13 @@ if TYPE_CHECKING:
     from raven.spine.turn import TurnRequest
 
 
+# What a turn that asked to design a Persona may reach. Talking to the reader
+# and nothing else: designing is the platform's own step, and every tool that
+# writes a file or dispatches work would be this turn doing by hand what it was
+# not asked to do (see the charter in `_run_turn`).
+MAKER_TOOLS: tuple[str, ...] = ("ask_user", "message")
+
+
 class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
     """
     The agent loop is the core processing engine.
@@ -658,6 +665,13 @@ class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
         # until another one replaces it.
         self._session_personas: dict[str, tuple[Any, Any]] = {}
 
+        # The Persona a session has generated but not saved, by session. A
+        # generated Harness is a draft until someone says to keep it: the page
+        # shows this one and saves it by name, and a session that generates a
+        # second one before saving the first replaces it, because a draft is
+        # the answer to the request that is on screen.
+        self._session_drafts: dict[str, Any] = {}
+
         # ``self.subagents``, ``self.context_engine`` and
         # ``self.memory_consolidator`` were each handed ``provider`` earlier in
         # this constructor. Inside a turn they read the turn's binding; the
@@ -1006,24 +1020,43 @@ class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
             # only. Both scopes below are None on an ordinary turn, which is the
             # path every reader answers to as "no playbook".
             charter = self._take_session_charter(session_key)
+            # A turn that asked to design a Persona never writes the library,
+            # whether or not the design came back. It used to be told not to,
+            # in a prompt, and only when generation had succeeded -- so a
+            # generation the validator threw away left an ordinary turn holding
+            # every tool, and a reader whose own words said "create and save it"
+            # got exactly that: a playbook written by `create_playbook`, a name
+            # collision, and a question about overwriting something they had
+            # never asked to save. The narrowing is the tool table now, not the
+            # wording: what this turn may reach is what it may do.
+            asked_persona = getattr(req, "playbook_mode", None) == "persona"
+            if asked_persona:
+                from raven.agent.subagent.charter import Charter
+
+                charter = Charter(
+                    prompt=(
+                        "The platform could not design a Persona for this request. Say so plainly, in one or "
+                        "two sentences, and say what you would need to try again. Create nothing and save "
+                        "nothing: the reader asked to design a Persona, not to have a playbook written for "
+                        "them."
+                    ),
+                    tools=MAKER_TOOLS,
+                )
             if resolution.disposition == "artifact" and resolution.artifact_name:
                 from raven.agent.subagent.charter import Charter
 
                 artifact_status = (
-                    f"has generated and saved the reusable Persona Harness {resolution.artifact_name!r}"
-                    if resolution.persisted
-                    else (
-                        f"generated the Persona Harness {resolution.artifact_name!r} for this turn, "
-                        "but persistence failed"
-                    )
+                    f"has generated the Persona Harness {resolution.artifact_name!r} and is holding it as a "
+                    "draft the reader can save or let go"
+                    if not resolution.persisted
+                    else f"has generated and saved the reusable Persona Harness {resolution.artifact_name!r}"
                 )
                 charter = Charter(
                     prompt=(
-                        f"The platform {artifact_status}. Do not call load_playbook, search for a persona "
-                        "format, or write Playbook, skill, persona, Harness, Workflow, or run-record files. "
-                        "Do not spawn workers or execute a Workflow. Reply concisely with what the generated "
-                        "Harness is for and whether it was saved."
-                    )
+                        f"The platform {artifact_status}. Reply concisely with what the generated Harness is "
+                        "for and who it can hand work to. Do not claim it has been saved."
+                    ),
+                    tools=MAKER_TOOLS if asked_persona else None,
                 )
                 self.adopt_session_persona(session_key, resolution)
                 # The workers go with the coordinator, to the turns that will

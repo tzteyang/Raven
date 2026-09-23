@@ -1423,3 +1423,111 @@ async def test_frontend_rpc_exposes_unified_kind_workers_and_workflow(library: P
     assert detail["workers"] == [{"label": "researcher", "agent": "Raven", "brief": "Use primary sources"}]
     assert detail["nodes"][0]["subagent"] == "researcher"
     METHOD_MODELS["playbooks.get"][1].model_validate({"playbook": detail})
+
+
+# ---------------------------------------------------------------------------
+# The draft: a generated Persona before anyone decided to keep it
+# ---------------------------------------------------------------------------
+
+
+class _LoopWithDraft:
+    """The three verbs the draft handlers reach for, and nothing else."""
+
+    def __init__(self, artifact=None) -> None:
+        self.drafts = {"tui:one": artifact} if artifact is not None else {}
+        self.saved: list[tuple[str, str | None]] = []
+
+    def session_draft(self, session_key: str):
+        return self.drafts.get(session_key)
+
+    def save_session_draft(self, session_key: str, name: str | None = None) -> str:
+        if session_key not in self.drafts:
+            raise ValueError("this session has no generated Persona to save")
+        self.saved.append((session_key, name))
+        del self.drafts[session_key]
+        return name or "skeptical-fact-checker"
+
+    def discard_session_draft(self, session_key: str) -> bool:
+        return self.drafts.pop(session_key, None) is not None
+
+
+def _persona_artifact():
+    from raven.playbook.agent_spec import AgentPlaybookSpec, CoordinatorEntry
+    from raven.playbook.unified import PlaybookMatch, UnifiedPlaybookSpec
+
+    return UnifiedPlaybookSpec(
+        name="skeptical-fact-checker",
+        description="Finds a primary source for every claim",
+        match=PlaybookMatch(summary="fact checking", keywords=["fact"]),
+        harness=AgentPlaybookSpec(
+            name="skeptical-fact-checker",
+            description="Finds a primary source for every claim",
+            coordinator=CoordinatorEntry(brief="Own the claim-checking conversation"),
+        ),
+    )
+
+
+@pytest.mark.asyncio
+async def test_draft_answers_null_when_the_session_generated_none() -> None:
+    loop = _LoopWithDraft()
+    answer = await mod.playbooks_draft({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+    assert answer == {"draft": None}
+
+
+@pytest.mark.asyncio
+async def test_draft_answers_the_row_shape_the_library_answers() -> None:
+    loop = _LoopWithDraft(_persona_artifact())
+    answer = await mod.playbooks_draft({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+    draft = answer["draft"]
+    assert draft["name"] == "skeptical-fact-checker"
+    # `draft`, not `user`: nothing is on disk, so a page must not offer to
+    # delete a file that does not exist.
+    assert draft["origin"] == "draft"
+    assert draft["coordinator"] is True
+    assert draft["artifact_kind"] == "harness"
+    assert draft["nodes"] == []
+
+
+@pytest.mark.asyncio
+async def test_draft_is_refused_without_a_session() -> None:
+    loop = _LoopWithDraft(_persona_artifact())
+    with pytest.raises(RpcError):
+        await mod.playbooks_draft({}, agent_loop_factory=lambda: loop)
+
+
+@pytest.mark.asyncio
+async def test_a_build_with_no_loop_behind_it_answers_no_draft() -> None:
+    assert await mod.playbooks_draft({"session_key": "tui:one"}) == {"draft": None}
+
+
+@pytest.mark.asyncio
+async def test_saving_keeps_the_generated_name_when_none_is_offered() -> None:
+    loop = _LoopWithDraft(_persona_artifact())
+    answer = await mod.playbooks_draft_save({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+    assert answer == {"name": "skeptical-fact-checker"}
+    assert loop.saved == [("tui:one", None)]
+
+
+@pytest.mark.asyncio
+async def test_saving_takes_the_name_the_reader_chose() -> None:
+    loop = _LoopWithDraft(_persona_artifact())
+    answer = await mod.playbooks_draft_save(
+        {"session_key": "tui:one", "name": "my-checker"}, agent_loop_factory=lambda: loop
+    )
+    assert answer == {"name": "my-checker"}
+
+
+@pytest.mark.asyncio
+async def test_saving_nothing_is_refused_rather_than_silent() -> None:
+    loop = _LoopWithDraft()
+    with pytest.raises(RpcError):
+        await mod.playbooks_draft_save({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+
+
+@pytest.mark.asyncio
+async def test_discarding_says_whether_there_was_one() -> None:
+    loop = _LoopWithDraft(_persona_artifact())
+    first = await mod.playbooks_draft_discard({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+    second = await mod.playbooks_draft_discard({"session_key": "tui:one"}, agent_loop_factory=lambda: loop)
+    assert first == {"discarded": True}
+    assert second == {"discarded": False}

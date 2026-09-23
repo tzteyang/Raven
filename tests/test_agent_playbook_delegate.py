@@ -723,3 +723,44 @@ def test_prose_and_capabilities_ride_together_when_a_row_has_both(workspace) -> 
     note = roster_note(_Meta("Raven-Research", owns="research: the live web read.", reads_local_files=True))
 
     assert note == "research: the live web read (reads local files)"
+
+
+def test_a_persona_is_told_to_converse_before_it_is_told_to_gate() -> None:
+    """Required inputs are a precondition on the work, not a filter on talking.
+
+    Caught in the app twice, and the second time was the lesson. A generated
+    travel Persona answered "hi" by counting the five trip details it did not
+    have -- first from an intake gate that ended the turn with no model call,
+    then, once that was fixed, from a systemPrompt that read its own input rule
+    as something to apply to every message.
+
+    The prompt used to REQUIRE the gate ("the coordinator must implement that
+    gate with intake"), which is what made a form out of a conversation: a
+    function that runs on every inbound message cannot tell a request for the
+    work from a greeting. So what is asserted here is the rule, not the two
+    phrasings that went wrong: a Persona converses, and its inputs gate the
+    work.
+    """
+    from raven.playbook.agent_generator import PERSONA_SYSTEM_PROMPT as prompt
+
+    assert "preconditions on the WORK, not a filter on the conversation" in prompt
+    assert "raises missing inputs at no other time" in prompt
+    # The mandate that produced the gate is gone, and stays gone.
+    assert "must implement that gate with intake" not in prompt
+    # Functions are still demanded where prose cannot hold: a tool-argument
+    # boundary is judge's, and that is the distinction the rule turns on.
+    assert "belongs in judge on the seat making the call" in prompt
+
+
+def test_the_intake_contract_states_when_it_runs() -> None:
+    """Whatever a generated intake does, it runs on every message.
+
+    A fact about the runtime rather than an example: a function that ends the
+    turn before any model call has to know it sees greetings too, or the first
+    thing it refuses is hello.
+    """
+    from raven.playbook.agent_generator import participant_function_guide
+
+    when = participant_function_guide()["intake"]["when"]
+    assert "EVERY inbound user text" in when
+    assert "return None" in when
