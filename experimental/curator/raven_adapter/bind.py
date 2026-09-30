@@ -3,14 +3,16 @@
 import json
 import sys
 from contextvars import ContextVar
-from dataclasses import dataclass, field
+from dataclasses import dataclass, field, replace
 from inspect import Parameter, iscoroutinefunction, signature
 from pathlib import Path, PurePosixPath
 from typing import Any
 
-from raven.agent.hook.participant import ParticipantHook
 from raven.agent.loop.bundles import HostWiring, TurnPolicy
 from raven.agent.loop.recovery import limits_from_defaults
+from raven.agent.tools.deliver import DeliverFilesTool
+from raven.agent.tools.file_search import FindTool, GrepTool
+from raven.agent.tools.filesystem import EditFileTool, ListDirTool, ReadFileTool, WriteFileTool
 from raven.agent.tools.registry import admit_tool
 from raven.agent.workdir import WorkdirPolicy, WorkdirResolver
 from raven.contracts.loop_hooks import AgentHook
@@ -19,6 +21,8 @@ from raven.contracts.session_events import SessionObserver
 from raven.contracts.tool_gate import ToolGate
 from raven.core.runtime import RavenRuntime, build_runtime
 from raven.home import set_config_path
+from raven.permissions.turn import current_turn
+from raven.playbook.validate import validate_structure
 from raven.plugins.context import PluginContext, ServiceLocator
 from raven.providers.factory import make_lazy_provider
 from raven.providers.pool import ProviderPool
@@ -26,24 +30,36 @@ from raven.session.manager import SessionManager
 
 from ..harness import Artifact, Declaration
 from ..harness.artifact import relative_path
+from ..harness.interaction import InteractionScope
+from ..harness.preparation import PreparationRequest
+from ..harness.resources import ToolContribution
+from .action.contracts import ActionBinding
 from .action.runtime import BoundAction
+from .capability.baseline import bind_workspace_skills
+from .capability.catalog import CapabilityCatalog
+from .capability.contracts import CapabilityBinding
 from .capability.runtime import BoundCapability
+from .content import ContentInstallation
+from .context_sources import SourceContext
 from .inference import Inference, supplied
-from .inspection import Baseline, runtime_sources
+from .inspection import Baseline, fingerprint, runtime_sources
 from .inspection.runtime import playbook_library
 from .materialize import (
     PLUGIN_ID,
-    install_content,
     load_factory,
     native_settings,
     write_package,
 )
-from .memory.context import MemoryContext
 from .memory.runtime import BoundMemory
-from .observe import LoopObserver, ObservedPool, ObservedProvider, Recorder, build_participant, participant_factory
-from .planning.contracts import TARGET, TOOL_NAME, PlanningBinding
+from .memory.window import MemoryWindow
+from .model_input import ModelInput
+from .observe import LoopObserver, ObservedPool, ObservedProvider, Recorder
+from .peers import RuntimePeers
+from .planning.contracts import TARGET, PlanningBinding
 from .planning.runtime import BoundPlanning
+from .preparation import Preparation, PreparedHarness
 from .prompts import bind_prompts
+from .strategy import SESSION
 
 _ASSEMBLY: ContextVar[Any] = ContextVar("curator_assembly", default=None)
 
@@ -121,12 +137,21 @@ def construct_component(kind, name, reference, context):
         raise
 
 
-def _plugin(root, artifact, declaration, package):
-    rows = []
-    for target_name, entries in artifact.values.items():
-        binding = declaration.target(target_name).binding
-        if binding.startswith("plugin.contributes."):
-            rows.extend((binding.rsplit(".", 1)[-1], entry) for entry in entries)
+def _plugin(root, artifact, declaration, package, prepared):
+    rows = [(item.kind, item.model_dump()) for item in prepared.components]
+    action = artifact.values.get("action.strategy")
+    if action is not None and ActionBinding.model_validate(action).dispatch:
+        if any(kind == "tool_gates" and row["name"] == "curator-action" for kind, row in rows):
+            raise ValueError("curator-action is reserved for the selected Action dispatch binding")
+        rows.append(
+            (
+                "tool_gates",
+                {
+                    "name": "curator-action",
+                    "factory": "experimental.curator.raven_adapter.action.runtime:build_gate",
+                },
+            )
+        )
     if not rows:
         return None
     wrapper_name = f"_bindings_{package.name}"
@@ -165,6 +190,11 @@ class Bound:
     planning: BoundPlanning | None = None
     strategies: dict = field(default_factory=dict)
     prompts: dict = field(default_factory=dict)
+    capability: BoundCapability | None = None
+    context_sources: SourceContext | None = None
+    inference: Inference | None = None
+    prepared: PreparedHarness = field(default_factory=PreparedHarness)
+    content_installation: ContentInstallation | None = None
 
     async def prepare(self):
         if self.planning:
@@ -177,7 +207,7 @@ class Bound:
         manager = self.runtime.loop.mcp_manager_if_started
         states = manager.status() if manager is not None else []
         self.recorder.add("mcp.status", servers=states)
-        requested = self.artifact.values.get("capability.mcp", {})
+        requested = self.prepared.config.get("tools", {}).get("mcp_servers", {})
         for name in requested:
             if self.baseline.config.tools.mcp_servers[name].enabled:
                 state = next((row for row in states if row["name"] == name), None)
@@ -211,6 +241,104 @@ class Bound:
         self.recorder.add("runtime.closed")
 
 
+def _bind_capability(
+    baseline,
+    artifact,
+    effective,
+    root,
+    package,
+    recorder,
+    planning,
+    strategies,
+    hooks,
+    *,
+    state_root,
+    infer,
+    dependencies,
+    peers,
+    scope,
+    preparation,
+):
+    """Assemble one candidate catalogue for all declared resource and interaction producers."""
+    capability = None
+    if strategies or "capability.strategy" in artifact.values or (planning and planning.config.tool):
+
+        def resolve_interaction(operation):
+            if operation == "planning.interact" and planning and planning.config.tool:
+                return planning.tool()
+            name = operation.split(".")[0]
+            owner = strategies.get(name)
+            if owner is None or not getattr(owner.config, "tool", None):
+                raise ValueError(f"interaction is not provided by this candidate: {operation}")
+            return owner.tool()
+
+        catalog = CapabilityCatalog(
+            fingerprint(artifact.model_dump(mode="json")),
+            package,
+            root,
+            material_base=baseline.config.workspace_path,
+            material_roots=(
+                baseline.config.workspace_path / "uploads",
+                baseline.config.workspace_path / "skills",
+                *(Path(row.path) for row in effective.extensions.skill_forge.local_dirs),
+            ),
+            resolve_interaction=resolve_interaction,
+            recorder=recorder,
+        )
+        configuration = (
+            CapabilityBinding.model_validate(artifact.values["capability.strategy"])
+            if "capability.strategy" in artifact.values
+            else None
+        )
+        if configuration is not None and baseline.task is None:
+            raise ValueError("a capability strategy requires a host task binding")
+        capability = BoundCapability(
+            configuration,
+            baseline.task,
+            state_root / "capability.json",
+            package,
+            recorder,
+            catalog=catalog,
+            infer=infer,
+            plan=dependencies["plan"],
+            scope=scope,
+            host=preparation.host("capability"),
+            peers=peers,
+        )
+        if configuration is not None:
+            strategies["capability"] = capability
+            hooks.append(capability.hook())
+            capability.prepare_candidate(
+                PreparationRequest(
+                    harness_id=str(baseline.config.workspace_path),
+                    revision=catalog.candidate,
+                    task=baseline.task,
+                    assets=artifact.files,
+                    material_roots=tuple(str(path) for path in catalog.material_roots),
+                )
+            )
+        if planning and planning.config.tool:
+            capability.require(
+                ToolContribution(name=planning.config.tool.name, owner="planning", interaction="planning.interact")
+            )
+        for name in ("memory", "action"):
+            owner = strategies.get(name)
+            if owner is not None and getattr(owner.config, "tool", None):
+                operation = "interact" if name == "memory" else "handle_request"
+                capability.require(
+                    ToolContribution(name=owner.config.tool.name, owner=name, interaction=f"{name}.{operation}")
+                )
+    return capability
+
+
+def _validate_bindings(artifact, declaration):
+    for name, value in artifact.values.items():
+        target = declaration.target(name)
+        if target.binding not in {"memory.strategy", "planning.strategy", "capability.strategy", "action.strategy"}:
+            raise ValueError(f"unsupported authoring entry: {name}; implement its owning strategy")
+        target.parse(value)
+
+
 def assemble(
     baseline: Baseline,
     artifact: Artifact,
@@ -221,55 +349,39 @@ def assemble(
     planning_state: Path | None = None,
 ) -> Bound:
     """Construct a generation; callers own process isolation and start/stop."""
-    for name in artifact.values:
-        binding = declaration.target(name).binding
-        if not (
-            binding.startswith(("config.", "raven_config.", "plugin.contributes."))
-            or binding
-            in {
-                "bootstrap_files",
-                "skill_files",
-                "playbook_files",
-                "HostWiring.hooks",
-                "build_runtime.context_engine",
-                TARGET,
-                "memory.strategy",
-                "capability.strategy",
-                "action.strategy",
-                "prompt.resources",
-            }
-        ):
-            raise ValueError(f"native binding is not implemented: {binding}")
+    _validate_bindings(artifact, declaration)
     root.mkdir(parents=True, exist_ok=True)
     package = write_package(root, artifact)
     if str(root) not in sys.path:
         sys.path.insert(0, str(root))
-    prompts = bind_prompts(artifact, package)
-    effective = native_settings(baseline, artifact, declaration)
+    prompts = {}
+    effective = Baseline.restore(baseline.export())
     if effective.config.workspace_path != baseline.config.workspace_path:
         raise ValueError("the agent home is a host resource; a Harness change must preserve current task storage")
-    for server in effective.config.tools.mcp_servers.values():
-        if server.command in artifact.files:
-            server.command = str(package / server.command)
-        server.args = [str(package / argument) if argument in artifact.files else argument for argument in server.args]
-    plugin_root = _plugin(root, artifact, declaration, package)
-    if plugin_root is not None:
-        effective.extensions.plugins.dirs = [*effective.extensions.plugins.dirs, str(plugin_root)]
-    # Native live readers and construction consume the same two configuration trees.
-    effective.extensions.base = effective.config
+    preparation = Preparation(baseline, artifact, package, recorder)
+    infer = Inference(None, recorder)
+    peers = RuntimePeers(recorder)
 
-    provider = ObservedProvider((provider_factory or make_lazy_provider)(effective.config), recorder)
-    router = None
-    if baseline.hosting == "acp":
-        from raven.core.provider_stack import build_model_routing
+    def prepare_owner(owner):
+        owner.prepare_candidate(
+            PreparationRequest(
+                harness_id=str(baseline.config.workspace_path),
+                revision=fingerprint(artifact.model_dump(mode="json")),
+                task=baseline.task,
+                assets=artifact.files,
+                material_roots=(str(baseline.config.workspace_path / "uploads"),),
+            )
+        )
 
-        router, provider = build_model_routing(effective.config, provider)
-    infer = Inference(provider, recorder)
-    groups = {}
-    for name, reference in artifact.values.items():
-        target = declaration.target(name)
-        if target.binding == "HostWiring.hooks":
-            groups.setdefault(reference, []).append(target)
+    def scope():
+        return InteractionScope(
+            harness_id=str(baseline.config.workspace_path),
+            task_id=baseline.task.id if baseline.task else None,
+            revision=fingerprint(artifact.model_dump(mode="json")),
+            session_key=SESSION.get() or current_turn().conversation_id or None,
+            turn_id=recorder.turn_id,
+        )
+
     planning = None
     if TARGET in artifact.values:
         if baseline.task is None:
@@ -281,28 +393,19 @@ def assemble(
             package,
             recorder,
             infer=infer,
+            peers=peers,
+            host=preparation.host("planning"),
+            scope=scope,
         )
+        prepare_owner(planning)
     dependencies = {"plan": planning.read if planning else _no_plan}
     observer = LoopObserver(recorder)
     hooks = [observer]
-    for index, (reference, targets) in enumerate(groups.items()):
-        loaded = load_factory(reference, package)
-        # Construct once here so a wrong entry point fails the check instead of leaving a seat absent at turn time.
-        build_participant(loaded, targets, dependencies)
-        factory = participant_factory(loaded, targets, recorder, dependencies)
-        hooks.append(
-            ParticipantHook(
-                f"curator-participant-{index}",
-                factory,
-                rolls_back=any(target.contract.__name__ == "review" for target in targets),
-            )
-        )
-
-    if planning and (planning.render or planning.observe):
+    if planning:
         hooks.append(planning.hook())
 
     strategies = {}
-    for name, implementation in (("memory", BoundMemory), ("capability", BoundCapability), ("action", BoundAction)):
+    for name, implementation in (("memory", BoundMemory), ("action", BoundAction)):
         target_name = f"{name}.strategy"
         if target_name not in artifact.values:
             continue
@@ -316,12 +419,66 @@ def assemble(
             recorder,
             infer=infer,
             plan=dependencies["plan"],
+            peers=peers,
+            scope=scope,
+            host=preparation.host(name),
         )
+        from raven.agent.loop.turn_path import _SKIP_AFTER_SEND_ORIGINS, _SKIP_USER_INBOUND_ORIGINS
+
+        if name == "memory":
+            if strategy.config.intake and baseline.origin in _SKIP_USER_INBOUND_ORIGINS:
+                raise ValueError("this origin does not reach Memory intake")
+            if strategy.config.archive and baseline.origin in _SKIP_AFTER_SEND_ORIGINS:
+                raise ValueError("this origin does not reach Memory archive")
+        elif "input" in strategy.config.events and baseline.origin in _SKIP_USER_INBOUND_ORIGINS:
+            raise ValueError("this origin does not reach Action input events")
+        prepare_owner(strategy)
         strategies[name] = strategy
-        hooks.append(strategy.hook())
-    capability = strategies.get("capability")
+        if name != "action":
+            hooks.append(strategy.hook())
+    capability = _bind_capability(
+        baseline,
+        artifact,
+        effective,
+        root,
+        package,
+        recorder,
+        planning,
+        strategies,
+        hooks,
+        state_root=planning_state.parent if planning_state else root,
+        infer=infer,
+        dependencies=dependencies,
+        peers=peers,
+        scope=scope,
+        preparation=preparation,
+    )
+    prepared = preparation.freeze()
+    effective = native_settings(baseline, prepared)
+    for server in effective.config.tools.mcp_servers.values():
+        if server.command in artifact.files:
+            server.command = str(package / server.command)
+        server.args = [str(package / argument) if argument in artifact.files else argument for argument in server.args]
+    plugin_root = _plugin(root, artifact, declaration, package, prepared)
+    if plugin_root is not None:
+        effective.extensions.plugins.dirs = [*effective.extensions.plugins.dirs, str(plugin_root)]
+    effective.extensions.base = effective.config
     if capability:
         capability.stage_skills(root, effective.extensions)
+    prompts.update(bind_prompts(artifact, package, references=prepared.prompts))
+    provider = ObservedProvider((provider_factory or make_lazy_provider)(effective.config), recorder)
+    router = None
+    if baseline.hosting == "acp":
+        from raven.core.provider_stack import build_model_routing
+
+        router, provider = build_model_routing(effective.config, provider)
+    infer.provider = provider
+    action = strategies.get("action")
+    if action is not None:
+        hooks.append(action.hook())
+        if action.config.dispatch:
+            dependencies["action_gate"] = action.gate()
+    peers.bind(planning=planning, memory=strategies.get("memory"), capability=capability, action=action)
 
     raw = {
         **effective.config.model_dump(mode="json", by_alias=True),
@@ -333,15 +490,8 @@ def assemble(
     set_config_path(config_path)
 
     context_engine = None
-    context_target = next(
-        (
-            target
-            for target in declaration.targets
-            if target.binding == "build_runtime.context_engine" and target.name in artifact.values
-        ),
-        None,
-    )
-    if context_target:
+    engine_factory = prepared.context_engine
+    if engine_factory:
         context = PluginContext(
             config=effective.extensions.context.model_dump(),
             services=ServiceLocator(
@@ -351,7 +501,7 @@ def assemble(
                 provider=provider,
             ),
         )
-        context_engine = load_factory(artifact.values[context_target.name], package)(context)
+        context_engine = load_factory(engine_factory, package)(context)
         for method in ("assemble", "after_turn", "set_provider"):
             if not callable(getattr(context_engine, method, None)):
                 raise TypeError(f"context engine lacks {method}")
@@ -359,9 +509,16 @@ def assemble(
             raise TypeError("context engine lacks its native identity or compaction declaration")
 
     memory = strategies.get("memory")
-    memory_context = MemoryContext(memory, context_engine) if memory and memory.config.composition else None
-    if memory_context is not None:
-        context_engine = memory_context
+    source_context = (
+        SourceContext(
+            context_engine,
+            initialized=memory.initialize_context if memory else None,
+        )
+        if capability
+        else None
+    )
+    if source_context is not None:
+        context_engine = source_context
 
     if baseline.hosting == "acp":
         from raven.core.engine_stack import build_local_sessions
@@ -381,47 +538,71 @@ def assemble(
         )
         host = HostWiring(hooks=hooks)
     objects = {}
-    token = _ASSEMBLY.set((package, objects, recorder, dependencies))
     runtime = None
+    installation = ContentInstallation(effective.config.workspace_path, root, prepared, recorder)
+    prepared = installation.prepared
+    token = _ASSEMBLY.set((package, objects, recorder, dependencies))
     try:
-        with install_content(effective.config.workspace_path, artifact, declaration):
-            runtime = build_runtime(
-                effective.config,
-                effective.extensions,
-                provider=provider,
-                router=router,
-                session_manager=sessions,
-                provider_pool=ObservedPool(ProviderPool(effective.config), recorder),
-                workdir_resolver=workdir,
-                context_engine=context_engine,
-                policy=TurnPolicy(
-                    max_iterations=effective.config.agents.defaults.max_tool_iterations,
-                    empty_recovery=limits_from_defaults(effective.config.agents.defaults),
-                    interactive=baseline.hosting == "acp",
+        installation.apply()
+        runtime = build_runtime(
+            effective.config,
+            effective.extensions,
+            provider=provider,
+            router=router,
+            session_manager=sessions,
+            provider_pool=ObservedPool(ProviderPool(effective.config), recorder),
+            workdir_resolver=workdir,
+            context_engine=context_engine,
+            policy=TurnPolicy(
+                max_iterations=effective.config.agents.defaults.max_tool_iterations,
+                empty_recovery=limits_from_defaults(effective.config.agents.defaults),
+                interactive=baseline.hosting == "acp",
+            ),
+            host=host,
+        )
+        if baseline.hosting == "acp":
+            from raven.proactive_engine.schedulers.cron.tool import CronTool
+
+            cron_tool = runtime.loop.tools.get("cron")
+            if isinstance(cron_tool, CronTool):
+                cron_tool.set_context("acp", "default")
+        baseline_skills = bind_workspace_skills(runtime, root)
+        if baseline.file_roots or baseline.read_roots or effective.config.tools.restrict_to_workspace:
+            managed = (capability.catalog.skill_root,) if capability and capability.catalog.skill_root else ()
+            _confine_files(runtime, baseline.file_roots, (*baseline.read_roots, baseline_skills, *managed))
+        if source_context is not None:
+            source_context.bind(runtime, effective.extensions)
+            if memory is not None:
+                memory.bind(runtime, source_context)
+        if capability:
+            capability.install(
+                runtime,
+                context=PluginContext(
+                    config={},
+                    services=ServiceLocator(
+                        workspace=effective.config.workspace_path,
+                        user_id=effective.extensions.memory.user_id,
+                        agent_id=effective.extensions.memory.agent_id,
+                        provider=provider,
+                    ),
                 ),
-                host=host,
+                disabled=effective.config.tools.disabled_tools,
             )
-            if baseline.hosting == "acp":
-                from raven.proactive_engine.schedulers.cron.tool import CronTool
+            if action is not None:
+                action.bind(runtime)
+            runtime.loop.harness = replace(
+                runtime.loop.harness,
+                action=ModelInput(runtime.loop.harness.action, capability, source_context, memory, action),
+                memory=MemoryWindow(runtime.loop.harness.memory, memory, capability, runtime.loop)
+                if memory is not None
+                else runtime.loop.harness.memory,
+            )
+        if not baseline.allow_delegation:
+            from .capability.leaf import bind_leaf
 
-                cron_tool = runtime.loop.tools.get("cron")
-                if isinstance(cron_tool, CronTool):
-                    cron_tool.set_context("acp", "default")
-            if memory_context is not None:
-                memory_context.bind(runtime, effective.extensions)
-            if planning and planning.to_change:
-                if runtime.loop.tools.get(TOOL_NAME) is not None:
-                    raise ValueError(f"planning tool would replace an existing tool: {TOOL_NAME}")
-                runtime.loop.tools.register(planning.tool())
-            if capability:
-                capability.install(runtime)
-            if not baseline.allow_delegation:
-                from .capability.leaf import bind_leaf
-
-                bind_leaf(runtime)
-            _verify_bindings(runtime, artifact, declaration, objects, effective.extensions.memory.backend)
-            _verify_skills(runtime, artifact, effective.config.workspace_path)
-            _verify_playbooks(runtime, artifact)
+            bind_leaf(runtime)
+        _verify_bindings(runtime, prepared, objects, effective.extensions.memory.backend)
+        _verify_playbooks(runtime, prepared)
         recorder.add("runtime.bound", package=str(package), targets=list(artifact.values))
         return Bound(
             runtime,
@@ -434,8 +615,14 @@ def assemble(
             planning,
             strategies,
             prompts,
+            capability,
+            source_context,
+            infer,
+            prepared,
+            installation,
         )
     except BaseException:
+        installation.rollback()
         if runtime is not None:
             runtime.loop.context.skills.stop_file_watcher()
         raise
@@ -443,53 +630,69 @@ def assemble(
         _ASSEMBLY.reset(token)
 
 
-def _verify_bindings(runtime, artifact, declaration, objects, backend_name):
+def _verify_bindings(runtime, prepared, objects, backend_name):
     registry, loop = runtime.plugin_registry, runtime.loop
-    for target_name, entries in artifact.values.items():
-        binding = declaration.target(target_name).binding
-        if not binding.startswith("plugin.contributes."):
-            continue
-        kind = binding.rsplit(".", 1)[-1]
+    for entry in prepared.components:
+        kind, name = entry.kind, entry.name
         registered = getattr(
             registry,
             {
-                "tools": "tool_names",
-                "hooks": "hook_names",
                 "services": "service_names",
                 "memory_backends": "memory_backend_names",
-                "tool_gates": "tool_gate_names",
                 "session_observers": "session_observer_names",
             }[kind],
         )()
-        for entry in entries:
-            name = entry["name"]
-            if name not in registered:
-                raise ValueError(f"{target_name}: contribution was not registered: {name}")
-            if kind == "memory_backends":
-                if name == backend_name and (
-                    runtime.backend is None or objects.get((kind, name)) is not runtime.backend
-                ):
-                    raise ValueError(f"selected memory backend was not bound: {name}")
-                continue
-            if (kind, name) not in objects:
-                raise ValueError(f"{target_name}: requested component was not constructed: {name}")
-            value = objects[kind, name]
-            actual = {
-                "tools": lambda: loop.tools.get(value.name) is value,
-                "hooks": lambda: any(value is item for item in loop.hooks),
-                "services": lambda: any(value is item for item in loop.plugin_services),
-                "tool_gates": lambda: any(value is item for item in loop.tools.tool_gates),
-                "session_observers": lambda: any(value is item for item in loop.session_observers),
-            }[kind]()
-            if not actual:
-                raise ValueError(f"{target_name}: component was not bound: {name}")
-    if "memory.backend_config" in artifact.values and runtime.backend is None:
-        if artifact.values["memory.backend_config"].get("backend") is not None:
-            raise ValueError("selected memory backend was not constructed")
+        if name not in registered:
+            raise ValueError(f"{entry.owner}: native component was not registered: {name}")
+        if kind == "memory_backends":
+            if name == backend_name and (runtime.backend is None or objects.get((kind, name)) is not runtime.backend):
+                raise ValueError(f"selected memory backend was not bound: {name}")
+            continue
+        value = objects.get((kind, name))
+        active = loop.plugin_services if kind == "services" else loop.session_observers
+        if value is None or not any(value is item for item in active):
+            raise ValueError(f"{entry.owner}: requested component was not bound: {name}")
+    if prepared.extensions.get("memory", {}).get("backend") is not None and runtime.backend is None:
+        raise ValueError("selected memory backend was not constructed")
 
 
-def _verify_playbooks(runtime, artifact):
-    files = artifact.values.get("planning.playbooks", {})
+def _confine_files(runtime, roots, read_roots=()):
+    """Rebuild Raven's file tools: reads reach the agent home, the session's working directory, `roots` and
+    `read_roots`; writes and edits reach the home, the working directory and `roots` only; delivering a file counts
+    as reading it.
+
+    A tool the configuration disabled stays absent. The shell is not rebuilt here: it follows the configuration's
+    `restrict_to_workspace`.
+    """
+    loop = runtime.loop
+    writable = (Path(loop.workspace).resolve(), *roots)
+    readable = (*writable, *read_roots)
+    reaches = {ReadFileTool: readable, ListDirTool: readable, GrepTool: readable, FindTool: readable}
+    reaches |= {WriteFileTool: writable, EditFileTool: writable}
+    for implementation, allowed in reaches.items():
+        tool = implementation(workspace=loop.workspace, allowed_dirs=allowed)
+        if loop.tools.get(tool.name) is not None:
+            loop.tools.register(tool)
+    if loop.tools.get("deliver_files") is not None and loop.deliverables is not None:
+        loop.tools.register(DeliverFilesTool(loop.deliverables, workspace=loop.workspace, allowed_dirs=readable))
+
+
+def _unloaded(library, name: str) -> str:
+    """Why the library does not offer a playbook, in the loader's own words: Raven skips a playbook it cannot load
+    or whose graph does not validate, and says so only in its log."""
+    if library is None:
+        return "the playbook library is not enabled"
+    try:
+        spec = library.store.load(name)
+    except Exception as exc:  # noqa: BLE001 -- whatever the loader raised is the reason to report
+        return f"{type(exc).__name__}: {exc}"
+    known = getattr(library, "_known_agents", lambda: None)()
+    errors = validate_structure(spec, known_agents=known, allow_blank_fillable=True)
+    return "; ".join(errors) if errors else "it loads and validates now; check its node agents"
+
+
+def _verify_playbooks(runtime, prepared):
+    files = {name.removeprefix("playbooks/"): text for name, text in prepared.content.get("planning", {}).items()}
     if not files:
         return
     library = playbook_library(runtime.loop)
@@ -509,19 +712,4 @@ def _verify_playbooks(runtime, artifact):
         elif len(parts) != 2 or parts[1] != "playbook.md":
             raise ValueError(f"a playbook file must be <name>/playbook.md or a node requirements.json: {name}")
         if parts[0] not in loaded:
-            raise ValueError(
-                f"playbook was not loaded; check its frontmatter, its yaml playbook-spec block and the node agents: {name}"
-            )
-
-
-def _verify_skills(runtime, artifact, home):
-    files = artifact.values.get("planning.skills", {})
-    if not files:
-        return
-    roots = [
-        Path(row["path"]).parent.resolve() for row in runtime.loop.context.skills.list_skills(filter_unavailable=False)
-    ]
-    for name in files:
-        path = (home / "skills" / name).resolve()
-        if not any(path.is_relative_to(root) for root in roots):
-            raise ValueError(f"skill resource has no discoverable SKILL.md package: {name}")
+            raise ValueError(f"playbook was not loaded: {name}: {_unloaded(library, parts[0])}")

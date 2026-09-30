@@ -1,10 +1,15 @@
-"""Compose what the analyst reads: signals, conversations, record summaries and prior expectations."""
+"""Compose what the analyst reads: signals, conversations, record summaries and the loop's history.
+
+The history is the Analyst's projection of it (`experimental.iteration.history`): the Curator's diagnoses name
+mechanisms, and the Analyst attributes behavior, not mechanism, so they are left out; a revision's predicted effects
+stay in the record, so the Analyst judges what happened rather than what was promised."""
 
 import json
 from collections import Counter
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..audience import project
 from ..curator.generation.context.render import tool
 from ..curator.harness.declaration import schema_for
 from ..curator.raven_adapter.observe import plain
@@ -39,17 +44,14 @@ def summary(exchange) -> dict:
     }
 
 
-def materials(
-    task, signals, sessions, *, previous_plan, previous_signals, previous_feedback, skills, history=()
-) -> dict:
+def materials(task, signals, sessions, *, previous_signals, previous_feedback, skills, history=()) -> dict:
     return {
         "task": task,
         "signals": plain(signals),
         "previous_signals": plain(previous_signals),
         "sessions": {name: [summary(exchange) for exchange in exchanges] for name, exchanges in sessions.items()},
-        "previous_expectations": [change.model_dump() for change in previous_plan.changes] if previous_plan else None,
         "previous_feedback": previous_feedback.model_dump(mode="json") if previous_feedback else None,
-        "history": list(history),
+        "history": project(tuple(history), "analyst"),
         "skills": skills,
     }
 

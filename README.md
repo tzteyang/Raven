@@ -9,7 +9,7 @@
   <a href="https://github.com/EverMind-AI/EverOS/discussions/67"><img src="https://img.shields.io/badge/WeCom-EverMind_Community-07C160?labelColor=gray&style=for-the-badge&logo=wechat&logoColor=white" alt="WeCom"></a>
 </p>
 
-[Website](https://raven.evermind.ai) · [Documentation](https://evermind-ai.github.io/Raven/) · [中文](README.zh-CN.md)
+[Technical Report](https://github.com/EverMind-AI/Raven/releases/download/tech-report-v1/technical-report.pdf) · [Website](https://raven.evermind.ai) · [Documentation](https://evermind-ai.github.io/Raven/) · [中文](README.zh-CN.md)
 
 </div>
 
@@ -23,9 +23,7 @@
 
 <p align="center"><em>One Surface, All Agents: Raven generates DAGs and orchestrates multiple specialized agents for complex tasks.</em></p>
 
-Raven is **The Harness of Harnesses**—a self-evolving multi-agent orchestration ecosystem. As a **Host Agent**, it brings specialized agents together through one unified surface to delegate tasks, coordinate execution, and integrate results. Its long-term vision is to extend this orchestration across devices, environments, and domains.
-
-Built on EverMind’s self-evolving harness engine and powered by [EverOS](https://github.com/EverMind-AI/EverOS), Raven preserves context across sessions and continuously improves agent harnesses and collaborative workflows.
+Raven is **the harness of harnesses, built for recursive self-improvement (RSI).** As a **Host Agent**, it brings built-in and third-party agents together to carry out complex tasks. Its modular architecture supports iterative improvement of Raven's own harness: proposing changes to how agents plan and act, evaluating those changes, and adopting improvements that pass validation. Powered by [EverOS](https://github.com/EverMind-AI/EverOS), Raven carries memory and context across sessions to support this process.
 
 **Built-in Agents: Raven-Research**, **Raven-Code**, **Raven-Design**, and **Raven-Oncall** support research, coding, visual design, and unattended workflow automation.
 
@@ -36,6 +34,91 @@ Built on EverMind’s self-evolving harness engine and powered by [EverOS](https
 </p>
 
 <p align="center"><em>Raven's Performance on the Multi-Agent Orchestration Benchmark</em></p>
+
+## ❯❯ Showcase
+
+These are three complete projects delivered by Raven. In each case, Raven drove a team of specialized agents from the initial brief or objective through execution to a complete set of final deliverables.
+
+### ❯ THRESHOLD: a complete game development project
+
+**The brief came from a person; Raven completed the entire project.** Working autonomously for about 4 days, Raven completed 42 rounds of planning, development, and verification to build a playable first-person shooter in Godot 4, centered on an arena boss fight. The full deliverable includes the game, its poster, presentation, and website, all produced by Raven.
+
+<table>
+<tr>
+<td colspan="2" valign="top"><p align="center"><b>Gameplay video</b></p></td>
+<td width="22.2%" valign="top"><p align="center"><b><a href="https://livxue.github.io/threshold/en/">Website ↗</a></b></p></td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+https://github.com/user-attachments/assets/44724e3e-6564-467a-b422-473aa8f474bd
+
+</td>
+<td rowspan="3" width="22.2%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/8cfd513f-fba9-432d-b020-51dba0a7faeb"><img src="https://github.com/user-attachments/assets/8cfd513f-fba9-432d-b020-51dba0a7faeb" alt="The THRESHOLD website as one long capture: hero, fight, kill cam, attack tells, evolution, making-of and footer" width="100%"></a></p></td>
+</tr>
+<tr>
+<td width="46.2%" valign="top"><p align="center"><b>Poster</b></p></td>
+<td width="31.6%" valign="top"><p align="center"><b>Presentation</b> · <b><a href="https://github.com/LivXue/Raven/releases/download/showcase-decks-2026-09-25/Raven-Game-0925.pptx">PPTX ↓</a></b></p></td>
+</tr>
+<tr>
+<td width="46.2%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/a12e76d1-e7b1-4a7e-a3ba-1f3b5492fb50"><img src="https://github.com/user-attachments/assets/a12e76d1-e7b1-4a7e-a3ba-1f3b5492fb50" alt="THRESHOLD poster: the Warden towers over the player on a molten arena floor" width="100%"></a></p></td>
+<td width="31.6%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/3852c187-3412-4501-9b62-809a3dfd0b81"><img src="https://github.com/user-attachments/assets/3852c187-3412-4501-9b62-809a3dfd0b81" alt="Cover, slides and closing slide of the THRESHOLD deck" width="100%"></a></p></td>
+</tr>
+</table>
+
+### ❯ Raven RSI: recursive self-improvement in practice
+
+**AI that improves AI, with the entire project completed by Raven.** Given a task and evaluation criteria it cannot modify, Raven RSI independently plans each round, writes code, runs experiments, and evaluates the results. In nanochat pre-training experiments, it completed 172 training runs across 7 rounds without a single crash, reducing `val_bpb` by 5.8% within the same 20-minute, single-GPU budget. The same process reduced overshoot in a dam-break simulation by three orders of magnitude and completed an FEA limit-load search in 8 rounds of bisection. The complete deliverable includes the experimental results, visualizations, poster, presentation, and project website, all produced by Raven.
+
+<table>
+<tr>
+<td width="35.8%" valign="top"><p align="center"><b>CFD dam-break simulation</b></p></td>
+<td colspan="2" width="35.8%" valign="top"><p align="center"><b>FEA limit-load search</b></p></td>
+<td width="28.4%" valign="top"><p align="center"><b><a href="https://livxue.github.io/raven-rsi/en/">Website ↗</a></b></p></td>
+</tr>
+<tr>
+<td width="35.8%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/44f81db4-4c17-47be-ad3b-047e26762a24"><img src="https://github.com/user-attachments/assets/44f81db4-4c17-47be-ad3b-047e26762a24" alt="Dam-break solve: a collapsing water column resolved to fine free-surface structure, with the out-of-bounds water fraction falling from 1e0 to 1.36e-10 over seven rounds" width="100%"></a></p></td>
+<td colspan="2" width="35.8%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/89878a01-ab5c-4070-8359-5bc34c3d58b7"><img src="https://github.com/user-attachments/assets/89878a01-ab5c-4070-8359-5bc34c3d58b7" alt="Limit-load search: a cantilever beam under rising load colored by von Mises stress, with the bisection bracket narrowing from 1800-2000 kN down to 3.125 kN over eight rounds" width="100%"></a></p></td>
+<td rowspan="3" width="28.4%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/791310d8-497e-4608-9fcc-ddddc83cba04"><img src="https://github.com/user-attachments/assets/791310d8-497e-4608-9fcc-ddddc83cba04" alt="The Raven RSI website as one long capture: research overview, nanochat, dam-break CFD, FEA solver convergence and model cost comparison" width="100%"></a></p></td>
+</tr>
+<tr>
+<td colspan="2" width="41.1%" valign="top"><p align="center"><b>Poster</b></p></td>
+<td width="30.5%" valign="top"><p align="center"><b>Presentation</b> · <b><a href="https://github.com/LivXue/Raven/releases/download/showcase-decks-2026-09-25/Raven-RSI-0925.pptx">PPTX ↓</a></b></p></td>
+</tr>
+<tr>
+<td colspan="2" width="41.1%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/c11b3422-3778-40c4-808b-506f950bb1b8"><img src="https://github.com/user-attachments/assets/c11b3422-3778-40c4-808b-506f950bb1b8" alt="Raven RSI poster: a spiral stone stair climbing into the light, with ravens circling it" width="100%"></a></p></td>
+<td width="30.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/f2c368e3-789e-4a8d-890f-384240b36c25"><img src="https://github.com/user-attachments/assets/f2c368e3-789e-4a8d-890f-384240b36c25" alt="Cover, slides and closing slide of the Raven RSI deck" width="100%"></a></p></td>
+</tr>
+</table>
+
+### ❯ Raven: a complete product launch project
+
+**One raven, a whole flock of specialists. Raven completed the entire project.** Its launch kit brings together a browser-based physics mini-game, a 16-slide product overview, posters in English and Chinese, and the README you are reading now, all produced by Raven.
+
+<table>
+<tr>
+<td colspan="2" valign="top"><p align="center"><b>Physics mini-game</b> · <b><a href="https://livxue.github.io/angry-raven/">Play online ↗</a></b></p></td>
+<td width="19%" valign="top"><p align="center"><b>README</b></p></td>
+</tr>
+<tr>
+<td colspan="2" valign="top">
+
+https://github.com/user-attachments/assets/dd186b6d-3752-4c59-89c7-eeea5c6fa962
+
+</td>
+<td rowspan="3" width="19%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/1bb3bef1-e701-4609-9b14-6de6877c9e5c"><img src="https://github.com/user-attachments/assets/1bb3bef1-e701-4609-9b14-6de6877c9e5c" alt="The top of the Raven README as one long capture: banner, introduction, the four built-in agents with their benchmarks, and runtime self-evolution" width="100%"></a></p></td>
+</tr>
+<tr>
+<td width="46.5%" valign="top"><p align="center"><b>Poster</b></p></td>
+<td width="34.5%" valign="top"><p align="center"><b>Presentation</b> · <b><a href="https://github.com/LivXue/Raven/releases/download/showcase-decks-2026-09-25/Raven-Overview-0925.pptx">PPTX ↓</a></b></p></td>
+</tr>
+<tr>
+<td width="46.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/4044db80-10f6-4963-9800-218125630c2b"><img src="https://github.com/user-attachments/assets/4044db80-10f6-4963-9800-218125630c2b" alt="Raven poster: a raven on a standing stone above sea cliffs at sunset, over the line One raven. A whole flock of specialists." width="100%"></a></p></td>
+<td width="34.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/2e19674e-83a8-4a77-a114-39f906c240d0"><img src="https://github.com/user-attachments/assets/2e19674e-83a8-4a77-a114-39f906c240d0" alt="Cover, slides and closing slide of the Raven overview deck" width="100%"></a></p></td>
+</tr>
+</table>
+
+**[More showcases](docs/showcase.md)**
 
 ## ❯❯ Built-in Agents
 
@@ -101,98 +184,15 @@ Raven's modular architecture is designed for harness self-evolution and subagent
 
 <p align="center"><em>Raven-Oncall significantly outperforms Claude Code on both success rate and cost for AI4S tasks</em></p>
 
-## ❯❯ Runtime Self-Evolution (Experimental)
+## ❯❯ Runtime Self-Evolution
 
-**Raven is built for this from the ground up.** Its agent loop is split into four decoupled strategy modules — **Memory**, **Planning**, **Capability**, and **Action** — so what an agent is told, what it treats as finished, which tools it reaches for, and which checks it must pass can all be rewritten **while it is running**. What changes belongs to that agent alone: a setting, or a small piece of judgement code written for it. The next turn of the same conversation already runs on it, with nothing restarted.
+**Raven is built for this from the ground up.** Its agent loop is split into four decoupled strategy modules — **Memory** for what a turn gets to see, **Planning** for how it approaches the work, **Capability** for which tools an iteration exposes, **Action** for what to do next and for judging it before it runs. A **Curator** keeps rewriting those four seats: a setting, or a small piece of judgement code written for that agent. What it changes belongs to that agent alone, and once installed the agent runs on it.
 
-**A Persona is the first thing this builds.** Describe the assistant you want and Raven assembles one: a lead role that talks to you, and specialists drawn from the agents you already have. What you asked for does not stop at a prompt — it lands in that assistant's **harness**, as its division of work, the tools it may reach for, and the checks it must pass before it acts. Raven keeps reworking the assistant from your feedback until it does the job.
+**A Curator changes more than the prompt** — the tools and outside services it reaches for, the skills and procedures it follows, and its own judgement at each point can all be replaced. It keeps going round after round — you put it to work, you say what was wrong, it reworks — until you are satisfied, until it has nothing left worth changing, or until the round budget runs out. Two things hold the quality: nothing is installed before it is verified, and a failed check sends it back; and a round's signals normally reach it with the reference answer stripped out, which limits how directly the answer is exposed. The Curator is experimental: it ships with the repository rather than the installed package.
+
+**A Persona is the first thing it builds.** Describe the assistant you want and the Curator assembles one: a lead role that talks to you, and specialists drawn from the agents you already have. What you asked for lands in that assistant's **harness** — its division of work, the tools it may reach for, and the checks it must pass before it acts.
 
 > Describe what you need once. Raven assembles the assistant, keeps improving it while you work, and afterwards a sentence is enough to put it to work again.
-
-## ❯❯ Showcase
-
-These are three complete projects delivered by Raven. In each case, Raven drove a team of specialized agents from the initial brief or objective through execution to a complete set of final deliverables.
-
-### ❯ THRESHOLD: a complete game development project
-
-**The brief came from a person; Raven completed the entire project.** Working autonomously for about 4 days, Raven completed 42 rounds of planning, development, and verification to build a playable first-person shooter in Godot 4, centered on an arena boss fight. The full deliverable includes the game, its poster, presentation, and website, all produced by Raven.
-
-<table>
-<tr>
-<td colspan="2" valign="top"><p align="center"><b>Gameplay video</b></p></td>
-<td width="22.2%" valign="top"><p align="center"><b><a href="https://livxue.github.io/threshold/en/">Website ↗</a></b></p></td>
-</tr>
-<tr>
-<td colspan="2" valign="top">
-
-https://github.com/user-attachments/assets/44724e3e-6564-467a-b422-473aa8f474bd
-
-</td>
-<td rowspan="3" width="22.2%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/8cfd513f-fba9-432d-b020-51dba0a7faeb"><img src="https://github.com/user-attachments/assets/8cfd513f-fba9-432d-b020-51dba0a7faeb" alt="The THRESHOLD website as one long capture: hero, fight, kill cam, attack tells, evolution, making-of and footer" width="100%"></a></p></td>
-</tr>
-<tr>
-<td width="46.2%" valign="top"><p align="center"><b>Poster</b></p></td>
-<td width="31.6%" valign="top"><p align="center"><b>Presentation</b></p></td>
-</tr>
-<tr>
-<td width="46.2%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/a12e76d1-e7b1-4a7e-a3ba-1f3b5492fb50"><img src="https://github.com/user-attachments/assets/a12e76d1-e7b1-4a7e-a3ba-1f3b5492fb50" alt="THRESHOLD poster: the Warden towers over the player on a molten arena floor" width="100%"></a></p></td>
-<td width="31.6%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/3852c187-3412-4501-9b62-809a3dfd0b81"><img src="https://github.com/user-attachments/assets/3852c187-3412-4501-9b62-809a3dfd0b81" alt="Cover, slides and closing slide of the THRESHOLD deck" width="100%"></a></p></td>
-</tr>
-</table>
-
-### ❯ Raven RSI: a complete recursive self-improvement project
-
-**AI that improves AI, with the entire project completed by Raven.** Given a task and evaluation criteria it cannot modify, Raven RSI independently plans each round, writes code, runs experiments, and evaluates the results. In nanochat pre-training experiments, it completed 172 training runs across 7 rounds without a single crash, reducing `val_bpb` by 5.8% within the same 20-minute, single-GPU budget. The same process reduced overshoot in a dam-break simulation by three orders of magnitude and completed an FEA limit-load search in 8 rounds of bisection. The complete deliverable includes the experimental results, visualizations, poster, presentation, and project website, all produced by Raven.
-
-<table>
-<tr>
-<td width="35.8%" valign="top"><p align="center"><b>CFD dam-break simulation</b></p></td>
-<td colspan="2" width="35.8%" valign="top"><p align="center"><b>FEA limit-load search</b></p></td>
-<td width="28.4%" valign="top"><p align="center"><b><a href="https://livxue.github.io/raven-rsi/en/">Website ↗</a></b></p></td>
-</tr>
-<tr>
-<td width="35.8%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/44f81db4-4c17-47be-ad3b-047e26762a24"><img src="https://github.com/user-attachments/assets/44f81db4-4c17-47be-ad3b-047e26762a24" alt="Dam-break solve: a collapsing water column resolved to fine free-surface structure, with the out-of-bounds water fraction falling from 1e0 to 1.36e-10 over seven rounds" width="100%"></a></p></td>
-<td colspan="2" width="35.8%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/89878a01-ab5c-4070-8359-5bc34c3d58b7"><img src="https://github.com/user-attachments/assets/89878a01-ab5c-4070-8359-5bc34c3d58b7" alt="Limit-load search: a cantilever beam under rising load colored by von Mises stress, with the bisection bracket narrowing from 1800-2000 kN down to 3.125 kN over eight rounds" width="100%"></a></p></td>
-<td rowspan="3" width="28.4%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/791310d8-497e-4608-9fcc-ddddc83cba04"><img src="https://github.com/user-attachments/assets/791310d8-497e-4608-9fcc-ddddc83cba04" alt="The Raven RSI website as one long capture: research overview, nanochat, dam-break CFD, FEA solver convergence and model cost comparison" width="100%"></a></p></td>
-</tr>
-<tr>
-<td colspan="2" width="41.1%" valign="top"><p align="center"><b>Poster</b></p></td>
-<td width="30.5%" valign="top"><p align="center"><b>Presentation</b></p></td>
-</tr>
-<tr>
-<td colspan="2" width="41.1%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/c11b3422-3778-40c4-808b-506f950bb1b8"><img src="https://github.com/user-attachments/assets/c11b3422-3778-40c4-808b-506f950bb1b8" alt="Raven RSI poster: a spiral stone stair climbing into the light, with ravens circling it" width="100%"></a></p></td>
-<td width="30.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/f2c368e3-789e-4a8d-890f-384240b36c25"><img src="https://github.com/user-attachments/assets/f2c368e3-789e-4a8d-890f-384240b36c25" alt="Cover, slides and closing slide of the Raven RSI deck" width="100%"></a></p></td>
-</tr>
-</table>
-
-### ❯ Raven: a complete product launch project
-
-**One raven, a whole flock of specialists. Raven completed the entire project.** Its launch kit brings together a browser-based physics mini-game, a 16-slide product overview, posters in English and Chinese, and the README you are reading now, all produced by Raven.
-
-<table>
-<tr>
-<td colspan="2" valign="top"><p align="center"><b>Physics mini-game</b> · <b><a href="https://livxue.github.io/angry-raven/">Play online ↗</a></b></p></td>
-<td width="19%" valign="top"><p align="center"><b>README</b></p></td>
-</tr>
-<tr>
-<td colspan="2" valign="top">
-
-https://github.com/user-attachments/assets/dd186b6d-3752-4c59-89c7-eeea5c6fa962
-
-</td>
-<td rowspan="3" width="19%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/1bb3bef1-e701-4609-9b14-6de6877c9e5c"><img src="https://github.com/user-attachments/assets/1bb3bef1-e701-4609-9b14-6de6877c9e5c" alt="The top of the Raven README as one long capture: banner, introduction, the four built-in agents with their benchmarks, and runtime self-evolution" width="100%"></a></p></td>
-</tr>
-<tr>
-<td width="46.5%" valign="top"><p align="center"><b>Poster</b></p></td>
-<td width="34.5%" valign="top"><p align="center"><b>Presentation</b></p></td>
-</tr>
-<tr>
-<td width="46.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/4044db80-10f6-4963-9800-218125630c2b"><img src="https://github.com/user-attachments/assets/4044db80-10f6-4963-9800-218125630c2b" alt="Raven poster: a raven on a standing stone above sea cliffs at sunset, over the line One raven. A whole flock of specialists." width="100%"></a></p></td>
-<td width="34.5%" valign="top"><p align="center"><a href="https://github.com/user-attachments/assets/2e19674e-83a8-4a77-a114-39f906c240d0"><img src="https://github.com/user-attachments/assets/2e19674e-83a8-4a77-a114-39f906c240d0" alt="Cover, slides and closing slide of the Raven overview deck" width="100%"></a></p></td>
-</tr>
-</table>
-
-**[More showcases](docs/showcase.md)**
 
 ## ❯❯ Connect Third-Party Agents
 
@@ -405,3 +405,18 @@ Issues and pull requests are welcome. Start with the [developer workflow](docs/d
 ## ❯❯ License
 
 [Apache License 2.0](LICENSE)
+
+## ❯❯ Citation
+
+If you use Raven in your research, please cite the [technical report](https://github.com/EverMind-AI/Raven/releases/download/tech-report-v1/technical-report.pdf):
+
+```bibtex
+@techreport{evermind2026raven,
+  title       = {{Raven: The Harness of Harnesses for Composable Agentic Intelligence}},
+  author      = {{EverMind AI}},
+  institution = {EverMind AI},
+  year        = {2026},
+  month       = sep,
+  url         = {https://github.com/EverMind-AI/Raven/releases/tag/tech-report-v1}
+}
+```

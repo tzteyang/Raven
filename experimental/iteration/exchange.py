@@ -1,6 +1,7 @@
 """One bounded model exchange that may query and must end in exactly one structured submission."""
 
 import asyncio
+import inspect
 import json
 
 from ..curator.generation.context.render import assistant_message
@@ -20,13 +21,29 @@ def messages(system: str, materials: dict) -> list[dict]:
 
 
 async def exchange(
-    provider, messages, tools, *, submit, query=None, model=None, max_calls=4, timeout=120, trace=None, label=""
+    provider,
+    messages,
+    tools,
+    *,
+    submit,
+    query=None,
+    model=None,
+    effort=None,
+    max_calls=4,
+    timeout=120,
+    trace=None,
+    label="",
 ):
-    """Drive the model until one call in `submit` parses; `query` tools run locally and feed results back.
+    """Drive the model until one call in `submit` parses; `query` tools run locally, awaited when they are coroutines,
+    and feed results back.
 
-    The last allowed call offers only the submission tools, so a query-happy model still ends with a submission."""
+    The last allowed call offers only the submission tools, so a query-happy model still ends with a submission.
+    `effort` is the reasoning effort of every call; without one the provider's own setting applies. A reply without
+    a tool call is traced with its finish reason and usage: a reasoning model can spend its whole output budget
+    thinking and return nothing, which only the usage shows."""
     query = query or {}
     trace = trace if trace is not None else []
+    extra = {"reasoning_effort": effort} if effort else {}
     submissions = [entry for entry in tools if entry["function"]["name"] in submit]
     for attempt in range(1, max_calls + 1):
         offered = tools
@@ -39,7 +56,7 @@ async def exchange(
         try:
             async with asyncio.timeout(timeout):
                 response = await provider.chat_with_retry(
-                    messages=messages, tools=offered, model=model, tool_choice="auto"
+                    messages=messages, tools=offered, model=model, tool_choice="auto", **extra
                 )
         except asyncio.CancelledError:
             raise
@@ -53,7 +70,15 @@ async def exchange(
             messages.append(
                 {"role": "user", "content": f"Plain text is not delivered. Reply by calling one of the tools: {names}."}
             )
-            trace.append({"label": label, "event": "output.missing"})
+            trace.append(
+                {
+                    "label": label,
+                    "event": "output.missing",
+                    "finish_reason": response.finish_reason,
+                    "content_chars": len(response.content or ""),
+                    "usage": dict(getattr(response, "usage", None) or {}),
+                }
+            )
             continue
         submitted = [call for call in response.tool_calls if call.name in submit]
         if submitted:
@@ -75,9 +100,12 @@ async def exchange(
             return call.name, value
         for call in response.tool_calls:
             try:
-                result = (
-                    query[call.name](call.arguments) if call.name in query else {"error": f"unknown tool: {call.name}"}
-                )
+                if call.name in query:
+                    result = query[call.name](call.arguments)
+                    if inspect.isawaitable(result):
+                        result = await result
+                else:
+                    result = {"error": f"unknown tool: {call.name}"}
             except (ValueError, TypeError, KeyError, IndexError) as exc:
                 result = {"error": str(exc)[:4000]}
             messages.append(

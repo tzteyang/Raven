@@ -1,24 +1,29 @@
 """Native Raven adaptation preserves grants, resources and observable result semantics."""
 
+import json
+import os
+from pathlib import Path
+
 import pytest
 
-from experimental.curator.harness import Artifact, Declaration, Target
+from experimental.curator.harness import Artifact, Declaration, Target, Task
 from experimental.curator.raven_adapter.bind import assemble
+from experimental.curator.raven_adapter.content import ContentInstallation
 from experimental.curator.raven_adapter.inspection import (
     Baseline,
     Inspection,
     declaration_for,
     file_source,
     redact,
-    unavailable_targets,
 )
-from experimental.curator.raven_adapter.materialize import install_content, load_factory, native_settings, write_package
-from experimental.curator.raven_adapter.observe import Recorder, participant_factory
+from experimental.curator.raven_adapter.materialize import load_factory, native_settings, write_package
+from experimental.curator.raven_adapter.observe import Recorder
+from experimental.curator.raven_adapter.preparation import PreparedHarness, describe_preparation
 from experimental.curator.raven_adapter.targets import catalogue
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse
-from raven.contracts.participant import Accept, AgentParticipant, StepView
+from raven.contracts.participant import AgentParticipant, StepView
 from raven.spine.turn import Origin
 
 
@@ -52,14 +57,11 @@ def step(phase="iteration"):
 
 def test_configuration_patches_preserve_defaults_and_share_the_native_base(baseline, declaration):
     old_model = baseline.config.agents.defaults.model
-    artifact = Artifact(
-        values={
-            "action.config": {"temperature": 0},
-            "memory.context_config": {"drop_segments": ["memory"]},
-            "planning.skill_config": {"enabled": False},
-        }
+    prepared = PreparedHarness(
+        config={"agents": {"defaults": {"temperature": 0}}},
+        extensions={"context": {"drop_segments": ["memory"]}, "skill_forge": {"enabled": False}},
     )
-    effective = native_settings(baseline, artifact, declaration)
+    effective = native_settings(baseline, prepared)
     assert effective.config.agents.defaults.temperature == 0
     assert effective.config.agents.defaults.model == old_model
     assert not effective.extensions.skill_forge.enabled
@@ -72,8 +74,8 @@ def test_an_authored_disabled_tools_list_adds_to_the_hosts_and_never_enables_a_t
     """e2e0925h onboarding: the Curator disabled the browser tools and its list replaced the host's, so the employee
     got exec, web_search, web_fetch and ask_user back."""
     baseline.config.tools.disabled_tools = ["exec", "ask_user"]
-    artifact = Artifact(values={"capability.tool_config": {"disabled_tools": ["deep_research", "exec"]}})
-    effective = native_settings(baseline, artifact, declaration)
+    prepared = PreparedHarness(config={"tools": {"disabled_tools": ["deep_research", "exec"]}})
+    effective = native_settings(baseline, prepared)
     assert effective.config.tools.disabled_tools == ["exec", "ask_user", "deep_research"]
     assert baseline.config.tools.disabled_tools == ["exec", "ask_user"]
 
@@ -89,19 +91,22 @@ def test_owned_content_rollback_restores_files_symlinks_and_permissions(tmp_path
     script.parent.mkdir(parents=True)
     script.write_text("old")
     script.chmod(0o755)
-    artifact = Artifact(
-        values={
-            "memory.prompt": {"TOOLS.md": "new"},
-            "planning.skills": {"old/run.sh": "new script", "new/SKILL.md": "new skill"},
+    prepared = PreparedHarness(
+        content={
+            "memory": {
+                "TOOLS.md": "new",
+                "skills/old/run.sh": "new script",
+                "skills/new/SKILL.md": "new skill",
+            }
         }
     )
-    with pytest.raises(RuntimeError):
-        with install_content(home, artifact, declaration):
-            assert not target.is_symlink()
-            assert target.read_text() == "new"
-            assert outside.read_text() == "shared template"
-            assert script.stat().st_mode & 0o777 == 0o755
-            raise RuntimeError("reject assembly")
+    transaction = ContentInstallation(home, tmp_path / "runtime", prepared, Recorder(tmp_path / "events.jsonl"))
+    transaction.apply()
+    assert not target.is_symlink()
+    assert target.read_text() == "new"
+    assert outside.read_text() == "shared template"
+    assert script.stat().st_mode & 0o777 == 0o755
+    transaction.rollback()
     assert target.is_symlink() and target.read_text() == "shared template"
     assert script.read_text() == "old"
     assert script.stat().st_mode & 0o777 == 0o755
@@ -115,8 +120,12 @@ def test_content_writes_reject_an_escaping_parent(tmp_path, declaration):
     outside.mkdir()
     (home / "skills").symlink_to(outside, target_is_directory=True)
     with pytest.raises(ValueError, match="escapes"):
-        with install_content(home, Artifact(values={"planning.skills": {"new/SKILL.md": "text"}}), declaration):
-            pytest.fail("the write should not be attempted")
+        ContentInstallation(
+            home,
+            tmp_path / "runtime",
+            PreparedHarness(content={"memory": {"skills/new/SKILL.md": "text"}}),
+            Recorder(tmp_path / "events.jsonl"),
+        )
 
 
 def test_generated_packages_do_not_reuse_a_previous_modules_code(tmp_path):
@@ -170,79 +179,22 @@ def test_empty_authority_is_not_reopened_by_default():
 
 
 def test_origin_and_residency_limits_come_from_the_actual_native_path(baseline):
-    from raven.agent.loop.turn_path import _SKIP_AFTER_SEND_ORIGINS, _SKIP_USER_INBOUND_ORIGINS
-
+    """Raven's turn path runs the inbound hook and the after_send chain for user, cron and heartbeat turns, and
+    skips both for sentinel and subagent turns, whose output is system-originated."""
     for origin in Origin:
         baseline.origin = origin
-        unavailable = unavailable_targets(baseline)
-        assert ("memory.intake" in unavailable) == (origin in _SKIP_USER_INBOUND_ORIGINS)
-        assert ("memory.archive" in unavailable) == (origin in _SKIP_AFTER_SEND_ORIGINS)
+        support = describe_preparation(baseline)
+        assert support["input"] == support["archive"] == (origin not in {Origin.SENTINEL, Origin.SUBAGENT})
     baseline.resident = False
-    assert {"action.services", "memory.session_observers"} <= unavailable_targets(baseline).keys()
-
-
-@pytest.mark.asyncio
-async def test_participant_methods_share_turn_state_without_exposing_unselected_methods(tmp_path, declaration):
-    class Participant(AgentParticipant):
-        def __init__(self):
-            self.calls = 0
-
-        async def advise(self, step):
-            self.calls += 1
-            return "note"
-
-        async def review(self, step):
-            return Accept(str(self.calls))
-
-        async def intake(self, text, step):
-            raise AssertionError("unselected method")
-
-    recorder = Recorder(tmp_path / "records.jsonl")
-    factory = participant_factory(
-        Participant, [declaration.target("planning.advise"), declaration.target("action.review")], recorder
-    )
-    one, two = factory(), factory()
-    await one.advise(step())
-    assert (await one.review(step("after_iteration")))["note"] == "1"
-    assert (await two.review(step("after_iteration")))["note"] == "0"
-    assert await one.intake("task", step("user_inbound")) is None
-
-
-@pytest.mark.asyncio
-async def test_observation_copies_prevent_nested_mutation_of_loop_data(tmp_path, declaration):
-    class Participant(AgentParticipant):
-        async def advise(self, step):
-            step.response.content = "changed"
-            step.transcript[0]["content"][0]["text"] = "changed"
-            return None
-
-    original = step()
-    factory = participant_factory(
-        Participant, [declaration.target("planning.advise")], Recorder(tmp_path / "records.jsonl")
-    )
-    assert await factory().advise(original) is None
-    assert original.response.content == "original"
-    assert original.transcript[0]["content"][0]["text"] == "original"
-
-
-def test_factory_errors_remain_visible_when_native_hooks_would_swallow_them(tmp_path, declaration):
-    recorder = Recorder(tmp_path / "records.jsonl")
-
-    def broken():
-        raise RuntimeError("factory broke")
-
-    factory = participant_factory(broken, [declaration.target("planning.advise")], recorder)
-    with pytest.raises(RuntimeError):
-        factory()
-    assert recorder.rows[-1]["kind"] == "participant.error"
-    assert recorder.rows[-1]["phase"] == "construction"
+    support = describe_preparation(baseline)
+    assert not support["resident_services"] and not support["session_retirement"]
 
 
 def test_unknown_bindings_are_rejected_before_loading_code(tmp_path, baseline):
     target = Target("action.future", AgentParticipant.review, "unknown.binding", dict, (), "unknown")
     declaration = Declaration("b", (target,))
     root = tmp_path / "runtime"
-    with pytest.raises(ValueError, match="not implemented"):
+    with pytest.raises(ValueError, match="unsupported authoring entry"):
         assemble(
             baseline, Artifact(values={"action.future": {}}), declaration, root, Recorder(tmp_path / "records.jsonl")
         )
@@ -304,20 +256,6 @@ def test_validation_copy_preserves_directory_relationships_and_excludes_itself(t
     assert baseline.workdir == work
 
 
-@pytest.mark.asyncio
-async def test_structural_participant_implementations_keep_the_native_contract(tmp_path, declaration):
-    class Existing:
-        async def advise(self, step):
-            return "existing behavior"
-
-    factory = participant_factory(
-        Existing, [declaration.target("planning.advise")], Recorder(tmp_path / "records.jsonl")
-    )
-    participant = factory()
-    assert await participant.advise(step()) == "existing behavior"
-    assert await participant.review(step("after_iteration")) is None
-
-
 def test_a_reference_to_a_module_missing_from_the_package_says_where_its_source_belongs(tmp_path):
     package = write_package(tmp_path, Artifact(values={}, files={"helpers.py": "VALUE = 1\n"}))
     with pytest.raises(ModuleNotFoundError, match=r"holds helpers\.py.*files\['planning_impl\.py'\]"):
@@ -366,3 +304,100 @@ def test_execution_errors_preserve_child_failure_attribution():
         }
     ]
     assert "harness" not in nested["records"][0]
+
+
+@pytest.mark.asyncio
+async def test_file_roots_confine_the_native_file_tools_and_keep_disabled_ones_absent(tmp_path):
+    from types import SimpleNamespace
+
+    from experimental.curator.raven_adapter.bind import _confine_files
+    from raven.agent.tools.deliver import DeliverFilesTool
+    from raven.agent.tools.filesystem import ReadFileTool, WriteFileTool
+    from raven.agent.tools.registry import ToolRegistry, call_failed
+
+    home, shared, handed, elsewhere = (tmp_path / name for name in ("home", "shared", "handed", "elsewhere"))
+    for folder in (home, shared, handed, elsewhere):
+        folder.mkdir()
+        (folder / "note.md").write_text(f"written in {folder.name}\n")
+    registry = ToolRegistry()
+    registry.register(ReadFileTool(workspace=home))
+    registry.register(WriteFileTool(workspace=home))
+    store = object()
+    registry.register(DeliverFilesTool(store, workspace=home))
+    loop = SimpleNamespace(workspace=home, tools=registry, deliverables=store)
+    _confine_files(SimpleNamespace(loop=loop), (shared.resolve(),), (handed.resolve(),))
+    assert registry.get("edit_file") is None and registry.get("grep") is None
+    for folder in (home, shared, handed):
+        assert f"written in {folder.name}" in await registry.execute("read_file", {"path": str(folder / "note.md")})
+    refused = await registry.execute("read_file", {"path": str(elsewhere / "note.md")})
+    assert call_failed(refused) and "written in elsewhere" not in str(refused)
+    await registry.execute("write_file", {"path": str(shared / "made.md"), "content": "by the child"})
+    assert (shared / "made.md").read_text() == "by the child"
+    refused = await registry.execute("write_file", {"path": str(handed / "made.md"), "content": "by the child"})
+    assert call_failed(refused) and not (handed / "made.md").exists()
+    assert registry.get("deliver_files")._allowed_dirs == (home.resolve(), shared.resolve(), handed.resolve())
+
+
+def test_a_copied_baseline_moves_its_file_roots_with_the_copy_and_with_its_parents(tmp_path):
+    from experimental.curator.raven_adapter.materialize import copy_local_state, remap_paths
+
+    parent_home, parent_work = tmp_path / "parent" / "home", tmp_path / "parent" / "work"
+    home, work = parent_home / "subagents" / "child", tmp_path / "child-work"
+    for folder in (parent_home / "uploads", parent_work, home / "own", work):
+        folder.mkdir(parents=True)
+    config = Config()
+    config.agents.defaults.workspace = str(home)
+    baseline = Baseline(
+        config,
+        RavenConfig(),
+        work,
+        file_roots=(parent_work, home / "own"),
+        read_roots=(parent_home, tmp_path / "outside"),
+    )
+    copied_parent = tmp_path / "copy" / "parent"
+    copied = copy_local_state(
+        baseline,
+        tmp_path / "copy" / "child",
+        remap=((parent_home, copied_parent / "home"), (parent_work, copied_parent / "work")),
+    )
+    assert copied.file_roots == ((copied_parent / "work").resolve(), copied.config.workspace_path / "own")
+    assert copied.read_roots == ((copied_parent / "home").resolve(), (tmp_path / "outside").resolve())
+    assert remap_paths((parent_home / "uploads",), ((parent_home, copied_parent / "home"),)) == (
+        (copied_parent / "home" / "uploads").resolve(),
+    )
+    assert Baseline.restore(copied.export()).read_roots == copied.read_roots
+
+
+@pytest.mark.parametrize("name", ["raven-code", "raven-research", "raven-oncall", "raven-design", "raven-ppt"])
+def test_existing_agent_preparation_reuses_renderer_and_isolates_host_environment(tmp_path, name):
+    from experimental.curator.raven_adapter.baselines.agents import prepare_agent
+    from raven.config.mode_catalogue import build_mode_catalogue
+
+    host = tmp_path / "host"
+    host.mkdir()
+    (host / "config.json").write_text(
+        json.dumps(
+            {
+                "agents": {"defaults": {"model": "openai/gpt-4o-mini", "provider": "openrouter"}},
+                "providers": {"openrouter": {"apiKey": "synthetic-key"}},
+            }
+        )
+    )
+    root = tmp_path / "prepared"
+    directory = Path(__file__).resolve().parents[1] / "agents" / name
+    previous = dict(os.environ)
+    baseline = prepare_agent(
+        directory,
+        root=root,
+        workdir=tmp_path,
+        task=Task(id="task", text="Inspect"),
+        environment={"RAVEN_HOME": str(host), "RESEARCH_SERPER_API_KEY": "synthetic-search-key"},
+    )
+    assert os.environ == previous
+    assert baseline.source_roots == (directory,)
+    assert baseline.config.workspace_path.is_relative_to(root)
+    assert baseline.task.id == "task"
+    assert build_mode_catalogue(baseline.config).get(baseline.mode) is not None
+    assert (root / "prepared.json").stat().st_mode & 0o777 == 0o600
+    if name in {"raven-code", "raven-oncall", "raven-research"}:
+        assert str(directory / "plugins") in baseline.extensions.plugins.dirs

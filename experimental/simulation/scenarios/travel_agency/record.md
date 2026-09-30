@@ -19,6 +19,7 @@
 - curation: Curator 的答复与 harness 改动
 - mechanism: 机制起作用的记录
 - ledger: 知识沉淀台账
+- requirements_ledger: 要求台账
 - cost: 成本与复现
 - value: 价值判定
 - customer: 客人

@@ -61,12 +61,18 @@ CLEAN = {"valid": True, "breaches": 0, "logs": 3, "findings": []}
 
 
 def record(rounds, ledger, isolation=CLEAN):
-    return {
+    """A judged run whose attribution read every intervention reason `FOR_RULE` as enforcing each rule its target was
+    sedimented for, and any other reason as enforcing none (see `experimental.simulation.attribution`)."""
+    value = {
         "run": {"name": "hoh-staged", "chain": "staged", "status": "finished"},
         "rounds": rounds,
         "ledger": ledger,
         "isolation": isolation,
     }
+    links = {
+        key: sorted(slot["rules"]) if slot["reason"] == FOR_RULE else [] for key, slot in candidates(value).items()
+    }
+    return {**value, "attribution": {"links": links, "interventions": len(links)}}
 
 
 FAILED_THEN_HELD = [moment(1, "fail"), moment(2, "pass"), moment(3, "pass")]
@@ -143,10 +149,13 @@ def test_a_rule_sedimented_through_several_targets_is_one_case():
     assert case["targets"] == ["action.review", "planning.strategy"] and case["mechanism_rows"] == 5
 
 
-def test_only_an_intervention_whose_reason_enforces_the_rule_counts():
+def test_only_an_intervention_the_attribution_reads_as_enforcing_the_rule_counts():
+    enforcing = [round_(1), round_(2, row("action.review", 3, intervention=True)), round_(3)]
+    ledger = [entry(FAILED_THEN_HELD, [landing(1)])]
+    assert cases(record(enforcing, ledger))[0]
+    assert cases({**record(enforcing, ledger), "attribution": None}) == ([], [])
     other = row("action.review", 3, intervention=True, reason="G2: this message asks three questions")
     rounds = [round_(1), round_(2, other), round_(3, other)]
-    ledger = [entry(FAILED_THEN_HELD, [landing(1)])]
     assert cases(record(rounds, ledger)) == ([], [])
     (key,) = candidates(record(rounds, ledger))
     assert key == reason_key("root", "action.review", "G2: this message asks three questions")

@@ -101,71 +101,83 @@ def bind_children(baseline, children, root):
 
 
 async def activate(worker, candidate, children=None):
-    """Activate one checked set at a single root execution boundary, restoring all owned state on failure."""
+    """Preview code-produced effects, then atomically activate one idle deployment."""
     import asyncio
 
+    from .content import check_owners, snapshot
     from .inspection import Inspection
-    from .materialize import extend_artifact, restore_content, retired_content, save_content
-    from .targets import catalogue
+    from .materialize import extend_artifact, restore_content
+    from .preparation import PreparedHarness
 
     async with worker._lock:
         if not await worker._exchange({"operation": "idle"}):
             raise ValueError("Harness activation requires an idle root and completed child calls")
         current = await worker._inspect()
         candidate = worker._accept(candidate, current)
-        proposed = worker._release_edited(
-            candidate.artifact, extend_artifact(worker.artifact, candidate.artifact), current.declaration
-        )
+        proposed = extend_artifact(worker.artifact, candidate.artifact)
         previous = {name: Child.restore(child.export()) for name, child in worker.children.items()}
         revised = {name: Child.restore(child.export()) for name, child in worker.children.items()}
-        saved = {
-            **save_content(worker.baseline.config.workspace_path, worker.artifact, current.declaration),
-            **save_content(worker.baseline.config.workspace_path, proposed, current.declaration),
-        }
-        saved_children, retired_children = {}, {}
         if set(children or {}) - set(revised):
             raise ValueError("candidate names a child Harness outside this deployment")
+        old_children = {}
         for name, child in revised.items():
             report = await worker._exchange({"operation": "inspect_agent", "agent": name})
             inspection = Inspection.restore(report["inspection"])
+            old_children[name] = PreparedHarness.model_validate(inspection.facts.get("prepared", {}))
             submitted = (children or {}).get(name)
             restoring = name in (children or {}) and submitted is None
-            home = child.baseline.config.workspace_path
-            effective = child_artifact(child, submitted, inspection, restoring=restoring)
-            saved_children[name] = {
-                **save_content(home, child.artifact, inspection.declaration),
-                **save_content(home, effective, inspection.declaration),
-            }
-            retired_children[name] = retired_content(
-                home, child.artifact, effective, inspection.declaration, worker._content_baseline
-            )
-            child.artifact = effective
+            child.artifact = child_artifact(child, submitted, inspection, restoring=restoring)
             if restoring:
                 child.plan = None
             elif submitted is not None:
                 child.plan = submitted.plan
-        check_content_owners(worker.baseline, proposed, revised)
         if proposed == worker.artifact and all(
             revised[name].artifact == child.artifact for name, child in previous.items()
         ):
             return current
-        retired = worker._retired_content(proposed, current.declaration)
-        directories = [worker.root, *(child_directory(worker.root, name) for name in worker.children)]
-        checkpoints = {}
-        old = worker.artifact
+        async with worker._validation_copy(candidate, inspection=current, children=children) as trial:
+            prepared = trial.prepared
+            prepared_children = {}
+            for name in revised:
+                report = await trial.agent_state(name)
+                prepared_children[name] = PreparedHarness.model_validate(
+                    report["inspection"]["facts"].get("prepared", {})
+                )
+        check_owners(
+            worker.baseline,
+            prepared,
+            {name: (child.baseline, prepared_children[name]) for name, child in revised.items()},
+        )
+        owners = [(worker.baseline, worker.prepared, prepared, worker.area)]
+        owners.extend(
+            (child.baseline, old_children[name], prepared_children[name], child_directory(worker.area, name))
+            for name, child in revised.items()
+        )
+        saved = {}
+        files = {}
+        for baseline, old_prepared, next_prepared, directory in owners:
+            saved.setdefault(baseline.config.workspace_path, {}).update(
+                snapshot(baseline.config.workspace_path, old_prepared.files().keys() | next_prepared.files().keys())
+            )
+            for name in (
+                "assembly/content-state.json",
+                "memory.json",
+                "planning.json",
+                "capability.json",
+                "action.json",
+            ):
+                path = directory / name
+                files[path] = path.read_bytes() if path.exists() else None
+        old_artifact, old_prepared = worker.artifact, worker.prepared
         try:
             try:
                 await worker._close()
             finally:
-                for directory in directories:
-                    for target in catalogue():
-                        if target.binding.endswith(".strategy"):
-                            path = directory / f"{target.name.split('.')[0]}.json"
-                            checkpoints[path] = path.read_bytes() if path.exists() else None
+                for _, _, _, directory in owners:
+                    for name in ("memory.json", "planning.json", "capability.json", "action.json"):
+                        path = directory / name
+                        files[path] = path.read_bytes() if path.exists() else None
             worker.artifact, worker.children = proposed, revised
-            restore_content(worker.baseline.config.workspace_path, retired)
-            for name, content in retired_children.items():
-                restore_content(revised[name].baseline.config.workspace_path, content)
             await worker._start()
             installed = await worker._inspect()
             for name, child in worker.children.items():
@@ -176,61 +188,33 @@ async def activate(worker, candidate, children=None):
             try:
                 await worker._close()
             finally:
-                restore_content(worker.baseline.config.workspace_path, saved)
-                for name, content in saved_children.items():
-                    restore_content(previous[name].baseline.config.workspace_path, content)
-                worker.artifact, worker.children = old, previous
-                for path, content in checkpoints.items():
+                for home, content in saved.items():
+                    restore_content(home, content)
+                for path, content in files.items():
                     if content is None:
                         path.unlink(missing_ok=True)
                     else:
                         _write(path, content)
+                worker.artifact, worker.children, worker.prepared = old_artifact, previous, old_prepared
                 if not isinstance(exc, asyncio.CancelledError):
                     await worker._start()
             raise
-        for path, value in saved.items():
-            worker._content_baseline.setdefault(path, value)
-        for content in saved_children.values():
-            for path, value in content.items():
-                worker._content_baseline.setdefault(path, value)
         worker.last_plan = candidate.plan
+        worker.last_attribution = getattr(candidate, "attribution", None)
+        worker.last_selection = getattr(candidate, "selection", None)
+        worker.last_children = {
+            name: submitted for name, submitted in (children or {}).items() if submitted is not None
+        }
+        worker._preview = None
         return installed
-
-
-def check_content_owners(baseline, artifact, children):
-    """Reject simultaneous writers using the same content mapping used by materialization."""
-    from ..harness import Declaration
-    from .materialize import content_updates
-    from .targets import catalogue
-
-    declaration = Declaration("ownership", catalogue())
-    root_paths = content_updates(baseline.config.workspace_path, artifact, declaration)
-    for name, child in children.items():
-        home = child.baseline.config.workspace_path.resolve()
-        for path in root_paths:
-            if path.resolve().is_relative_to(home):
-                raise ValueError(f"root content overlaps the managed child {name}: {path}")
-    owners = {}
-    for name, child in children.items():
-        for path in content_updates(child.baseline.config.workspace_path, child.artifact, declaration):
-            key = path.resolve()
-            if key in owners:
-                raise ValueError(f"children {owners[key]} and {name} both own {path}")
-            owners[key] = name
 
 
 def child_artifact(child, candidate, inspection, *, restoring=False):
     """Resolve one proposed child version for both copied validation and real activation."""
-    from .materialize import extend_artifact, release_edited
+    from .materialize import extend_artifact
 
     if candidate is not None:
         inspection.declaration.validate(candidate)
     delta = child.original if restoring else (candidate.artifact if candidate else Artifact(values={}))
     proposed = child.original if restoring else extend_artifact(child.artifact, delta)
-    return release_edited(
-        child.baseline.config.workspace_path,
-        child.artifact,
-        delta,
-        proposed,
-        inspection.declaration,
-    )
+    return proposed

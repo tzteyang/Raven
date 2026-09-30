@@ -85,6 +85,12 @@ drives the LLM + tool-execution iterations, consolidates memory, and emits `Deli
 events via the Spine `emit` callback. Exposed to the Spine via `AgentTurnRunner`.
 _Avoid_: calling a single LLM call the "agent loop" — the loop spans all Iterations of one turn.
 
+**Turn synthesis policy** (`agent/loop/_shared.py:TurnSynthesisPolicy`):
+Product guidance for the tool-free reply when a Turn stops at its iteration or time
+budget or on a repeating tool call. A product may request one buffered format repair
+and format the static fallback; a Turn without this policy keeps the Agent Loop's
+generic wrap-up.
+
 **Harness Modules** (`agent/harness/`, paper `contracts/harness.py`):
 The four generation-scoped strategy roles the Agent Loop delegates to without giving up its
 Turn state machine: **Memory** assembles the window the model sees, **Planning** may prepare
@@ -102,7 +108,8 @@ merge what they answer (`ask_intake`, `ask_advice`, `ask_review`, `ask_salvage`,
 `ask_system_addendum`, `ask_archive`, `ask_select_tools`). Replacing a role therefore means two
 different things: a new way to produce, or a new rule for adjudicating what the products say.
 Frozen per Generation: the tool array is the prompt-cache prefix, so the set a turn runs on
-cannot move between two of its model calls.
+does not move between two of its model calls -- except for tools the turn's own `plugin` call
+connected, which join it on purpose (`ToolRegistry.admit_to_this_turn`).
 
 **Harness Curator** (`experimental/curator/`):
 Experimental generation of a worker's Harness from its task, the materials handed to it and
@@ -121,13 +128,140 @@ root's node requirements, checked and activated together. Children run through
 `raven_adapter/hosting/acp.py` on the native ACP/RPC turn pipeline; a `Child` in
 `raven_adapter/deployment.py` holds a host-provided baseline, its active artifact, authoring
 grants and prior plan.
+
+**Strategy interaction** (`experimental/curator/harness/interaction.py`):
+A concrete domain command inside an `InteractionRequest`, whose `InteractionScope`
+identifies the host Harness, task, revision, session and turn. Model tools expose only
+the command schema and query/command mode; the adapter supplies identity and provenance. `StrategyPeers`
+provides named cross-owner operations and detached views. Read-only operations cannot
+request peer writes, and awaited owner cycles are rejected before acquiring a lock.
+
+**Planning projection** (`experimental/curator/harness/planning.py`):
+The concrete plan view and optional model guidance returned by Planning initialization
+and interactions. A command publishes it only after its checkpoint succeeds; a query
+cannot change it. Consumers read a detached committed view, and restored session owners
+reconstruct the projection through initialization. Business replies are separate from
+the projection; rejecting a proposal can legitimately record a blocker. A partial plan
+is valid, and replanning does not undo external execution facts.
+
+**Capability contribution** (`experimental/curator/harness/resources.py`):
+A serializable tool implementation/interaction reference or a complete Skill package
+declaration submitted to `CapabilityStrategy.register`. A `RegistrationReceipt`
+reports candidate staging, idempotent repetition or rejection. The adapter installs
+the complete closed catalogue into a new native runtime; staging does not grant model
+visibility or execution permission. `EffectiveCapabilities` records the actual tool
+definitions and skill delivery selected for a model call.
+
+**Strategy preparation** (`experimental/curator/harness/preparation.py`):
+The synchronous candidate lifecycle before native construction. The same generated
+strategy class implements `prepare`, optionally through protected resource helpers.
+Role-scoped Raven host services collect typed policies, owned content and native
+dependencies; resource admission uses `CapabilityStrategy.register`. Those services
+close before session execution. Supporting assets do not activate independently.
+`PreparedHarness` records host-produced effects, not an additional Curator output
+field. Native content ownership is persisted separately for withdrawal, outside-edit
+preservation and failed-activation recovery.
+
+**Strategy inference** (`experimental/curator/harness/inference.py`):
+An optional typed, single-step worker-model call inside an active strategy operation.
+Curator authors its instruction, input selection, result model and consumer. The
+host owns operation identity and shares one attempt across its sequential peer
+chain, with additional turn, input, output and timeout bounds. It returns validated
+domain data without tools or a model repair loop; Action maps it to permitted
+controls whose application is recorded separately. It is not Curator execution
+or a delegated Agent workflow.
+
+**Context source** (`experimental/curator/harness/context.py`):
+A host-supplied context contribution with identity, owner, role, text and protection.
+Memory initializes its organization from actual sources and composes a detached
+projection for each model call. Protected source text and current user messages survive
+the projection; session working state and explicit task-shared knowledge have distinct
+checkpoint ownership.
+
+Local Memory projection overflow is classified at the model-input boundary so
+the native Loop can use its existing window-shrink budget before retrying. It
+records local pressure without claiming a provider call; invalid message or
+source projections remain contract errors.
+
+**Action control receipt** (`experimental/curator/harness/action.py`):
+The host's requested, applied, rejected or unsupported result for an Action control.
+Typed events distinguish proposals, actual outcomes, progress, failure and application
+feedback. A decision to revise or finish is separate from evidence that the native loop
+applied it; per-call refusal uses the native ToolGate consumer.
 `experimental/analyst/` turns a round's `Signal`s and execution records into `Feedback`: a
 decision plus behavior requirements stated in observable terms, never a mechanism. `experimental/iteration/`
-is the generic loop: `Trial`s run the worker (a conversation, a dataset, a simulation), `Evaluator`s
-measure the sessions into `Signal`s (text, per-item results, metrics, their own satisfied verdict), the
-analyst decides, and only a `curate` decision reaches `workflow.improve`.
+is the generic loop: `Trial`s run the worker (a conversation, a dataset, a simulation), `Assessor`s
+measure the sessions into `Signal`s (text, per-item results, metrics, their own satisfied verdict,
+attachments for material handed over), the analyst decides, and only a `curate` decision or a handover
+reaches `workflow.improve`. An **Assessor** holds a standard the worker never sees (criteria, materials,
+references, held-out cases) as its own state; the loop sees only its `Signal`; the protocol and the generic
+human and dataset assessors live in `experimental/assessor/`. `iteration/hearing.py`
+decides what the Curator hears of the signals and the history: a `Remark` (source, text, satisfied,
+attachments), never per-item results, metrics or references.
 _Avoid_: conflating this experiment with the Context Engine's Curator; calling the analyst an
-evaluator, which names the source of a `Signal`.
+assessor, which names the source of a `Signal`; the earlier name "evaluator" for that role; writing an
+assessor's standard into a `Signal`.
+
+**Cultivation scenario** (`experimental/scenario/`):
+The closed set of inputs one cultivation may consist of: the profile, cases, norms, facts,
+exemplars, counterexamples, checks, the exchange's schedule and wording, the prior and the
+evaluation aids, each item with the roles that may receive it (partner, conversant, party,
+analyst, curator). `load` reads a scenario directory and refuses a file outside every category;
+`sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the party's
+schedule of handing materials over, which the loop never reads. `provenance.json` says where each
+material came from and whether the party stands behind it (`Scenario.confirmed`).
+_Avoid_: calling a check a norm: a norm is handed over, a check is the party's own standard and stays
+on the evaluation side.
+
+**Compartment** (`experimental/iteration/compartment.py`):
+One model role's context: every value admitted into it and every provider request made inside it
+is scanned for that role's sealed fingerprints, and each admission and violation is appended to the
+run's `boundaries.jsonl`. Words a speaker is entitled to say, such as each conversant's messages, are
+spared per speaker; identifiers stay sealed.
+
+**Confinement** (`experimental/curator/raven_adapter/confinement.py`):
+The partner's process tree (the employee, its shell, its child harnesses and the strategy code the Curator installs)
+running as a dedicated user from a code image, able to reach only its area. The *area* (`Worker.area`; `employee/`
+of a run, `employee/` of each replica) is where the process runs and writes; the worker's root beside it keeps the
+loop's records, which the process never reads. The *code image* is the code the process imports, copied by a
+whitelist, with its own environment and interpreter, built once per content. Before a confined run starts, a probe
+run as that user must find the records, the runs beside, the repository and the scenario out of its reach.
+_Avoid_: sandbox, which in Raven (`tools.sandbox`) confines one tool command, not the process.
+
+**Mechanism attribution** (`experimental/curator/attribution/`):
+The Curator's diagnosis, before it changes anything, of where each input stands in the current
+Harness: the responsible mechanism and its state from a closed set (`absent`, `not_exposed`,
+`not_triggered`, `not_consumed`, `wrong_logic`, `blocked`, `model_ignored`, `uncovered`), with the
+evidence. It is its own step with its own budget, resumable state and record; `ModelAttributor`, the
+default, runs on the Curator's model, and any `Attributor` may replace it.
+
+**Typed history** (`experimental/iteration/history.py`, `ledger.py`):
+Per round, the behavior requirements raised, the Curator's diagnoses and changes with the scope they
+belong to (`root` or `child/<name>`), and whether each requirement held in the round after its
+revision. `ledger.held` is the one rule for holding; the ledger joins the entries into rows and
+groups them by attributor identity, so versions of attribution can be compared.
+
+**Standard** (`experimental/assessor/standard.py`):
+The criteria a round is held to on the evaluation side: declared (the party's checks), derived (drawn
+from the norms the party stands behind, of strength should until the party confirms them) and
+sedimented (every requirement raised so far, kept as a regression check). The `StandardAssessor`
+judges each round against it and returns a `Signal`.
+
+**Research stage** (`experimental/research/`):
+Before a cultivation, the handed-over scenario read into one slot per category, the rules its
+exemplars and counterexamples show and its norms leave unstated induced, the facts or common rules of
+the trade its empty slots need researched on the web, and each settled by the party (confirmed,
+amended, rejected or undecided), written as a new scenario directory with its `provenance.json`.
+What the party held back stays in it, received by the party alone. The loop never runs it and loads
+its output like any other scenario.
+
+**Finding** (`experimental/research/inquiry.py`):
+One fact about the world, or one common rule of the trade, that a research returned: its wording as
+its source states it, the pages it was read from, a passage copied from one of them, and the
+handed-over materials that say otherwise. It is kept only when the passage occurs whole in a page the
+stage reads itself, whoever researched it (Claude Code, Codex or the stage's own model).
+_Avoid_: calling a finding a rule: a rule is induced from the party's own instances, a finding is
+read from the web.
 
 **Window Shrink** (`agent/window/`, paper `contracts/harness.py:MemoryModule.shrink`):
 How a Turn's transcript is made to fit again after it is assembled. The Memory role is
@@ -1487,7 +1621,10 @@ fingerprint cache, or the generation swap. Timing is asymmetric by design: a rev
 binds the next read (a tightened deny pattern gates the very next tool call), while an
 addition to the model's tool array lands on the next turn -- `ToolRegistry.turn_scope`
 freezes both registry membership and the withheld set at turn entry, because the array
-is the prompt-cache prefix and must not move between two model calls of one turn.
+is the prompt-cache prefix and must not move between two model calls of one turn. The one
+exception is an addition the turn's own call produced: `ToolRegistry.admit_to_this_turn`
+lets the tools a `plugin` connect or authorize registered join that turn from its next
+model call, at the cost of one rebuilt prefix.
 _Avoid_: reading `config.json` keys ad hoc outside this module; treating a live
 preference as a door (doors reconcile members after a durable write; this lane never
 touches member identity).

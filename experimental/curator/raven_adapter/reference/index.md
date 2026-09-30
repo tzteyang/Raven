@@ -20,13 +20,15 @@
 
 | 材料 | 回答的问题 | 何时读取 |
 |---|---|---|
+| [候选准备](preparation.md) | 四策略怎样决定 profile、资源、原生政策和 Playbook，候选与会话生命周期怎样分开？ | 首次构建或改变原生装配；所有选中策略都会得到该契约 |
+| [单步语义调用](../../harness/reference/inference.md) | 策略怎样组织判断提示词、类型化结果与一次模型调用，并映射到实际消费者？ | 规则不足以解释当前语义或证据时；四策略均获得契约，实际限制见 worker.inference |
 | [Memory 接入](memory.md) / [公共语义](../../harness/reference/memory.md) | 检索、保留及上下文呈现怎样连接？ | 生成 memory.strategy |
 | [Planning 接入](planning.md) / [公共语义](../../harness/reference/planning.md) | 规划操作怎样通过工具、上下文和观察生效？ | 生成 planning.strategy |
 | [Capability 接入](capability.md) / [公共语义](../../harness/reference/capability.md) | 工具、Skill、能力选择与使用知识怎样交付？ | 生成 capability.strategy |
 | [Action 接入](action.md) / [公共语义](../../harness/reference/action.md) | 语义决策怎样作用于判断和恢复？ | 生成 action.strategy |
 | [Loop 执行](loop-execution.md) | 一次任务输入如何经过装配、模型调用、工具执行、恢复和保存？ | 建立整体时序；判断某方法是否会被调用 |
 | [四策略与信息通道](strategies-and-channels.md) | 策略职责、信息关系和具体改造入口怎样对应？ | 定位改造对象、比较实现方式 |
-| [参与行为与控制](participation-and-control.md) | Participant 与 Hook 在何时读取什么，返回值怎样合成并被应用？ | 生成 intake、advise、review、salvage 等行为或原生 Hook |
+| [参与行为与控制](participation-and-control.md) | Participant 与 Hook 在何时读取什么，返回值怎样合成并被应用？ | 核对策略的入站、观察、审查和恢复消费者；原生 Hook 不是独立生成入口 |
 | [上下文与资源](context-and-resources.md) | Prompt、历史、Skill、记忆和上下文引擎怎样进入模型输入？ | 修改输入内容、知识供给、记忆或上下文管理 |
 | [工具与扩展](tools-and-extensions.md) | 工具如何被展示、授权、执行，MCP 和插件如何参与？ | 增减能力、约束工具执行、贡献组件 |
 | [装配与状态](assembly-and-state.md) | 配置、文件和工厂如何成为运行实例，状态怎样跨 turn 或换版延续？ | 生成产物、组合组件、规划生命周期 |

@@ -16,8 +16,6 @@ import random
 from dataclasses import dataclass
 from datetime import date, timedelta
 
-import yaml
-
 TRIP = ("address", "origin", "destination", "start", "nights", "adults", "children", "seniors", "budget", "phone")
 PEOPLE = ("children", "seniors")
 YEAR = 2026
@@ -66,17 +64,6 @@ class Drawn:
     name: str
     text: str
     trip: Trip | None
-
-
-def split(text: str) -> tuple[dict, str]:
-    """A persona file's frontmatter and body; a file without frontmatter has no values."""
-    if not text.startswith("---"):
-        return {}, text.strip()
-    _, head, body = text.split("---", 2)
-    values = (yaml.safe_load(head) or {}).get("values") or {}
-    if not isinstance(values, dict):
-        raise ValueError("a drill card's values must be a mapping")
-    return values, body.strip()
 
 
 def _day(value) -> date:

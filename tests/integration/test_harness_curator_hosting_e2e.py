@@ -84,13 +84,25 @@ def hosted(baseline, tmp_path):
     baseline.config.providers.openai.api_key = "local-test-only"
     baseline.config.permissions.tools["evidence_probe"] = "allow"
     planning = planning_artifact()
-    supplied = {**values(), **planning["values"]}
+    supplied = {**values(), "planning.strategy": planning["values"]["planning.strategy"]}
+    authored_files = {**files(), **planning["files"]}
     dropped = baseline.extensions.context.drop_segments
     if {"skills", "active_skills"} & set(dropped):
-        supplied["memory.context_config"] = {
-            "drop_segments": [name for name in dropped if name not in {"skills", "active_skills"}]
-        }
-    artifact = Artifact(values=supplied, files={**files(), **planning["files"]})
+        from tests.fixtures.harness_curator.authoring import add_method
+
+        source = (
+            "from experimental.curator.harness.preparation import PreparationRequest\n"
+            + authored_files["task_memory.py"]
+        )
+        kept = [name for name in dropped if name not in {"skills", "active_skills"}]
+        source = add_method(
+            source,
+            "Memory",
+            f"def prepare(self, request: PreparationRequest) -> None:\n    from experimental.curator.raven_adapter.preparation import ContextPolicy\n    self.host.context(ContextPolicy(drop_segments={kept!r}))",
+        )
+        source += "\n_original_create = create\ndef create(state, task, *, shared, host):\n    value = _original_create(state, task, shared=shared)\n    value.host = host\n    return value\n"
+        authored_files["task_memory.py"] = source
+    artifact = Artifact(values=supplied, files=authored_files)
     state = tmp_path / "state"
     deployment = tmp_path / "deployment.json"
     deployment.write_text(
@@ -117,9 +129,16 @@ def hosted(baseline, tmp_path):
 
 
 @pytest.mark.asyncio
-@pytest.mark.parametrize("route", ["connection", "delegate"])
-@pytest.mark.parametrize("profile", ["plain", "code", "research", "oncall", "design", "ppt"])
+@pytest.mark.parametrize(
+    "profile, route",
+    [
+        ("plain", "connection"),
+        *((profile, "delegate") for profile in ("plain", "code", "research", "oncall", "design", "ppt")),
+    ],
+)
 async def test_full_four_strategies_run_in_the_responding_acp_process(baseline, tmp_path, route, profile, grounded):
+    """Every profile runs through the delegating backend, the route a parent playbook takes; the plain connection is
+    the same server behind a direct client and is checked once."""
     if profile == "code":
         rendered = grounded.render_acp_config(RUN_PY.parent / "config.json")
         config, extensions = load_config(rendered), load_raven_config(rendered)
@@ -209,14 +228,14 @@ async def test_full_four_strategies_run_in_the_responding_acp_process(baseline, 
         assert final["pid"] == initial["pid"]
         for role in ("planning", "capability", "action"):
             assert len(facts[role]["sessions"]) == 2, (role, facts[role])
-        assert facts["memory"]["state"]["facts"] == {"evidence_probe": "cobalt"}
+        assert facts["memory"]["shared"]["facts"] == {"evidence_probe": "cobalt"}
         records = final["records"]
         action_records = [row for row in records if row["kind"] == "action.result"]
         assert all(row["turn_id"] for row in action_records)
         assert {row["conversation"] for row in action_records} == set(facts["action"]["sessions"])
         for role in ("planning", "memory", "capability", "action"):
             assert any(row["kind"] == f"{role}.result" for row in records), role
-        assert any(row["kind"] == "action.result" and row["result"].get("kind") == "retry" for row in records)
+        assert any(row["kind"] == "action.result" and row["result"].get("control") == "revise" for row in records)
         logged = [json.loads(line) for line in Path(final["log"]).read_text().splitlines()]
         assert len(logged) == final["total"]
         requests = [row for row in logged if row["kind"] == "provider.request"]
@@ -279,7 +298,7 @@ async def test_parent_playbook_executes_the_same_child_its_inspection_observes(b
         assert not executed.errors, executed.errors
         after = await worker.inspect_agent("Hosted")
         assert after.facts["action"]["sessions"]
-        assert after.facts["memory"]["state"]["facts"] == {"evidence_probe": "cobalt"}
+        assert after.facts["memory"]["shared"]["facts"] == {"evidence_probe": "cobalt"}
         assert any(row["kind"] == "dag.progress" for row in executed.records)
     rows = [json.loads(line) for line in (state / "observations.jsonl").read_text().splitlines()]
     assert len([row for row in rows if row["kind"] == "hosting.ready"]) == 1

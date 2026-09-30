@@ -1,7 +1,7 @@
 """Cache breakpoints reach the gateway models measured to read them, and no other model."""
 
+from experimental.automation import caching
 from experimental.curator.generation import run
-from experimental.simulation import caching
 from raven.providers import prompt_cache
 
 

@@ -97,6 +97,22 @@ updates:
         patterns:
           - "*"
   - package-ecosystem: npm
+    directory: /experimental/webui
+    schedule:
+      interval: weekly
+    open-pull-requests-limit: 0
+    commit-message:
+      prefix: "build"
+      include: "scope"
+    labels:
+      - dependencies
+      - security
+    groups:
+      studio-security:
+        applies-to: security-updates
+        patterns:
+          - "*"
+  - package-ecosystem: npm
     directory: /bridge
     schedule:
       interval: weekly

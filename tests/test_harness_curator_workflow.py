@@ -16,7 +16,7 @@ from experimental.curator.raven_adapter.exploration import Exploration, Withheld
 from experimental.curator.raven_adapter.inspection import Inspection
 from experimental.curator.raven_adapter.targets import catalogue
 from raven.config.schema import Config
-from tests.test_harness_curator_generation import Provider, plan, response, selection
+from tests.test_harness_curator_generation import Provider, diagnosis, plan, response, selection
 
 
 @pytest.fixture
@@ -25,13 +25,17 @@ def worker(tmp_path, monkeypatch):
     (repository / "raven").mkdir(parents=True)
     (repository / "raven/evidence.py").write_text("EVIDENCE = 'retained'\n")
     monkeypatch.setattr(workflow, "Exploration", partial(Exploration, repository=repository, source_paths=("raven",)))
-    inspection = Inspection(Declaration("baseline", catalogue()), {"task": {"id": "task", "text": "Improve"}}, {})
+    inspection = Inspection(
+        Declaration("baseline", catalogue()),
+        {"task": {"id": "task", "text": "Improve"}, "authored": {"values": {}, "files": {"rules.py": ""}}},
+        {},
+    )
     worker = SimpleNamespace(
         root=tmp_path / "worker",
         baseline=SimpleNamespace(config=Config()),
         last_plan=None,
         last_execution=None,
-        artifact=Artifact(values={}),
+        artifact=Artifact(values={}, files={"rules.py": ""}),
         inspect=AsyncMock(return_value=inspection),
         check=AsyncMock(return_value=Validation([], [])),
         install=AsyncMock(),
@@ -45,11 +49,12 @@ def worker(tmp_path, monkeypatch):
 
 @pytest.mark.asyncio
 async def test_workflow_resumes_preflight_with_same_files_and_cleans_up_after_installation(worker):
-    draft = {"values": {"action.config": {"temperature": 0.2}}, "files": {"draft.py": "VALUE = 2\n"}}
+    draft = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}, "files": {"draft.py": "VALUE = 2\n"}}
     first = Provider(
+        response("submit_diagnosis", diagnosis()),
         response("read_file", {"path": "source/raven/evidence.py"}),
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
         response("check_candidate", draft),
     )
     with pytest.raises(GenerationPausedError):
@@ -81,7 +86,9 @@ async def test_workflow_resumes_preflight_with_same_files_and_cleans_up_after_in
 async def test_refused_resume_preserves_checkpoint_without_calling_model(worker, change):
     with pytest.raises(GenerationPausedError):
         await workflow.improve(
-            worker, Provider(response("read_file", {"path": "facts.json"})), limits=Limits(max_calls=1)
+            worker,
+            Provider(response("submit_diagnosis", diagnosis()), response("read_file", {"path": "facts.json"})),
+            limits=Limits(max_calls=1),
         )
     path = worker.root / "curation/pending.json"
     before = path.read_bytes()
@@ -107,11 +114,17 @@ async def test_refused_resume_preserves_checkpoint_without_calling_model(worker,
 async def test_explicit_restart_discards_old_investigation_and_workspace(worker):
     with pytest.raises(GenerationPausedError):
         await workflow.improve(
-            worker, Provider(response("read_file", {"path": "facts.json"})), limits=Limits(max_calls=1)
+            worker,
+            Provider(response("submit_diagnosis", diagnosis()), response("read_file", {"path": "facts.json"})),
+            limits=Limits(max_calls=1),
         )
     path = worker.root / "curation/pending.json"
     workspace = Path(json.loads(path.read_text())["workspace"])
-    result = await workflow.improve(worker, Provider(response("submit_selection", selection())), resume=False)
+    result = await workflow.improve(
+        worker,
+        Provider(response("submit_diagnosis", diagnosis()), response("submit_selection", selection())),
+        resume=False,
+    )
     assert not path.exists() and not workspace.exists()
     assert not any(event["event"] == "query" for event in result.trace)
 
@@ -119,9 +132,10 @@ async def test_explicit_restart_discards_old_investigation_and_workspace(worker)
 @pytest.mark.asyncio
 async def test_proposal_retains_its_candidate_and_investigation_without_installing(worker):
     provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_diagnosis", diagnosis()),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
     result = await workflow.propose(worker, provider)
     worker.install.assert_not_awaited()
@@ -133,11 +147,11 @@ async def test_proposal_retains_its_candidate_and_investigation_without_installi
     assert state["calls"] == 3
     repaired = await workflow.propose(
         worker,
-        Provider(response("submit_artifact", {"values": {"action.config": {"temperature": 0.3}}})),
+        Provider(response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_3"}}})),
         repair=Validation(["Another scope requires a compatible sampling choice"], []),
         limits=Limits(max_calls=4),
     )
-    assert repaired.candidate.artifact.values["action.config"]["temperature"] == 0.3
+    assert repaired.candidate.artifact.values["action.strategy"]["factory"] == "rules:policy_0_3"
     assert json.loads((worker.root / "progress/generation.json").read_text())["calls"] == 4
     worker.install.assert_not_awaited()
     shutil.rmtree(workspace)
@@ -145,12 +159,14 @@ async def test_proposal_retains_its_candidate_and_investigation_without_installi
 
 @pytest.mark.asyncio
 async def test_provider_interruption_retains_investigation_and_resumes_the_current_stage(worker):
+    """The continuation runs on a new worker object over the same root: everything it needs is on disk."""
     from experimental.curator.generation.run import GenerationInterruptedError
     from raven.contracts.llm_provider import LLMResponse
 
     first = Provider(
+        response("submit_diagnosis", diagnosis()),
         response("read_file", {"path": "source/raven/evidence.py"}),
-        response("submit_selection", selection("action.config")),
+        response("submit_selection", selection("action.strategy")),
         LLMResponse(content="Transient provider failure", finish_reason="error"),
     )
     with pytest.raises(GenerationInterruptedError) as interrupted:
@@ -162,11 +178,12 @@ async def test_provider_interruption_retains_investigation_and_resumes_the_curre
     assert saved["state"]["stage"] == "design"
     assert (workspace / "snapshot.json").is_file()
     resumed = Provider(
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
-    result = await workflow.improve(worker, resumed, limits=Limits(max_calls=5))
-    assert len(resumed.requests) == 2
+    again = SimpleNamespace(**{**vars(worker), "install": AsyncMock()})
+    result = await workflow.improve(again, resumed, limits=Limits(max_calls=5))
+    assert len(resumed.requests) == 2 and again.install.await_count == 1
     assert "retained" in str(result.trace)
     assert [row["call"] for row in result.trace if row["event"] == "model.call"] == [1, 2, 3, 4, 5]
     assert not path.exists() and not workspace.exists()

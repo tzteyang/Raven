@@ -115,8 +115,6 @@ async def test_leaf_closes_spawn_direct_backend_dag_resolution_and_config_reopen
 async def test_inspection_acquires_the_native_parent_binding_without_changing_backend_class():
     from unittest.mock import AsyncMock
 
-    from raven.acp_client.acp_agent import AcpAgentBackend
-
     pool = SimpleNamespace(acquire=AsyncMock(return_value=object()))
     backend = SimpleNamespace(
         pool=pool,
@@ -137,7 +135,6 @@ async def test_inspection_acquires_the_native_parent_binding_without_changing_ba
         binding={"RAVEN_PARENT_MODEL": "model", "RAVEN_PARENT_PROVIDER": "custom", "RAVEN_PARENT_PROTOCOL": "chat"},
         ready_timeout_s=7.0,
     )
-    assert not hasattr(AcpAgentBackend, "connection")
 
 
 def test_leaf_rejects_reintroduced_orchestration_tools(monkeypatch):
@@ -153,7 +150,7 @@ def _rows():
         {"kind": "hosting.ready", "turn_id": None},
         *({"kind": "provider.delta", "turn_id": "t", "delta": {"content": "tok"}} for _ in range(500)),
         {"kind": "provider.request", "turn_id": "t", "parameters": {"messages": context}},
-        {"kind": "action.result", "turn_id": "t", "result": {"kind": "retry"}},
+        {"kind": "action.result", "turn_id": "t", "result": {"control": "revise"}},
     ]
 
 

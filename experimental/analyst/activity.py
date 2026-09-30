@@ -4,11 +4,10 @@ Planning, participant, component and strategy rows say when a mechanism of the h
 (passed, sent work back, ended a turn, refused a tool or a planning step). The Analyst attaches this activity to its
 feedback so the Curator can check its own revision against facts; a record of the run can classify the same rows.
 
-Each decision counts once: a loop rollback is the loop carrying out a resample already counted, and a planning tool
-error repeats the strategy's own. An action strategy's decision is what the host applied (its `review` callback, in
-the host's own verdicts), not the strategy's `.result`, whose words are the strategy's own (a generated reviewer may
-say `revise` for what the host carries out as a resample); that result is kept as `assessed`. Other strategies'
-`.callback` rows are the host applying a `.result` already counted.
+Each intervention counts once from its applied control receipt. Requests and
+rejected controls remain evidence, and a loop rollback or correlated tool refusal
+does not count it again. Action results are assessments. Existing recorded review
+callbacks still describe the native verdict captured in those earlier runs.
 """
 
 import json
@@ -112,6 +111,15 @@ def strategy_row(kind: str, row: dict) -> tuple[str, str, str] | None:
         return target, "refused", cut(str(row["error"]).removeprefix("ValueError:").strip())
     if kind.endswith(".error"):
         return target, "error", cut(row.get("error"))
+    if kind == "action.control":
+        receipt = row.get("receipt") or {}
+        if receipt.get("status") == "applied":
+            decision = {"revise": "resample", "finish": "end", "reject": "refused"}.get(
+                receipt.get("control"), "applied"
+            )
+        else:
+            decision = "control_" + str(receipt.get("status") or "unknown")
+        return target, decision, cut(receipt.get("reason") or receipt.get("control"))
     if kind == "action.callback" and row.get("operation") == "review":
         applied = row.get("result") if isinstance(row.get("result"), dict) else {}
         if applied.get("verdict") in REVIEW_VERDICTS:
@@ -135,15 +143,23 @@ def strategy_row(kind: str, row: dict) -> tuple[str, str, str] | None:
     )
 
 
-def classify(row: dict, tools: dict) -> tuple[str, str, str, str] | None:
+def classify(row: dict, tools: dict, controls: set) -> tuple[str, str, str, str] | None:
     """(kind, target, decision, summary) for a mechanism row, or None for rows that are not mechanism evidence."""
     kind = str(row.get("kind") or "")
     family = kind.split(".", 1)[0]
+    if kind == "action.control":
+        receipt = row.get("receipt") or {}
+        if receipt.get("status") == "applied" and receipt.get("control_id"):
+            if receipt["control_id"] in controls:
+                return None
+            controls.add(receipt["control_id"])
     if kind == "runner.event" and row.get("event_type") == "ToolEvent":
         event = row.get("event") or {}
         if event.get("phase") == "start":
             tools[event.get("tool_call_id")] = event.get("name")
         preview = str(event.get("result_preview") or "")
+        if any(f"[{control}]" in preview for control in controls):
+            return None
         if (
             event.get("phase") == "complete"
             and event.get("ok") is False
@@ -249,12 +265,18 @@ def activity(sessions) -> list[dict]:
         states: dict[str, list[str]] = defaultdict(list)
         for exchange in exchanges:
             tools: dict = {}
+            controls: set = set()
+            requested_after_output = {}
             seen = False
             for scope, row in scoped(exchange.execution.records):
-                found = classify(row, tools)
+                receipt = row.get("receipt") or {} if row.get("kind") == "action.control" else {}
+                if receipt.get("status") == "requested":
+                    requested_after_output[receipt.get("control_id")] = seen
+                found = classify(row, tools, controls)
                 if found is not None:
                     kind, target, decision, summary = found
-                    add(session, scope, target, decision, summary, late=seen and decision in INTERVENTIONS)
+                    visible = requested_after_output.get(receipt.get("control_id"), seen)
+                    add(session, scope, target, decision, summary, late=visible and decision in INTERVENTIONS)
                     if kind == "planning.result":
                         states[scope].append(json.dumps(row.get("result"), sort_keys=True, default=str))
                 elif scope == "root" and (failure := _failed_tool(row, tools)):

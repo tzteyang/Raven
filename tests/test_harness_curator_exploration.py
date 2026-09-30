@@ -1,13 +1,15 @@
 """Native Curator exploration preserves input versions, permissions and stage handoffs."""
 
 import asyncio
+import hashlib
 import json
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 
 from experimental.curator.generation.context.collect import collect
-from experimental.curator.generation.run import GenerationError, Limits, generate
+from experimental.curator.generation.run import GenerationError, Limits
 from experimental.curator.harness import Declaration, Validation
 from experimental.curator.raven_adapter.exploration import Exploration, Withheld
 from experimental.curator.raven_adapter.inspection import Inspection
@@ -17,7 +19,7 @@ from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from raven.contracts.tool import Continuation, Tool, ToolResult
 from raven.sandbox import DirectExecutor
-from tests.test_harness_curator_generation import Provider, plan, response, selection
+from tests.test_harness_curator_generation import Provider, generate, plan, response, selection
 
 
 async def passing(candidate):
@@ -49,7 +51,11 @@ def exploration(tmp_path):
     (repository / "raven/helper.py").write_text('def evidence():\n    return "UNREGISTERED_EVIDENCE"\n')
     config = Config()
     config.permissions.tools["exec"] = "allow"
-    inspection = Inspection(Declaration("baseline", catalogue()), {"task": {"id": "task", "text": "Inspect"}}, {})
+    inspection = Inspection(
+        Declaration("baseline", catalogue()),
+        {"task": {"id": "task", "text": "Inspect"}, "authored": {"values": {}, "files": {"rules.py": ""}}},
+        {},
+    )
     return Exploration(config, inspection, repository=repository, source_paths=("raven",), executor=Executor())
 
 
@@ -99,15 +105,13 @@ async def test_native_execution_refuses_outside_paths_background_and_denied_comm
         assert exploration.executor.starts == 0
 
 
-@pytest.mark.parametrize("change", ["original", "source", "facts", "new_original", "new_snapshot"])
+@pytest.mark.parametrize("change", ["facts", "new_snapshot"])
 @pytest.mark.asyncio
 async def test_changed_inputs_are_rejected_before_handoff(exploration, change):
+    """A changed fact and a file added to the snapshot: the digest check reads the whole workspace the same way."""
     async with exploration:
         path = {
-            "original": exploration.repository / "raven/helper.py",
-            "source": exploration.root / "source/raven/helper.py",
             "facts": exploration.root / "facts.json",
-            "new_original": exploration.repository / "raven/new.py",
             "new_snapshot": exploration.root / "source/raven/new.py",
         }[change]
         path.write_text("changed")
@@ -117,7 +121,10 @@ async def test_changed_inputs_are_rejected_before_handoff(exploration, change):
 
 @pytest.mark.asyncio
 async def test_preflight_stages_readable_draft_and_final_submission_is_checked_again(exploration):
-    draft = {"values": {"action.config": {"temperature": 0.2}}, "files": {"policy.py": "POLICY = 'draft'\n"}}
+    draft = {
+        "values": {"action.strategy": {"factory": "rules:policy_0_2"}},
+        "files": {"policy.py": "POLICY = 'draft'\n"},
+    }
     inspected = []
 
     class Curator(Provider):
@@ -129,8 +136,8 @@ async def test_preflight_stages_readable_draft_and_final_submission_is_checked_a
             return await super().chat_with_retry(**kwargs)
 
     provider = Curator(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
         response("check_candidate", draft),
         response("submit_artifact", draft),
     )
@@ -161,10 +168,10 @@ async def test_preflight_stages_readable_draft_and_final_submission_is_checked_a
 
 @pytest.mark.asyncio
 async def test_preflight_uses_separate_budget_without_consuming_repair_or_query_budget(exploration):
-    draft = {"values": {"action.config": {"temperature": 0.2}}}
+    draft = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
     provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
         response("check_candidate", draft),
         response("check_candidate", draft),
         response("submit_artifact", draft),
@@ -251,9 +258,9 @@ async def test_cancellation_during_executor_start_releases_the_owned_environment
 async def test_native_read_keeps_its_trust_boundary_across_both_stage_handoffs(exploration):
     provider = Provider(
         response("read_file", {"path": "source/raven/helper.py"}),
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
 
     async def validate(candidate):
@@ -306,8 +313,8 @@ async def test_reopened_exploration_retains_scratch_draft_and_exact_paths(explor
     ) as first:
         (root / "scratch.txt").write_text("retained evidence")
         candidate = first.inspection.declaration.accept(
-            plan("action.config"),
-            {"values": {"action.config": {"temperature": 0.2}}, "files": {"draft.py": "VALUE = 2\n"}},
+            plan("action.strategy"),
+            {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}, "files": {"draft.py": "VALUE = 2\n"}},
         )
         location = first.stage_candidate(candidate)
         await first.start_executor()
@@ -336,7 +343,11 @@ async def test_live_edits_to_reference_sources_keep_the_snapshot_while_runtime_e
     (repository / "tests").mkdir()
     (repository / "raven/helper.py").write_text("VALUE = 1\n")
     (repository / "tests/test_helper.py").write_text("assert True\n")
-    inspection = Inspection(Declaration("baseline", catalogue()), {"task": {"id": "task", "text": "Inspect"}}, {})
+    inspection = Inspection(
+        Declaration("baseline", catalogue()),
+        {"task": {"id": "task", "text": "Inspect"}, "authored": {"values": {}, "files": {"rules.py": ""}}},
+        {},
+    )
     async with Exploration(Config(), inspection, repository=repository, source_paths=("raven", "tests")) as exploration:
         (repository / "tests/test_helper.py").write_text("assert 1 == 1\n")
         (repository / "tests/test_new.py").write_text("assert True\n")
@@ -418,7 +429,11 @@ async def test_without_an_os_sandbox_no_shell_is_offered_and_commands_never_leav
     (outside / "answer.txt").write_text("PRIVATE_ANSWER")
     config = Config()
     config.permissions.tools["exec"] = "allow"
-    inspection = Inspection(Declaration("baseline", catalogue()), {"task": {"id": "task", "text": "Inspect"}}, {})
+    inspection = Inspection(
+        Declaration("baseline", catalogue()),
+        {"task": {"id": "task", "text": "Inspect"}, "authored": {"values": {}, "files": {"rules.py": ""}}},
+        {},
+    )
     plain = Exploration(config, inspection, repository=repository, source_paths=("raven",), executor=DirectExecutor())
     async with plain:
         assert "exec" not in plain.registry.tool_names and plain.describe()["shell"].startswith("not offered")
@@ -439,7 +454,11 @@ def test_the_evaluation_side_the_caller_withholds_never_enters_the_snapshot(tmp_
     (repository / "tests/test_raven_helper.py").write_text("def test_value(): pass\n")
     (repository / "tests/test_simulation_reference.py").write_text("QUOTE = 'HL-Q-1026-4P'\n")
     (repository / "tests/test_cards.py").write_text("from experimental.simulation.cards import draw\n")
-    inspection = Inspection(Declaration("baseline", catalogue()), {"task": {"id": "task", "text": "Inspect"}}, {})
+    inspection = Inspection(
+        Declaration("baseline", catalogue()),
+        {"task": {"id": "task", "text": "Inspect"}, "authored": {"values": {}, "files": {"rules.py": ""}}},
+        {},
+    )
     withheld = Withheld(paths=("tests/test_simulation_*",), markers=(b"experimental.simulation",))
     copies = {}
     for name, value in (("open", Withheld()), ("withheld", withheld)):
@@ -456,3 +475,31 @@ def test_the_evaluation_side_the_caller_withholds_never_enters_the_snapshot(tmp_
         exploration.temporary.cleanup()
     assert copies["open"] == {"test_raven_helper.py", "test_simulation_reference.py", "test_cards.py"}
     assert copies["withheld"] == {"test_raven_helper.py"}
+
+
+def test_a_component_root_above_the_declared_source_paths_does_not_widen_the_snapshot(tmp_path):
+    repo = tmp_path / "repo"
+    for relative in ("pkg/__init__.py", "pkg/curator/__init__.py", "pkg/curator/a.py", "pkg/hidden/secret.md"):
+        (repo / relative).parent.mkdir(parents=True, exist_ok=True)
+        (repo / relative).write_text("x")
+    skill = tmp_path / "home" / "skills" / "sop"
+    skill.mkdir(parents=True)
+    (skill / "SKILL.md").write_text("x")
+    digest = hashlib.sha256(b"x").hexdigest()
+    inspection = SimpleNamespace(
+        facts={},
+        sources={
+            "component.a": {
+                "path": str(repo / "pkg" / "curator" / "a.py"),
+                "root": str(repo / "pkg"),
+                "digest": digest,
+            },
+            "skill.workspace/sop": {"path": str(skill / "SKILL.md"), "root": str(skill), "digest": digest},
+        },
+    )
+    exploration = Exploration(Config(), inspection, repository=repo, source_paths=("pkg/curator",), root=tmp_path / "x")
+    assert set(exploration.mounts) == {
+        "source/pkg/curator",
+        f"materials/{list(exploration.mounts)[-1].split('/')[1]}/sop",
+    }
+    assert repo / "pkg" not in exploration.mounts.values()

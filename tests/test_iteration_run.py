@@ -7,16 +7,20 @@ import pytest
 
 from experimental.analyst import role
 from experimental.analyst.feedback import Feedback
+from experimental.assessor.dataset import Case, Dataset, contains
+from experimental.assessor.human import Human
 from experimental.curator.generation.run import GenerationPausedError
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration import run as loop
+from experimental.curator.generation.run import Limits as CuratorLimits
+from experimental.curator.harness import Attributed, Attribution, Diagnosis, Task
+from experimental.curator.raven_adapter.worker import Execution, TurnTimeoutError
+from experimental.iteration import session as stepping
 from experimental.iteration.conversation import Conversation
-from experimental.iteration.dataset import Case, Dataset, contains
-from experimental.iteration.human import Human
-from experimental.iteration.protocols import Exchange, Item, Signal
+from experimental.iteration.hearing import opaque
+from experimental.iteration.history import Diagnosed, Raised
+from experimental.iteration.protocols import Exchange, Handover, Item, Signal
 from experimental.iteration.records import load, runs
-from experimental.iteration.run import Limits, run, satisfied, trial_sessions
+from experimental.iteration.run import run
+from experimental.iteration.session import Limits, satisfied, trial_sessions
 
 
 class FakeWorker:
@@ -75,14 +79,18 @@ CONTINUE = Feedback(decision="continue", reason="Every evaluator is satisfied an
 def curations(monkeypatch):
     calls = []
 
-    async def improve(worker, provider, *, feedback=None, model=None, limits=None, probe=None):
-        calls.append({"feedback": feedback, "model": model, "limits": limits})
+    async def improve(worker, provider, *, feedback=None, model=None, limits=None, probe=None, observations=None):
+        calls.append({"feedback": feedback, "model": model, "limits": limits, "observations": observations})
         worker.artifact_id = f"artifact-{len(calls)}"
+        worker.last_attribution = Attributed(
+            attribution=Attribution(diagnoses=(Diagnosis(about="task", state="absent", evidence=("task",)),)),
+            identity={"implementation": "model"},
+        )
         path = worker.root / "curation" / f"c{len(calls)}.json"
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(json.dumps({"feedback": feedback, "active_artifact_id": worker.artifact_id}))
 
-    monkeypatch.setattr(loop, "improve", improve)
+    monkeypatch.setattr(stepping, "improve", improve)
     return calls
 
 
@@ -91,7 +99,18 @@ def analyses(monkeypatch):
     calls, scripted = [], []
 
     async def analyse(
-        worker, provider, signals, sessions, *, previous_signals, previous_feedback, history, model, limits
+        worker,
+        provider,
+        signals,
+        sessions,
+        *,
+        previous_signals,
+        previous_feedback,
+        history,
+        model,
+        limits,
+        sealed=None,
+        spoken=None,
     ):
         calls.append(
             {
@@ -100,6 +119,8 @@ def analyses(monkeypatch):
                 "previous": previous_feedback,
                 "history": history,
                 "model": model,
+                "sessions": sessions,
+                "spoken": spoken,
             }
         )
         feedback = scripted.pop(0)
@@ -119,26 +140,25 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     worker = FakeWorker(tmp_path)
     student = Conversation(Scripted("student", "Plan a trip", "Cheap please", "Plan again"), max_turns=2)
     analyses.scripted.extend([CURATE, CONTINUE])
+    limits = Limits(max_rounds=4, curator=CuratorLimits(call_timeout=7))
     rounds = await run(
         worker,
         provider=object(),
         trials=[student],
-        analyst=[Verifier(failing("Never asked the budget."), passing())],
+        assessors=[Verifier(failing("Never asked the budget."), passing())],
         model="analyst",
         curator_model="curator",
-        limits=Limits(max_rounds=4),
+        limits=limits,
     )
     assert [row["feedback"] is None for row in curations] == [True, False]
     assert curations[1]["feedback"]["decision"] == "curate" and curations[1]["model"] == "curator"
-    assert (
-        curations[0]["limits"] is curations[1]["limits"] is Limits().curator
-        or curations[0]["limits"].call_timeout == 180
-    )
+    assert curations[0]["limits"] is curations[1]["limits"] is limits.curator
     assert curations[1]["feedback"]["signals"][0]["text"] == "Never asked the budget."
-    assert curations[1]["feedback"]["signals"][0]["items"][0]["result"] == "fail"
+    assert curations[1]["feedback"]["signals"][0]["satisfied"] is False
+    assert "items" not in curations[1]["feedback"]["signals"][0]
     assert [text for _, text in worker.runs] == ["Plan a trip", "Cheap please", "Plan again"]
     keys = [key for key, _ in worker.runs]
-    assert all(key.startswith("curator:student:") for key in keys)
+    assert all(key.startswith(f"curator:{opaque('student')}:") for key in keys)
     assert keys[0] == keys[1] != keys[2]
     assert [item.curated for item in rounds] == [True, False]
     assert rounds[1].sessions["student"][0].execution.artifact_id == "artifact-2"
@@ -148,14 +168,27 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     assert analyses.calls[0]["model"] == "analyst"
     assert analyses.calls[0]["history"] == () and curations[1]["feedback"]["history"] == []
     earlier = analyses.calls[1]["history"][0]
-    assert earlier["round"] == 1 and "fail" in earlier["results"]["verifier"].values()
-    assert earlier["requirements"] == [
-        {"behavior": REQUIREMENT["behavior"], "strength": "must_hold", "acceptance": REQUIREMENT["acceptance"]}
-    ]
+    assert earlier.round == 1 and "fail" in earlier.results["verifier"].values()
+    assert earlier.requirements == (
+        Raised(id="", behavior=REQUIREMENT["behavior"], strength="must_hold", acceptance=REQUIREMENT["acceptance"]),
+    )
+    assert earlier.diagnoses == (Diagnosed(about="task", state="absent"),)
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
     assert record["task"] == "Serve the agency's travellers" and len(record["rounds"]) == 2
     assert record["status"] == "finished"
     assert record["rounds"][0]["signals"][0]["items"][0]["result"] == "fail"
+    joined = load(runs(tmp_path)[0])
+    first, second = joined["rounds"]
+    exchange = first["sessions"]["student"][0]
+    assert exchange["user"] == "Plan a trip"
+    assert exchange["execution"]["records"][0]["event"]["content"] == "Reply to Plan a trip"
+    item = first["signals"][0]["items"][0]
+    assert (item["id"], item["result"], item["session"]) == ("asks budget", "fail", "student")
+    assert first["feedback"]["requirements"][0]["behavior"] == REQUIREMENT["behavior"]
+    assert joined["initial_curation"][0]["active_artifact_id"] == "artifact-1"
+    assert first["curation"][0]["active_artifact_id"] == "artifact-2"
+    assert [round_["signals"][0]["items"][0]["result"] for round_ in (first, second)] == ["fail", "pass"]
+    assert second["feedback"]["decision"] == "continue" and second["curation"] == []
     assert record["initial_curation"] == ["c1.json"]
     assert [(item["analysis"], item["curation"]) for item in record["rounds"]] == [
         (["a1.json"], ["c2.json"]),
@@ -166,6 +199,21 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     assert joined["rounds"][0]["curation"][0]["feedback"]["decision"] == "curate"
     assert joined["rounds"][0]["analysis"][0]["feedback"]["reason"] == "Intake gap."
     assert joined["rounds"][1]["curation"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_turn_past_the_time_limit_ends_its_conversation_and_is_kept(tmp_path):
+    class Slow(FakeWorker):
+        async def run(self, text, *, session_key):
+            if self.runs:
+                late = Execution("turn-late", [], [], {"timed_out": True, "timeout": 600, "explicit_reply": False})
+                raise TurnTimeoutError("worker timed out after 600s during the operation", [], late)
+            return await super().run(text, session_key=session_key)
+
+    student = Conversation(Scripted("student", "Plan a trip", "Cheaper?", "Thanks"), max_turns=3)
+    (exchanges,) = (await student.run(Slow(tmp_path))).values()
+    assert [exchange.user for exchange in exchanges] == ["Plan a trip", "Cheaper?"]
+    assert exchanges[-1].execution.outcome["timed_out"] and exchanges[-1].assistant == ""
 
 
 @pytest.mark.asyncio
@@ -279,12 +327,14 @@ async def test_an_opening_reaches_the_first_curation_and_the_record(tmp_path, cu
     worker = FakeWorker(tmp_path)
     student = Conversation(Scripted("student", "Plan a trip"), max_turns=1)
     analyses.scripted.append(CONTINUE)
-    opening = Signal("agency", "Here are our materials.", attachments=("uploads/sop.md",))
+    opening = Signal(
+        "agency", "Here are our materials.", attachments=(Handover("sop", "norm", ("uploads/sop/sop.md",)),)
+    )
     await run(
         worker,
         provider=object(),
         trials=[student],
-        analyst=[Verifier(passing())],
+        assessors=[Verifier(passing())],
         limits=Limits(max_rounds=1),
         opening=(opening,),
     )
@@ -293,20 +343,18 @@ async def test_an_opening_reaches_the_first_curation_and_the_record(tmp_path, cu
             {
                 "source": "agency",
                 "text": "Here are our materials.",
-                "items": [],
-                "metrics": {},
                 "satisfied": None,
-                "attachments": ["uploads/sop.md"],
+                "attachments": [{"name": "sop", "kind": "norm", "files": ["uploads/sop/sop.md"]}],
             }
         ]
     }
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
-    assert record["opening"][0]["attachments"] == ["uploads/sop.md"]
+    assert record["opening"][0]["attachments"] == [{"name": "sop", "kind": "norm", "files": ["uploads/sop/sop.md"]}]
 
 
 @pytest.mark.asyncio
 async def test_a_supplied_curator_replaces_improve(tmp_path, curations, analyses):
-    async def keep(worker, provider, *, feedback=None, model=None, limits=None, probe=None):
+    async def keep(worker, provider, *, feedback=None, model=None, limits=None, probe=None, observations=None):
         return None
 
     worker = FakeWorker(tmp_path)
@@ -315,7 +363,7 @@ async def test_a_supplied_curator_replaces_improve(tmp_path, curations, analyses
         worker,
         provider=object(),
         trials=[Conversation(Scripted("student", "Plan a trip"), max_turns=1)],
-        analyst=[Verifier(failing("No budget question."), passing())],
+        assessors=[Verifier(failing("No budget question."), passing())],
         curator=keep,
         limits=Limits(max_rounds=3),
     )
@@ -334,12 +382,12 @@ async def test_a_round_is_recorded_before_its_curation_and_a_paused_curator_leav
     analyses.scripted.extend([CURATE])
     calls = []
 
-    async def pausing(worker, provider, *, feedback=None, model=None, limits=None, probe=None):
+    async def pausing(worker, provider, *, feedback=None, model=None, limits=None, probe=None, observations=None):
         calls.append(feedback)
         if feedback is not None:
             (worker.root / "curation").mkdir(exist_ok=True)
             (worker.root / "curation" / "pending.json").write_text("{}")
-            state = SimpleNamespace(trace=[], model_copy=lambda deep: None)
+            state = SimpleNamespace(trace=[], calls=0, model_copy=lambda deep: None)
             if transport:
                 from experimental.curator.generation.run import GenerationInterruptedError
 
@@ -350,7 +398,7 @@ async def test_a_round_is_recorded_before_its_curation_and_a_paused_curator_leav
         worker,
         provider=object(),
         trials=[Conversation(Scripted("student", "Plan a trip"), max_turns=1)],
-        analyst=[Verifier(failing("No budget question."))],
+        assessors=[Verifier(failing("No budget question."))],
         curator=pausing,
         limits=Limits(max_rounds=3),
     )
@@ -369,7 +417,7 @@ async def test_the_last_review_is_not_curated_and_the_stop_reason_says_so(tmp_pa
         worker,
         provider=object(),
         trials=[Conversation(Scripted("student", "Plan a trip"), max_turns=1)],
-        analyst=[Verifier(failing())],
+        assessors=[Verifier(failing())],
         limits=Limits(max_rounds=1),
     )
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
@@ -377,34 +425,6 @@ async def test_the_last_review_is_not_curated_and_the_stop_reason_says_so(tmp_pa
     assert record["stop"] == "rounds exhausted; the last review was not curated, no round would test it"
     assert record["rounds"][0]["curated"] is False and record["rounds"][0]["curation"] == []
     assert len(curations) == 1
-
-
-@pytest.mark.asyncio
-async def test_the_record_joins_conversations_verdicts_feedback_and_revisions(tmp_path, curations, analyses):
-    worker = FakeWorker(tmp_path)
-    analyses.scripted.extend([CURATE, CONTINUE])
-    await run(
-        worker,
-        provider=object(),
-        trials=[Conversation(Scripted("student", "Plan a trip", "Plan again"), max_turns=1)],
-        analyst=[Verifier(failing("Never asked the budget."), passing())],
-        limits=Limits(max_rounds=3),
-    )
-    joined = load(runs(tmp_path)[0])
-    first, second = joined["rounds"]
-    (exchange,) = first["sessions"]["student"]
-    assert exchange["user"] == "Plan a trip"
-    assert exchange["execution"]["records"][0]["event"]["content"] == "Reply to Plan a trip"
-    assert first["signals"][0]["text"] == "Never asked the budget."
-    item = first["signals"][0]["items"][0]
-    assert (item["id"], item["result"], item["session"]) == ("asks budget", "fail", "student")
-    assert first["feedback"]["decision"] == "curate"
-    assert first["feedback"]["requirements"][0]["behavior"] == "Ask for the budget before recommending."
-    assert joined["initial_curation"][0]["active_artifact_id"] == "artifact-1"
-    assert first["curation"][0]["active_artifact_id"] == "artifact-2"
-    assert second["sessions"]["student"][0]["execution"]["artifact_id"] == "artifact-2"
-    assert [round_["signals"][0]["items"][0]["result"] for round_ in (first, second)] == ["fail", "pass"]
-    assert second["feedback"]["decision"] == "continue" and second["curation"] == []
 
 
 @pytest.mark.asyncio
@@ -419,7 +439,7 @@ async def test_a_failed_analysis_still_records_the_round(tmp_path, curations, mo
             worker,
             provider=object(),
             trials=[Conversation(Scripted("student", "Plan a trip"), max_turns=1)],
-            analyst=[Verifier(failing("No budget question."))],
+            assessors=[Verifier(failing("No budget question."))],
         )
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
     assert record["status"] == "error" and len(record["rounds"]) == 1
@@ -432,8 +452,12 @@ async def test_a_failed_analysis_still_records_the_round(tmp_path, curations, mo
 def test_loading_a_moved_run_finds_its_kept_deliverables_under_the_new_folder(tmp_path):
     root = tmp_path / "moved"
     (root / "iteration").mkdir(parents=True)
+    kept = root / "replicas" / "1-session-ab12cd" / "deliverables" / "turn-2" / "trip.html"
+    kept.parent.mkdir(parents=True)
+    kept.write_text("<p>trip</p>")
     old = "/elsewhere/original/deliverables/turn-1/trip.html"
-    execution = {"turn_id": "turn-1", "records": [], "artifact_id": "a", "deliverables": [old]}
+    copied = "/elsewhere/original/replicas/1-session-ab12cd/deliverables/turn-2/trip.html"
+    execution = {"turn_id": "turn-1", "records": [], "artifact_id": "a", "deliverables": [old, copied]}
     record = {
         "task_id": "t",
         "task": "T",
@@ -442,49 +466,69 @@ def test_loading_a_moved_run_finds_its_kept_deliverables_under_the_new_folder(tm
     (root / "iteration" / "r.json").write_text(json.dumps(record))
     run = load(root / "iteration" / "r.json")
     assert run["rounds"][0]["sessions"]["student"][0]["execution"]["deliverables"] == [
-        str(root / "deliverables" / "turn-1" / "trip.html")
+        str(root / "deliverables" / "turn-1" / "trip.html"),
+        str(kept),
     ]
 
 
 @pytest.mark.asyncio
-async def test_material_handed_over_with_a_review_reaches_the_curator_in_the_words_the_analyst_relays(
-    tmp_path, curations
-):
-    heard = (Signal("owner", "Here is the brand guide.", attachments=("uploads/guide/guide.md",)),)
-    measured = (Signal("owner", "Here is the brand guide.", items=(Item("brand", "fail", "student"),)),)
+async def test_material_handed_over_with_a_review_reaches_the_curator_as_what_it_may_hear(tmp_path, curations):
+    measured = (
+        Signal(
+            "owner",
+            "Here is the brand guide.",
+            items=(Item("brand", "fail", "student", expected="THE-REFERENCE"),),
+            metrics={"pass_rate": 0.0},
+            satisfied=False,
+            attachments=(Handover("guide", "norm", ("uploads/guide/guide.md",)),),
+        ),
+    )
 
     class Owner:
         def __init__(self):
             self.reviews = [
-                role.Review(
-                    measured,
-                    Feedback(decision="supplement", reason="Waits on material."),
-                    relayed=heard,
-                    handover=("guide",),
-                ),
-                role.Review(measured, Feedback(decision="stop", reason="All held.")),
+                role.Review(Feedback(decision="supplement", reason="Waits on material.")),
+                role.Review(Feedback(decision="stop", reason="All held.")),
             ]
 
-        async def review(self, worker, sessions, **context):
+        async def review(self, worker, sessions, signals, **context):
             return self.reviews.pop(0)
 
     rounds = await run(
-        FakeWorker(tmp_path), object(), [Conversation(Scripted("student", "Hi", "Hi again"), max_turns=1)], Owner()
+        FakeWorker(tmp_path),
+        object(),
+        [Conversation(Scripted("student", "Hi", "Hi again"), max_turns=1)],
+        [Verifier(*measured, *measured)],
+        analyst=Owner(),
     )
     assert [item.curated for item in rounds] == [True, False] and len(curations) == 2
     feedback = curations[1]["feedback"]
     assert feedback["decision"] == "supplement" and feedback["requirements"] == []
+    assert rounds[1].signals == measured and rounds[1].feedback.decision == "stop"
     assert feedback["signals"] == [
         {
             "source": "owner",
             "text": "Here is the brand guide.",
-            "items": [],
-            "metrics": {},
-            "satisfied": None,
-            "attachments": ["uploads/guide/guide.md"],
+            "satisfied": False,
+            "attachments": [{"name": "guide", "kind": "norm", "files": ["uploads/guide/guide.md"]}],
         }
     ]
     assert rounds[0].signals == measured
+
+
+@pytest.mark.asyncio
+async def test_the_curator_hears_each_rounds_verdict_but_never_the_criteria_it_was_measured_against(
+    tmp_path, curations, analyses
+):
+    analyses.scripted.extend([CURATE, CURATE, CONTINUE])
+    verifier = Verifier(failing(), failing(), passing())
+    trial = Conversation(Scripted("student", "Hi", "Hi again", "Hi once more"), max_turns=1)
+    await run(FakeWorker(tmp_path), object(), [trial], [verifier], limits=Limits(max_rounds=3))
+    assert len(curations) == 3
+    (earlier,) = [entry for entry in curations[2]["feedback"]["history"] if entry["round"] == 1]
+    assert earlier["satisfied"] == {"verifier": False} and "results" not in earlier and "failed_in" not in earlier
+    assert "asks budget" not in json.dumps(curations[2]["feedback"])
+    assert analyses.calls[1]["history"][-1].results == {"verifier": {"asks budget": "fail"}}
 
 
 @pytest.mark.asyncio
@@ -498,6 +542,11 @@ async def test_the_curator_never_receives_the_reference_answers_it_could_copy_in
     )
     verifier = Verifier(reference, reference)
     await run(FakeWorker(tmp_path), object(), [dataset], [dataset, verifier], limits=Limits(max_rounds=2))
-    told = json.dumps(curations[1]["feedback"])
+    told = json.dumps({"feedback": curations[1]["feedback"], "observations": curations[1]["observations"]})
     assert "PARIS-REFERENCE" not in told and "SECRET-EXPECTED" not in told and "SECRET-NOTE" not in told
     assert analyses.calls[0]["signals"][0].items[0].expected == "PARIS-REFERENCE"
+    observed = curations[1]["observations"]
+    assert observed and observed[0]["source"] == "trial"
+    assert observed[0]["turn_id"] == "turn-1" and observed[0]["artifact_id"] == "artifact-1"
+    assert observed[0]["records"][0]["kind"] == "runner.event"
+    assert {row["session"] for row in observed} == {opaque("case:capital")}

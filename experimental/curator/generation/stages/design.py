@@ -48,4 +48,9 @@ def parse(declaration: Declaration, selection: Selection, arguments: dict) -> Pl
     plan = declaration.parse_plan(arguments)
     if {change.target for change in plan.changes} != set(selection.targets):
         raise ValueError("design must cover exactly the current selection; revise selection first")
+    untreated = [change.target for change in plan.changes if change.treatment is None]
+    if untreated:
+        raise ValueError(
+            f"say for every change whether it modifies, replaces or adds a mechanism (treatment): {untreated}"
+        )
     return plan

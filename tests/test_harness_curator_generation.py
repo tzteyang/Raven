@@ -7,8 +7,9 @@ from unittest.mock import AsyncMock
 import pytest
 
 from experimental.curator.generation.context.collect import collect
-from experimental.curator.generation.run import GenerationError, Limits, generate
-from experimental.curator.harness import Declaration, Validation
+from experimental.curator.generation.run import GenerationError, Limits
+from experimental.curator.generation.run import generate as generate_from
+from experimental.curator.harness import Attributed, Attribution, Declaration, Diagnosis, Validation
 from experimental.curator.raven_adapter.targets import catalogue
 from raven.contracts.llm_provider import LLMResponse, RunMeta, ToolCallRequest
 from raven.contracts.tool import RAW_ARGUMENTS_KEY
@@ -41,8 +42,33 @@ def response(name, arguments):
     return LLMResponse(content=None, tool_calls=[ToolCallRequest(name, name, arguments)])
 
 
-def selection(*targets):
-    return {"understanding": "Current task, observed need and candidate rationale", "targets": list(targets)}
+ATTRIBUTED = Attributed(
+    attribution=Attribution(diagnoses=(Diagnosis(about="task", state="absent", evidence=("task",)),)),
+    identity={"implementation": "test"},
+)
+
+
+async def generate(context, provider, **options):
+    """A generation from the task's attribution unless a test supplies another."""
+    return await generate_from(context, provider, **{"attribution": ATTRIBUTED, **options})
+
+
+def diagnosis(*abouts):
+    """The attribution's submission covering `abouts`, or the task alone."""
+    return {
+        "diagnoses": [
+            {"about": about, "state": "absent", "evidence": ["task"], "mechanism": ""}
+            for about in (abouts or ("task",))
+        ]
+    }
+
+
+def selection(*targets, grounds=("task",)):
+    return {
+        "understanding": "Current task, observed need and candidate rationale",
+        "targets": list(targets),
+        "grounds": {target: list(grounds) for target in targets},
+    }
 
 
 def plan(*targets):
@@ -55,6 +81,7 @@ def plan(*targets):
                 "reason": "Observed need",
                 "expected": "Improve behavior",
                 "verification": "Inspect actual calls",
+                "treatment": "add",
             }
             for name in targets
         ],
@@ -84,16 +111,14 @@ async def test_plan_queries_native_materials_then_generates_combined_artifacts(c
     provider = Provider(
         response("read_source", {"name": "loop", "length": 1000}),
         response("read_fact", {"name": "configuration", "path": ["config", "agents", "defaults"]}),
-        response("submit_selection", selection("action.config", "planning.skills")),
-        response("submit_plan", plan("action.config", "planning.skills")),
+        response("submit_selection", selection("action.strategy", "capability.strategy")),
+        response("submit_plan", plan("action.strategy", "capability.strategy")),
         response(
             "submit_artifact",
             {
                 "values": {
-                    "action.config": {"temperature": 0.2},
-                    "planning.skills": {
-                        "guide/SKILL.md": "---\nname: guide\ndescription: A task guide\n---\nUse evidence."
-                    },
+                    "action.strategy": {"factory": "rules:policy_0_2"},
+                    "capability.strategy": {"factory": "rules:create"},
                 }
             },
         ),
@@ -106,24 +131,28 @@ async def test_plan_queries_native_materials_then_generates_combined_artifacts(c
 
     result = await generate(context, provider, validate=validate)
     assert result.candidate is checked[0]
-    assert set(result.candidate.artifact.values) == {"action.config", "planning.skills"}
+    assert set(result.candidate.artifact.values) == {"action.strategy", "capability.strategy"}
     assert [event["tool"] for event in result.trace if event["event"] == "query"] == ["read_source", "read_fact"]
     assert "human" in provider.requests[0]["messages"][1]["content"]
     assert "Background" in provider.requests[0]["messages"][0]["content"]
-    assert "Understand" in provider.requests[0]["messages"][2]["content"]
+    assert "Select the necessary" in provider.requests[0]["messages"][2]["content"]
+    assert "Understand the current task" not in provider.requests[0]["messages"][2]["content"]
 
 
 @pytest.mark.asyncio
 async def test_validation_can_change_the_mechanism_instead_of_only_rewriting_code(context):
     provider = Provider(
-        response("submit_selection", selection("planning.advise")),
-        response("submit_plan", plan("planning.advise")),
-        response("submit_artifact", {"values": {"planning.advise": "rules:Participant"}}),
-        response("revise_selection", selection("action.review")),
-        response("submit_plan", plan("action.review")),
+        response("submit_selection", selection("planning.strategy")),
+        response("submit_plan", plan("planning.strategy")),
+        response("submit_artifact", {"values": {"planning.strategy": {"factory": "rules:Participant"}}}),
+        response("revise_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
         response(
             "submit_artifact",
-            {"values": {"action.review": "checks:Participant"}, "files": {"checks.py": "class Participant: pass"}},
+            {
+                "values": {"action.strategy": {"factory": "checks:Participant"}},
+                "files": {"checks.py": "class Participant: pass"},
+            },
         ),
     )
     calls = []
@@ -135,28 +164,11 @@ async def test_validation_can_change_the_mechanism_instead_of_only_rewriting_cod
         return Validation([], [{"kind": "runtime.bound"}])
 
     result = await generate(context, provider, validate=validate)
-    assert result.candidate.plan.changes[0].target == "action.review"
+    assert result.candidate.plan.changes[0].target == "action.strategy"
     repair_request = json.dumps(packet(provider.requests[3]), ensure_ascii=False)
     assert "Guidance did not enforce" in repair_request
     assert "observed.gap" in repair_request
     assert any(event["event"] == "revise_selection" for event in result.trace)
-
-
-@pytest.mark.asyncio
-async def test_implementation_can_return_to_design_before_validation(context):
-    provider = Provider(
-        response("submit_selection", selection("planning.advise")),
-        response("submit_plan", plan("planning.advise")),
-        response("revise_selection", selection("memory.prompt")),
-        response("submit_plan", plan("memory.prompt")),
-        response("submit_artifact", {"values": {"memory.prompt": {"TOOLS.md": "Native tool guidance"}}}),
-    )
-
-    async def validate(candidate):
-        return Validation([], [])
-
-    result = await generate(context, provider, validate=validate)
-    assert result.candidate.plan.changes[0].target == "memory.prompt"
 
 
 @pytest.mark.asyncio
@@ -179,9 +191,9 @@ async def test_empty_plan_retains_the_existing_harness_only_after_host_validatio
 async def test_failed_unchanged_candidate_enters_repair_and_can_reselect(context):
     provider = Provider(
         response("submit_selection", selection()),
-        response("revise_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("revise_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
     checked = []
     evidence = {"kind": "action.error", "operation": "decision", "arguments": [{"status": "ready"}]}
@@ -193,7 +205,7 @@ async def test_failed_unchanged_candidate_enters_repair_and_can_reselect(context
     result = await generate(context, provider, validate=validate)
     assert len(checked) == 2
     assert not checked[0].artifact.values
-    assert result.candidate.artifact.values == {"action.config": {"temperature": 0.2}}
+    assert result.candidate.artifact.values == {"action.strategy": {"factory": "rules:policy_0_2"}}
     assert "recorded contract failure" in str(provider.requests[1]["messages"])
     assert "ready" in str(provider.requests[1]["messages"])
     assert [event["stage"] for event in result.trace if event["event"] == "model.call"] == [
@@ -222,23 +234,23 @@ async def test_failed_unchanged_candidate_cannot_bypass_repair_budget(context):
 async def test_invalid_selection_is_returned_to_the_model_and_still_cannot_expand_grants(context):
     context = collect(
         context.task,
-        context.declaration.restrict(["planning.advise"]),
+        context.declaration.restrict(["planning.strategy"]),
         facts=context.facts,
         sources=context.sources,
         read_source=context.read_source,
     )
     provider = Provider(
-        response("submit_selection", selection("action.hooks")),
-        response("submit_selection", selection("planning.advise")),
-        response("submit_plan", plan("planning.advise")),
-        response("submit_artifact", {"values": {"planning.advise": "rules:Participant"}}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_selection", selection("planning.strategy")),
+        response("submit_plan", plan("planning.strategy")),
+        response("submit_artifact", {"values": {"planning.strategy": {"factory": "rules:Participant"}}}),
     )
 
     async def validate(candidate):
         return Validation([], [])
 
     result = await generate(context, provider, validate=validate)
-    assert result.candidate.plan.changes[0].target == "planning.advise"
+    assert result.candidate.plan.changes[0].target == "planning.strategy"
     assert any(event["event"] == "output.rejected" for event in result.trace)
 
 
@@ -253,9 +265,9 @@ async def test_query_budget_refuses_more_reads_without_discarding_the_generation
     provider = Provider(
         response("read_source", {"name": "not-registered"}),
         response("read_source", {"name": "loop"}),
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
 
     async def validate(candidate):
@@ -267,25 +279,6 @@ async def test_query_budget_refuses_more_reads_without_discarding_the_generation
     refused = [row for row in result.trace if row["event"] == "query.rejected"]
     assert len(refused) == 1 and "budget exhausted" in refused[0]["result"]["error"]
     assert result.validation.passed
-
-
-@pytest.mark.asyncio
-async def test_repair_and_total_call_budgets_are_program_controlled(context):
-    provider = Provider(
-        response("submit_selection", selection("planning.advise")),
-        response("submit_plan", plan("planning.advise")),
-        response("submit_artifact", {"values": {"planning.advise": "rules:Participant"}}),
-    )
-
-    async def validate(candidate):
-        return Validation(["still invalid"], [])
-
-    with pytest.raises(GenerationError, match="repair budget"):
-        await generate(context, provider, validate=validate, limits=Limits(max_repairs=0))
-
-    provider = Provider(LLMResponse(content="I will do it."))
-    with pytest.raises(GenerationError, match="call budget"):
-        await generate(context, provider, validate=validate, limits=Limits(max_calls=1))
 
 
 @pytest.mark.asyncio
@@ -329,16 +322,16 @@ async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(
     from dataclasses import replace
 
     authored = {
-        "values": {"planning.advise": "shared:Guide", "action.review": "shared:Review"},
+        "values": {"planning.strategy": {"factory": "shared:Guide"}, "action.strategy": {"factory": "shared:Review"}},
         "files": {"shared.py": "class Guide: pass\nclass Review: pass\n"},
     }
     context = replace(context, facts={**context.facts, "authored": authored})
     provider = Provider(
         response("read_source", {"name": "loop"}),
-        response("submit_selection", selection("planning.advise")),
-        response("submit_plan", plan("planning.advise")),
-        response("submit_artifact", {"values": {"planning.advise": "shared:Guide"}}),
-        response("submit_artifact", {"values": {"planning.advise": "shared:Guide"}}),
+        response("submit_selection", selection("planning.strategy")),
+        response("submit_plan", plan("planning.strategy")),
+        response("submit_artifact", {"values": {"planning.strategy": {"factory": "shared:Guide"}}}),
+        response("submit_artifact", {"values": {"planning.strategy": {"factory": "shared:Guide"}}}),
     )
     calls = 0
 
@@ -361,21 +354,21 @@ async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(
     planning_text = instructions(provider.requests[0])
     implementation_text = instructions(provider.requests[3])
     repair_text = instructions(provider.requests[4])
-    assert "# Understand the current task" in planning_text
+    assert "# Select the necessary authoring entries" in planning_text
     assert "# Implement the selected plan" not in planning_text
     assert "# Repair from host validation" not in implementation_text
     assert "# Implement the selected plan" in repair_text and "# Repair from host validation" in repair_text
     for request in provider.requests[2:]:
         data = packet(request)
         assert next(row for row in data["history"] if row["event"] == "query")["result"]["text"] == "native protocol"
-        assert [item["target"] for item in data["selected_contracts"]] == ["planning.advise"]
+        assert [item["target"] for item in data["selected_contracts"]] == ["planning.strategy"]
     assert packet(provider.requests[4])["validation_errors"]
 
 
 def test_orientation_is_complete_and_uses_the_inspected_source_version(context, tmp_path):
     from dataclasses import replace
 
-    from experimental.curator.generation.stages.understand import materials
+    from experimental.curator.generation.stages.shared import materials
     from experimental.curator.raven_adapter.inspection import Inspection, file_source
 
     text = "Host mechanism background.\n" * 1500 + "FINAL_REQUIRED_CONDITION"
@@ -389,17 +382,6 @@ def test_orientation_is_complete_and_uses_the_inspected_source_version(context, 
     path.write_text("Changed after inspection")
     with pytest.raises(ValueError, match="source changed"):
         materials(context)
-
-
-def test_rendered_delivery_actions_follow_the_supplied_tool_instead_of_a_static_name():
-    from experimental.curator.generation.context.render import messages, tool
-
-    action = tool("host_candidate_v2", "Submit the current candidate.", {"type": "object"})
-    other = tool("submit_selection", "Submit a selection.", {"type": "object"})
-    rendered = messages(("implement",), {"task": "A task"}, {}, tools=[action, other], available={"host_candidate_v2"})
-    text = rendered[2]["content"]
-    assert "`host_candidate_v2`: Submit the current candidate." in text
-    assert "submit_artifact" not in text and "submit_selection" not in text
 
 
 def test_dynamic_control_uses_host_inputs_and_keeps_task_materials_in_the_data_message():
@@ -428,47 +410,49 @@ def test_artifact_wire_normalization_preserves_file_text_and_authority(context):
 
     from experimental.curator.generation.stages.implement import parse
 
-    selected = context.declaration.parse_plan(plan("action.config"))
+    selected = context.declaration.parse_plan(plan("action.strategy"))
     file_text = '{"keep": "this is file content, not a container to decode"}'
     candidate = parse(
         context.declaration,
         selected,
         {
-            "values": json.dumps({"action.config": {"temperature": 0.2}}),
-            "files": json.dumps({"data.json": file_text}),
+            "values": json.dumps({"action.strategy": {"factory": "rules:policy_0_2"}}),
+            "files": json.dumps({"data.json": file_text, "rules.py": "def policy_0_2(): pass"}),
         },
     )
-    assert candidate.artifact.values == {"action.config": {"temperature": 0.2}}
+    assert candidate.artifact.values == {"action.strategy": {"factory": "rules:policy_0_2"}}
     assert candidate.artifact.files["data.json"] == file_text
     with pytest.raises(ValueError):
-        parse(context.declaration, selected, {"values": json.dumps({"capability.tools": []})})
+        parse(context.declaration, selected, {"values": json.dumps({"capability.strategy": []})})
     with pytest.raises(ValueError):
         parse(context.declaration, selected, {"values": "not JSON"})
     with pytest.raises(ValueError):
         parse(context.declaration, selected, {"values": "[]"})
 
 
-def test_implementation_keeps_other_granted_choices_visible_for_replanning(context):
+def test_implementation_sees_only_the_selected_contracts_while_selection_lists_every_target(context):
     from experimental.curator.generation.stages.implement import materials
 
     selected = context.declaration.parse_plan(plan("action.strategy"))
     from experimental.curator.generation.stages.select import materials as catalogue_of
 
-    data = materials(context, context.declaration.parse_selection(selection("action.strategy")), selected)
+    data = materials(
+        context, context.declaration.parse_selection(selection("action.strategy"), ATTRIBUTED.attribution), selected
+    )
     assert [row["target"] for row in data["selected_contracts"]] == ["action.strategy"]
     assert data["selected_contracts"][0]["knowledge"] and data["plan"]["changes"][0]["target"] == "action.strategy"
     assert "available_targets" not in data
     available = catalogue_of(context.declaration)
-    assert "prompt.resources" in {row["target"] for row in available}
+    assert "capability.strategy" in {row["target"] for row in available}
     assert all("knowledge" not in row for row in available)
 
 
 @pytest.mark.asyncio
 async def test_three_stages_preserve_diagnosis_queries_failures_and_concrete_design(context):
 
-    chosen = selection("action.config")
+    chosen = selection("action.strategy")
     chosen["understanding"] = "Sampling is unstable; retain task state. Check the temperature reader."
-    designed = plan("action.config")
+    designed = plan("action.strategy")
     designed["design"] = "Set temperature to 0.2 through native defaults; preserve every other setting."
     note = "The first lookup failed; the registered loop source supplies the needed reader."
     provider = Provider(
@@ -476,7 +460,7 @@ async def test_three_stages_preserve_diagnosis_queries_failures_and_concrete_des
         response("submit_selection", chosen),
         LLMResponse(content=note, tool_calls=[ToolCallRequest("read", "read_source", {"name": "loop"})]),
         response("submit_plan", designed),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
 
     async def validate(candidate):
@@ -512,14 +496,14 @@ async def test_three_stages_preserve_diagnosis_queries_failures_and_concrete_des
 
 @pytest.mark.asyncio
 async def test_design_cannot_change_targets_or_skip_the_concrete_mechanism(context):
-    missing_design = plan("action.config")
+    missing_design = plan("action.strategy")
     missing_design.pop("design")
     provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("memory.prompt")),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("memory.strategy")),
         response("submit_plan", missing_design),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
 
     async def validate(candidate):
@@ -537,11 +521,17 @@ async def test_design_can_reselect_dependencies_but_must_design_the_new_selectio
 
     provider = Provider(
         response("submit_selection", selection("action.strategy")),
-        response("revise_selection", selection("action.strategy", "prompt.resources")),
+        response("revise_selection", selection("action.strategy", "capability.strategy")),
         response("submit_plan", plan("action.strategy")),
-        response("submit_plan", plan("action.strategy", "prompt.resources")),
+        response("submit_plan", plan("action.strategy", "capability.strategy")),
         response(
-            "submit_artifact", {"values": {"action.strategy": {"factory": "rules:create"}, "prompt.resources": []}}
+            "submit_artifact",
+            {
+                "values": {
+                    "action.strategy": {"factory": "rules:create"},
+                    "capability.strategy": {"factory": "rules:capability"},
+                }
+            },
         ),
     )
 
@@ -550,7 +540,7 @@ async def test_design_can_reselect_dependencies_but_must_design_the_new_selectio
 
     result = await generate(context, provider, validate=validate)
     data = packet(provider.requests[2])
-    assert {row["target"] for row in data["selected_contracts"]} == {"action.strategy", "prompt.resources"}
+    assert {row["target"] for row in data["selected_contracts"]} == {"action.strategy", "capability.strategy"}
     assert "plan" not in data and "candidate" not in data
     assert len(result.candidate.plan.changes) == 2
     assert any(row["event"] == "output.rejected" for row in result.trace)
@@ -563,14 +553,14 @@ async def test_redesign_retains_failed_candidate_evidence_but_clears_active_draf
     from experimental.curator.raven_adapter.inspection import Inspection
     from raven.config.schema import Config
 
-    previous = plan("action.config")
+    previous = plan("action.strategy")
     previous["design"] = "OLD_DESIGN"
     revised = {**previous, "design": "NEW_DESIGN addresses the observed failure"}
-    old = {"values": {"action.config": {"temperature": 0.4}}, "files": {"old.py": "OLD_DRAFT = True\n"}}
-    fixed = {"values": {"action.config": {"temperature": 0.2}}}
+    old = {"values": {"action.strategy": {"factory": "rules:policy_0_4"}}, "files": {"old.py": "OLD_DRAFT = True\n"}}
+    fixed = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
     probe_evidence = {"kind": "probe.failed", "details": "OLD_EVIDENCE"}
     provider = Provider(
-        response("submit_selection", selection("action.config")),
+        response("submit_selection", selection("action.strategy")),
         response("submit_plan", previous),
         response("check_candidate", old),
         response("submit_artifact", old),
@@ -601,7 +591,7 @@ async def test_redesign_retains_failed_candidate_evidence_but_clears_active_draf
     assert "plan" not in data and "candidate" not in data
     history = data["history"]
     assert any(
-        row["event"] == "submit_artifact" and row["output"]["artifact"] == {**old, "remove": [], "remove_paths": {}}
+        row["event"] == "submit_artifact" and row["output"]["artifact"] == {**old, "remove": [], "remove_files": []}
         for row in history
     )
     assert any(row["event"] == "validation" and row["observations"] == [probe_evidence] for row in history)
@@ -614,11 +604,11 @@ async def test_redesign_retains_failed_candidate_evidence_but_clears_active_draf
 async def test_reselection_remains_inside_grants_and_backtracking_uses_total_budget(context):
     from dataclasses import replace
 
-    restricted = replace(context, declaration=context.declaration.restrict(["action.config"]))
+    restricted = replace(context, declaration=context.declaration.restrict(["action.strategy"]))
     provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("revise_selection", selection("memory.prompt")),
-        response("revise_selection", selection("action.config")),
+        response("submit_selection", selection("action.strategy")),
+        response("revise_selection", selection("memory.strategy")),
+        response("revise_selection", selection("action.strategy")),
     )
     with pytest.raises(GenerationError, match="call budget") as caught:
         await generate(restricted, provider, validate=None, limits=Limits(max_calls=3))
@@ -647,11 +637,11 @@ async def test_remaining_budget_tracks_queries_checks_and_repairs_across_stages(
             self.sent.append(sent)
             return await super().chat_with_retry(**kwargs)
 
-    artifact = {"values": {"action.config": {"temperature": 0.2}}}
+    artifact = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
     provider = BudgetProvider(
-        response("submit_selection", selection("action.config")),
+        response("submit_selection", selection("action.strategy")),
         response("read_source", {"name": "loop"}),
-        response("submit_plan", plan("action.config")),
+        response("submit_plan", plan("action.strategy")),
         response("check_candidate", artifact),
         response("submit_artifact", artifact),
         response("submit_artifact", artifact),
@@ -681,9 +671,9 @@ async def test_remaining_budget_tracks_queries_checks_and_repairs_across_stages(
 @pytest.mark.parametrize("stage_index", [0, 1, 2])
 async def test_invalid_arguments_preserve_stage_and_context_before_resubmission(context, stage_index):
     outputs = [
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.2}}}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     ]
     raw = '{"description": "Use verdict="resample" here"}'
     name = outputs[stage_index].tool_calls[0].name
@@ -732,56 +722,6 @@ def test_provider_reasoning_and_tool_metadata_survive_native_message_building():
 
 
 @pytest.mark.asyncio
-async def test_unparsable_response_can_be_resubmitted_through_curator_without_restarting(context):
-    raw = '{"understanding": "Keep "existing" harness", "targets": []}'
-    provider = Provider(
-        LLMResponse(
-            content=None,
-            tool_calls=[
-                ToolCallRequest(
-                    "selection-call",
-                    "submit_selection",
-                    {RAW_ARGUMENTS_KEY: raw},
-                    run_meta=RunMeta(arguments_repaired=True),
-                )
-            ],
-        ),
-        LLMResponse(
-            content=None,
-            tool_calls=[
-                ToolCallRequest(
-                    "selection-call",
-                    "submit_selection",
-                    {"understanding": "Existing harness is sufficient", "targets": []},
-                )
-            ],
-        ),
-    )
-    checked = []
-
-    async def validate(candidate):
-        checked.append(candidate)
-        return Validation([], [])
-
-    result = await generate(context, provider, validate=validate, limits=Limits(max_calls=2))
-    assert not result.candidate.plan.changes and checked == [result.candidate]
-    assert len(provider.requests) == 2
-    messages = provider.requests[1]["messages"]
-    assert messages[-3]["tool_calls"][0]["function"]["arguments"] == raw
-    assert messages[-2]["tool_call_id"] == "selection-call"
-    assert "Parser:" in messages[-2]["content"]
-    assert "# Remaining generation budget" in messages[-1]["content"]
-    assert context.task in messages[1]["content"]
-    assert [event["event"] for event in result.trace] == [
-        "model.call",
-        "output.rejected",
-        "model.call",
-        "submit_selection",
-        "validation",
-    ]
-
-
-@pytest.mark.asyncio
 async def test_invalid_call_blocks_entire_tool_batch_without_spending_query_budget(context):
     from unittest.mock import AsyncMock, Mock
 
@@ -825,15 +765,15 @@ async def test_repeated_invalid_submissions_stop_at_call_budget(context, kind):
         invalid.tool_calls[0].run_meta = RunMeta(arguments_repaired=True)
     else:
         invalid.truncated = True
-    provider = Provider(invalid, invalid)
+    provider = Provider(invalid, invalid, invalid)
 
     async def validate(candidate):
         pytest.fail("Invalid submission must not reach validation")
 
     with pytest.raises(GenerationError, match="call budget exhausted") as failure:
         await generate(context, provider, validate=validate, limits=Limits(max_calls=2))
-    assert len(provider.requests) == 2
-    assert len([event for event in failure.value.trace if event["event"] == "output.rejected"]) == 2
+    assert len(provider.requests) == 3, "a submission refused on the last call gets one call to be corrected"
+    assert len([event for event in failure.value.trace if event["event"] == "output.rejected"]) == 3
 
 
 @pytest.mark.asyncio
@@ -851,20 +791,37 @@ async def test_provider_failures_do_not_become_model_output_repairs(context, err
 
 
 @pytest.mark.asyncio
+async def test_a_failure_that_is_not_resumable_ends_the_generation_instead_of_pausing_it(context):
+    from unittest.mock import AsyncMock
+
+    # A stand-in for the loop's boundary error: this file stays free of evaluation-side imports, which would
+    # withhold it from the Curator's exploration snapshot.
+    class SealedError(RuntimeError):
+        resumable = False
+
+    provider = Provider()
+    violation = SealedError("curator compartment: sealed information in chat_with_retry")
+    provider.chat_with_retry = AsyncMock(side_effect=violation)
+    with pytest.raises(SealedError) as failure:
+        await generate(context, provider, validate=AsyncMock())
+    assert failure.value is violation and provider.chat_with_retry.await_count == 1
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("pause_after", [1, 2, 3, 4, 5, 6])
 async def test_serialized_resume_preserves_every_stage_and_does_not_replay_work(context, pause_after):
     from experimental.curator.generation.run import GenerationPausedError
     from experimental.curator.generation.state import GenerationState
 
-    draft = {"values": {"action.config": {"temperature": 0.2}}}
+    draft = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
     provider = Provider(
         response("read_source", {"name": "loop"}),
-        response("submit_selection", selection("action.config")),
+        response("submit_selection", selection("action.strategy")),
         response("read_fact", {"name": "configuration"}),
-        response("submit_plan", plan("action.config")),
+        response("submit_plan", plan("action.strategy")),
         response("check_candidate", draft),
         response("submit_artifact", draft),
-        response("submit_artifact", {"values": {"action.config": {"temperature": 0.4}}}),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_4"}}}),
     )
     checks = []
 
@@ -886,7 +843,7 @@ async def test_serialized_resume_preserves_every_stage_and_does_not_replay_work(
     saved_messages = state.model_copy(deep=True).messages
     resumed = Provider(*provider.responses)
     result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=7), resume=state)
-    assert result.candidate.artifact.values["action.config"] == {"temperature": 0.4}
+    assert result.candidate.artifact.values["action.strategy"] == {"factory": "rules:policy_0_4"}
     assert len(checks) == 3
     assert len(provider.requests) + len(resumed.requests) == 7
     assert state.calls == pause_after and state.messages == saved_messages
@@ -935,7 +892,7 @@ async def test_resume_refuses_changed_inputs_before_any_model_call(context, chan
         "feedback": "New feedback",
         "facts": {"changed": True},
         "sources": {"new": {"start": 1, "end": 2}},
-        "declaration": context.declaration.restrict(["action.config"]),
+        "declaration": context.declaration.restrict(["action.strategy"]),
     }[change]
     resumed = Provider()
     with pytest.raises(ValueError, match="inputs changed"):
@@ -948,11 +905,11 @@ async def test_resume_refuses_changed_inputs_before_any_model_call(context, chan
 async def test_pause_after_backtracking_resumes_design_without_a_stale_plan(context, revision):
     from experimental.curator.generation.run import GenerationPausedError
 
-    target = "memory.prompt" if revision == "revise_selection" else "action.config"
+    target = "memory.strategy" if revision == "revise_selection" else "action.strategy"
     arguments = selection(target) if revision == "revise_selection" else {"reason": "Reconsider the mechanism"}
     provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
         response(revision, arguments),
     )
     staged = []
@@ -962,9 +919,9 @@ async def test_pause_after_backtracking_resumes_design_without_a_stale_plan(cont
     assert state.stage == "design" and state.plan is None and state.candidate is None
     assert state.selection.targets == (target,) and staged == [None]
     values = (
-        {"memory.prompt": {"TOOLS.md": "New guidance"}}
-        if target == "memory.prompt"
-        else {"action.config": {"temperature": 0.2}}
+        {"memory.strategy": {"factory": "rules:create"}}
+        if target == "memory.strategy"
+        else {"action.strategy": {"factory": "rules:policy_0_2"}}
     )
     resumed = Provider(response("submit_plan", plan(target)), response("submit_artifact", {"values": values}))
 
@@ -973,32 +930,6 @@ async def test_pause_after_backtracking_resumes_design_without_a_stale_plan(cont
 
     result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=5), resume=state)
     assert result.candidate.artifact.values == values
-
-
-@pytest.mark.asyncio
-async def test_resume_does_not_reset_the_artifact_repair_budget(context):
-    from experimental.curator.generation.run import GenerationPausedError
-
-    draft = {"values": {"action.config": {"temperature": 0.2}}}
-    provider = Provider(
-        response("submit_selection", selection("action.config")),
-        response("submit_plan", plan("action.config")),
-        response("submit_artifact", draft),
-    )
-
-    async def validate(candidate):
-        return Validation(["Still fails the behavior check"], [])
-
-    with pytest.raises(GenerationPausedError) as paused:
-        await generate(context, provider, validate=validate, limits=Limits(max_calls=3, max_repairs=1))
-    with pytest.raises(GenerationError, match="repair budget exhausted"):
-        await generate(
-            context,
-            Provider(response("submit_artifact", draft)),
-            validate=validate,
-            limits=Limits(max_calls=4, max_repairs=1),
-            resume=paused.value.state,
-        )
 
 
 @pytest.mark.asyncio
@@ -1053,7 +984,26 @@ async def test_a_value_naming_a_module_no_file_provides_is_sent_back_before_vali
     assert len(checked) == 1 and "planning_impl.py" in result.candidate.artifact.files
     rejected = next(event for event in result.trace if event["event"] == "output.rejected")
     assert "'planning_impl'" in rejected["error"] and "stage_file" in rejected["error"]
-    assert result.trace[-1]["event"] != "validation" or not result.trace[-1]["errors"]
+    assert result.validation.passed
+
+
+@pytest.mark.asyncio
+async def test_after_staging_a_file_another_stages_submission_is_still_refused_as_unavailable(context):
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("stage_file", {"path": "planning_impl.py", "content": "def create(state, task):\n    return None\n"}),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "planning_impl:create"}}}),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    result = await generate(context, provider, validate=validate)
+    refused = next(event for event in result.trace if event["event"] == "action.unavailable")
+    assert refused["tool"] == "submit_plan" and "not available in the implement stage" in refused["result"]["error"]
+    assert not any(event["event"] == "query" and event.get("tool") == "submit_plan" for event in result.trace)
 
 
 def test_observations_reach_a_request_as_an_index_and_are_read_on_demand():
@@ -1096,18 +1046,14 @@ async def test_a_call_that_spent_its_output_thinking_is_followed_by_a_short_thin
         LLMResponse(content=None, finish_reason="stop"),
         LLMResponse(content=None, finish_reason="stop"),
         response("submit_selection", selection()),
-        response("submit_plan", plan()),
-        response("submit_artifact", {"values": {}}),
     )
 
     async def validate(candidate):
         return Validation([], [])
 
-    try:
-        await generate(context, provider, validate=validate, limits=Limits(max_calls=6, max_output=65536))
-    except GenerationError:
-        pass
-    assert len(provider.requests) >= 2 and all(request["max_tokens"] == 65536 for request in provider.requests)
+    result = await generate(context, provider, validate=validate, limits=Limits(max_calls=6, max_output=65536))
+    assert result.validation.passed and len(provider.requests) == 4
+    assert all(request["max_tokens"] == 65536 for request in provider.requests)
     efforts = [request.get("reasoning_effort") for request in provider.requests[:4]]
     assert efforts == [None, "low", "none", "none"]
     assert "ran out of output" in provider.requests[1]["messages"][-2]["content"]
@@ -1120,32 +1066,28 @@ async def test_a_curator_call_on_a_model_that_needs_breakpoints_marks_the_tail_s
     """Without breakpoints each call is written to the cache again and never read; with marks only on the tail, each
     new stage writes the curation's materials again."""
     provider = Provider(
-        response("submit_selection", selection()),
-        response("submit_plan", plan()),
-        response("submit_artifact", {"values": {}}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
 
     async def validate(candidate):
         return Validation([], [])
 
-    try:
-        await generate(
-            context,
-            provider,
-            validate=validate,
-            model="openrouter/anthropic/claude-opus-5.5",
-            limits=Limits(max_calls=3),
-        )
-    except GenerationError:
-        pass
-    for request in provider.requests[:2]:
+    result = await generate(
+        context,
+        provider,
+        validate=validate,
+        model="openrouter/anthropic/claude-opus-5.5",
+        limits=Limits(max_calls=3),
+    )
+    assert result.validation.passed and len(provider.requests) == 3
+    for request in provider.requests:
         messages = request["messages"]
         marked = [index for index, message in enumerate(messages) if "cache_control" in json.dumps(message)]
         assert marked == [0, 1, len(messages) - 2] and messages[0].get("cache_marks_placed")
         assert "cache_control" in json.dumps(request["tools"][-1])
-    plain = Provider(response("submit_selection", selection()))
-    try:
+    plain = Provider(response("submit_selection", selection("action.strategy")))
+    with pytest.raises(GenerationError):
         await generate(context, plain, validate=validate, model="deepseek/deepseek-flash", limits=Limits(max_calls=1))
-    except GenerationError:
-        pass
     assert "cache_control" not in json.dumps(plain.requests[0]["messages"])

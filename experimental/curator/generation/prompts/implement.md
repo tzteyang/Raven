@@ -8,9 +8,9 @@ Produce the checked plan's executable strategy behavior and necessary resources,
 
 Read plan, selected_contracts and their knowledge in full. Use current_authored for all active values and file contents, not just the selected bindings; history retains earlier decisions, queries and checks, including failures and obsolete proposals. Use worker facts and registered queries for missing runtime conditions or baseline code.
 
-The selected contract determines the factory input, callable signature, result shape and lifetime. Public strategy, native Participant, plugin and context-engine contracts are distinct. Apply the contract of the selected entry; do not transfer one kind's construction or lifetime assumptions to another.
+The selected strategy contract determines its factory input, callable signature, result shape and lifetime. Host services can construct owned native components with different contracts. Do not transfer a strategy owner's construction or lifetime assumptions to a Participant, plugin, service or context engine.
 
-A native contribution's payload schema may describe a factory reference without its calling convention. Read the registered assembly topic and relevant factory/context contracts when those details are not supplied. Do not infer constructor arguments or resource handles from a reference string.
+A strategy's host service may accept a native component factory reference. Read the registered assembly topic and that factory/context contract before requesting it. This is an owned dependency, not another authoring target. Do not infer constructor arguments or resource handles from a reference string.
 
 ## Work
 
@@ -25,11 +25,11 @@ Runtime values must satisfy their declared contracts after construction and muta
 
 ## Artifact and merge rules
 
-Return exactly the plan's target values, using their supplied schemas, and the supporting text files. Configuration objects carry intended patches. The current materializer recursively merges mappings, replaces lists and scalars, and preserves files omitted from the update. Consequently, include the complete intended list when replacing a contribution list; omission is not a deletion operation. Use an explicitly permitted null only where its contract defines removal or disabling.
+Return exactly the plan's strategy bindings and supporting code/assets. Binding updates preserve omitted fields and files. Strategy prepare defines the complete owned resource and native setup effects for the resulting implementation. Retire a strategy through remove; retire obsolete supporting files through remove_files. Assets never activate independently.
 
 Write each supporting file with the file-staging action, one complete file per call, before you check or submit; staged files join the artifact automatically, so the artifact itself then only needs the target values. A value that references module:attribute needs that module among the staged files, the artifact's files or the current authored files.
 
-Source files form an isolated package. Use package-relative imports between supplied files and normal imports for installed dependencies. References must resolve to the object kind required by the selected binding: callable factories for construction, Prompt objects for prompt.resources. Provide complete content for every file you update, including dependencies needed by retained callers; do not submit patch instructions as source code.
+Source files form an isolated package. Use package-relative imports between supplied files and normal imports for installed dependencies. References must resolve to the object kind required by the selected binding: callable strategy factories for construction, and Prompt objects explicitly indexed and consumed by their owning strategy. Provide complete content for every file you update, including dependencies needed by retained callers; do not submit patch instructions as source code.
 
 Resource formats, factory parameters and result types come from selected_contracts. Do not copy a redacted configuration value, duplicate an interface schema in another file, or assume a loaded skill has reached model input.
 
@@ -45,6 +45,5 @@ Every selected value has its required implementation or resource; references res
 ## Revising selection
 
 The artifact schema contains only targets selected in the current plan. available_targets also lists the
-other host-granted choices. If an implementation needs another granted target (for example prompt.resources
-for a newly authored Prompt), revise selection first and complete the new design. Mentioning a resource in prose does not select its target.
+other host-granted strategy choices. If an implementation needs another strategy owner (for example Capability to prepare new Skills), revise selection first and complete the new design. A supporting Prompt belongs to its consuming strategy and does not need a separate target.
 Do not add an unselected value to the artifact or omit required resource admission to fit the current schema.

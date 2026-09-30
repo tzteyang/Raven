@@ -14,7 +14,12 @@ from ...harness import Task
 
 @dataclass
 class Baseline:
-    """The selected worker's native configuration and hosting conditions."""
+    """The selected worker's native configuration and hosting conditions.
+
+    `file_roots` and `read_roots`, when either is set, confine Raven's file tools: reads reach the agent home, the
+    session's working directory and both sets of roots, writes and edits the home, the working directory and
+    `file_roots` only; delivering a file counts as reading it. Both empty leaves Raven's own setting.
+    """
 
     config: Config
     extensions: RavenConfig
@@ -27,6 +32,8 @@ class Baseline:
     hosting: str = "worker"
     allow_delegation: bool = True
     inherit_model: bool = False
+    file_roots: tuple[Path, ...] = ()
+    read_roots: tuple[Path, ...] = ()
 
     def __post_init__(self):
         if self.hosting not in {"worker", "acp"}:
@@ -38,6 +45,8 @@ class Baseline:
         self.workdir = Path(self.workdir).resolve()
         self.origin = Origin(self.origin)
         self.source_roots = tuple(Path(path).resolve() for path in self.source_roots)
+        self.file_roots = tuple(Path(path).resolve() for path in self.file_roots)
+        self.read_roots = tuple(Path(path).resolve() for path in self.read_roots)
 
     def export(self) -> dict:
         return {
@@ -49,6 +58,8 @@ class Baseline:
             "hosting": self.hosting,
             "allow_delegation": self.allow_delegation,
             "inherit_model": self.inherit_model,
+            "file_roots": [str(path) for path in self.file_roots],
+            "read_roots": [str(path) for path in self.read_roots],
             "origin": self.origin.value,
             "resident": self.resident,
             "task": self.task.model_dump() if self.task else None,
@@ -68,6 +79,8 @@ class Baseline:
             data.get("hosting", "worker"),
             data.get("allow_delegation", True),
             data.get("inherit_model", False),
+            tuple(Path(path) for path in data.get("file_roots", ())),
+            tuple(Path(path) for path in data.get("read_roots", ())),
         )
 
 

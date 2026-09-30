@@ -21,6 +21,7 @@ from ..bind import assemble
 from ..inspection import declaration_for, fingerprint, redact, unavailable_targets
 from ..inspection.runtime import describe_bound
 from ..observe import Recorder, plain
+from ..runner import ScopedLoop
 from .lifecycle import configure_role, start_cron
 from .transport import serve
 
@@ -96,7 +97,7 @@ async def serve_harness(reader, out, baseline, artifact, root, *, grants=None, p
         )
         await bound.prepare()
         stack = await build_rpc_stack(
-            translator.send_frame, agent_loop=bound.runtime.loop, channel=channel, approval_responder=approval_responder
+            translator.send_frame, agent_loop=ScopedLoop(bound), channel=channel, approval_responder=approval_responder
         )
         await bound.start()
         await start_cron(bound.runtime.loop, stack)

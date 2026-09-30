@@ -1,117 +1,257 @@
-"""Install strategy-provided resources and translate capability selection into native exposure."""
+"""Bind public registration and selection to native tools and skill consumers."""
 
 from copy import deepcopy
-from pathlib import Path
-from typing import get_type_hints
 
 from raven.agent.hook.participant import ParticipantHook
-from raven.agent.tools.registry import admit_tool
-from raven.config.raven import LocalDirConfig
-from raven.contracts.participant import AgentParticipant, Intake
+from raven.contracts.participant import AgentParticipant
 
-from ...harness import Artifact
+from ...harness.declaration import typed
+from ...harness.interaction import InteractionScope
+from ...harness.resources import (
+    CapabilityContribution,
+    CapabilitySelection,
+    EffectiveCapabilities,
+    RegistrationReceipt,
+    SelectionRequest,
+)
 from ...harness.strategies import CapabilityStrategy
-from ..calls import translator
-from ..materialize import _write
-from ..strategy import BoundStrategy
-from .contracts import CapabilityResources
+from ..observe import plain
+from ..strategy import SESSION, BoundStrategy
+
+
+class NativeCapability(CapabilityStrategy):
+    """Use the shared registrar and preserve native selection when no policy was authored."""
+
+    def __init__(self, registrar):
+        self.registrar = registrar
+
+    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:
+        return self.registrar.register(contribution)
+
+    async def select(self, request: SelectionRequest) -> CapabilitySelection:
+        return CapabilitySelection()
 
 
 class BoundCapability(BoundStrategy):
-    def __init__(self, config, task, path, package, recorder, *, infer=None, plan=None):
-        super().__init__(
-            "capability", CapabilityStrategy, config, task, path, package, recorder, infer=infer, plan=plan
+    """Share one candidate catalogue across independently checkpointed session policies."""
+
+    def __init__(
+        self,
+        config,
+        task,
+        path,
+        package,
+        recorder,
+        *,
+        catalog,
+        infer=None,
+        plan=None,
+        peers=None,
+        scope=None,
+        host=None,
+    ):
+        self.catalog, self.runtime = catalog, None
+        self.config, self.task, self.path, self.recorder = config, task, path, recorder
+        self.scope = scope or (
+            lambda: InteractionScope(
+                harness_id=str(path.parent),
+                task_id=task.id,
+                revision=catalog.candidate,
+                session_key=SESSION.get(),
+                turn_id=recorder.turn_id,
+            )
         )
-        if get_type_hints(self.strategy.provide).get("return") is not CapabilityResources:
-            raise TypeError("capability provide must declare CapabilityResources as its return type")
-        self.need = translator(config.need, package, 2)
-        self.expose = translator(config.expose, package, 1)
-        self.render = translator(config.context, package, 1)
-        self.resources = self.translate("provide", self.strategy.provide)
-        if not isinstance(self.resources, CapabilityResources):
-            raise TypeError("capability provide must return CapabilityResources")
-        names = [admit_tool(tool).name for tool in self.resources.tools]
-        if len(names) != len(set(names)):
-            raise ValueError("capability resources contain duplicate tool names")
-        self.skill_files = Artifact(values={}, files=self.resources.skills).files
-        self.skill_root = None
+        self.plan = plan
+        self.selections = {}
+        self.selection_errors = {}
+        self.effective_views = {}
+        self.native = NativeCapability(catalog)
+        if config is not None:
+            super().__init__(
+                "capability",
+                CapabilityStrategy,
+                config,
+                task,
+                path,
+                package,
+                recorder,
+                infer=infer,
+                plan=plan,
+                registrar=catalog,
+                peers=peers,
+                host=host,
+            )
+            required = {
+                "register": ([CapabilityContribution], RegistrationReceipt),
+                "select": ([SelectionRequest], CapabilitySelection),
+            }
+            if self.types != required:
+                raise TypeError(
+                    "capability methods must use the public contribution, receipt, request and selection types"
+                )
+
+    def _key(self):
+        scope = self.scope()
+        return scope.session_key, scope.turn_id
+
+    def _current_turn(self):
+        current = self._key()
+        for records in (self.selections, self.selection_errors, self.effective_views):
+            for key in tuple(records):
+                if key[0] == current[0] and key != current:
+                    del records[key]
+
+    def register(self, contribution):
+        """Call the public policy, checking its receipt against the actual staged catalogue."""
+        contribution = typed(CapabilityContribution, contribution)
+        if self.catalog.closed:
+            return self.native.register(contribution)
+        before = (
+            dict(self.catalog.contributions),
+            dict(self.catalog.tools),
+            dict(self.catalog.skills),
+            dict(self.catalog.deferred_tools),
+        )
+        try:
+            result = (
+                self.translate("register", self.strategy.register, contribution, output=RegistrationReceipt)
+                if self.config is not None
+                else self.native.register(contribution)
+            )
+            if (result.name, result.owner, result.kind, result.candidate) != (
+                contribution.name,
+                contribution.owner,
+                contribution.kind,
+                self.catalog.candidate,
+            ):
+                raise ValueError("registration receipt does not identify the supplied contribution")
+            key = (contribution.kind, contribution.name)
+            expected = before[0] if result.status == "rejected" else {**before[0], key: contribution}
+            if self.catalog.contributions != expected:
+                raise ValueError("registration receipt disagrees with the actual candidate resources")
+            if result.status == "unchanged" and before[0].get(key) != contribution:
+                raise ValueError("unchanged registration requires an identical existing contribution")
+            if result.status == "staged" and key in before[0]:
+                raise ValueError("an identical existing contribution must report unchanged")
+        except BaseException:
+            self.catalog.contributions, self.catalog.tools, self.catalog.skills, self.catalog.deferred_tools = before
+            raise
+        self.recorder.add("capability.register", contribution=contribution, receipt=result)
+        return result
+
+    def require(self, contribution):
+        receipt = self.register(contribution)
+        if receipt.status == "rejected":
+            raise ValueError(f"capability contribution {receipt.name} refused: {receipt.reason}")
+        return receipt
 
     def stage_skills(self, root, config):
-        if not self.skill_files:
-            return
-        self.skill_root = root / "capability-skills"
-        for name, content in self.skill_files.items():
-            _write(self.skill_root / name, content.encode())
-        config.skill_forge.local_dirs.append(LocalDirConfig(path=str(self.skill_root), name="curator-capability"))
+        self.catalog.stage(config)
 
-    def install(self, runtime):
-        for tool in self.resources.tools:
-            if runtime.loop.tools.get(tool.name) is not None:
-                raise ValueError(f"capability tool would replace an existing tool: {tool.name}")
-            runtime.loop.tools.register(tool)
-        if self.skill_root:
-            roots = [
-                Path(row["path"]).parent.resolve()
-                for row in runtime.loop.context.skills.list_skills(filter_unavailable=False)
-            ]
-            for name in self.skill_files:
-                path = (self.skill_root / name).resolve()
-                if not any(path.is_relative_to(root) for root in roots):
-                    raise ValueError(f"capability skill is not discoverable: {name}")
-        self.recorder.add(
-            "capability.resources", tools=[tool.name for tool in self.resources.tools], skills=list(self.skill_files)
+    def install(self, runtime, *, context=None, disabled=()):
+        self.catalog.install(runtime, context=context, disabled=disabled)
+        self.runtime = runtime
+
+    async def prepare(self):
+        if self.config is not None:
+            await super().prepare()
+
+    async def select(self, request):
+        if not self.catalog.installed:
+            raise RuntimeError("capability selection requires an installed catalogue")
+        self._current_turn()
+        request = typed(SelectionRequest, request)
+        result = (
+            await self.call(
+                "select",
+                request,
+                source="selection",
+                validate=lambda value: self._validate_selection(request, value),
+            )
+            if self.config is not None
+            else await self.native.select(request)
         )
+        self._validate_selection(request, result)
+        self.selections[self._key()] = result
+        self.selection_errors.pop(self._key(), None)
+        return result
 
-    async def select(self, need):
-        return await self.call("select", need, source="selection")
+    @staticmethod
+    def _validate_selection(request, result):
+        offered = {row["function"]["name"] for row in request.tools}
+        if result.tools is not None and set(result.tools) - offered:
+            raise ValueError("capability selection must name offered tools")
+        if result.skills is not None:
+            for selected in result.skills:
+                matches = [
+                    skill
+                    for skill in request.skills
+                    if skill.name == selected.name and (selected.source is None or skill.source == selected.source)
+                ]
+                if len(matches) != 1 or not matches[0].available:
+                    raise ValueError(f"selected skill is unknown, ambiguous or unavailable: {selected.name}")
+
+    def effective(self, tools):
+        if self._key() in self.selection_errors:
+            raise RuntimeError(f"capability selection failed: {self.selection_errors[self._key()]}")
+        selection = self.selections.get(self._key(), CapabilitySelection())
+        bodies = {(item.source, item.name) for item in selection.skills or () if item.delivery == "body"}
+        skills = self.catalog.skill_views(self.runtime, bodies=bodies) if self.runtime is not None else ()
+        view = EffectiveCapabilities(
+            scope=self.scope(),
+            tools=plain(tools),
+            skills=skills,
+            selection=selection.skills or (),
+            native_skills=selection.skills is None,
+            guidance=selection.guidance,
+        )
+        self.effective_views[self._key()] = view
+        self.recorder.add("capability.effective", view=view)
+        return view
+
+    def read(self):
+        value = self.effective_views.get(self._key())
+        return value.model_copy(deep=True) if value is not None else None
 
     def facts(self):
         return {
-            **super().facts(),
-            "tools": [admit_tool(tool).schema for tool in self.resources.tools],
-            "skills": deepcopy(self.skill_files),
+            **(super().facts() if self.config is not None else {}),
+            **self.catalog.facts(),
+            "effective": [view.model_dump(mode="json") for view in self.effective_views.values()],
         }
 
     def hook(self):
         owner = self
 
         class CapabilityParticipant(AgentParticipant):
-            def __init__(self):
-                self.selection = None
-                self.has_selection = False
-
-            async def choose(self, offered, step):
-                self.has_selection = False
-                need = owner.translate("need", owner.need, offered, step, output=owner.types["select"][0][0])
-                self.selection = await owner.select(need)
-                self.has_selection = True
-                return self.selection
-
-            @owner.callback
             async def select_tools(self, offered, step):
-                if owner.need is None:
-                    return None
-                result = await self.choose(offered, step)
-                if owner.expose is None:
-                    return None
-                names = owner.translate("expose", owner.expose, result, output=list[str] | None)
-                if names is None:
-                    return None
-                available = {row["function"]["name"]: row for row in offered}
-                if len(names) != len(set(names)) or set(names) - available.keys():
-                    raise ValueError("capability selection must contain unique offered tool names")
-                return [deepcopy(available[name]) for name in names]
-
-            @owner.callback
-            async def system_addendum(self, step):
-                if owner.render is None:
-                    return None
                 try:
-                    if not self.has_selection:
-                        await self.choose(list(step.tools), step)
-                    content = owner.translate("context", owner.render, self.selection, output=str | None)
-                    return Intake(content) if content is not None else None
-                finally:
-                    self.has_selection = False
+                    request = SelectionRequest(
+                        scope=owner.scope(),
+                        messages=plain(step.transcript),
+                        tools=plain(offered),
+                        skills=owner.catalog.skill_views(owner.runtime),
+                        subagents=tuple(
+                            {
+                                "name": agent.name,
+                                "description": agent.description,
+                                "owns": agent.owns,
+                                "stateful": agent.stateful,
+                                "reads_local_files": agent.reads_local_files,
+                                "live_progress": agent.live_progress,
+                            }
+                            for agent in owner.runtime.loop.subagents.list_agents()
+                        ),
+                        plan=owner.plan() if owner.plan else None,
+                    )
+                    result = await owner.select(request)
+                    if result.tools is None:
+                        return None
+                    available = {row["function"]["name"]: row for row in offered}
+                    return [deepcopy(available[name]) for name in result.tools]
+                except Exception as exc:
+                    owner.selection_errors[owner._key()] = str(exc)
+                    owner.recorder.add("capability.error", operation="selection", error=str(exc))
+                    raise
 
         return ParticipantHook("curator-capability", CapabilityParticipant, rolls_back=False)

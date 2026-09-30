@@ -1,4 +1,4 @@
-"""Expand the selected contracts and parse native configuration, content and code artifacts."""
+"""Expand selected strategy contracts and parse their factory bindings and supporting assets."""
 
 import json
 import re
@@ -48,7 +48,7 @@ def output() -> dict:
     """The artifact submission for the shared tool list; its schema is the general artifact shape."""
     return tool(
         NAME,
-        "Submit native payloads and supporting files for exactly the planned targets.",
+        "Submit strategy bindings and supporting code/assets for exactly the planned targets.",
         schema_for(Artifact),
     )
 

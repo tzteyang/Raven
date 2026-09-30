@@ -1,27 +1,32 @@
 """Export one cultivation run's records as a self-contained, reviewable cultivation record.
 
 A run directory holds what `experimental.iteration.run` and the travel-agency simulation wrote: the iteration record
-with its analysis and curation records, each Harness generation's `observations.jsonl`, the kept deliverables, the
-employee's agent home, `settings.json` and, once the suite finished the run, `suite-summary.json`. `build_record`
+with its analysis and curation records, the kept deliverables, `settings.json` and, once the suite finished the run,
+`suite-summary.json`, beside the employee's area `employee/` (each Harness generation's `observations.jsonl` and the
+agent home) and each replica's under `replicas/`. `build_record`
 reads them without any model call and returns one JSON-serialisable dict (schema 1). `export_record` writes that dict
 (`record.json`), its ledger (`ledger.json`), a Markdown transcript, copies of the deliverables and the page images
 that already exist beside them, the scenario inputs, and `manifest.json` with every file's SHA-256, size and time.
 Every string the record carries passes `redact`; no `config.json`, credential folder or trace log is ever copied.
 
-Linking rules. They are deterministic, and every link says how it was made:
+Linking rules. Every link is one the loop or the run's evaluation recorded, and says which; the record matches no
+text:
 
-- A requirement the owner raised as the Analyst links `owner` to the criteria it named for it in the analysis record.
-  Otherwise it links `explicit` to the criteria whose ids its behavior, observation, acceptance or evidence names.
-  Otherwise it links `inferred` to the criteria that failed, in the same round, in a drill session it cites; when
-  several did, those whose verdict shares a quoted passage with the requirement are kept, if any. Otherwise `none`.
-  A session is cited by one of its turn ids (or an 8+ hex prefix), by `[name]`, a quoted or backticked name, its name
-  beside "conversation", "drill", "session", "dialog", "chat", "trial" or "card", or its case-sensitive name next to
-  non-ASCII text.
-- After a round, a curation's change attaches to the criteria its reason names (by id or a shared SOP section
-  marker) among those linked to that round's requirements, and to all of those when it names none of them. For the
-  onboarding curation, or when the round linked no criterion, a change attaches only to criteria its reason names by
-  id or shares a section marker with. Markers are `S4.1`, `G2`, `B3` and the like; ranges such as `S4.1 to S4.7` or
-  `G1-G9` expand, and a bare section such as `S4` covers its subsections.
+- A requirement links `grounds` to the criteria its grounds name as `check:<criterion id>`; its `case:<id>` grounds
+  are its `cases`. A requirement without a check ground links `reading` to the rules the run's `attribution.json`
+  reads it as restating (`experimental.simulation.attribution.read_requirements`, a model reading kept beside the
+  records), and `none` when there is no such reading. Its id, `repeats`, `situation` and grounds
+  are the round's feedback; whether it `held` is the run's typed history (`experimental.iteration.history`), where
+  the loop's one rule decided it (`experimental.iteration.ledger`).
+- A curation's change links `addresses` to criteria through the inputs it addresses, as the change of the same scope
+  and target in the typed history entry of the round it followed records them: an addressed requirement id brings
+  that requirement's check grounds, while a material, a playbook node or the task brings none, so onboarding attaches
+  to no criterion. Only an installed curation a round's record names, the root's or a child harness's installed with
+  it, has that entry; any other curation keeps empty `addresses` and attaches to none.
+- A material was given at onboarding when the opening signals hand it over by name (a `Handover`) or the disclosure
+  plan gives it then, and otherwise in the first round whose signals hand it over or after which the next round's
+  analysis reads it as a skill (the way a material copied straight into the skill pool shows); one found only in the
+  employee's home was handed over in an unknown round.
 - A target's facet is the role the target catalogue gives it (so `planning.skills` is capability); `prompt.*` counts
   as memory and anything else as other.
 - Mechanism evidence is the planning, participant, component, strategy (action, capability, memory), inference,
@@ -30,9 +35,9 @@ Linking rules. They are deterministic, and every link says how it was made:
   how often. Review verdicts `resample` and `end`, refused tools and refused planning steps are interventions.
 - Mechanism rows carry the harness scope they ran in: `root`, or the child harness whose process records a
   `child.execution` row carries.
-- In the ledger, a criterion's evidence for a round counts the mechanism rows of the scope and target that an
-  installed curation sedimented for it before that round, from the drills its verdicts name (every drill when none
-  is named).
+- In the criterion ledger (`ledger`), a criterion's evidence for a round counts the mechanism rows of the scope and
+  target that an installed curation sedimented for it before that round, from the drills its verdicts name (every
+  drill when none is named).
 - A criterion is `never_failed` when judged and never failed, `not_exercised` when never judged pass or fail,
   `still_failing` when its last judged round failed or was mixed, and otherwise `held_since_round_N`, where round N
   starts its final run of passing rounds.
@@ -47,10 +52,12 @@ round marked `partial`. Paths are relative to the run directory; `export_record`
 the reader; a run from before the command line was stored gets one rebuilt from its settings (see `_command`).
 
 Keys beyond the agreed schema (`run.steps`, `run.warnings`, `run.suite`, `run.reproduce`, `unlinked_deliverables`,
-`node_requirements`, `value` (the verdict of `experimental.simulation.value`), each change's `attached` and `paths`,
-each mechanism row's `scope`, `count` and `intervention`, and the like) are additive. Cost comes from
-`suite-summary.json` when the suite wrote one, else from the audit spans under `<state_root>/<run name>/traces/logs`
-or the copy in the run's own `traces/`, else it is null.
+`node_requirements`, `value` (the verdict of `experimental.simulation.value`), `requirements_ledger` (the loop's own
+ledger as `experimental.iteration.records.load` joins it: `rows`, `summary` and `holdout`, or null when the record
+could not be joined), each requirement's `id`, `situation`, `repeats`, `grounds`, `cases` and `held`, each change's
+`treatment`, `addresses`, `attached` and `paths`, each mechanism row's `scope`, `count` and `intervention`, and the
+like) are additive. Cost comes from `suite-summary.json` when the suite wrote one, else from the audit spans under
+`<state_root>/<run name>/traces/logs` or the copy in the run's own `traces/`, else it is null.
 
 The transcript's labels are English; a scenario may override any of them in a `record.md` beside its
 `scenario.json`, one `- key: label` line per label.
@@ -73,13 +80,14 @@ from ..analyst.activity import cut as _cut
 from ..analyst.activity import dicts as _dicts
 from ..analyst.activity import scope_of as _scope
 from ..analyst.activity import scoped as _scoped
+from ..automation.channel import seen
+from ..automation.employee import AREA, REPLICAS
+from ..automation.isolation import RESULT as ISOLATION
 from ..curator.raven_adapter.targets import catalogue
 from ..iteration import records
+from ..research.package import digest
 from .agency import REFERENCES
 from .attribution import RESULT as ATTRIBUTION
-from .channel import seen
-from .employee import REPLICAS
-from .isolation import RESULT as ISOLATION
 from .scenario import BUNDLED
 from .value import judge
 
@@ -112,15 +120,9 @@ PUBLIC = frozenset({"raven_commit"})
 NEVER_COPIED = frozenset({"config.json", "config.migrations.json", "credentials", ".lock"})
 TEXT_SUFFIXES = frozenset({".md", ".txt", ".json", ".csv", ".html", ".htm", ".yaml", ".yml", ".jsonl"})
 FACETS = ("memory", "planning", "capability", "action")
-MARKER = re.compile(
-    r"(?<![A-Za-z0-9])([SGB])(\d{1,2})(?:\.(\d{1,2}))?"
-    r"(?:\s*(?:to|-|\u2013|\u2014|~)\s*([SGB])?(\d{1,2})(?:\.(\d{1,2}))?)?(?![A-Za-z0-9])"
-)
-QUOTE = re.compile(r"\"([^\"]{12,})\"|\u201c([^\u201d]{12,})\u201d|\u300c([^\u300d]{8,})\u300d")
-HEX = re.compile(r"[0-9a-f]{8,32}")
+CHECK, CASE = "check:", "case:"
 TURN_FIELD = re.compile(r'"turn_id":\s*(?:null|"([^"]*)")')
 CHAT_ID = re.compile(r"Chat ID:\s*([^\s:]+):[0-9A-Za-z]{6,}")
-SESSION_WORDS = "conversation|drill|session|dialog|dialogue|chat|trial|card"
 LABELS = {
     "title": "Cultivation record",
     "inputs": "Inputs",
@@ -139,6 +141,7 @@ LABELS = {
     "curation": "Curator reply and harness changes",
     "mechanism": "Mechanism at work",
     "ledger": "Knowledge-sedimentation ledger",
+    "requirements_ledger": "Requirements ledger",
     "cost": "Cost and reproduction",
     "value": "Value verdict",
     "customer": "Customer",
@@ -172,63 +175,6 @@ def facet(target: str) -> str:
     if head == "prompt":
         return "memory"
     return head if head in FACETS else "other"
-
-
-def markers(text) -> set[str]:
-    """SOP section markers cited in `text`, with ranges expanded."""
-    found = set()
-    for letter, major, minor, letter2, major2, minor2 in MARKER.findall(str(text or "")):
-        found.add(f"{letter}{major}" + (f".{minor}" if minor else ""))
-        if not major2:
-            continue
-        end = f"{letter2 or letter}{major2}" + (f".{minor2}" if minor2 else "")
-        if (letter2 or letter) != letter:
-            found.add(end)
-        elif minor and minor2 and major == major2:
-            found.update(f"{letter}{major}.{n}" for n in range(int(minor), min(int(minor2), int(minor) + 50) + 1))
-        elif not minor and not minor2:
-            found.update(f"{letter}{n}" for n in range(int(major), min(int(major2), int(major) + 50) + 1))
-        else:
-            found.add(end)
-    return found
-
-
-def _marker_match(left: set[str], right: set[str]) -> bool:
-    return any(a == b or b.startswith(a + ".") or a.startswith(b + ".") for a in left for b in right)
-
-
-def _names(text: str, name: str) -> bool:
-    return bool(name) and re.search(rf"(?<![A-Za-z0-9_-]){re.escape(name)}(?![A-Za-z0-9_-])", text) is not None
-
-
-def _cites(text: str, session: str, turns) -> bool:
-    """Whether a requirement's text cites a drill session (see the module docstring)."""
-    tokens = HEX.findall(text)
-    if any(turn and any(turn.startswith(token) for token in tokens) for turn in turns):
-        return True
-    name = re.escape(session)
-    free = r"(?![A-Za-z0-9_-])"
-    patterns = (
-        rf"\[{name}\]",
-        rf"`{name}`",
-        rf"[\"']{name}[\"']",
-        rf"(?<![A-Za-z0-9_-]){name}(?:'s)?\s+(?i:{SESSION_WORDS})",
-        rf"(?i:{SESSION_WORDS})\s+[`'\"]?{name}{free}",
-        rf"(?<![A-Za-z0-9_-]){name}\s?(?=[^\x00-\x7f])",
-        rf"(?<=[^\x00-\x7f])\s?{name}{free}",
-    )
-    return any(re.search(pattern, text) for pattern in patterns)
-
-
-def _quotes(text: str) -> list[str]:
-    return [" ".join(next(part for part in match if part).split()) for match in QUOTE.findall(text or "")]
-
-
-def _shares_quote(text: str, other: str) -> bool:
-    flat_text, flat_other = " ".join((text or "").split()), " ".join((other or "").split())
-    return any(quote[:30] in flat_other for quote in _quotes(text)) or any(
-        quote[:30] in flat_text for quote in _quotes(other)
-    )
 
 
 def _json(path: Path):
@@ -278,6 +224,12 @@ def _unique(values) -> list:
     return list(dict.fromkeys(values))
 
 
+def _grounded(grounds, kind: str) -> list[str]:
+    """The ids a requirement's `grounds` name as `kind`: `check:` for criteria, `case:` for cases."""
+    grounds = grounds if isinstance(grounds, list | tuple) else []
+    return _unique(str(ground).removeprefix(kind) for ground in grounds if str(ground).startswith(kind))
+
+
 def _inside(path: Path, root: Path) -> Path | None:
     """`path` resolved, when it is an existing file inside `root`; nothing outside the run is ever read."""
     try:
@@ -296,6 +248,8 @@ def _local(path, root: Path) -> Path | None:
     parts = raw.parts
     if "home" in parts:
         start = len(parts) - 1 - parts[::-1].index("home")
+        if start >= 1 and parts[start - 1] == AREA:
+            start -= 1
         if start >= 2 and parts[start - 2] == REPLICAS:
             start -= 2
         candidates.append(root.joinpath(*parts[start:]))
@@ -347,11 +301,31 @@ def _joined(path: Path) -> dict:
         return run
 
 
-def _scenario(scenario_dir, settings: dict) -> dict:
-    """The scenario's files as plain data; a missing or older scenario leaves its parts empty."""
-    root = Path(scenario_dir) if scenario_dir else BUNDLED / str(settings.get("scenario") or DEFAULT_SCENARIO)
+def _history(run: dict) -> dict[int, dict]:
+    """The run's typed history (`experimental.iteration.history`) by round, 0 being onboarding."""
+    return {entry["round"]: entry for entry in _dicts(run.get("history")) if isinstance(entry.get("round"), int)}
+
+
+def _scenario_root(scenario_dir, settings: dict) -> Path:
+    """The run's own scenario directory: the one given, else the one the run recorded, else the `--scenario` of its
+    command line, else the bundled scenario it names. One that cannot be found, or whose files changed since the run,
+    fails: another scenario's files read in its place would describe a run that never happened."""
+    argv = settings.get("argv") or []
+    given = argv[argv.index("--scenario") + 1] if "--scenario" in argv[:-1] else None
+    named = str(settings.get("scenario") or DEFAULT_SCENARIO)
+    candidates = [scenario_dir, settings.get("scenario_dir"), given]
+    root = next((Path(path) for path in candidates if path and Path(path).is_dir()), BUNDLED / named)
     if not root.is_dir():
-        root = BUNDLED / DEFAULT_SCENARIO
+        raise FileNotFoundError(f"the run's scenario {named} is not at {root}; give its directory")
+    recorded = settings.get("scenario_digest")
+    if recorded and recorded != digest(root):
+        raise ValueError(f"the scenario at {root} changed since the run; give the directory the run used")
+    return root
+
+
+def _scenario(scenario_dir, settings: dict) -> dict:
+    """The scenario's files as plain data; an older scenario without some of them leaves those parts empty."""
+    root = _scenario_root(scenario_dir, settings)
     spec = _json(root / "scenario.json")
     spec = spec if isinstance(spec, dict) else {}
     without = set(settings.get("without") or ())
@@ -389,16 +363,6 @@ def _labels(scenario: dict) -> dict:
         if match and match.group(1) in labels:
             labels[match.group(1)] = match.group(2)
     return labels
-
-
-def _document(path: Path) -> str:
-    try:
-        text = Path(path).read_text()
-    except OSError:
-        return ""
-    if text.startswith("---"):
-        text = text.split("---", 2)[-1]
-    return text.strip()
 
 
 # Curations
@@ -592,12 +556,56 @@ def _curation_sources(run: dict, root: Path) -> list[tuple[int | None, dict]]:
     )
 
 
-def _curations(run: dict, root: Path) -> list[dict]:
+def _revision(
+    entry: dict | None, scope: str = "root", reading: dict | None = None
+) -> tuple[dict[str, list[str]], dict[str, list[str]]]:
+    """What each change of a typed history entry's revision in `scope` addresses, by target, and the criteria each
+    requirement the entry raised is grounded on, or else the rules a reading of it names, by id."""
+    if entry is None:
+        return {}, {}
+    addresses = {
+        str(change.get("target", "")): [str(address) for address in change.get("addresses") or []]
+        for change in _dicts(entry.get("revision"))
+        if _scope(change.get("scope")) == scope
+    }
+    checks = {
+        str(raised.get("id", "")): _grounded(raised.get("grounds"), CHECK)
+        or [str(rule) for rule in (reading or {}).get(str(raised.get("id", "")), ())]
+        for raised in _dicts(entry.get("requirements"))
+    }
+    return addresses, checks
+
+
+def _change(change: dict, paths: dict, addresses: dict, checks: dict) -> dict:
+    """One change of a curation's plan, attached to the criteria of the requirements it addresses."""
+    target = str(change.get("target", ""))
+    addressed = addresses.get(target, [])
+    criteria = _unique(criterion for address in addressed for criterion in checks.get(address, ()))
+    return {
+        "target": target,
+        "facet": facet(target),
+        "treatment": change.get("treatment"),
+        "reason": change.get("reason", ""),
+        "expected": change.get("expected", ""),
+        "verification": change.get("verification", ""),
+        "paths": paths.get(target, []),
+        "addresses": addressed,
+        "attached": [{"criterion": criterion, "link": "addresses"} for criterion in criteria],
+    }
+
+
+def _curations(run: dict, root: Path, history: dict[int, dict], reading: dict | None = None) -> list[dict]:
+    """Every curation in install order; only an installed curation a round's record names, the root's or a child's
+    installed with it, is the revision of that round's typed history entry in its scope, so only its changes take
+    links from it (see the module docstring)."""
     states: dict[str, tuple[dict, dict]] = {}
     out = []
     for number, data in _curation_sources(run, root):
         scope = _scope(data.get("scope"))
         outcome, error = _outcome(data)
+        joined = data.get("joined", "by record")
+        in_history = (outcome, joined) == ("installed", "by record")
+        addresses, checks = _revision(history.get(number) if in_history else None, scope, reading)
         plan, source = _plan(data)
         artifact = _candidate(data)
         entries, paths = [], {}
@@ -619,24 +627,14 @@ def _curations(run: dict, root: Path) -> list[dict]:
                 "scope": scope,
                 "understanding": plan.get("understanding", ""),
                 "design": plan.get("design", ""),
-                "changes": [
-                    {
-                        "target": str(change.get("target", "")),
-                        "facet": facet(str(change.get("target", ""))),
-                        "reason": change.get("reason", ""),
-                        "expected": change.get("expected", ""),
-                        "verification": change.get("verification", ""),
-                        "paths": paths.get(str(change.get("target", "")), []),
-                    }
-                    for change in _dicts(plan.get("changes"))
-                ],
+                "changes": [_change(change, paths, addresses, checks) for change in _dicts(plan.get("changes"))],
                 "artifact_diff": entries,
                 "outcome": outcome,
                 "error": error,
                 "plan_source": source,
                 "validation": {"errors": validation.get("errors") or [], "bound": bound},
                 "active_artifact": data.get("active_artifact_id"),
-                "joined": data.get("joined", "by record"),
+                "joined": joined,
             }
         )
     return out
@@ -647,7 +645,7 @@ def _curations(run: dict, root: Path) -> list[dict]:
 
 def _generations(root: Path) -> list[Path]:
     """The observation files of every Harness generation, the employee's and its replicas', oldest first."""
-    found = [*root.glob("*/observations.jsonl"), *root.glob(f"{REPLICAS}/*/*/observations.jsonl")]
+    found = [*root.glob(f"{AREA}/*/observations.jsonl"), *root.glob(f"{REPLICAS}/*/{AREA}/*/observations.jsonl")]
     return sorted(found, key=lambda path: path.stat().st_mtime)
 
 
@@ -721,8 +719,9 @@ def _playbooks(rows, root: Path) -> list[dict]:
 def _mechanism(rows, session: str, turn: int) -> list[dict]:
     groups: dict[tuple, dict] = {}
     tools: dict = {}
+    controls: set = set()
     for scope, row in _scoped(rows):
-        found = _classify(row, tools)
+        found = _classify(row, tools, controls)
         if found is None:
             continue
         kind, target, decision, summary = found
@@ -819,50 +818,26 @@ def _evaluation(item: dict, severity: dict) -> dict:
     }
 
 
-def _requirement_text(requirement: dict) -> str:
-    evidence = requirement.get("evidence") or []
-    parts = [requirement.get("behavior"), requirement.get("observed"), requirement.get("acceptance")]
-    return "\n".join(str(part) for part in [*parts, *(evidence if isinstance(evidence, list) else [evidence])] if part)
-
-
-def link(requirement: dict, criteria: list[str], items: list[dict], turns: dict[str, list[str]]) -> tuple[list, str]:
-    """The criteria a requirement concerns and how that was established (see the module docstring)."""
-    text = _requirement_text(requirement)
-    named = [criterion for criterion in criteria if _names(text, criterion)]
-    if named:
-        return named, "explicit"
-    cited = {session for session, ids in turns.items() if _cites(text, session, ids)}
-    failing = [item for item in items if item.get("result") == "fail" and item.get("session") in cited]
-    ids = _unique(item["criterion"] for item in failing)
-    if len(ids) > 1:
-        quoted = [
-            criterion
-            for criterion in ids
-            if any(
-                _shares_quote(text, f"{item.get('actual', '')} {item.get('note', '')}")
-                for item in failing
-                if item["criterion"] == criterion
-            )
-        ]
-        ids = quoted or ids
-    return (ids, "inferred") if ids else ([], "none")
-
-
-def _analysis(item: dict, criteria: list[str], items: list[dict], turns: dict) -> dict:
+def _analysis(item: dict, entry: dict | None, reading: dict | None = None) -> dict:
+    """The round's feedback, each requirement linked through its grounds, or else through the rules a reading of it
+    names (`experimental.simulation.attribution`), and carrying whether it held as the round's typed history `entry`
+    records it."""
     feedback = item.get("feedback") if isinstance(item.get("feedback"), dict) else {}
     error = next((str(data["error"]) for data in _dicts(item.get("analysis")) if data.get("error")), None)
+    judged = _dicts((entry or {}).get("requirements"))
     requirements = []
-    stated = next(
-        (data["requirement_criteria"] for data in _dicts(item.get("analysis")) if "requirement_criteria" in data), None
-    )
     for index, requirement in enumerate(_dicts(feedback.get("requirements"))):
-        if isinstance(stated, list) and index < len(stated) and stated[index]:
-            linked, how = list(stated[index]), "owner"
-        else:
-            linked, how = link(requirement, criteria, items, turns)
+        # The typed history keeps the round's requirements in the feedback's order.
+        raised = judged[index] if index < len(judged) and judged[index].get("id") == requirement.get("id") else {}
+        grounds = requirement.get("grounds")
+        grounds = [str(ground) for ground in grounds] if isinstance(grounds, list | tuple) else []
+        criteria = _grounded(grounds, CHECK)
+        read = [] if criteria else [str(rule) for rule in (reading or {}).get(str(requirement.get("id", "")), ())]
         evidence = requirement.get("evidence") or []
         requirements.append(
             {
+                "id": requirement.get("id", ""),
+                "situation": requirement.get("situation", ""),
                 "behavior": requirement.get("behavior", ""),
                 "observed": requirement.get("observed", ""),
                 "evidence": list(evidence) if isinstance(evidence, list | tuple) else [str(evidence)],
@@ -870,8 +845,12 @@ def _analysis(item: dict, criteria: list[str], items: list[dict], turns: dict) -
                 "expectation": requirement.get("expectation"),
                 "strength": requirement.get("strength"),
                 "recurrence": requirement.get("recurrence"),
-                "criteria": linked,
-                "link": how,
+                "repeats": requirement.get("repeats"),
+                "grounds": grounds,
+                "criteria": criteria or read,
+                "cases": _grounded(grounds, CASE),
+                "link": "grounds" if criteria else "reading" if read else "none",
+                "held": raised.get("held"),
             }
         )
     waiting = sorted(
@@ -911,7 +890,9 @@ def _turn_ids(item: dict) -> dict[str, list[str]]:
     return turns
 
 
-def _rounds(run: dict, root: Path, scenario: dict, criteria: list[str], severity: dict) -> list[dict]:
+def _rounds(
+    run: dict, root: Path, scenario: dict, severity: dict, history: dict[int, dict], reading: dict | None = None
+) -> list[dict]:
     """Recorded rounds; each drill carries the card values it drew and the figures and deck facts computed for it, the
     k-th judging of a drill in `references.jsonl` belonging to round k."""
     cards = {path.stem for path in scenario["cards"]}
@@ -936,7 +917,7 @@ def _rounds(run: dict, root: Path, scenario: dict, criteria: list[str], severity
                 "partial": False,
                 "drills": drills,
                 "evaluation": evaluation,
-                "analysis": _analysis(item, criteria, evaluation["items"], _turn_ids(item)),
+                "analysis": _analysis(item, history.get(number), reading),
                 "mechanism_evidence": evidence,
                 "curation": following[0] if following else None,
             }
@@ -1054,15 +1035,20 @@ def _skills(item: dict) -> set[str]:
     return names
 
 
-def _material_of(path) -> str:
-    """The material an uploaded file belongs to: its folder, `uploads/<material>/<file>`."""
-    return Path(str(path)).parent.name
+def _handed(signals) -> set[str]:
+    """The names of the materials `signals` hand over (`experimental.iteration.protocols.Handover`)."""
+    return {
+        str(handover["name"])
+        for signal in _dicts(signals)
+        for handover in _dicts(signal.get("attachments"))
+        if handover.get("name")
+    }
 
 
 def _materials(scenario: dict, run: dict, settings: dict, root: Path) -> list[dict]:
-    """Each scenario material with its hash and when the owner gave it (see `given`)."""
+    """Each scenario material with its hash and when the owner gave it (see the module docstring)."""
     rounds = _dicts(run.get("rounds"))
-    opening = {_material_of(path) for signal in _dicts(run.get("opening")) for path in signal.get("attachments") or []}
+    opening = _handed(run.get("opening"))
     if settings.get("disclose") == "all":
         opening |= set(scenario["materials"])
     elif settings.get("disclose") == "staged":
@@ -1071,13 +1057,11 @@ def _materials(scenario: dict, run: dict, settings: dict, root: Path) -> list[di
         opening = _skills(rounds[0])
     handed: dict[str, int] = {}
     for number, item in enumerate(rounds, start=1):
-        remark = "\n".join(str(signal.get("text") or "") for signal in _dicts(item.get("signals")))
-        later = _skills(rounds[number]) if number < len(rounds) else set()
-        for name, folder in scenario["materials"].items():
-            head = _document(folder / "SKILL.md")[:160]
-            if name not in opening and name not in handed and ((head and head in remark) or name in later):
+        arrived = _handed(item.get("signals")) | (_skills(rounds[number]) if number < len(rounds) else set())
+        for name in scenario["materials"]:
+            if name not in opening and name not in handed and name in arrived:
                 handed[name] = number
-    home = root / "home"
+    home = root / AREA / "home"
     out = []
     for name, folder in scenario["materials"].items():
         present = (home / "skills" / name).is_dir() or (home / "uploads" / name).is_dir()
@@ -1115,7 +1099,7 @@ def _inputs(scenario: dict, run: dict, settings: dict, root: Path, played: set[s
 def _revisions(root: Path, curations: list[dict], rounds: list[dict]) -> list[str]:
     """Artifact ids in install order: the hired baseline (as its package prefix when only that is known) first."""
     bound = []
-    for path in sorted(root.glob("*/observations.jsonl"), key=lambda path: path.stat().st_mtime):
+    for path in sorted(root.glob(f"{AREA}/*/observations.jsonl"), key=lambda path: path.stat().st_mtime):
         for row in _jsonl(path):
             if row.get("kind") == "runtime.bound" and row.get("package"):
                 bound.append(Path(str(row["package"])).name.removeprefix("_curator_"))
@@ -1216,20 +1200,17 @@ def placed(argv, values: dict[str, str]) -> list[str]:
 def _command(settings: dict) -> str | None:
     """The simulation command that reproduces this run's setup; configuration, homes and folders are the reader's own.
 
-    A run that stored its command line (`argv`) gets it back, with its seed and analysis added when it left them to
-    the draw or the default: a later default must not change what the command reproduces. An older run's command is
-    rebuilt from its settings as far as they go: a run with no `analysis` setting predates it and ran the owner's own
-    analysis, a partition is given as `--partition`, and a model is named only where it differs from the one its role
+    A run that stored its command line (`argv`) gets it back, with its seed added when it left it to the draw: a later
+    default must not change what the command reproduces. An older run's command is rebuilt from its settings as far as
+    they go: a partition is given as `--partition`, and a model is named only where it differs from the one its role
     falls back to.
     """
     if not settings:
         return None
     if isinstance(settings.get("argv"), list):
         argv = placed(settings["argv"], PLACEHOLDERS)
-        for option, key in (("--seed", "seed"), ("--analysis", "analysis")):
-            given = any(token == option or token.startswith(f"{option}=") for token in argv)
-            if not given and settings.get(key) is not None:
-                argv += [option, str(settings[key])]
+        if not any(arg == "--seed" or arg.startswith("--seed=") for arg in argv) and settings.get("seed") is not None:
+            argv += ["--seed", str(settings["seed"])]
         return shlex.join([*COMMAND, *argv])
     argv = [
         *COMMAND,
@@ -1246,7 +1227,6 @@ def _command(settings: dict) -> str | None:
         argv += [
             flag for key in ("deliver", "disclose") if settings.get(key) for flag in (f"--{key}", str(settings[key]))
         ]
-    argv += ["--analysis", str(settings.get("analysis") or "owner")]
     for key in ("rounds", "turns", "repeats"):
         if settings.get(key) is not None:
             argv += [f"--{key}", str(settings[key])]
@@ -1282,29 +1262,6 @@ def _command(settings: dict) -> str | None:
 
 
 # Ledger
-
-
-def _attach(curations: list[dict], rounds: dict[int, dict], criteria: list[str], rules: dict) -> None:
-    """Attach each curation change to criteria in place (see the module docstring), recording how."""
-    for curation in curations:
-        item = rounds.get(curation["round"]) if curation["round"] else None
-        pool = _unique(
-            criterion
-            for requirement in (item["analysis"]["requirements"] if item else [])
-            for criterion in requirement["criteria"]
-        )
-        for change in curation["changes"]:
-            cited = markers(change["reason"])
-            named = [criterion for criterion in criteria if _names(str(change["reason"]), criterion)]
-            marked = [
-                criterion for criterion in criteria if cited and _marker_match(cited, markers(rules.get(criterion, "")))
-            ]
-            if pool:
-                chosen = [criterion for criterion in pool if criterion in named or criterion in marked]
-                attached = [(c, "named" if c in named else "marker") for c in chosen] or [(c, "round") for c in pool]
-            else:
-                attached = [(c, "named") for c in named] + [(c, "marker") for c in marked if c not in named]
-            change["attached"] = [{"criterion": criterion, "link": how} for criterion, how in attached]
 
 
 def _verdict(passes: int, fails: int) -> str:
@@ -1443,15 +1400,17 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     settings = settings if isinstance(settings, dict) else {}
     scenario = _scenario(scenario_dir, settings)
     run = _joined(path)
+    history = _history(run)
+    attribution = _json(root / ATTRIBUTION)
+    reading = (attribution.get("requirements") if isinstance(attribution, dict) else None) or {}
     criteria = _criteria(scenario, run)
-    ids = [row["id"] for row in criteria]
     severity = {row["id"]: row["severity"] for row in criteria}
-    rounds = _rounds(run, root, scenario, ids, severity)
+    rounds = _rounds(run, root, scenario, severity, history, reading)
     recorded = {turn for item in _dicts(run.get("rounds")) for turns in _turn_ids(item).values() for turn in turns}
     partial = _partial_round(len(rounds) + 1, _unrecorded(root, recorded), root, scenario)
     if partial:
         rounds.append(partial)
-    curations = _curations(run, root)
+    curations = _curations(run, root, history, reading)
     for item in rounds:
         if item["curation"] is None:
             item["curation"] = next(
@@ -1461,7 +1420,6 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     for item in rounds:
         if item["partial"] and item["revision"]:
             item["revision"] = next((full for full in revisions if full.startswith(item["revision"])), item["revision"])
-    _attach(curations, {item["number"]: item for item in rounds}, ids, {row["id"]: row["check"] for row in criteria})
     played = {drill["card"] for item in rounds for drill in item["drills"]}
     started, updated = _times(root, path, settings)
     unknown = sorted({row["id"] for row in criteria} - {row["id"] for row in scenario["criteria"]})
@@ -1517,6 +1475,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
         "curations": curations,
         "rounds": rounds,
         "ledger": ledger(criteria, rounds, curations),
+        "requirements_ledger": run.get("ledger"),
         "unlinked_deliverables": [
             _delivered(file, root)
             for file in kept
@@ -1525,7 +1484,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
         "node_requirements": _node_requirements(root),
         "cost": _cost(root, state_root),
         "isolation": _json(root / ISOLATION),
-        "attribution": _json(root / ATTRIBUTION),
+        "attribution": attribution,
     }
     record["value"] = judge(record)
     return redact(record), {"root": root, "scenario": scenario, "labels": _labels(scenario)}
@@ -1533,7 +1492,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
 
 def _node_requirements(root: Path) -> list[dict]:
     out = []
-    for file in sorted((root / "home" / "playbooks").glob("*/nodes/*/requirements.json")):
+    for file in sorted((root / AREA / "home" / "playbooks").glob("*/nodes/*/requirements.json")):
         data = _json(file)
         out.append(
             {
@@ -1691,6 +1650,10 @@ def _label(revisions: list[str], artifact) -> str:
     return f"v{index} (`{str(artifact)[:12]}`)" if index is not None else f"`{str(artifact)[:12]}`"
 
 
+def _held(value) -> str:
+    return {True: "yes", False: "no"}.get(value, "not judged")
+
+
 def _inputs_md(record: dict, labels: dict) -> list[str]:
     inputs, run = record["inputs"], record["run"]
     lines = [f"## {labels['inputs']}", "", f"### {labels['profile']}", "", _quote(inputs["profile"]), ""]
@@ -1732,14 +1695,16 @@ def _curation_md(curation: dict) -> list[str]:
         lines += ["Design:", "", _quote(curation["design"]), ""]
     if curation["changes"]:
         lines += _table(
-            ["Target", "Facet", "Reason", "Expected", "Criteria"],
+            ["Target", "Facet", "Treatment", "Reason", "Expected", "Addresses", "Criteria"],
             [
                 [
                     c["target"],
                     c["facet"],
+                    c["treatment"] or "",
                     c["reason"],
                     c["expected"],
-                    ", ".join(f"{a['criterion']} ({a['link']})" for a in c.get("attached", [])),
+                    ", ".join(c["addresses"]),
+                    ", ".join(a["criterion"] for a in c["attached"]),
                 ]
                 for c in curation["changes"]
             ],
@@ -1839,13 +1804,19 @@ def _analysis_md(item: dict, labels: dict) -> list[str]:
     if analysis["decision"]:
         lines += [f"Decision: **{analysis['decision']}**", "", _quote(analysis["reason"]), ""]
     for index, requirement in enumerate(analysis["requirements"]):
+        name = f"`{requirement['id']}` " if requirement["id"] else ""
+        repeats = f", repeats `{requirement['repeats']}`" if requirement["repeats"] else ""
+        grounds = ", ".join(requirement["grounds"]) or "none"
         criteria = ", ".join(requirement["criteria"]) or "none"
-        lines += [f"{index}. **{requirement['behavior']}**", ""]
+        lines += [f"{index}. {name}**{requirement['behavior']}**", ""]
+        if requirement["situation"]:
+            lines += [f"   - Situation: {requirement['situation']}"]
         lines += [f"   - Observed: {requirement['observed']}"]
         lines += [f"   - Evidence: {evidence}" for evidence in requirement["evidence"]]
         lines += [f"   - Acceptance: {requirement['acceptance']}"]
         lines += [
-            f"   - Strength {requirement['strength']}, recurrence {requirement['recurrence']}; criteria {criteria} ({requirement['link']})",
+            f"   - Strength {requirement['strength']}, recurrence {requirement['recurrence']}{repeats}; grounds "
+            f"{grounds}; criteria {criteria} ({requirement['link']}); held {_held(requirement['held'])}",
             "",
         ]
     if analysis["task_updates"]:
@@ -1918,6 +1889,59 @@ def _ledger_md(record: dict, labels: dict) -> list[str]:
                     ", ".join(f"{key} x{count}" for key, count in moment["evidence"].items()),
                 ]
                 for moment in entry["timeline"]
+            ],
+        )
+    return lines
+
+
+def _requirements_md(record: dict, labels: dict) -> list[str]:
+    """The loop's own ledger: per requirement raised, the Curator's diagnosis of it, the changes that addressed it
+    with their treatment, and whether it held in the round after."""
+    ledger = record.get("requirements_ledger")
+    lines = [f"## {labels['requirements_ledger']}", ""]
+    if ledger is None:
+        return lines + ["The run's records could not be joined, so the loop's ledger is missing.", ""]
+    if not ledger["rows"]:
+        lines += ["The run's typed history holds no requirement.", ""]
+    else:
+        lines += _table(
+            ["Round", "Requirement", "Strength", "Repeats", "Diagnosis", "Changes", "Held"],
+            [
+                [
+                    row["round"],
+                    row["requirement"],
+                    row["strength"],
+                    row["repeats"] or "",
+                    row["state"] or "not diagnosed",
+                    "; ".join(f"{c['target']} ({c['treatment'] or 'no treatment'})" for c in row["changes"])
+                    or ("none addressed it" if row["curated"] else "not curated"),
+                    _held(row["held"]),
+                ]
+                for row in ledger["rows"]
+            ],
+        )
+    if ledger["summary"]:
+        lines += ["Judged requirements by attributor, diagnosis and treatment:", ""]
+        lines += _table(
+            ["Attributor", "Diagnosis", "Treatment", "Judged", "Held"],
+            [
+                [
+                    group["attributor"] or "",
+                    group["state"] or "not diagnosed",
+                    group["treatment"] or "none",
+                    group["judged"],
+                    group["held"],
+                ]
+                for group in ledger["summary"]
+            ],
+        )
+    if ledger["holdout"]:
+        lines += ["Held-out assessments, which no role saw:", ""]
+        lines += _table(
+            ["Round", "Assessor", "Satisfied", "Items", "Passed", "Failed"],
+            [
+                [row["round"], row["source"], row["satisfied"], row["items"], row["passed"], row["failed"]]
+                for row in ledger["holdout"]
             ],
         )
     return lines
@@ -2003,7 +2027,7 @@ def _value_md(record: dict, labels: dict) -> list[str]:
 
 
 def transcript(record: dict, labels: dict | None = None) -> str:
-    """The record as Markdown, readable without the page: inputs, onboarding, each round, the ledger and the cost."""
+    """The record as Markdown, readable without the page: inputs, onboarding, each round, both ledgers and the cost."""
     labels = {**LABELS, **(labels or {})}
     run = record["run"]
     lines = [f"# {labels['title']}: {run['name']}", ""]
@@ -2046,7 +2070,8 @@ def transcript(record: dict, labels: dict | None = None) -> str:
         lines += ["## Curations not joined to a round", ""]
         for curation in unplaced:
             lines += _curation_md(curation)
-    lines += _ledger_md(record, labels) + _value_md(record, labels) + _cost_md(record, labels)
+    lines += _ledger_md(record, labels) + _requirements_md(record, labels)
+    lines += _value_md(record, labels) + _cost_md(record, labels)
     return "\n".join(lines).rstrip() + "\n"
 
 

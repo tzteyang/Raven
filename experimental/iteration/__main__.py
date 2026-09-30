@@ -9,14 +9,15 @@ from raven.config.raven import load_raven_config
 from raven.core.config_stack import load_runtime_config
 from raven.providers.factory import make_lazy_provider
 
+from ..assessor.human import DONE, Human
 from ..curator.generation.run import GenerationError
 from ..curator.harness import Task
 from ..curator.raven_adapter.inspection import Baseline
 from ..curator.raven_adapter.worker import Worker, WorkerError
 from .conversation import Conversation
 from .exchange import ExchangeError
-from .human import DONE, Human
-from .run import Limits, run
+from .run import run
+from .session import Limits
 
 
 async def main(args):

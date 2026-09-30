@@ -7,20 +7,34 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
+from ..attribution import AttributionInterruptedError
 from ..generation.run import Generated, GenerationError, GenerationInterruptedError, GenerationPausedError
 from ..harness import Validation
 from ..raven_adapter.deployment import child_directory
 from ..raven_adapter.inspection import Inspection, file_source, fingerprint
-from ..raven_adapter.materialize import _write, extend_artifact
+from ..raven_adapter.materialize import _write
 from ..raven_adapter.observe import plain
-from ..workflow import CANDIDATE, PENDING, propose
-from .context import merge_sources
+from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, propose
+from ..workflow import attribute as attribute_local
+from .context import child_observations, execution_turns, merge_sources
 from .requirements import feedback_for
 from .state import Progress
 
 
 def _save(path, state):
     _write(path, state.model_dump_json(indent=2).encode())
+
+
+SCOPE = "attribution-scope"
+
+
+def _surface_attributions(scope_root, worker_root):
+    """Copy every attribution record a scope wrote, however that attribution ended, next to the worker's own under
+    the same name: the loop reads a round's attributions there."""
+    for source in sorted((Path(scope_root) / ATTRIBUTION).glob("*.json")):
+        target = Path(worker_root) / ATTRIBUTION / source.name
+        if not target.exists():
+            _write(target, source.read_bytes())
 
 
 def _cleanup(directory):
@@ -49,47 +63,17 @@ def _groups(nodes, available):
     return groups
 
 
-async def improve(worker, provider, *, feedback, model, limits, probe, resume):
-    from ..raven_adapter.worker import Worker, WorkerError
-
-    actual_children = {name: await worker.agent_state(name) for name in worker.children}
-    inspection = await worker.inspect()
-    path = worker.root / "curation/composition.json"
-    state = Progress.model_validate_json(path.read_text()) if path.exists() else None
-    if state is not None and not resume:
-        _cleanup(state.directory)
-        state = None
-    if state is not None:
-        feedback = state.feedback if feedback is None else feedback
-        model = state.model if model is None else model
-    identity = fingerprint(
-        {
-            "baseline": inspection.declaration.baseline,
-            "children": {
-                name: Inspection.restore(actual["inspection"]).declaration.baseline
-                for name, actual in actual_children.items()
-            },
-            "feedback": feedback,
-            "model": model,
-        }
-    )
-    if state is not None and state.input_id != identity:
-        raise ValueError(
-            "composite inputs changed; the prior investigation was retained, explicitly restart to replace it"
-        )
-    state = state or Progress(
-        input_id=identity, directory=str(worker.root / "curation/scopes" / uuid4().hex), feedback=feedback, model=model
-    )
-    if state.error:
-        raise GenerationError(f"previous composite curation failed: {state.error}; explicitly restart to replace it")
-    _save(path, state)
+def _root_scope(worker, inspection, actual_children, directory):
+    """The root scope as its curation sees it: the worker's inspection with every child's view merged in (each
+    child's facts kept under `directory`), and a check that also previews the playbook nodes a candidate would run.
+    Returns the scope, its inspection and the current playbook nodes."""
     current_nodes = inspection.facts["composition"]["nodes"]
     sources = dict(inspection.sources)
     child_views = {}
     for name, actual in actual_children.items():
         viewed = Inspection.restore(actual["inspection"])
         prefix = f"child.{name}"
-        evidence = Path(state.directory) / "root" / f"{fingerprint(name)[:16]}-inspection.json"
+        evidence = Path(directory) / "root" / f"{fingerprint(name)[:16]}-inspection.json"
         if not evidence.exists():
             _write(evidence, json.dumps(actual["inspection"], ensure_ascii=False).encode())
         sources[f"{prefix}.facts"] = file_source(evidence)
@@ -124,8 +108,13 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
             return checked
         try:
             nodes = await worker.preview_nodes(candidate)
-            if set(candidate.plan.node_reasons) != set(current_nodes) | set(nodes):
-                raise ValueError("root node reasons must cover current, added and retired playbook nodes")
+            expected = set(current_nodes) | set(nodes)
+            provided = set(candidate.plan.node_reasons)
+            if provided != expected:
+                raise ValueError(
+                    "root node reasons must cover current, added and retired playbook nodes; "
+                    f"missing={sorted(expected - provided)}, extra={sorted(provided - expected)}"
+                )
             _groups(nodes, worker.children)
             return checked
         except ValueError as exc:
@@ -134,30 +123,119 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
     root = SimpleNamespace(
         baseline=worker.baseline,
         artifact=worker.artifact,
-        root=Path(state.directory) / "root",
+        root=Path(directory) / "root",
         last_plan=worker.last_plan,
         last_execution=worker.last_execution,
         inspect=root_inspection,
         check=root_check,
         withheld=worker.withheld,
     )
+    return root, inspection, current_nodes
+
+
+async def attribute(worker, provider, *, feedback=None, model=None, observations=None, attributor=None):
+    """Attribute the root scope's inputs as a composite curation sees them, record it beside the worker's own
+    attribution records and return it; nothing is generated. Its scope lives under the worker's curation folder, so
+    a paused attribution is continued by the next call and never touches a composite curation in progress."""
+    actual_children = {name: await worker.agent_state(name) for name in worker.children}
+    root, _, _ = _root_scope(worker, await worker.inspect(), actual_children, worker.root / "curation" / SCOPE)
+    try:
+        return await attribute_local(
+            root, provider, feedback=feedback, model=model, observations=observations, attributor=attributor
+        )
+    finally:
+        _surface_attributions(root.root, worker.root)
+
+
+async def improve(
+    worker, provider, *, feedback, model, limits, probe, resume, observations=None, attributor=None, attribution=None
+):
+    """Propose the root, then every child a root node assigns work to, then activate them once.
+
+    Each scope attributes its own inputs before generating (the root the loop's requirements and handovers, a child
+    the node requirements routed to it), each with the attributor's own budget; `attribution` supplies the root's.
+    Every scope's attribution records are copied beside the worker's own, where the loop reads a round's
+    attributions, and the curation record names the root's."""
+    from ..raven_adapter.worker import Worker, WorkerError
+
+    actual_children = {name: await worker.agent_state(name) for name in worker.children}
+    inspection = await worker.inspect()
+    path = worker.root / "curation/composition.json"
+    state = Progress.model_validate_json(path.read_text()) if path.exists() else None
+    if state is not None and not resume:
+        _cleanup(state.directory)
+        state = None
+    if state is not None:
+        feedback = state.feedback if feedback is None else feedback
+        model = state.model if model is None else model
+        observations = state.observations if observations is None else observations
+    directory = Path(state.directory) if state is not None else worker.root / "curation/scopes" / uuid4().hex
+    inputs, executions = {}, {}
+    for name, actual in actual_children.items():
+        evidence = directory / "inputs" / f"{fingerprint(name)[:16]}-execution.json"
+        captured = json.loads(evidence.read_text()) if evidence.exists() else actual["records"]
+        executions[name] = execution_turns(captured, actual["records"])
+        inputs[evidence] = captured
+        actual["records"] = captured
+    identity = fingerprint(
+        {
+            "baseline": inspection.declaration.baseline,
+            "children": {
+                name: {
+                    "baseline": Inspection.restore(actual["inspection"]).declaration.baseline,
+                    "revision": actual["revision"],
+                    "execution": fingerprint(executions[name]),
+                }
+                for name, actual in actual_children.items()
+            },
+            "feedback": feedback,
+            "observations": observations,
+            "model": model,
+        }
+    )
+    if state is not None and state.input_id != identity:
+        raise ValueError(
+            "composite inputs changed; the prior investigation was retained, explicitly restart to replace it"
+        )
+    state = state or Progress(
+        input_id=identity,
+        directory=str(directory),
+        feedback=feedback,
+        model=model,
+        observations=observations,
+    )
+    if state.error:
+        raise GenerationError(f"previous composite curation failed: {state.error}; explicitly restart to replace it")
+    for evidence, rows in inputs.items():
+        if not evidence.exists():
+            _write(evidence, json.dumps(rows, ensure_ascii=False).encode())
+    _save(path, state)
+    root, inspection, current_nodes = _root_scope(worker, inspection, actual_children, state.directory)
     record = {
         "task_id": worker.baseline.task.id,
         "feedback": feedback,
         "turn_id": worker.last_execution.turn_id if worker.last_execution else None,
     }
+    generating = "root"
     try:
         while True:
             if state.root is None or state.repair is not None:
-                result = await propose(
-                    root,
-                    provider,
-                    feedback=feedback,
-                    model=model,
-                    limits=state.limits_for("root", limits),
-                    probe=probe,
-                    repair=state.repair,
-                )
+                generating = "root"
+                try:
+                    result = await propose(
+                        root,
+                        provider,
+                        feedback=feedback,
+                        model=model,
+                        limits=state.limits_for("root", limits),
+                        probe=probe,
+                        repair=state.repair,
+                        observations=observations,
+                        **({"attributor": attributor} if attributor is not None else {}),
+                        **({"attribution": attribution} if attribution is not None else {}),
+                    )
+                finally:
+                    _surface_attributions(root.root, worker.root)
                 state.root, state.repair = result, None
                 _save(path, state)
             nodes = await worker.preview_nodes(state.root.candidate)
@@ -165,12 +243,7 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
             failure_scope = {"scope": "composition"}
             try:
                 selected = {}
-                parent_artifact = extend_artifact(worker.artifact, state.root.candidate.artifact)
-                parent_materials = {
-                    target.name: parent_artifact.values[target.name]
-                    for target in inspection.declaration.targets
-                    if target.binding in {"bootstrap_files", "skill_files"} and target.name in parent_artifact.values
-                }
+                parent_materials = await worker.preview_materials(state.root.candidate, children=tuple(groups))
                 for name, uses in groups.items():
                     child = worker.children[name]
                     actual = await worker.agent_state(name)
@@ -187,11 +260,14 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
                         },
                         "feedback": feedback_for(name, feedback),
                     }
+                    trial_evidence = child_observations(observations, name)
                     child_id = fingerprint(
                         {
                             "baseline": view.declaration.baseline,
                             "uses": uses,
                             "feedback": relevant,
+                            "observations": trial_evidence,
+                            "current_execution": fingerprint(executions[name]),
                             "materials": {
                                 key: value["digest"]
                                 for key, value in inspection.sources.items()
@@ -230,10 +306,13 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
                         },
                     )
                     validator = Worker(
-                        child.baseline, child_directory(worker.root, name), timeout=worker.timeout, **child.grants
+                        child.baseline,
+                        child_directory(worker.area, name),
+                        timeout=worker.timeout,
+                        confinement=worker.confinement,
+                        **child.grants,
                     )
                     validator.artifact = child.artifact
-                    validator._content_baseline = worker._content_baseline
 
                     async def inspect(current=local_view):
                         return current
@@ -252,21 +331,28 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
                         withheld=worker.withheld,
                     )
                     _save(path, state)
-                    result = await propose(
-                        subject,
-                        provider,
-                        feedback=relevant,
-                        model=model,
-                        limits=state.limits_for(scope, limits),
-                        observations=(
-                            {
-                                "kind": "child.execution",
-                                "revision": actual["revision"],
-                                "source": "execution.current",
-                                "record_kinds": dict(Counter(row["kind"] for row in observed)),
-                            },
-                        ),
-                    )
+                    generating = f"child/{name}"
+                    try:
+                        result = await propose(
+                            subject,
+                            provider,
+                            feedback=relevant,
+                            model=model,
+                            limits=state.limits_for(scope, limits),
+                            **({"attributor": attributor} if attributor is not None else {}),
+                            observations=(
+                                {
+                                    "kind": "child.execution",
+                                    "revision": actual["revision"],
+                                    "source": "execution.current",
+                                    "record_kinds": dict(Counter(row["kind"] for row in observed)),
+                                    "records": observed,
+                                },
+                                *trial_evidence,
+                            ),
+                        )
+                    finally:
+                        _surface_attributions(directory, worker.root)
                     state.children[name] = result
                     state.inputs[name] = child_id
                     selected[name] = result.candidate
@@ -353,8 +439,17 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
                 )
                 _save(path, state)
     except GenerationInterruptedError as exc:
-        record["paused"] = {"checkpoint": str(path), "reason": str(exc), **state.totals()}
+        record["paused"] = {
+            "stage": "diagnose" if isinstance(exc, AttributionInterruptedError) else exc.state.stage,
+            "scope": generating,
+            "checkpoint": str(path),
+            "reason": str(exc),
+            **state.totals(),
+            "attribution": state.attribution_totals(),
+        }
         _save(path, state)
+        if isinstance(exc, AttributionInterruptedError):
+            raise
         interrupted = state.paused(exc.state.stage)
         if isinstance(exc, GenerationPausedError):
             raise interrupted
@@ -364,5 +459,9 @@ async def improve(worker, provider, *, feedback, model, limits, probe, resume):
         _save(path, state)
         raise
     finally:
+        attributed = state.root.candidate.attribution if state.root is not None else None
+        if attributed is not None:
+            record["attribution"], record["attributor"] = attributed.record, attributed.identity
+        record["budget"] = {"generation": state.totals(), "attribution": state.attribution_totals()}
         record["active_artifact_id"] = worker.revision_id
         _write(worker.root / "curation" / f"{uuid4().hex}.json", json.dumps(record, ensure_ascii=False).encode())

@@ -1,6 +1,7 @@
-"""Read a scenario directory: the agency profile, its material files, traveller personas and the agency's checks."""
+"""A scenario as the simulated agency works it: the owner's profile, its material folders, the customer personas and
+the owner's checks, read through the contract loader (`experimental.scenario`), which also says each material's kind
+and who may receive what."""
 
-import json
 import random
 import shutil
 from dataclasses import dataclass, field, replace
@@ -9,9 +10,12 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .cards import Drawn, draw, split
+from ..scenario import Disclosure
+from ..scenario import Scenario as Contract
+from ..scenario import load as read_contract
+from ..scenario.contract import document, frontmatter
+from .cards import Drawn, draw
 
-SKILL_FILE = "SKILL.md"
 BUNDLED = Path(__file__).resolve().parent / "scenarios"
 
 
@@ -23,14 +27,6 @@ class Criterion(BaseModel):
     id: str = Field(min_length=1)
     check: str = Field(min_length=1)
     severity: Literal["red_line", "standard"] = "standard"
-
-
-class _Spec(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    initial: list[str] = Field(default_factory=list)
-    criteria: list[Criterion] = Field(min_length=1)
-    plans: dict[str, list[list[str]]] = Field(default_factory=dict)
 
 
 @dataclass(frozen=True)
@@ -51,7 +47,10 @@ class Scenario:
 
     `initial` is what the employee has before the first round under the staged plan; the agency hands over the rest.
     `plans` are named partitions of the materials into steps: step 0 at onboarding, step k with the review of round k.
-    `onboarding` and `handover` are the owner's words around uploaded files, each listing them at `{files}`."""
+    `onboarding` and `handover` are the owner's words around uploaded files, each listing them at `{files}`. `kinds`
+    are the materials' kinds in the contract's terms, and `contract` the loaded contract itself, whole even when
+    `without` leaves materials out. `handed` are the materials the agency may hand over, those the partner may
+    receive; the others it only holds and judges by, such as a procedure it never handed over."""
 
     root: Path
     profile: str
@@ -62,50 +61,38 @@ class Scenario:
     onboarding: str = ""
     handover: str = ""
     plans: dict[str, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
+    kinds: dict[str, str] = field(default_factory=dict)
+    contract: Contract | None = field(default=None, compare=False, repr=False)
+    handed: tuple[str, ...] = ()
 
     @classmethod
     def load(cls, root: Path) -> "Scenario":
         root = Path(root).resolve()
         if not root.is_dir():
             root = BUNDLED / root.name
-        profile = (root / "profile.md").read_text().strip()
-        if not profile:
-            raise ValueError(f"scenario profile is empty: {root}")
-        materials = {path.parent.name: path.parent for path in sorted((root / "materials").glob(f"*/{SKILL_FILE}"))}
-        personas = tuple(
-            Persona(path.stem, body, values)
-            for path in sorted((root / "personas").glob("*.md"))
-            for values, body in [split(path.read_text())]
-        )
-        if not personas:
-            raise ValueError(f"scenario has no personas: {root}")
-        spec = _Spec.model_validate(json.loads((root / "scenario.json").read_text()))
-        ids = [criterion.id for criterion in spec.criteria]
-        if len(set(ids)) != len(ids):
-            raise ValueError(f"criterion ids repeat: {sorted({i for i in ids if ids.count(i) > 1})}")
-        unknown = set(spec.initial) - materials.keys()
-        if unknown:
-            raise ValueError(f"the initial release names materials the scenario does not have: {sorted(unknown)}")
-        onboarding, handover = (
-            (root / f"{name}.md").read_text().strip() if (root / f"{name}.md").is_file() else ""
-            for name in ("onboarding", "handover")
-        )
-        plans = {}
-        for name, steps in spec.plans.items():
-            named = [material for step in steps for material in step]
-            if not steps or not steps[0] or sorted(named) != sorted(set(named)) or set(named) != materials.keys():
-                raise ValueError(f"plan {name} must give every material exactly once, starting at onboarding")
-            plans[name] = tuple(tuple(step) for step in steps)
+        return cls.of(read_contract(root))
+
+    @classmethod
+    def of(cls, read: Contract) -> "Scenario":
+        """The agency's view of a loaded contract: the materials and checks the party may receive. The agency judges
+        by checks, so a scenario without any it may read is refused."""
+        checks = [check for check in read.statements.checks if "party" in check.visibility]
+        if not checks:
+            raise ValueError(f"the scenario has no checks for the agency to judge by: {read.root}")
+        held = {name: material for name, material in read.materials.items() if "party" in material.visibility}
         return cls(
-            root,
-            profile,
-            materials,
-            personas,
-            tuple(spec.criteria),
-            tuple(spec.initial),
-            onboarding,
-            handover,
-            plans,
+            read.root,
+            read.situation.profile,
+            {name: material.path for name, material in held.items()},
+            tuple(Persona(case.id, case.text, case.values) for case in read.situation.cases),
+            tuple(Criterion(id=check.id, check=check.check, severity=check.severity) for check in checks),
+            read.exchange.initial,
+            read.exchange.onboarding,
+            read.exchange.handover,
+            dict(read.exchange.plans),
+            {name: material.kind for name, material in held.items()},
+            read,
+            tuple(name for name in read.handed if name in held),
         )
 
     def without(self, names) -> "Scenario":
@@ -117,6 +104,8 @@ class Scenario:
         return replace(
             self,
             materials={name: path for name, path in self.materials.items() if name not in names},
+            kinds={name: kind for name, kind in self.kinds.items() if name not in names},
+            handed=tuple(name for name in self.handed if name not in names),
             initial=tuple(name for name in self.initial if name not in names),
             plans={
                 plan: tuple(tuple(name for name in step if name not in names) for step in steps)
@@ -124,8 +113,30 @@ class Scenario:
             },
         )
 
+    def disclosure(self, plan="staged", rounds: int | None = None) -> Disclosure:
+        """The schedule `plan` gives over this scenario's materials (see `experimental.scenario.disclosure`)."""
+        return Disclosure.of(plan, materials=self.handed, initial=self.initial, plans=self.plans, rounds=rounds)
+
     def text(self, material: str) -> str:
-        return (self.materials[material] / SKILL_FILE).read_text()
+        """A material's own document (see `experimental.scenario.contract.document`)."""
+        return document(self.materials[material]).read_text()
+
+    def stands_behind(self, material: str) -> bool:
+        """Whether the owner holds the partner to this material: it gave it, or confirmed it after a research stage
+        induced it (`experimental.scenario.contract.Scenario.confirmed`); an unconfirmed one is handed over as a
+        candidate and judged by no one."""
+        return self.contract is None or self.contract.confirmed(material)
+
+    def standing_norms(self, names) -> dict[str, str]:
+        """The norms among `names` the evaluation side may draw criteria from, by name to text: those the owner
+        stands behind and the Analyst may read."""
+        return {
+            name: self.text(name)
+            for name in names
+            if self.kinds.get(name) == "norm"
+            and self.stands_behind(name)
+            and (self.contract is None or self.contract.visible(name, "analyst"))
+        }
 
     def release(self, names, skills: Path) -> None:
         for name in names:
@@ -138,16 +149,12 @@ class Scenario:
 
     def document(self, material: str) -> str:
         """A material as the owner's own document: its text without the skill frontmatter."""
-        text = self.text(material)
-        if text.startswith("---"):
-            text = text.split("---", 2)[2]
-        return text.strip() + "\n"
+        return frontmatter(self.text(material))[1] + "\n"
 
     def upload(self, names, uploads: Path, *, shared: Path | None = None) -> list[str]:
         """Put materials in an uploads folder the way an owner uploads files, one folder per material.
 
-        The folder holds the document as `<name>.md` and every file that ships beside it under its own name, so a
-        document that says a template is "in this folder" stays true. With `shared` (the `uploads` folder of the
+        Each complete package keeps SKILL.md, frontmatter and all nested/binary assets. With `shared` (the `uploads` folder of the
         working directory), the same folders are also put there and the returned paths are relative to the working
         directory: every drill works in its own copy of it, where those relative paths resolve, while an absolute
         path would name one drill's copy only. Otherwise they are relative to the uploads folder's parent.
@@ -159,13 +166,8 @@ class Scenario:
             for name in names:
                 folder = place / name
                 shutil.rmtree(folder, ignore_errors=True)
-                folder.mkdir(parents=True)
-                (folder / f"{name}.md").write_text(self.document(name))
-                written.append(folder / f"{name}.md")
-                for extra in sorted(self.materials[name].iterdir()):
-                    if extra.is_file() and extra.name != SKILL_FILE:
-                        shutil.copyfile(extra, folder / extra.name)
-                        written.append(folder / extra.name)
+                shutil.copytree(self.materials[name], folder, symlinks=True)
+                written.extend(path for path in sorted(folder.rglob("*")) if path.is_file())
             paths = written
         base = Path(shared if shared is not None else uploads).parent
         return [path.relative_to(base).as_posix() for path in paths]

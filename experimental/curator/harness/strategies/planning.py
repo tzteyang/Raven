@@ -1,48 +1,50 @@
-"""Planning operations implemented by generated strategies and their delegates."""
+"""Session planning semantics authored by Curator and connected through host bindings."""
 
 from abc import abstractmethod
 from typing import Protocol
 
+from ..interaction import InteractionRequest
+from ..planning import PlanningInitialization, PlanningProjection, PlanningResult
+from ..preparation import StrategyPreparation
 
-class PlanningStrategy[ViewT, ChangeT](Protocol):
-    """Own a task's planning behavior through initialization, reading and revision.
 
-    Concrete implementations define their view and change types, representation,
-    decision rules and explicit dependencies. They may delegate to an existing
-    component; callers still use one owner of the planning rules and state.
+class PlanningStrategy[ViewT, CommandT, ReplyT](StrategyPreparation, Protocol):
+    """Own task organization, domain interactions and the published plan.
 
-    A factory binds the task and its resources. An instance or its delegated
-    state can outlive a turn. This protocol neither chooses storage nor maps
-    operations to tools, prompts, skills or host callbacks.
+    Curator chooses concrete views, commands, replies and transition rules.
+    Checklists, partial plans and dependency graphs share this lifecycle.
+    Factories bind explicit resources and checkpoint state; private helpers
+    and algorithms remain implementation choices.
+
+    prepare may publish reusable procedures and child-customization requirements.
+    Runtime interactions manage this session's progress. Capability admits tools
+    and Skills, Memory assembles model input, and Action owns loop control.
+    A procedure or model-reported completion is not proof of external success.
     """
 
     @abstractmethod
-    async def initialize(self, task: str) -> ViewT:
-        """Create or resume the bound task's plan and return its current view.
+    async def initialize(self, initial: PlanningInitialization) -> PlanningProjection[ViewT]:
+        """Create or restore this session and return its current projection.
 
-        Existing progress survives repeated calls. The task text supplies the
-        initial objective and constraints, not identity or a reset command.
-        Subsequent requirement changes go through revise.
+        Preserve restored progress and reconstruct the projection for every new
+        owner instance. Partial and concrete empty plans are valid. Initialization
+        must work without a live model or ready peers. Later requirements enter
+        interact; no private template-method sequence is prescribed.
         """
         ...
 
     @abstractmethod
-    async def view(self) -> ViewT:
-        """Read a detached view without changing the plan.
+    async def interact(self, request: InteractionRequest[CommandT]) -> PlanningResult[ViewT, ReplyT]:
+        """Handle a concrete planning request with host identity and provenance.
 
-        An uninitialized plan is an error. An empty plan is a valid concrete
-        view; it must not be confused with missing initialization or None.
-        """
-        ...
+        Queries cannot change retained state or the published projection. Commands
+        may revise a plan, record evidence, decline a proposal while recording a
+        blocker, or legitimately do nothing. Business outcomes belong to ReplyT;
+        invalid input and failed dependencies remain errors. Deduplicate actual
+        evidence and distinguish agent reports from host observations.
 
-    @abstractmethod
-    async def revise(self, change: ChangeT) -> ViewT:
-        """Evaluate a typed request and return the resulting current view.
-
-        A valid request may leave the plan unchanged. Invalid or unsupported
-        requests and dependency failures remain errors; they must not replace
-        the last valid state or masquerade as an unchanged success. Revising
-        planning state does not execute the task's external actions or change
-        the Harness implementation.
+        Return a projection reconstructible from retained state. Preserve executed
+        facts when changing future work. Use peers for cross-owner requests; a
+        local failure cannot roll back another owner's successful operation.
         """
         ...

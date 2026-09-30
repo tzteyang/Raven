@@ -1,44 +1,21 @@
-"""A proposal guard and inert test tools for checking refusal and permitted execution."""
+"""A typed proposal guard and inert tools for behavioral validation and repair."""
 
-from typing import Literal
-
-from pydantic import BaseModel
-
+from experimental.curator.harness.action import ActionDecision, ActionEvent
 from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.raven_adapter.targets.action import ReviewResult
 from raven.contracts.tool import Tool
 
 
-class Proposal(BaseModel):
-    calls: list[str]
-
-
-class Decision(BaseModel):
-    verdict: Literal["accept", "resample"]
-
-
-class Guard(ActionStrategy[Proposal, Proposal, Decision]):
-    async def assess(self, proposal: Proposal) -> Decision:
-        return Decision(verdict="resample" if "blocked_probe" in proposal.calls else "accept")
-
-    async def recover(self, failure: Proposal) -> Decision:
-        return Decision(verdict="accept")
+class Guard(ActionStrategy[None, None]):
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.kind == "proposal" and event.stage == "batch":
+            names = [call.name for call in event.calls]
+            if "blocked_probe" in names:
+                return ActionDecision(control="revise", feedback="Use safe_probe instead.")
+        return ActionDecision()
 
 
 def create(state, task):
     return Guard()
-
-
-def proposal(step) -> Proposal:
-    calls = step.response.tool_calls if step.response is not None else []
-    return Proposal(calls=[call.name for call in calls])
-
-
-def decision(value: Decision) -> ReviewResult:
-    return ReviewResult(
-        verdict=value.verdict,
-        inject=[{"role": "user", "content": "Use safe_probe instead."}] if value.verdict == "resample" else None,
-    )
 
 
 class Probe(Tool):

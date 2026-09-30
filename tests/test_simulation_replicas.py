@@ -7,20 +7,24 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.harness import Artifact
+from experimental.automation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
 from experimental.curator.raven_adapter.deployment import child_directory
 from experimental.curator.raven_adapter.hosting.prepare import prepare_children
 from experimental.curator.raven_adapter.strategy import Scopes
 from experimental.curator.raven_adapter.worker import Execution
+from experimental.iteration.compartment import Guard, GuardedFactory
+from experimental.iteration.hearing import opaque
 from experimental.iteration.protocols import Exchange
+from experimental.scenario.sealed import Sealed
 from experimental.simulation.agency import NAME as REVIEW
 from experimental.simulation.agency import Agency
-from experimental.simulation.employee import HOME, WORKDIR, Together, hire, replicate
 from experimental.simulation.scenario import BUNDLED, Scenario
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
+from raven.providers.factory import make_lazy_provider
+from tests.fixtures.harness_curator.authoring import profile
 
 TRAVEL = BUNDLED / "travel_agency"
-AUTHORED = Artifact(values={"memory.prompt": {"AGENTS.md": "Quote from the price list."}})
+AUTHORED = profile({"TOOLS.md": "Quote from the price list."})
 
 
 def config_file(tmp_path):
@@ -39,9 +43,10 @@ def config_file(tmp_path):
 def test_a_replica_copies_the_employee_as_it_stands_with_its_installed_revision(tmp_path):
     scenario, config = Scenario.load(TRAVEL), config_file(tmp_path)
     (tmp_path / "work").mkdir()
-    employee = hire(scenario, config, workdir=tmp_path / "work", root=tmp_path / "run")
-    employee.children = prepare_children(employee.baseline, employee.root, ["Raven"])
-    employee.children["Raven"].artifact = Artifact(values={"memory.prompt": {"TOOLS.md": "Search first."}})
+    guard = Guard("partner", Sealed.of([], tokens=["wbt-budget"]))
+    employee = hire(scenario.contract, config, workdir=tmp_path / "work", root=tmp_path / "run", guard=guard)
+    employee.children = prepare_children(employee.baseline, employee.area, ["Raven"])
+    employee.children["Raven"].artifact = profile({"TOOLS.md": "Search first."})
     employee.artifact = AUTHORED
     home = employee.baseline.config.workspace_path
     (home / "skills" / "service-sop").mkdir(parents=True)
@@ -51,28 +56,31 @@ def test_a_replica_copies_the_employee_as_it_stands_with_its_installed_revision(
     (tmp_path / "work" / "handover").mkdir()
     (tmp_path / "work" / "handover" / "ticket.md").write_text("earlier ticket")
     saved = {"task_id": employee.baseline.task.id, "data": {}, "sessions": {"c1": {"stage": "S2"}}}
-    (employee.root / "planning.json").write_text(json.dumps(saved))
-    child_state = child_directory(employee.root, "Raven")
+    (employee.area / "planning.json").write_text(json.dumps(saved))
+    child_state = child_directory(employee.area, "Raven")
     child_state.mkdir(parents=True, exist_ok=True)
     (child_state / "action.json").write_text('{"held": 1}')
 
     root = tmp_path / "run" / "replicas" / "1-student"
     replica = replicate(employee, config, root)
-    assert replica.root == root.resolve() and replica.baseline.config.workspace_path == root / HOME
-    assert (root / HOME / "skills" / "service-sop" / "SKILL.md").read_text() == "SOP"
-    assert not (root / HOME / "sessions").exists()
-    assert (root / WORKDIR / "handover" / "ticket.md").read_text() == "earlier ticket"
-    assert replica.baseline.workdir == root / WORKDIR
+    area = root / AREA
+    assert replica.root == root.resolve() and replica.area == area.resolve()
+    assert replica.baseline.config.workspace_path == area / HOME
+    assert (area / HOME / "skills" / "service-sop" / "SKILL.md").read_text() == "SOP"
+    assert not (area / HOME / "sessions").exists()
+    assert (area / WORKDIR / "handover" / "ticket.md").read_text() == "earlier ticket"
+    assert replica.baseline.workdir == area / WORKDIR
     assert replica.artifact == AUTHORED and replica.children["Raven"].artifact == employee.children["Raven"].artifact
-    assert replica.children["Raven"].baseline.config.workspace_path == root / HOME / "subagents" / "Raven"
+    assert replica.children["Raven"].baseline.config.workspace_path == area / HOME / "subagents" / "Raven"
     # A replica under a new task id would refuse the employee's saved plan before any drill started.
     assert replica.baseline.task == employee.baseline.task
-    assert Scopes("planning", replica.baseline.task, root / "planning.json", dict, per_session=True).saved["c1"] == {
+    assert Scopes("planning", replica.baseline.task, area / "planning.json", dict, per_session=True).saved["c1"] == {
         "stage": "S2"
     }
-    assert (child_directory(root, "Raven") / "action.json").read_text() == '{"held": 1}'
+    assert (child_directory(area, "Raven") / "action.json").read_text() == '{"held": 1}'
     assert employee.artifact == AUTHORED and (tmp_path / "work" / "handover" / "ticket.md").is_file()
     assert replica.revision_id == employee.revision_id
+    assert replica.provider_factory == GuardedFactory(make_lazy_provider, guard)
 
 
 class Employee:
@@ -120,15 +128,16 @@ async def test_every_drill_runs_at_once_on_its_own_replica_and_the_employee_play
     together = Together(drills, spawn, placed)
     sessions = await asyncio.wait_for(together.run(employee), 5)
     assert sessions == {"family": [], "premium": [], "student": []}
-    assert [drills[name].worker for name in drills] == [made[f"1-{name}"] for name in drills]
+    assert [drills[name].worker for name in drills] == [made[f"1-{opaque(name)}"] for name in drills]
     assert not employee.closed and all(replica.started and replica.closed for replica in made.values())
     assert {name: where["workdir"] for name, where in placed.items()} == {
-        name: tmp_path / f"1-{name}" for name in drills
+        name: tmp_path / f"1-{opaque(name)}" for name in drills
     }
     drills = {name: Drill(name) for name in drills}
     together.trials = drills
     await together.run(employee)
-    assert sorted(made) == [f"{round}-{name}" for round in (1, 2) for name in ("family", "premium", "student")]
+    assert sorted(made) == sorted(f"{round}-{opaque(name)}" for round in (1, 2) for name in drills)
+    assert not any(name in label for label in made for name in drills)
 
 
 async def test_a_replica_on_another_revision_never_plays_and_every_replica_is_closed(tmp_path):
@@ -137,7 +146,8 @@ async def test_a_replica_on_another_revision_never_plays_and_every_replica_is_cl
     made = []
 
     def spawn(worker, label):
-        made.append(Employee(tmp_path / label, package="_curator_old" if label.endswith("student") else "_curator_abc"))
+        old = label.endswith(opaque("student"))
+        made.append(Employee(tmp_path / label, package="_curator_old" if old else "_curator_abc"))
         return made[-1]
 
     drills = {name: Drill(name) for name in ("family", "premium", "student")}
@@ -197,7 +207,7 @@ async def test_the_owner_reads_what_each_drill_filed_on_its_replica_and_nothing_
         Provider(),
         employee / "home" / "skills",
         workdir=employee / "workdir",
-        plan="all",
+        disclosure=scenario.disclosure("all"),
         uploads=employee / "home" / "uploads",
         workdirs=placed,
     )

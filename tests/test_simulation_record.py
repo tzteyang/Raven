@@ -1,4 +1,5 @@
-"""The cultivation record: parsing a run, linking requirements and changes to criteria, the ledger and the export."""
+"""The cultivation record: parsing a run, linking requirements and changes to criteria through the ids the loop
+recorded, both ledgers and the export."""
 
 import hashlib
 import json
@@ -7,8 +8,9 @@ from pathlib import Path
 
 import pytest
 
+from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
 from experimental.simulation import record
-from experimental.simulation.record import build_record, export_record, facet, ledger, link, markers, redact
+from experimental.simulation.record import build_record, export_record, facet, ledger, redact
 
 T1 = "a1" * 16
 T2 = "b2" * 16
@@ -16,6 +18,7 @@ KEY = "sk-or-v1-" + "a" * 40
 JINA = "jina_" + "x" * 25
 HEX40 = "0123456789abcdef0123456789abcdef01234567"
 QUOTE = "the pair total lands around 2,020 pounds"
+ATTRIBUTOR = {"implementation": "model", "prompts": "p1", "model": "m-c", "catalogue": True}
 
 
 def write(path: Path, content) -> Path:
@@ -60,9 +63,50 @@ def text_row(turn, content):
     return {"kind": "runner.event", "turn_id": turn, "event_type": "Text", "event": {"content": content}}
 
 
+def raised(requirement: dict, held=None) -> Raised:
+    """A feedback requirement as the typed history keeps it, with whether it held."""
+    fields = ("id", "situation", "behavior", "strength", "acceptance", "repeats", "grounds")
+    return Raised(**{name: requirement[name] for name in fields if name in requirement}, held=held)
+
+
+def history(requirements: list[dict], again: dict) -> list[dict]:
+    """The typed history the loop wrote for the fixture run: each revision addresses what the Curator selected it for,
+    and round 1's requirements were judged by round 2, which raised the first one again."""
+    entries = [
+        Entry(
+            round=0,
+            understanding="Plain employee; the owner gave an SOP.",
+            revision=(Revised(target="memory.prompt", treatment="add", addresses=("material:sop",)),),
+            diagnoses=(Diagnosed(about="material:sop", state="absent"),),
+            attributor=ATTRIBUTOR,
+        ),
+        Entry(
+            round=1,
+            satisfied={"agency": False},
+            requirements=tuple(
+                raised(requirement, held) for requirement, held in zip(requirements, (False, True, True))
+            ),
+            understanding="Quotes and questions keep failing.",
+            revision=(
+                Revised(target="action.review", treatment="add", addresses=("R2",)),
+                Revised(target="planning.strategy", treatment="modify", addresses=("R1", "material:sop")),
+            ),
+            diagnoses=(
+                Diagnosed(about="R1", state="absent"),
+                Diagnosed(about="R2", state="model_ignored"),
+                Diagnosed(about="R3", state="absent"),
+            ),
+            attributor=ATTRIBUTOR,
+        ),
+        Entry(round=2, satisfied={"agency": False}, requirements=(raised(again),)),
+    ]
+    return [entry.model_dump(mode="json") for entry in entries]
+
+
 def round_one_rows(run: Path) -> list[dict]:
     out_file = write(
-        run / "home" / "sessions" / "curator" / "family_1" / "subagents" / "nodes" / "n1.out.md", "Found 3 trains."
+        run / "employee" / "home" / "sessions" / "curator" / "family_1" / "subagents" / "nodes" / "n1.out.md",
+        "Found 3 trains.",
     )
     return [
         {"kind": "provider.request", "turn_id": T1, "parameters": {"messages": []}},
@@ -113,7 +157,7 @@ def round_one_rows(run: Path) -> list[dict]:
                             "status": "completed",
                             "started_at": 1000,
                             "ended_at": 13500,
-                            "output_file": f"/somewhere/else/home/{out_file.relative_to(run / 'home').as_posix()}",
+                            "output_file": f"/somewhere/else/employee/home/{out_file.relative_to(run / 'employee' / 'home').as_posix()}",
                         }
                     ]
                 },
@@ -132,10 +176,10 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
     write(run / "deliverables" / T1 / "notes.md", f"notes with {KEY}")
     write(run / "gen1" / "config.json", {"providers": {"openrouter": {"apiKey": KEY}}})
     write(
-        run / "gen1" / "observations.jsonl",
+        run / "employee" / "gen1" / "observations.jsonl",
         json.dumps({"kind": "runtime.bound", "turn_id": None, "package": "/x/_curator_" + "c" * 20}) + "\n",
     )
-    write(run / "home" / "uploads" / "sop" / "sop.md", "sop")
+    write(run / "employee" / "home" / "uploads" / "sop" / "sop.md", "sop")
     write(
         run / "settings.json",
         {
@@ -143,15 +187,23 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "scenario": "scenario",
             "deliver": "dialog",
             "disclose": "staged",
-            "teach": "documents",
-            "curator": "improve",
-            "targets": "all",
-            "judge": "round",
             "rounds": 2,
             "turns": 4,
             "repeats": 1,
             "cards": ["family"],
-            "models": {"employee": "m-e", "curator": "m-c", "analyst": "m-a", "simulation": "m-s", "subagents": None},
+            "concurrent_drills": 1,
+            "curator_budget": {"calls": None, "queries": None},
+            "seed": None,
+            "without": [],
+            "models": {
+                "employee": "m-e",
+                "curator": "m-c",
+                "analyst": "m-a",
+                "simulation": "m-s",
+                "traveller": "m-s",
+                "subagents": None,
+            },
+            "efforts": {"employee": None, "employee_tier": None, "curator": None, "traveller": None},
             "baseline": {"skills/x/SKILL.md": "ab" * 32},
             "started": 1790000000.0,
         },
@@ -168,6 +220,7 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
                         "changes": [
                             {
                                 "target": "memory.prompt",
+                                "treatment": "add",
                                 "reason": "Quote format per S4.1 to S4.3 and identity per G1.",
                                 "expected": "Rules visible.",
                             }
@@ -196,11 +249,13 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
                         "changes": [
                             {
                                 "target": "action.review",
+                                "treatment": "add",
                                 "reason": "Gate every quote before it is sent.",
                                 "expected": "Resamples.",
                             },
                             {
                                 "target": "planning.strategy",
+                                "treatment": "modify",
                                 "reason": "Count questions for question-limit.",
                                 "expected": "Fewer.",
                             },
@@ -216,13 +271,59 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "active_artifact_id": "B" * 64,
         },
     )
-    write(run / "analysis" / "a1.json", {"materials": {"skills": ["skill.builtin/weather", "skill.workspace/sop"]}})
-    write(
-        run / "analysis" / "a2.json", {"materials": {"skills": ["skill.workspace/sop", "skill.workspace/price-list"]}}
-    )
     price_head = "# Price list\n\nComfort 3900."
+
+    def scorecard(remark, verdicts, satisfied=False):
+        """The owner's verdicts as the agency records them beside the run's analyses: its signal carries only words."""
+        return {
+            "source": "agency",
+            "scorecard": {
+                "source": "agency",
+                "text": remark,
+                "items": [
+                    {
+                        "id": criterion,
+                        "result": result,
+                        "session": "family",
+                        "expected": "",
+                        "actual": actual,
+                        "note": note,
+                    }
+                    for criterion, result, actual, note in verdicts
+                ],
+                "metrics": {},
+                "satisfied": satisfied,
+                "attachments": [],
+            },
+            "waiting_on_material": {},
+        }
+
+    write(
+        run / "analysis" / "a1.json",
+        scorecard(
+            "Quotes were wrong.",
+            [
+                ("ai-identity", "pass", "", ""),
+                ("question-limit", "fail", "asked four questions", ""),
+                ("quote-correct", "fail", f'said "{QUOTE}"', HEX40),
+            ],
+        ),
+    )
+    write(run / "analysis" / "a2.json", {"materials": {"skills": ["skill.builtin/weather", "skill.workspace/sop"]}})
+    write(
+        run / "analysis" / "a3.json",
+        scorecard(
+            "Better quotes.",
+            [("ai-identity", "pass", "", ""), ("question-limit", "fail", "", ""), ("quote-correct", "pass", "", "")],
+        ),
+    )
+    write(
+        run / "analysis" / "a4.json", {"materials": {"skills": ["skill.workspace/sop", "skill.workspace/price-list"]}}
+    )
     requirements = [
         {
+            "id": "R1",
+            "situation": "Any reply that gathers what the customer wants.",
             "behavior": "Ask at most two questions (`question-limit`).",
             "observed": "Four questions at once.",
             "evidence": ["the family drill"],
@@ -230,8 +331,11 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "acceptance": "Two at most.",
             "strength": "must_hold",
             "recurrence": 0,
+            "grounds": ["assessor:agency", "check:question-limit"],
         },
         {
+            "id": "R2",
+            "situation": "Any quote.",
             "behavior": "State only listed prices.",
             "observed": "An invented total.",
             "evidence": [f'turn {T1[:12]} assistant: "{QUOTE}"'],
@@ -239,8 +343,11 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "acceptance": "Every figure is on the list.",
             "strength": "must_hold",
             "recurrence": 0,
+            "grounds": ["check:quote-correct", "case:pair-quote"],
         },
         {
+            "id": "R3",
+            "situation": "Any reply.",
             "behavior": "Sound warm.",
             "observed": "Curt replies.",
             "evidence": ["overall tone"],
@@ -248,19 +355,27 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "acceptance": "Warm.",
             "strength": "should",
             "recurrence": 0,
+            "grounds": ["assessor:agency"],
         },
     ]
+    again = {
+        **requirements[0],
+        "observed": "Three questions again.",
+        "expectation": "unmet",
+        "recurrence": 1,
+        "repeats": "R1",
+    }
     iteration = {
         "task_id": "task-1",
         "task": "Sell short trips.",
         "status": "finished",
-        "stop": "rounds exhausted",
+        "stop": "rounds exhausted; the last review was not curated, no round would test it",
         "curator": "improve",
         "opening": [
             {
                 "source": "agency",
                 "text": "Here are my files:\n- uploads/sop/sop.md",
-                "attachments": ["uploads/sop/sop.md"],
+                "attachments": [{"name": "sop", "kind": "norm", "files": ["uploads/sop/sop.md"]}],
             }
         ],
         "initial_curation": ["c0.json"],
@@ -285,24 +400,12 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
                     {
                         "source": "agency",
                         "text": f"Quotes were wrong.\n\n---\n\n{price_head}",
-                        "items": [
-                            {"id": "ai-identity", "result": "pass", "session": "family"},
-                            {
-                                "id": "question-limit",
-                                "result": "fail",
-                                "session": "family",
-                                "actual": "asked four questions",
-                            },
-                            {
-                                "id": "quote-correct",
-                                "result": "fail",
-                                "session": "family",
-                                "actual": f'said "{QUOTE}"',
-                                "note": HEX40,
-                            },
-                        ],
+                        "items": [],
                         "metrics": {},
                         "satisfied": False,
+                        "attachments": [
+                            {"name": "price-list", "kind": "fact", "files": ["uploads/price-list/price-list.md"]}
+                        ],
                     }
                 ],
                 "feedback": {
@@ -313,7 +416,7 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
                     "task_updates": [],
                 },
                 "curated": True,
-                "analysis": ["a1.json"],
+                "analysis": ["a1.json", "a2.json"],
                 "curation": ["c1.json"],
                 "unexpected": {"extra": True},
             },
@@ -349,18 +452,25 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
                     {
                         "source": "agency",
                         "text": "Better quotes.",
-                        "items": [
-                            {"id": "ai-identity", "result": "pass", "session": "family"},
-                            {"id": "question-limit", "result": "fail", "session": "family"},
-                            {"id": "quote-correct", "result": "pass", "session": "family"},
-                        ],
+                        "items": [],
+                        "metrics": {},
+                        "satisfied": False,
+                        "attachments": [],
                     }
                 ],
-                "feedback": {"decision": "continue", "reason": "Improving."},
-                "analysis": ["a2.json"],
+                "feedback": {
+                    "decision": "curate",
+                    "reason": "Questions still pile up.",
+                    "requirements": [again],
+                    "filtered": [],
+                    "task_updates": [],
+                },
+                "curated": False,
+                "analysis": ["a3.json", "a4.json"],
                 "curation": [],
             },
         ],
+        "history": history(requirements, again),
         **overrides,
     }
     write(run / "iteration" / "r1.json", iteration)
@@ -381,7 +491,7 @@ def test_a_run_with_onboarding_and_two_rounds_reads_as_one_record(tmp_path):
     assert data["run"]["started"] == "2026-09-21T14:13:20Z"
     assert data["run"]["revisions"] == ["c" * 20, "A" * 64, "B" * 64]
     assert "--chain staged" in data["run"]["reproduce"] and "--cards family" in data["run"]["reproduce"]
-    assert "--analysis owner" in data["run"]["reproduce"] and "--judge" not in data["run"]["reproduce"]
+    assert "--analysis" not in data["run"]["reproduce"] and "--judge" not in data["run"]["reproduce"]
     assert [(c["round"], c["outcome"]) for c in data["curations"]] == [(0, "installed"), (1, "installed")]
     onboarding, after = data["curations"]
     assert [(d["target"], d["path"], d["change"], d["lines_added"]) for d in onboarding["artifact_diff"]] == [
@@ -435,10 +545,22 @@ def test_a_run_with_onboarding_and_two_rounds_reads_as_one_record(tmp_path):
     )
 
 
+def test_a_material_is_handed_over_in_the_round_whose_signals_name_it(tmp_path):
+    run, scenario = make_run(tmp_path)
+    iteration = json.loads((run / "iteration" / "r1.json").read_text())
+    first, second = iteration["rounds"]
+    first["signals"][0]["text"] += "\n\n# Brand guide"
+    second["signals"][0]["attachments"] = [{"name": "brand", "kind": "norm", "files": ["uploads/brand/brand.md"]}]
+    write(run / "iteration" / "r1.json", iteration)
+    materials = by_id(build_record(run, scenario)["inputs"]["materials"], "name")
+    assert (materials["brand"]["given"], materials["brand"]["round"]) == ("handed_over", 2)
+    assert (materials["price-list"]["given"], materials["price-list"]["round"]) == ("handed_over", 1)
+
+
 def test_the_reproduce_command_is_the_stored_command_line_with_the_readers_own_paths():
     argv = ["--config", "<config.json with your own keys>", "--home", "/h", "--state-dir=/runs/r", "--workdir", "/w"]
     settings = {"argv": [*argv, "--partition", '[["sop"], ["price-list"]]', "--timeout", "9000", "--seed=3"]}
-    command = record._command({**settings, "seed": 3, "analysis": "analyst"})
+    command = record._command({**settings, "seed": 3})
     assert shlex.split(command) == [
         *record.COMMAND,
         "--config",
@@ -453,11 +575,9 @@ def test_the_reproduce_command_is_the_stored_command_line_with_the_readers_own_p
         "--timeout",
         "9000",
         "--seed=3",
-        "--analysis",
-        "analyst",
     ]
     drawn = shlex.split(record._command({"argv": ["--chain", "documents"], "seed": 5, "analysis": "owner"}))
-    assert drawn[-6:] == ["--chain", "documents", "--seed", "5", "--analysis", "owner"]
+    assert drawn[-4:] == ["--chain", "documents", "--seed", "5"]
 
 
 def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
@@ -482,7 +602,7 @@ def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
     }
     argv = shlex.split(record._command(old))
     assert "--chain" not in argv and argv[argv.index("--partition") + 1] == json.dumps([["sop"], ["price-list"]])
-    assert argv[argv.index("--analysis") + 1] == "owner" and "--judge" not in argv
+    assert "--analysis" not in argv and "--judge" not in argv
     assert [flag for flag in argv if flag.endswith("-model")] == [
         "--curator-model",
         "--traveller-model",
@@ -490,29 +610,71 @@ def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
     ]
     assert argv[argv.index("--curator-calls") + 1] == "96" and "--curator-queries" not in argv
     assert argv[argv.index("--curator-effort") + 1] == "high" and argv[argv.index("--seed") + 1] == "11"
-    assert "--analysis analyst" in record._command({**old, "analysis": "analyst"})
     assert "--chain documents" in record._command({**old, "chain": "documents", "disclose": "all"})
 
 
-def test_requirements_link_explicitly_by_id_by_cited_failing_session_or_not_at_all(tmp_path):
+def test_links_come_only_from_the_grounds_and_addresses_the_loop_recorded(tmp_path):
     run, scenario = make_run(tmp_path)
-    requirements = build_record(run, scenario)["rounds"][0]["analysis"]["requirements"]
-    assert [(r["criteria"], r["link"]) for r in requirements] == [
-        (["question-limit"], "explicit"),
-        (["quote-correct"], "inferred"),
-        ([], "none"),
+    data = build_record(run, scenario)
+    first, second = (item["analysis"]["requirements"] for item in data["rounds"])
+    assert [(r["id"], r["criteria"], r["cases"], r["link"], r["held"]) for r in first] == [
+        ("R1", ["question-limit"], [], "grounds", False),
+        ("R2", ["quote-correct"], ["pair-quote"], "grounds", True),
+        ("R3", [], [], "none", True),
     ]
-    items = [
-        {"criterion": "quote-correct", "result": "fail", "session": "premium", "actual": "x"},
-        {"criterion": "question-limit", "result": "fail", "session": "premium", "actual": "y"},
+    assert first[0]["grounds"] == ["assessor:agency", "check:question-limit"] and first[0]["situation"]
+    assert [(r["id"], r["repeats"], r["criteria"], r["held"]) for r in second] == [
+        ("R1", "R1", ["question-limit"], None)
     ]
-    turns = {"premium": ["c3" * 16]}
-    both = link(
-        {"behavior": "b", "evidence": ["In the premium conversation it rushed."]}, ["quote-correct"], items, turns
-    )
-    assert both == (["quote-correct", "question-limit"], "inferred")
-    assert link({"behavior": "Recommend the Premium package only after intake."}, [], items, turns) == ([], "none")
-    assert link({"behavior": "b", "evidence": [f"turn {'c3' * 4} said so"]}, [], items, turns)[1] == "inferred"
+    onboarding, after = data["curations"]
+    (prompt,) = onboarding["changes"]
+    assert (prompt["treatment"], prompt["addresses"], prompt["attached"]) == ("add", ["material:sop"], [])
+    assert [(c["target"], c["treatment"], c["addresses"], c["attached"]) for c in after["changes"]] == [
+        ("action.review", "add", ["R2"], [{"criterion": "quote-correct", "link": "addresses"}]),
+        ("planning.strategy", "modify", ["R1", "material:sop"], [{"criterion": "question-limit", "link": "addresses"}]),
+    ]
+    iteration = json.loads((run / "iteration" / "r1.json").read_text())
+    iteration["rounds"][0]["feedback"]["requirements"][0]["grounds"] = ["assessor:agency"]
+    iteration["history"][1]["requirements"][0]["grounds"] = ["assessor:agency"]
+    iteration["history"][1]["requirements"][1]["held"] = None
+    write(run / "iteration" / "r1.json", iteration)
+    named = build_record(run, scenario)
+    unlinked, quoted, _ = named["rounds"][0]["analysis"]["requirements"]
+    assert "`question-limit`" in unlinked["behavior"] and (unlinked["criteria"], unlinked["link"]) == ([], "none")
+    assert quoted["held"] is None
+    changes = {c["target"]: c for c in named["curations"][1]["changes"]}
+    assert "question-limit" in changes["planning.strategy"]["reason"] and changes["planning.strategy"]["attached"] == []
+    assert by_id(named["ledger"])["question-limit"]["sedimented_in"] == []
+    iteration["history"] = [entry for entry in iteration["history"] if entry["round"] != 1]
+    write(run / "iteration" / "r1.json", iteration)
+    pending = build_record(run, scenario)
+    assert [(c["addresses"], c["attached"]) for c in pending["curations"][1]["changes"]] == [([], []), ([], [])]
+    assert [r["held"] for r in pending["rounds"][0]["analysis"]["requirements"]] == [None, None, None]
+    assert pending["rounds"][0]["analysis"]["requirements"][1]["criteria"] == ["quote-correct"]
+
+
+def test_the_record_carries_the_loops_own_requirements_ledger(tmp_path):
+    run, scenario = make_run(tmp_path)
+    data = build_record(run, scenario)
+    rows = data["requirements_ledger"]["rows"]
+    assert [(r["round"], r["requirement"], r["state"], r["changes"], r["held"]) for r in rows] == [
+        (1, "R1", "absent", [{"scope": "root", "target": "planning.strategy", "treatment": "modify"}], False),
+        (1, "R2", "model_ignored", [{"scope": "root", "target": "action.review", "treatment": "add"}], True),
+        (1, "R3", "absent", [], True),
+        (2, "R1", None, [], None),
+    ]
+    assert {(g["state"], g["treatment"]): (g["judged"], g["held"]) for g in data["requirements_ledger"]["summary"]} == {
+        ("absent", "modify"): (1, 0),
+        ("model_ignored", "add"): (1, 1),
+        ("absent", None): (1, 1),
+    }
+    assert data["requirements_ledger"]["holdout"] == []
+    text = record.transcript(data)
+    section = text[text.index("## Requirements ledger") :]
+    assert "| 1 | R1 | must_hold |  | absent | planning.strategy (modify) | no |" in section
+    assert "| 1 | R3 | should |  | absent | none addressed it | yes |" in section
+    assert "| 2 | R1 | must_hold | R1 | not diagnosed | not curated | not judged |" in section
+    assert "0. `R1` **Ask at most two questions" in text and "held no" in text
 
 
 def test_the_ledger_shows_a_failure_held_after_a_sedimented_change(tmp_path):
@@ -526,22 +688,20 @@ def test_the_ledger_shows_a_failure_held_after_a_sedimented_change(tmp_path):
         (1, "fail", 1, 0),
         (2, "pass", 0, 1),
     ]
-    assert [(c["target"], c["link"]) for c in quote["timeline"][0]["changes"]] == [("memory.prompt", "marker")]
+    assert quote["timeline"][0]["changes"] == []
     assert quote["timeline"][1]["requirements"] == [1]
-    assert [(c["target"], c["link"]) for c in quote["timeline"][1]["changes"]] == [("action.review", "round")]
+    assert [(c["target"], c["link"]) for c in quote["timeline"][1]["changes"]] == [("action.review", "addresses")]
     assert quote["timeline"][2]["evidence"] == {"participant.result/accept": 1, "participant.result/resample": 1}
-    assert [(s["round"], s["target"], s["facet"]) for s in quote["sedimented_in"]] == [
-        (0, "memory.prompt", "memory"),
-        (1, "action.review", "action"),
+    assert [(s["round"], s["target"], s["facet"], s["link"]) for s in quote["sedimented_in"]] == [
+        (1, "action.review", "action", "addresses")
     ]
     questions = entries["question-limit"]
     assert questions["status"] == "still_failing"
     assert [(c["target"], c["link"]) for c in questions["timeline"][1]["changes"]] == [
-        ("action.review", "round"),
-        ("planning.strategy", "named"),
+        ("planning.strategy", "addresses")
     ]
-    assert entries["ai-identity"]["status"] == "never_failed"
-    assert [c["target"] for c in entries["ai-identity"]["timeline"][0]["changes"]] == ["memory.prompt"]
+    assert [moment["requirements"] for moment in questions["timeline"]] == [[], [0], [0]]
+    assert entries["ai-identity"]["status"] == "never_failed" and entries["ai-identity"]["sedimented_in"] == []
     assert entries["deck-structure"]["status"] == "not_exercised" and entries["deck-structure"]["sedimented_in"] == []
 
 
@@ -571,7 +731,7 @@ def test_status_follows_the_final_run_of_passing_rounds():
     )
 
 
-def test_facets_and_section_markers():
+def test_a_targets_facet_is_the_role_the_catalogue_gives_it():
     assert [
         facet(target)
         for target in (
@@ -585,9 +745,6 @@ def test_facets_and_section_markers():
             "hosting",
         )
     ] == ["memory", "memory", "planning", "capability", "capability", "action", "other", "other"]
-    assert markers("S4.1 to S4.3, G4/G5 and B3") == {"S4.1", "S4.2", "S4.3", "G4", "G5", "B3"}
-    assert markers("rules G1" + chr(0x2013) + "G3 and stages S1-S2") == {"G1", "G2", "G3", "S1", "S2"}
-    assert markers("HL-SOP-01 and AWS S3") == {"S3"}
 
 
 def test_scopes_children_and_unknown_fields_are_tolerated(tmp_path):
@@ -612,6 +769,7 @@ def test_scopes_children_and_unknown_fields_are_tolerated(tmp_path):
     assert [(c["round"], c["scope"]) for c in built["curations"]] == [(0, "root"), (1, "root"), (1, "research")]
     assert built["curations"][2]["artifact_diff"][0]["path"] == "AGENTS.md"
     assert built["rounds"][2]["drills"] == [] and built["rounds"][2]["analysis"]["decision"] is None
+    assert built["requirements_ledger"] is None and "the loop's ledger is missing" in record.transcript(built)
     minimal = tmp_path / "minimal"
     write(minimal / "iteration" / "r.json", {"status": "running", "rounds": [{}]})
     out = export_record(minimal, minimal / "record", scenario)
@@ -638,6 +796,8 @@ def test_a_composed_curations_child_changes_and_child_process_rows_carry_the_chi
     }
     write(run / "curation" / "c1.json", {**data, "child_changes": {"Raven-PPT": child}, "withdrawn_children": []})
     iteration = json.loads((run / "iteration" / "r1.json").read_text())
+    child_change = {"scope": "child/Raven-PPT", "target": "action.review", "treatment": "add", "addresses": ["R2"]}
+    iteration["history"][1]["revision"].append(child_change)
     records = iteration["rounds"][1]["sessions"]["family"][0]["execution"]["records"]
     records.append(
         {
@@ -654,13 +814,20 @@ def test_a_composed_curations_child_changes_and_child_process_rows_carry_the_chi
     assert [d["path"] for d in ppt["artifact_diff"]] == ["(value)", "deck_gate.py"]
     rows = {(r["scope"], r["target"], r["decision"]) for r in built["rounds"][1]["mechanism_evidence"]}
     assert {("root", "action.review", "resample"), ("Raven-PPT", "action.review", "end")} <= rows
+    assert [(c["addresses"], c["attached"]) for c in ppt["changes"]] == [
+        (["R2"], [{"criterion": "quote-correct", "link": "addresses"}])
+    ]
     quote = by_id(built["ledger"])["quote-correct"]
-    assert (1, "Raven-PPT", "action.review") in {(s["round"], s["scope"], s["target"]) for s in quote["sedimented_in"]}
+    assert [(s["round"], s["scope"], s["target"]) for s in quote["sedimented_in"]] == [
+        (1, "root", "action.review"),
+        (1, "Raven-PPT", "action.review"),
+    ]
     assert quote["timeline"][2]["evidence"]["participant.result/end"] == 1
     assert built["value"]["run"]["name"] == "staged-1" and built["value"]["verdict"] in ("partial", "none")
     out = export_record(run, run / "record", scenario)
-    text = (out / "transcript.md").read_text()
-    assert "Raven-PPT: action.review" in text and "Value verdict" in text
+    saved = json.loads((out / "record.json").read_text())
+    assert saved["value"]["verdict"] == built["value"]["verdict"]
+    assert [c["id"] for c in saved["curations"] if c["scope"] == "Raven-PPT"] == ["c1.Raven-PPT"]
 
 
 def test_secret_looking_strings_never_leave_the_record(tmp_path):
@@ -711,6 +878,7 @@ def test_export_writes_a_manifest_with_true_hashes_and_never_copies_configuratio
         "## Round 1 on v1",
         "### Deliverable pages",
         "## Knowledge-sedimentation ledger",
+        "## Requirements ledger",
         "## Cost and reproduction",
     ):
         assert heading in transcript
@@ -752,7 +920,7 @@ def test_an_unfinished_trial_becomes_a_partial_round_from_the_observations(tmp_p
         },
         text_row(follow, "Your deck is ready."),
     ]
-    write(run / "gen2" / "observations.jsonl", "\n".join(json.dumps(row) for row in rows) + "\n")
+    write(run / "employee" / "gen2" / "observations.jsonl", "\n".join(json.dumps(row) for row in rows) + "\n")
     write(run / "deliverables" / follow / "deck.pptx", b"late-deck")
     data = build_record(run, scenario)
     (partial,) = data["rounds"]
@@ -781,14 +949,14 @@ def test_a_drill_played_on_a_replica_is_read_from_the_replicas_folder(tmp_path):
         text_row(turn, "Here is your deck."),
     ]
     replica = run / "replicas" / "1-student"
-    write(replica / "gen1" / "observations.jsonl", "\n".join(json.dumps(row) for row in rows) + "\n")
+    write(replica / "employee" / "gen1" / "observations.jsonl", "\n".join(json.dumps(row) for row in rows) + "\n")
     write(replica / "deliverables" / turn / "deck.pptx", b"replica-deck")
     (partial,) = build_record(run, scenario)["rounds"]
     (drill,) = partial["drills"]
     assert drill["session"] == "student" and drill["exchanges"][0]["assistant"] == "Here is your deck."
     assert drill["exchanges"][0]["delivered"][0]["path"] == f"replicas/1-student/deliverables/{turn}/deck.pptx"
-    moved = write(replica / "home" / "skills" / "sop" / "SKILL.md", "SOP")
-    assert record._local("/elsewhere/replicas/1-student/home/skills/sop/SKILL.md", run) == moved.resolve()
+    moved = write(replica / "employee" / "home" / "skills" / "sop" / "SKILL.md", "SOP")
+    assert record._local("/elsewhere/replicas/1-student/employee/home/skills/sop/SKILL.md", run) == moved.resolve()
 
 
 def test_cost_prefers_the_suite_summary_then_audit_spans(tmp_path):
@@ -848,6 +1016,7 @@ def test_host_guards_and_argument_errors_are_not_mechanism_refusals():
 
     def refusal(preview):
         tools = {}
+        controls = set()
         classify(
             {
                 "kind": "runner.event",
@@ -855,13 +1024,14 @@ def test_host_guards_and_argument_errors_are_not_mechanism_refusals():
                 "event": {"phase": "start", "tool_call_id": "c", "name": "read_file"},
             },
             tools,
+            controls,
         )
         row = {
             "kind": "runner.event",
             "event_type": "ToolEvent",
             "event": {"phase": "complete", "tool_call_id": "c", "ok": False, "result_preview": preview},
         }
-        return classify(row, tools)
+        return classify(row, tools, controls)
 
     assert refusal("Error: blocked by the quote gate: price not in the list")[2] == "refused"
     for preview in (
@@ -897,6 +1067,21 @@ def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_c
     assert [(row["criterion"], row["result"], row["session"]) for row in evaluation["items"]] == [
         ("quote-sheet-correct", "fail", "student")
     ]
-    assert _analysis(item, ["quote-sheet-correct"], evaluation["items"], {})["waiting_on_material"] == [
-        "deck-aesthetics"
-    ]
+    assert _analysis(item, None)["waiting_on_material"] == ["deck-aesthetics"]
+
+
+def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_place(tmp_path):
+    from experimental.research.package import digest
+    from experimental.simulation.scenario import BUNDLED
+    from tests.test_research_induction import make_scenario
+
+    shop = make_scenario(tmp_path / "shop")
+    settings = {"scenario": "shop", "scenario_dir": str(shop), "scenario_digest": digest(shop)}
+    assert record._scenario_root(None, settings) == shop
+    assert record._scenario_root(None, {"scenario": "shop", "argv": ["--scenario", str(shop)]}) == shop
+    assert record._scenario_root(None, {"scenario": "travel_agency"}) == BUNDLED / "travel_agency"
+    with pytest.raises(FileNotFoundError, match="give its directory"):
+        record._scenario_root(None, {"scenario": "shop"})
+    (shop / "profile.md").write_text("You answer the tea shop's customers, and now its suppliers too.\n")
+    with pytest.raises(ValueError, match="changed since the run"):
+        record._scenario_root(None, settings)

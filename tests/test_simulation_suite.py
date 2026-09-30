@@ -10,8 +10,8 @@ from types import SimpleNamespace
 
 import pytest
 
+from experimental.scenario import Disclosure
 from experimental.simulation import suite
-from experimental.simulation.agency import partition
 from experimental.simulation.scenario import BUNDLED, Scenario
 
 
@@ -104,6 +104,36 @@ def test_scrub_redacts_every_credential_in_the_workers_configuration_copies(tmp_
     assert "sk-or-v1" not in nested.read_text() and "sk-or-v1" not in rendered.read_text()
 
 
+def test_scrub_reaches_the_product_configurations_pinned_for_the_employee_and_its_replicas(tmp_path, monkeypatch):
+    from types import SimpleNamespace
+
+    from experimental.automation import employee
+    from raven.config.schema import Config
+
+    folder = tmp_path / "product"
+    folder.mkdir()
+    (folder / "config.json").write_text(json.dumps({"agents": {"defaults": {"model": "shipped"}}, "tools": {}}))
+    monkeypatch.setattr(employee, "product_folder", lambda name: folder)
+    config = Config.model_validate(
+        {
+            "providers": {"deepseek": {"apiKey": "ds-secret-key"}},
+            "agents": {
+                "defaults": {"model": "deepseek/deepseek-flash", "provider": "deepseek", "reasoningEffort": "low"}
+            },
+        }
+    )
+    row = SimpleNamespace(name="Raven-PPT", command="raven-ppt run")
+    records = tmp_path / "records"
+    for deployment in (records / "deployment", records / "replicas" / "1" / "deployment"):
+        employee.pin(row, "deepseek/deepseek-flash", config, deployment)
+        assert "ds-secret-key" in (deployment / "raven-ppt.json").read_text()
+    assert suite.scrub(records) == 2
+    for deployment in (records / "deployment", records / "replicas" / "1" / "deployment"):
+        copy = deployment / "raven-ppt.json"
+        assert "ds-secret-key" not in copy.read_text() and copy.stat().st_mode & 0o777 == 0o600
+        assert json.loads(copy.read_text())["agents"]["defaults"]["model"] == "deepseek/deepseek-flash"
+
+
 def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     argv = suite.command(
         ["--chain", "documents"],
@@ -121,14 +151,14 @@ def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     budgets = " ".join(
         suite.command(
             [],
-            arguments(tmp_path, curator_calls=96, curator_queries=144, analysis="analyst"),
+            arguments(tmp_path, curator_calls=96, curator_queries=144),
             config=tmp_path / "c.json",
             workdir=tmp_path / "w",
             records=tmp_path / "r",
         )
     )
     assert "--curator-calls 96 --curator-queries 144" in budgets
-    assert "--analysis analyst" in budgets and "--analysis" not in flat
+    assert "--analysis" not in budgets and "--analysis" not in flat
     efforts = " ".join(
         suite.command(
             ["--chain", "staged"],
@@ -199,13 +229,17 @@ def test_random_partitions_cover_every_material_and_fit_before_the_last_round():
     rng = random.Random(3)
     for _ in range(50):
         steps = suite.random_partition(materials, 4, rng)
-        assert 2 <= len(steps) <= 4 and partition(steps, materials, rounds=4)
+        assert 2 <= len(steps) <= 4 and Disclosure.of(steps, materials=materials, rounds=4).steps
     core = [
         name for name in materials if name not in ("brand-design-guide", "consultation-scripts", "plan-deck-sample")
     ]
     for _ in range(50):
         steps = suite.random_partition(materials, 4, rng, core)
-        assert set(core) <= set(steps[0]) and 2 <= len(steps) <= 4 and partition(steps, materials, rounds=4)
+        assert (
+            set(core) <= set(steps[0])
+            and 2 <= len(steps) <= 4
+            and Disclosure.of(steps, materials=materials, rounds=4).steps
+        )
     with pytest.raises(ValueError, match="outside"):
         suite.random_partition(materials, 4, rng, materials)
 

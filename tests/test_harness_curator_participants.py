@@ -1,68 +1,31 @@
-"""A participant entry point is a factory for an instance carrying the selected methods, checked at binding."""
+"""Selected class helpers and native dependencies are checked against their actual callers."""
 
 import pytest
 
 from experimental.curator.raven_adapter.bind import conform
-from experimental.curator.raven_adapter.observe import build_participant
+from experimental.curator.raven_adapter.calls import strategy_method
+from experimental.curator.raven_adapter.inference import supplied
 from experimental.curator.raven_adapter.planning.contracts import PlanReader
-from experimental.curator.raven_adapter.targets.action import TARGETS as ACTION
-from experimental.curator.raven_adapter.targets.capability import TARGETS as CAPABILITY
-from raven.contracts.participant import AgentParticipant, StepView
+from experimental.curator.raven_adapter.targets import catalogue
 from raven.contracts.tool_gate import ToolGate
-
-REVIEW = next(target for target in ACTION if target.name == "action.review")
-SELECT = next(target for target in CAPABILITY if target.name == "capability.select_tools")
-
-
-class Reviewer(AgentParticipant):
-    async def review(self, step):
-        return None
-
-
-async def review(step):
-    return None
-
-
-def test_a_factory_returning_a_participant_with_the_selected_method_is_accepted():
-    assert isinstance(build_participant(Reviewer, [REVIEW]), Reviewer)
-
-
-def test_the_method_itself_is_refused_with_a_message_naming_the_target():
-    with pytest.raises(
-        TypeError, match="action.review: the entry point must be a factory taking no positional arguments"
-    ):
-        build_participant(review, [REVIEW])
-
-
-def test_a_participant_missing_or_inheriting_the_selected_method_is_refused():
-    with pytest.raises(TypeError, match="capability.select_tools: the selected method is not implemented"):
-        build_participant(Reviewer, [SELECT])
-    with pytest.raises(TypeError, match="the selected method is missing"):
-        build_participant(object, [REVIEW])
 
 
 class Gate:
-    name = "gate"
-
     async def adjudicate(self, name, params, *, session_workdir=None):
         return None
 
 
 class SyncGate:
-    name = "gate"
-
     def adjudicate(self, name, params):
         return None
 
 
 class NarrowGate:
-    name = "gate"
-
     async def adjudicate(self, name, params=None):
         return None
 
 
-def test_a_component_is_checked_against_the_way_the_host_calls_it():
+def test_native_components_match_the_form_and_arguments_used_by_the_host():
     conform(Gate(), ToolGate)
     with pytest.raises(TypeError, match="must be async"):
         conform(SyncGate(), ToolGate)
@@ -70,35 +33,44 @@ def test_a_component_is_checked_against_the_way_the_host_calls_it():
         conform(NarrowGate(), ToolGate)
 
 
-def test_participant_targets_show_the_step_they_receive():
-    assert StepView in REVIEW.knowledge and StepView in SELECT.knowledge
+def test_selected_helpers_are_real_methods_with_the_required_call_shape():
+    class Owner:
+        def _render_context(self, view):
+            return f"View: {view}"
+
+        async def _intake(self, request):
+            return request.text
+
+    owner = Owner()
+    assert strategy_method(owner, "_render_context", 1)({"step": 1}) == "View: {'step': 1}"
+    with pytest.raises(TypeError, match="synchronous"):
+        strategy_method(owner, "_intake", 1)
+    with pytest.raises(TypeError, match="must implement"):
+        strategy_method(owner, "_missing", 1)
+    with pytest.raises(TypeError):
+        strategy_method(owner, "_render_context", 2)
 
 
-def test_action_side_targets_show_how_to_read_the_plan():
-    gates = next(target for target in ACTION if target.name == "action.tool_gates")
-    assert all(PlanReader in target.knowledge for target in (REVIEW, SELECT, gates))
+def test_factories_receive_only_declared_keyword_dependencies():
+    host, plan = object(), lambda: {"stage": "intake"}
+
+    def factory(state, task, *, host, plan):
+        return state, task, host, plan
+
+    assert supplied(factory, {"host": host, "plan": plan}) == {"host": host, "plan": plan}
+    with pytest.raises(TypeError, match="host-supplied keyword-only"):
+        supplied(factory, {"plan": plan})
+
+    def positional(state, task, host):
+        return state, task, host
+
+    with pytest.raises(TypeError, match="keyword-only"):
+        supplied(positional, {"host": host})
 
 
-class PlanAwareReviewer(AgentParticipant):
-    def __init__(self, plan):
-        self.plan = plan
-
-    async def review(self, step):
-        return None
-
-
-def test_an_entry_point_may_declare_the_plan_reader_as_a_keyword_only_dependency():
-    def reader():
-        return {"stage": "intake"}
-
-    def entry(*, plan):
-        return PlanAwareReviewer(plan)
-
-    def positional(plan):
-        return PlanAwareReviewer(plan)
-
-    assert build_participant(entry, [REVIEW], {"plan": reader}).plan() == {"stage": "intake"}
-    with pytest.raises(TypeError, match="host-supplied keyword-only dependency"):
-        build_participant(entry, [REVIEW])
-    with pytest.raises(TypeError, match="no positional arguments"):
-        build_participant(positional, [REVIEW], {"plan": reader})
+def test_strategy_reading_path_includes_plan_access_and_preparation_consumers():
+    for target in catalogue():
+        assert PlanReader in target.knowledge or target.name == "planning.strategy"
+        knowledge = target.describe()["knowledge"]
+        assert any("Role-owned setup" in row["content"] for row in knowledge)
+        assert any("PreparationRequest" in row["content"] for row in knowledge)

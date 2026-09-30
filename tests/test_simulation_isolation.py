@@ -1,8 +1,8 @@
-"""A run's tool calls are scanned for paths outside its bounds; the shapes come from recorded runs."""
+"""A run's tool calls are scanned for paths outside its bounds, in the runner-event and provider-request rows the worker records."""
 
 import json
 
-from experimental.simulation.isolation import EXPERIMENTAL, scan
+from experimental.automation.isolation import EXPERIMENTAL, scan
 
 
 def tool_event(name, arguments, call_id):

@@ -1,4 +1,4 @@
-"""Load declared prompt objects from the candidate and expose their actual input contracts."""
+"""Load prompt objects explicitly selected by strategy preparation and expose their input contracts."""
 
 from pathlib import Path
 
@@ -6,9 +6,9 @@ from ..harness.prompts import Prompt
 from .materialize import load_object
 
 
-def bind_prompts(artifact, package: Path):
+def bind_prompts(artifact, package: Path, *, references):
     prompts = {}
-    for reference in artifact.values.get("prompt.resources", []):
+    for reference in references:
         if reference in prompts:
             raise ValueError(f"duplicate prompt resource: {reference}")
         prompt = load_object(reference, package)

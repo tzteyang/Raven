@@ -1344,8 +1344,8 @@
       "zh": "Hi，我是 Raven Agent"
     },
     "gui.composer_ph": {
-      "en": "Describe your task, or have Raven build an agent for it",
-      "zh": "描述你的任务，或让 Raven 搭一个智能体来做"
+      "en": "Describe your task",
+      "zh": "描述你的任务"
     },
     "gui.compress.done": {
       "en": "Archived {n} messages - {before} to {after} tokens",
@@ -2374,6 +2374,10 @@
     "gui.notice.organ_degraded": {
       "en": "Part of the runtime is unavailable, so this answer comes without it.",
       "zh": "本回合有部分能力不可用，这个回答不会用到它们。"
+    },
+    "gui.notice.question_unanswered": {
+      "en": "A question went unanswered, so the turn continued without an answer.",
+      "zh": "有提问没有得到回答，这一回合在没有答案的情况下继续了。"
     },
     "gui.hub.auto_use": {
       "zh": "技能由 Raven 按需自动使用，暂不支持单独停用",
@@ -4375,6 +4379,18 @@
       "en": "new version available",
       "zh": "有新版本"
     },
+    "gui.upg.phase.download": {
+      "en": "Downloading the new version: {progress}",
+      "zh": "正在下载新版本：{progress}"
+    },
+    "gui.upg.phase.install": {
+      "en": "Installing the new version...",
+      "zh": "正在安装新版本…"
+    },
+    "gui.upg.phase.restart": {
+      "en": "Restarting Raven...",
+      "zh": "正在重启 Raven…"
+    },
     "gui.upg.reauth": {
       "en": "Raven restarted but this page is no longer signed in. Reopen Raven.",
       "zh": "Raven 已重启，但这个页面的登录失效了，请重新打开 Raven。"
@@ -4382,6 +4398,18 @@
     "gui.upg.title": {
       "en": "Upgrade Raven?",
       "zh": "升级 Raven？"
+    },
+    "gui.upg.why.busy": {
+      "en": "Raven is still working on a turn, a sub-agent or a question waiting for an answer, possibly in an IM channel. Upgrading restarts Raven and would cut that off, so let it finish first.",
+      "zh": "Raven 还在处理回合、子智能体或待回答的问题（可能在 IM 渠道里）。升级会重启 Raven 并打断它们，请等它们结束再升级。"
+    },
+    "gui.upg.why.not_serving": {
+      "en": "This page is not being served by a running Raven, so it has nothing here to upgrade.",
+      "zh": "这个页面当前没有正在运行的 Raven 在托管，这里没有可以升级的对象。"
+    },
+    "gui.upg.why.unsupervised": {
+      "en": "This Raven was started by hand in a terminal, so nothing would bring it back after an upgrade. Run raven upgrade there, then start Raven again.",
+      "zh": "这个 Raven 是在终端里手动启动的，升级后没有守护进程能把它重新拉起来。请在那个终端里运行 raven upgrade，然后重新启动 Raven。"
     },
     "gui.upg.working": {
       "en": "Upgrading Raven...",
@@ -4647,10 +4675,6 @@
       "en": "This view cannot read files here",
       "zh": "这里没法读取文件"
     },
-    "gui.ws.save_copy": {
-      "en": "Save a copy",
-      "zh": "保存副本"
-    },
     "gui.ws.expand_lines": {
       "en": "show {n} more",
       "zh": "展开 {n} 行"
@@ -4674,14 +4698,6 @@
     "gui.ws.file_denied": {
       "en": "Raven is confined to the workspace, so this file cannot be opened here.",
       "zh": "Raven 被限制在工作目录内，这个文件没法在这里打开。"
-    },
-    "gui.ws.html_run": {
-      "en": "Run it here",
-      "zh": "在这里运行"
-    },
-    "gui.ws.html_no_scripts": {
-      "en": "Scripts do not run in this preview. A page that needs them may look blank, or may look finished while its layout is wrong and nothing responds. Open the file outside Raven to see it as written.",
-      "zh": "预览不运行脚本。需要脚本的页面可能一片空白，也可能看着像画好了、实际上排版是歪的且点什么都没反应。要看它本来的样子，请在 Raven 之外打开这个文件。"
     },
     "gui.ws.file_gone": {
       "en": "That file is no longer there.",
@@ -4738,10 +4754,6 @@
     "gui.ws.dlv_turn": {
       "en": "turn {n}",
       "zh": "第 {n} 轮"
-    },
-    "gui.ws.download": {
-      "en": "Download",
-      "zh": "下载"
     },
     "gui.ws.dlv_here": {
       "en": "delivered this turn",
@@ -8376,8 +8388,8 @@
       "zh": "继续对话…"
     },
     "gui.composer.ph_busy": {
-      "en": "Continue the conversation; it is sent once this turn ends",
-      "zh": "继续对话，输入会排队到本轮结束再发"
+      "en": "Continue the conversation; Raven will receive your new instruction directly",
+      "zh": "继续对话，Raven 将直接收到你的新指令"
     },
     "gui.plus.add": {
       "en": "Add",

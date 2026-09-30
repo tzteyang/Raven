@@ -18,9 +18,10 @@ from pathlib import Path
 
 from pptx import Presentation
 
+from ..automation.channel import said
+from ..automation.files import _MOTION, deck_slides
+from ..scenario.contract import frontmatter
 from .cards import Trip
-from .channel import said
-from .files import _MOTION, deck_slides
 
 CONFIG = "reference.md"
 NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
@@ -76,10 +77,6 @@ def _sections(text: str) -> list[tuple[str, str]]:
     return [(part.partition("\n")[0], part.partition("\n")[2]) for part in re.split(r"^## ", text, flags=re.M)[1:]]
 
 
-def _body(text: str) -> str:
-    return text.split("---", 2)[2] if text.startswith("---") else text
-
-
 def words(path: Path) -> dict[str, tuple[str, ...]]:
     """The scenario's reference words: each table row's key and the backticked values in its second cell."""
     found = {}
@@ -123,7 +120,7 @@ class Rules:
         if not config.is_file():
             return None
         found = words(config)
-        prices = _body(scenario.text(found["price_list"][0]))
+        prices = frontmatter(scenario.text(found["price_list"][0]))[1]
         products, seasons, insurance = {}, {}, None
         for heading, body in _sections(prices):
             tables = _tables(body)
@@ -159,10 +156,10 @@ class Rules:
                     insurance = _ints(row[1])[0]
         child = next(
             line
-            for line in _body(scenario.text(found["booking_policy"][0])).splitlines()
+            for line in frontmatter(scenario.text(found["booking_policy"][0]))[1].splitlines()
             if "%" in line and any(word in line for word in found["child"])
         )
-        spec = _body(scenario.text(found["deck_spec"][0]))
+        spec = frontmatter(scenario.text(found["deck_spec"][0]))[1]
         material, _, file = found["template"][0].partition("/")
         template = scenario.materials[material] / file
         deck = Presentation(str(template))

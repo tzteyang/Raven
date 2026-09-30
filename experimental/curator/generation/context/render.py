@@ -13,16 +13,28 @@ _PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 _COMMON = ("common/background", "common/contracts", "common/materials", "common/interaction")
 
 
+def prompt_files() -> tuple[Path, ...]:
+    """The prompt files every Curator request draws on besides its stages' own: the shared rules, the rules of a
+    composition's root and child scopes, and the request frame."""
+    return tuple(_PROMPTS / f"{name}.md" for name in (*_COMMON, "composition/root", "composition/child", "request"))
+
+
 def tool(name: str, description: str, parameters: dict) -> dict:
     return {"type": "function", "function": {"name": name, "description": description, "parameters": parameters}}
 
 
-def _prompt(name: str) -> str:
-    return (_PROMPTS / f"{name}.md").read_text().strip()
+def _prompt(name: str | Path) -> str:
+    """A prompt by its name under the generation's prompts, or a prompt file another component owns."""
+    path = name if isinstance(name, Path) else _PROMPTS / f"{name}.md"
+    return path.read_text().strip()
+
+
+def _stage(name: str | Path) -> str:
+    return name.stem if isinstance(name, Path) else name
 
 
 def messages(
-    stages: tuple[str, ...], materials: dict, stage_materials: dict, *, tools: list[dict], available: set[str]
+    stages: tuple[str | Path, ...], materials: dict, stage_materials: dict, *, tools: list[dict], available: set[str]
 ) -> list[dict]:
     """A stage request: shared rules, the curation's materials, then this stage's instructions and its own data.
 
@@ -35,7 +47,7 @@ def messages(
     local = (f"composition/{scope}",) if scope in {"root", "child"} else ()
     offered = [entry for entry in tools if entry["function"]["name"] in available]
     actions = "\n".join(f"- `{entry['function']['name']}`: {entry['function']['description']}" for entry in offered)
-    request = Template(_prompt("request")).substitute(stages=" → ".join(stages), actions=actions)
+    request = Template(_prompt("request")).substitute(stages=" → ".join(map(_stage, stages)), actions=actions)
     return [
         {"role": "system", "content": "\n\n".join(_prompt(name) for name in (*_COMMON, *local))},
         {"role": "user", "content": json.dumps(materials, ensure_ascii=False, indent=2)},

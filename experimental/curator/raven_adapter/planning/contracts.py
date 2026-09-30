@@ -1,82 +1,80 @@
-"""Authoring and observation contracts shared by planning generation and binding."""
+"""Raven bindings and trusted observation inputs for generated Planning owners."""
 
-from typing import Protocol
+from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from ...harness.interaction import InteractionScope, InteractionTool
 from ..targets import EntryPoint
 
 TARGET = "planning.strategy"
-TOOL_NAME = "curator_planning"
 
 
 class PlanReader(Protocol):
-    """Read this conversation's plan from any other Harness component; declare it as a keyword-only `plan`.
+    """Read this session's latest committed plan without entering its owner.
 
-    Strategy factories, participant entry points and plugin component factories (tool gates, hooks, tools)
-    may declare `plan`; the host supplies a reader bound to the planning strategy. Calling it returns a copy
-    of the plan view (the planning strategy's view type, as JSON) that planning last produced for the
-    conversation now running, or None when no planning strategy is bound or this conversation has no plan
-    yet. It is read-only: changing the returned value changes nothing. Planning updates its view when it
-    initializes, renders context, runs its tool or observes a completed iteration, so the plan reflects
-    everything observed up to the last completed iteration; the model output being judged right now is in
-    the component's own arguments (for example a StepView or the tool call), not yet in the plan.
+    Factories may declare the keyword-only plan dependency. The returned view
+    is detached JSON, or None before this session is initialized or when no
+    Planning is bound. A view describes processed evidence, not a model proposal
+    currently being judged. Planning may publish partial and empty views.
     """
 
-    def __call__(self) -> dict | None: ...
+    def __call__(self) -> JsonValue: ...
+
+
+type PlanningPhase = Literal["before_model", "after_iteration"]
 
 
 class PlanningObservation(BaseModel):
-    """Completed iteration evidence supplied by the host, never by tool arguments.
+    """Host input before capability selection or actual completed-iteration evidence.
 
-    messages contains this turn's transcript up to this moment, including tool
-    results. Tool content retains Raven's untrusted-data boundary markers and
-    may differ from the raw tool return. response is the observed model proposal,
-    not proof of execution.
-    Inspect tool-call IDs and actual results before drawing conclusions. Native
-    retries can repeat an observation; translation and revision should tolerate it.
+    messages is this turn's current transcript, preserving tool-data boundaries.
+    response is a proposal, not proof of execution. tools is the offered catalogue
+    before selection, not the current effective capabilities or a permission grant.
+    Stable event identity permits repeated observations to be recognized.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 
+    scope: InteractionScope
+    event_id: str
+    phase: PlanningPhase
     iteration: int
     messages: list[dict[str, JsonValue]]
-    response: dict[str, JsonValue] | None
+    response: dict[str, JsonValue] | None = None
+    tools: list[dict[str, JsonValue]] = Field(default_factory=list)
 
 
 class PlanningBinding(BaseModel):
-    """Construct one planning strategy per session and select its Raven interaction paths.
+    """Bind one session owner and independently select its host interaction paths.
 
-    Each session's plan is initialized from the task on first use. Supporting
-    entry points are synchronous translations. They receive detached data and
-    do not own planning state. All business decisions belong to the strategy's
-    async initialize/view/revise methods or their explicit delegates.
+    Tools expose business arguments and query/command mode; scope and provenance
+    are host supplied. Observation translation is optional and synchronous. All
+    state transitions and business judgments belong to initialize/interact.
     """
 
     model_config = ConfigDict(extra="forbid")
 
     factory: EntryPoint = Field(
-        description="create(state: dict[str, JsonValue]) returns a concrete instance explicitly inheriting "
-        "PlanningStrategy, with concrete method annotations. Structural method matching alone is not accepted. "
-        "The host supplies one mutable JSON checkpoint per session, kept across that session's turns and Harness "
-        "revisions; a new session starts empty and its plan is initialized from the task. Put all durable plan "
-        "state in this mapping. The factory may explicitly migrate an older representation. initialize must "
-        "resume restored state; view must not change it. Factories construct inert objects. An optional keyword-only infer dependency supplies host-bounded text inference."
+        description="create(state: dict[str, JsonValue]) returns an inert instance explicitly inheriting "
+        "PlanningStrategy[ViewT, CommandT, ReplyT] with concrete annotations. One checkpoint belongs to each "
+        "session across turns and revisions. initialize(PlanningInitialization) restores progress and returns "
+        "PlanningProjection[ViewT]; interact(InteractionRequest[CommandT]) returns PlanningResult[ViewT, ReplyT]. "
+        "Factories may explicitly migrate state. Optional keyword-only peers and infer dependencies provide "
+        "owner-scoped collaboration and bounded single-step inference; host prepares reusable procedures. "
+        "An optional keyword-only plan reads this session's committed view (None before initialization), "
+        "never an operation's uncommitted state. Projection subclasses may retain the same ViewT and public fields."
     )
-    tool: EntryPoint | None = Field(
-        default=None,
-        description="translate(request: ConcreteCommand) returns ChangeT or None to read the current view. "
-        "The input annotation supplies the curator_planning tool schema. Tool arguments cannot invoke the "
-        "observation callback. Registration does not bypass native tool permissions.",
+    tool: InteractionTool | None = Field(
+        default=None, description="Publish an Agent-facing planning.interact tool through Capability.register."
     )
-    context: EntryPoint | None = Field(
-        default=None,
-        description="render(view: ViewT) returns str or None for the current model-input addendum. "
-        "Raven replaces this participant's previous addendum before each model call.",
+    requests: bool = Field(default=False, description="Allow peer interactions independently of tool publication.")
+    context: bool = Field(
+        default=False, description="Deliver the committed projection's guidance before model calls; None withdraws it."
     )
-    observe: EntryPoint | None = Field(
-        default=None,
-        description="translate(view: ViewT, observation: PlanningObservation) returns ChangeT or None. "
-        "Called after an iteration with real host evidence. None requests no revision. "
-        "A revision changes planning state, not the loop's accept/retry decision.",
+    observe: tuple[PlanningPhase, ...] = Field(
+        default=(),
+        description="Select host phases for synchronous _observe(view: ViewT, observation: "
+        "PlanningObservation) -> CommandT | None. The translation cannot change state. A returned command "
+        "enters interact with observation provenance. before_model runs before Capability selection.",
     )
