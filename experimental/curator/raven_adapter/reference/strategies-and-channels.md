@@ -80,20 +80,20 @@ Raven 的原生四模块协议定义在 `raven.contracts.harness`，与 Curator 
 
 ## 5. 从目标选择实现方式
 
-下表列出原生入口的 Target 名称，用于定位已有机制。名称不是公共策略协议的方法清单，也不固定资源的策略归属；例如 planning.skills 是 Skill 资源入口的名称。方案先明确语义操作，再核对所需原生入口及其组合。
+生成出口只有 memory.strategy、planning.strategy、capability.strategy、action.strategy。
+原生配置、资源和组件由所属策略代码在 prepare 中提出，adapter 在原生构造前落实。
+公共运行方法继续处理实际会话；类内受保护方法可承担分派或翻译，不另建业务 owner。
 
-| 目标或问题 | 实现方式与阅读位置 | Target 名称示例 | 选择时必须确认 |
-|---|---|---|---|
-| 稳定的角色规则、输出要求 | [原生 Prompt 内容](context-and-resources.md#31-修改-bootstrap-内容) | `memory.prompt` | 实际上下文路径读取该资源，内容未被覆盖或省略 |
-| 可复用的任务方法与步骤 | [Skill](context-and-resources.md#33-提供-skill) | `planning.skills` | 能被发现，且正文实际送达模型；引用工具与资源存在 |
-| 每次决策前依状态调整提醒 | [advise、system addendum](participation-and-control.md#4-建议诊断和重采样注入) | `planning.advise`、`memory.system_addendum` | 所需状态在对应阶段可见，消息进入正确位置 |
-| 缺少执行能力 | [工具工厂、配置、MCP](tools-and-extensions.md) | `capability.tools`、`capability.mcp` | 实现注册、连接成功、执行授权与结果表达 |
-| 需要检查模型提案或已执行结果 | [review、原生 Hook](participation-and-control.md) | `action.review`、`action.hooks` | 调用阶段、结果是否已存在、合成顺序和拒绝后果 |
-| 对每次工具派发施加限制 | [ToolGate](tools-and-extensions.md#4-reviewjudge-与-toolgate) | `action.tool_gates` | 原生逐调用检查路径可达，拒绝和错误的语义符合目标 |
-| 历史、知识或记忆供给不合适 | [上下文与记忆](context-and-resources.md) | `memory.context_engine`、`memory.backends` | 读取路径、预算、身份及持久化生命周期 |
-| 需要跨 turn 的后台工作或清理 | [服务、SessionObserver](tools-and-extensions.md#7-service-与-sessionobserver) | `action.services`、`memory.session_observers` | resident 条件、资源归属、停止和失败路径 |
+| 目标 | 策略中的表达 | 原生消费者 |
+|---|---|---|
+| 画像与上下文组织 | Memory.prepare / initialize / compose | bootstrap、真实上下文来源、实际模型请求 |
+| tools 与 Skills | Capability.prepare / register / select | ToolRegistry、Skill 发现与读取 |
+| 计划与流程 | Planning.prepare / initialize / view / revise；可选类内翻译 | Playbook、节点需求、会话计划工具和建议 |
+| 监督与主动请求 | Action.handle_event / handle_request；可选事件分派方法 | Hook、执行前 gate、控制应用回执 |
+| 后端、连接与服务 | 所属策略的 prepare 和受限 host 方法 | 原生组件构造与驻留生命周期 |
 
-这些例子不保证本轮授权开放，也不穷举所有组合。[select.materials](../../generation/stages/select.py) 从 Declaration 派生 target、binding、effect 等材料。四策略目标（如 planning.strategy）交付公共协议、绑定与阅读材料；原生资源条目与之并存可用。同一生效声明供选面、检查和装配使用。
+参见 [候选准备契约](preparation.md)。具体 policy 字段及阶段可达性通过
+worker.preparation_contracts 查询，不能通过旧 Target 或复制宽配置 schema 绕过。
 
 ## 6. 一个完整的推导例子
 

@@ -221,7 +221,7 @@ def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def _convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[str, Any]]]:
-    system_prompt = ""
+    system_parts: list[str] = []
     input_items: list[dict[str, Any]] = []
 
     for idx, msg in enumerate(messages):
@@ -229,7 +229,25 @@ def _convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[st
         content = msg.get("content")
 
         if role == "system":
-            system_prompt = content if isinstance(content, str) else ""
+            if isinstance(content, str):
+                system_parts.append(content)
+            elif isinstance(content, list):
+                for part in content:
+                    if (
+                        not isinstance(part, dict)
+                        or part.get("type") != "text"
+                        or not isinstance(part.get("text"), str)
+                    ):
+                        raise ValueError("Responses system messages require text content")
+                    system_parts.append(part["text"])
+            elif content is not None:
+                raise ValueError("Responses system messages require text content")
+            continue
+
+        if role == "developer":
+            item = _convert_user_message(content)
+            item["role"] = "developer"
+            input_items.append(item)
             continue
 
         if role == "user":
@@ -280,7 +298,7 @@ def _convert_messages(messages: list[dict[str, Any]]) -> tuple[str, list[dict[st
             )
             continue
 
-    return system_prompt, input_items
+    return "\n\n".join(system_parts), input_items
 
 
 def _convert_tool_output(content: Any) -> Any:

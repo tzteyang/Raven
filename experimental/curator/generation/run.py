@@ -1,9 +1,14 @@
-"""Coordinate source queries, planning, implementation and bounded validation repair."""
+"""Coordinate source queries, planning, implementation and bounded validation repair.
+
+A generation starts from an attribution made before it (`experimental.curator.attribution`): selection grounds
+every target on its diagnoses. The stage tool loop here (`ask`) is shared infrastructure: the attribution runs its
+own exchange through it with its own tools, budget and state.
+"""
 
 import asyncio
 import json
-from collections.abc import Awaitable, Callable
-from dataclasses import dataclass
+from collections.abc import Awaitable, Callable, Sequence
+from dataclasses import dataclass, replace
 from functools import partial
 from math import isfinite
 
@@ -14,11 +19,11 @@ from raven.permissions.turn import set_current_tool_call_id
 from raven.providers.prompt_cache import accepts_cache_control, cache_control, claim_marks
 from raven.security.trust import wrap_untrusted
 
-from ..harness import Candidate, Plan, Validation
+from ..harness import Attributed, Candidate, Plan, Validation
 from ..raven_adapter.observe import plain
 from .context import query, render
 from .context.collect import Context
-from .stages import design, implement, repair, select, understand
+from .stages import design, implement, repair, select, shared
 from .state import GenerationState
 
 
@@ -74,7 +79,18 @@ class GenerationInterruptedError(GenerationError):
 
 class GenerationPausedError(GenerationInterruptedError):
     def __init__(self, state):
-        super().__init__("Curator call budget exhausted; resume with a higher total max_calls", state)
+        super().__init__(
+            f"Curator call budget exhausted after {state.calls} calls; resume with a higher total max_calls", state
+        )
+
+
+class GapReportedError(GenerationError):
+    """The Curator reported a gap it cannot close with what it was given: missing authority, capability or
+    information. The curation ends without a candidate; the loop keeps the question for whoever can answer it."""
+
+    def __init__(self, stage, reason, trace=()):
+        super().__init__(f"{stage}: {reason}", trace)
+        self.stage, self.reason = stage, reason
 
 
 def _argument_errors(response):
@@ -156,7 +172,7 @@ def _shared_tools(context, tool_registry) -> list[dict]:
         repair.reopen(),
         check,
         implement.stage_tool(),
-        understand.gap_tool(),
+        shared.gap_tool(),
     ]
     names = [item["function"]["name"] for item in tools]
     if len(names) != len(set(names)):
@@ -169,7 +185,16 @@ STAGED_ACTIONS = frozenset(
 )
 
 
-async def _ask(
+def _budget(state, limits) -> str:
+    return render.budget(
+        calls=limits.max_calls - state.calls,
+        queries=limits.max_queries - state.queries,
+        checks=limits.max_checks - state.checks,
+        repairs=limits.max_repairs - state.repairs,
+    )
+
+
+async def ask(
     stage,
     stages,
     stage_materials,
@@ -188,17 +213,26 @@ async def _ask(
     stage_candidate,
     stage_files=False,
     progress=None,
+    tools=None,
+    staged=None,
+    budget=None,
 ):
-    """One stage's tool loop. `schemas` gives the narrowed argument schema of each submission this stage accepts."""
+    """One stage's tool loop. `schemas` gives the narrowed argument schema of each submission this stage accepts.
+
+    `tools` is the request's tool list (the curation's shared list by default), `staged` the submission and preflight
+    actions in it that a stage offers only when its parsers name them, and `budget(state, limits)` the trailing
+    budget note; an exchange with its own tools and budget, such as the attribution's, supplies all three."""
     trace = state.trace
-    tools = _shared_tools(context, tool_registry)
+    tools = _shared_tools(context, tool_registry) if tools is None else tools
+    staged = STAGED_ACTIONS if staged is None else staged
+    budget = _budget if budget is None else budget
     offered = {
         *parsers,
-        understand.GAP,
+        shared.GAP,
         *((CHECK,) if check_parser is not None else ()),
         *((implement.STAGE_FILE,) if stage_files else ()),
     }
-    available = {name for name in (item["function"]["name"] for item in tools) if name not in STAGED_ACTIONS} | offered
+    available = {name for name in (item["function"]["name"] for item in tools) if name not in staged} | offered
     if not state.messages:
         state.messages = render.messages(
             stages,
@@ -206,29 +240,25 @@ async def _ask(
             {
                 **stage_materials,
                 "submission_schemas": schemas,
-                "history": [event for event in trace if event["event"] != "model.call"],
+                "history": [event for event in trace if event.get("event") != "model.call"],
             },
             tools=tools,
             available=available,
         )
     messages = state.messages
-    parsers = {**parsers, understand.GAP: understand.parse_gap}
+    parsers = {**parsers, shared.GAP: shared.parse_gap}
     # A call that spends its whole output on thinking returns nothing, and some providers still report `stop`: each such
     # call moves the rest of this stage one step down THINKING (the configured effort, then low, then none) so a later
     # call can still submit.
     thinking = 0
-    while state.calls < limits.max_calls:
+    # A submission refused on the last call gets one more call to correct it, so a slip in its form does not lose the
+    # stage's investigation; a second refusal still ends the budget.
+    grace = 0
+    while state.calls < limits.max_calls + grace:
         if progress:
             progress(state)
-        request_messages = render.trailing(
-            messages,
-            render.budget(
-                calls=limits.max_calls - state.calls,
-                queries=limits.max_queries - state.queries,
-                checks=limits.max_checks - state.checks,
-                repairs=limits.max_repairs - state.repairs,
-            ),
-        )
+        shown = replace(limits, max_calls=limits.max_calls + grace) if grace else limits
+        request_messages = render.trailing(messages, budget(state, shown))
         state.calls += 1
         trace.append({"stage": stage, "event": "model.call", "call": state.calls})
         default = getattr(provider, "get_default_model", None)
@@ -246,6 +276,9 @@ async def _ask(
         except asyncio.CancelledError:
             raise
         except Exception as exc:
+            # A failure that says it is not resumable, such as a boundary violation, would fail again on resume.
+            if getattr(exc, "resumable", True) is False:
+                raise
             raise GenerationInterruptedError(f"{stage}: model call failed: {exc}", state) from exc
         if response.finish_reason == "error":
             raise GenerationInterruptedError(f"{stage}: provider error: {response.content}", state)
@@ -254,6 +287,9 @@ async def _ask(
         assistant = render.assistant_message(response)
         messages.append(assistant)
         invalid_calls = _argument_errors(response)
+        submitting = any(call.name in parsers for call in response.tool_calls)
+        if submitting and state.calls >= limits.max_calls:
+            grace = 1
         if invalid_calls:
             result = {
                 "error": "No tools in this response were executed. Correct and resubmit.",
@@ -295,8 +331,8 @@ async def _ask(
                 )
                 continue
             trace.append({"stage": stage, "event": call.name, "output": plain(value)})
-            if call.name == understand.GAP:
-                raise GenerationError(f"{stage}: {value}", trace)
+            if call.name == shared.GAP:
+                raise GapReportedError(stage, value, trace)
             return call.name, value
         overthought = not response.tool_calls and (
             response.finish_reason == "length" or not (response.content or "").strip()
@@ -323,19 +359,19 @@ async def _ask(
             )
             continue
         for index, call in enumerate(response.tool_calls):
-            if call.name in STAGED_ACTIONS and call.name not in offered:
+            if call.name in staged and call.name not in offered:
                 result = {
                     "error": f"`{call.name}` is not available in the {stage} stage; use one of "
-                    + ", ".join(sorted(offered & STAGED_ACTIONS))
+                    + ", ".join(sorted(offered & staged))
                 }
                 trace.append({"stage": stage, "event": "action.unavailable", "tool": call.name, "result": result})
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
                 continue
             if stage_files and call.name == implement.STAGE_FILE:
                 try:
-                    staged = implement.parse_staged(call.arguments)
-                    state.staged[staged.path] = staged.content
-                    result = {"staged": staged.path, "chars": len(staged.content), "staged_files": sorted(state.staged)}
+                    entry = implement.parse_staged(call.arguments)
+                    state.staged[entry.path] = entry.content
+                    result = {"staged": entry.path, "chars": len(entry.content), "staged_files": sorted(state.staged)}
                 except (ValueError, TypeError) as exc:
                     result = {"error": str(exc)[:2000]}
                 trace.append(
@@ -442,10 +478,23 @@ async def _ask(
     raise GenerationPausedError(state)
 
 
+def shared_materials(context: Context, *, catalogue: bool = True) -> dict:
+    """The curation's materials every stage request carries, stable parts first; without `catalogue` the granted
+    targets are left out (an attribution may diagnose without seeing what could be changed)."""
+    common = shared.materials(context)
+    return {
+        "task": common.pop("task"),
+        "orientation": common.pop("orientation"),
+        **({"available_targets": select.materials(context.declaration)} if catalogue else {}),
+        **common,
+    }
+
+
 async def generate(
     context: Context,
     provider: LLMProvider,
     *,
+    attribution: Attributed,
     validate: Callable[[Candidate], Awaitable[Validation]],
     model: str | None = None,
     limits: Limits = Limits(),
@@ -453,27 +502,25 @@ async def generate(
     stage_candidate=None,
     resume: GenerationState | None = None,
     progress=None,
+    investigation: Sequence[dict] = (),
 ) -> Generated:
-    """Run three bounded stages; stage_candidate(None) clears a superseded draft.
+    """Select, design, implement and repair from `attribution`; stage_candidate(None) clears a superseded draft.
 
-    `progress(state)` is called before every model call and after every validation, so a reader can follow a
-    generation while it runs."""
+    `investigation` is what the attribution read, as its trace events: a new generation starts its trace with them,
+    so later stages see that evidence as their own history. `progress(state)` is called before every model call and
+    after every validation, so a reader can follow a generation while it runs."""
     identity = GenerationState.identity(context)
-    state = resume.model_copy(deep=True) if resume is not None else GenerationState(input_id=identity)
+    if resume is not None:
+        state = resume.model_copy(deep=True)
+        if state.attribution != attribution:
+            raise ValueError("the attribution changed; cannot resume this generation")
+    else:
+        state = GenerationState(input_id=identity, attribution=attribution, trace=list(investigation))
     state.check(context, limits)
-    trace = state.trace
-
-    shared = understand.materials(context)
-    shared_materials = {
-        "task": shared.pop("task"),
-        "orientation": shared.pop("orientation"),
-        "available_targets": select.materials(context.declaration),
-        **shared,
-    }
-    ask = partial(
-        _ask,
+    run_stage = partial(
+        ask,
         context=context,
-        shared_materials=shared_materials,
+        shared_materials=shared_materials(context),
         provider=provider,
         state=state,
         limits=limits,
@@ -483,8 +530,10 @@ async def generate(
         stage_candidate=stage_candidate,
         progress=progress,
     )
+    trace = state.trace
 
     async def checked(candidate):
+        candidate = replace(candidate, attribution=state.attribution, selection=state.selection)
         if stage_candidate:
             stage_candidate(candidate)
         validation = await validate(candidate)
@@ -510,14 +559,17 @@ async def generate(
         state.advance("repair")
         return None
 
+    def parse_selection(value):
+        return context.declaration.parse_selection(value, attribution.attribution)
+
     while True:
         if state.stage == "select":
-            _, state.selection = await ask(
+            _, state.selection = await run_stage(
                 "select",
-                ("understand", "select"),
+                ("select",),
+                select.stage_materials(attribution.attribution),
                 {},
-                {},
-                {select.NAME: context.declaration.parse_selection},
+                {select.NAME: parse_selection},
             )
             state.advance("design")
         selection = state.selection
@@ -529,14 +581,14 @@ async def generate(
                 return result
             continue
         if state.stage == "design":
-            name, proposal = await ask(
+            name, proposal = await run_stage(
                 "design",
                 ("design",),
                 design.materials(context, selection),
                 {design.NAME: design.schema(context.declaration, selection)},
                 {
                     design.NAME: lambda value: design.parse(context.declaration, selection, value),
-                    select.REVISE: context.declaration.parse_selection,
+                    select.REVISE: parse_selection,
                 },
             )
             if name == select.REVISE:
@@ -555,7 +607,7 @@ async def generate(
                 raise ValueError("repair state is missing its candidate or validation")
             materials = repair.materials(context, selection, state.candidate, state.validation)
         artifact_schema = context.declaration.artifact_schema(plan)
-        name, proposal = await ask(
+        name, proposal = await run_stage(
             state.stage,
             ("implement",) if state.stage == "implement" else ("implement", "repair"),
             materials,
@@ -563,7 +615,7 @@ async def generate(
             {
                 implement.NAME: lambda value: implement.parse(context.declaration, plan, value, state.staged, authored),
                 repair.NAME: repair.Revision.model_validate,
-                select.REVISE: context.declaration.parse_selection,
+                select.REVISE: parse_selection,
             },
             check_parser=lambda value: implement.parse(context.declaration, plan, value, state.staged, authored),
             stage_files=True,

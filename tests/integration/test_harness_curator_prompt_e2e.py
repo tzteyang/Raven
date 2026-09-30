@@ -10,55 +10,54 @@ from experimental.curator.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
+from tests.test_harness_curator_generation import response
 
-ACTION = """from pydantic import BaseModel
+ACTION = """from pydantic import BaseModel, ConfigDict
 from experimental.curator.harness.prompts import Prompt
+from experimental.curator.harness.preparation import PreparationRequest
 from experimental.curator.harness.strategies import ActionStrategy
+from experimental.curator.harness.action import ActionEvent, ActionDecision
 
-class Situation(BaseModel):
-    question: str
-class Failure(BaseModel):
-    reason: str
-class Decision(BaseModel):
-    accepted: bool
 class Inputs(BaseModel):
     goal: str
     question: str
 
+class Guidance(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    text: str
+
 GUIDANCE = Prompt.from_file(__file__, "prompts/guide.md", Inputs)
 
-class Action(ActionStrategy[Situation, Failure, Decision]):
-    def __init__(self, state, task, infer):
-        self.state, self.task, self.infer = state, task, infer
-    async def guide(self, proposal: Situation) -> str | None:
+class Action(ActionStrategy[None, None]):
+    def __init__(self, state, task, infer, host):
+        self.state, self.task, self.infer, self.host = state, task, infer, host
+    def prepare(self, request: PreparationRequest) -> None:
+        self.host.prompt("action:GUIDANCE")
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.kind != "progress":
+            return ActionDecision()
         self.state["guidance_calls"] = self.state.get("guidance_calls", 0) + 1
-        return GUIDANCE.render(Inputs(goal=self.task.text, question=proposal.question))
-    async def assess(self, proposal: Situation) -> Decision:
-        return Decision(accepted=True)
-    async def recover(self, failure: Failure) -> Decision:
-        return Decision(accepted=False)
+        question = next(row["content"] for row in reversed(event.messages) if row["role"] == "user")
+        inputs = Inputs(goal=self.task.text, question=question)
+        return ActionDecision(guidance=GUIDANCE.render(inputs))
 
-def create(state, task, *, infer):
-    return Action(state, task, infer)
-
-def situation(step):
-    return Situation(question=step.question)
+def create(state, task, *, infer, host):
+    return Action(state, task, infer, host)
 """
 MEMORY = """from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.harness.strategies.memory import ContextRequest, ContextView
+from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView, CompactionRequest
 
-class Memory(MemoryStrategy[str, str, str, bool]):
-    async def recall(self, query: str) -> str:
-        return ""
-    async def retain(self, record: str) -> bool:
-        return False
+class Memory(MemoryStrategy[bool, str, bool]):
+    async def initialize(self, initial: InitialContext) -> bool:
+        return True
     async def compose(self, request: ContextRequest) -> ContextView:
         return ContextView(messages=[*request.messages[:-1],
             {"role": "assistant", "content": "noise " * request.budget}, request.messages[-1]])
-    async def compact(self, request: ContextRequest) -> ContextView:
+    async def compact(self, request: CompactionRequest) -> ContextView:
         required = [request.messages[i] for i in request.required]
-        return ContextView(messages=[*required[:-1],
-            {"role": "assistant", "content": "MEMORY_COMPACTED"}, required[-1]])
+        systems = [message for message in request.messages if message["role"] == "system"]
+        return ContextView(messages=[*systems,
+            {"role": "assistant", "content": "MEMORY_COMPACTED"}, *required])
 
 def create(state, task):
     return Memory()
@@ -68,8 +67,7 @@ def create(state, task):
 def artifact():
     return {
         "values": {
-            "action.strategy": {"factory": "action:create", "guidance": "action:situation"},
-            "prompt.resources": ["action:GUIDANCE"],
+            "action.strategy": {"factory": "action:create", "events": ["progress"]},
         },
         "files": {"action.py": ACTION, "prompts/guide.md": "GUIDANCE_A: $goal / $question"},
     }
@@ -88,7 +86,7 @@ async def test_prompt_guidance_reaches_model_and_revision_preserves_state(baseli
         first = await worker.run("First question")
         assert not first.errors
         assert any(
-            "GUIDANCE_A: Use evidence / First question" in str(row)
+            "GUIDANCE_A: Use evidence /" in str(row) and "First question" in str(row)
             for row in first.records
             if row["kind"] == "provider.request"
         )
@@ -96,15 +94,15 @@ async def test_prompt_guidance_reaches_model_and_revision_preserves_state(baseli
         assert facts["prompts"]["action:GUIDANCE"]["input_schema"]["required"] == ["goal", "question"]
         assert facts["action"]["sessions"]["curator:task"]["guidance_calls"] == 1
         change = {
-            "values": {"prompt.resources": ["action:GUIDANCE"]},
+            "values": {"action.strategy": proposed["values"]["action.strategy"]},
             "files": {"prompts/guide.md": "GUIDANCE_B: $goal / $question"},
         }
         inspection = await worker.inspect()
-        await worker.install(inspection.declaration.accept(plan_for("prompt.resources"), change))
+        await worker.install(inspection.declaration.accept(plan_for("action.strategy"), change))
         second = await worker.run("Second question")
         assert not second.errors
         assert any(
-            "GUIDANCE_B: Use evidence / Second question" in str(row)
+            "GUIDANCE_B: Use evidence /" in str(row) and "Second question" in str(row)
             for row in second.records
             if row["kind"] == "provider.request"
         )
@@ -116,7 +114,7 @@ async def test_prompt_guidance_reaches_model_and_revision_preserves_state(baseli
 async def test_memory_compacts_native_context_and_rejects_lost_protected_messages(baseline, tmp_path):
     baseline.task = Task(text="Keep the current goal")
     proposed = {
-        "values": {"memory.strategy": {"factory": "memory:create", "composition": True}},
+        "values": {"memory.strategy": {"factory": "memory:create", "compact": ["projection"]}},
         "files": {"memory.py": MEMORY},
     }
     async with Worker(baseline, tmp_path / "runtime", provider_factory=replay_provider, timeout=30) as worker:
@@ -132,7 +130,7 @@ async def test_memory_compacts_native_context_and_rejects_lost_protected_message
         )
         bad = deepcopy(proposed)
         bad["files"]["memory.py"] = bad["files"]["memory.py"].replace(
-            "required = [request.messages[i] for i in request.required]", "required = [request.messages[-1]]"
+            'systems = [message for message in request.messages if message["role"] == "system"]', "systems = []"
         )
         inspection = await worker.inspect()
         await worker.install(inspection.declaration.accept(plan_for("memory.strategy"), bad))
@@ -147,11 +145,13 @@ async def test_strategy_inference_is_distinct_from_worker_model_decision(baselin
     baseline.task = Task(text="Use an explicit inference dependency")
     proposed = artifact()
     proposed["files"]["action.py"] = proposed["files"]["action.py"].replace(
-        "return GUIDANCE.render(Inputs(goal=self.task.text, question=proposal.question))",
-        'return await self.infer([{"role": "user", "content": GUIDANCE.render(Inputs(goal=self.task.text, question=proposal.question))}])',
+        "return ActionDecision(guidance=GUIDANCE.render(inputs))",
+        "answer = await self.infer(instruction=GUIDANCE.render(inputs), data={}, output_type=Guidance)\n"
+        "        return ActionDecision(guidance=answer.text)",
     )
     provider = partial(
-        replay_provider, responses=[LLMResponse(content="INFERRED_GUIDANCE"), LLMResponse(content="Final answer")]
+        replay_provider,
+        responses=[LLMResponse(content='{"text":"INFERRED_GUIDANCE"}'), LLMResponse(content="Final answer")],
     )
     async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=30) as worker:
         inspection = await worker.inspect()
@@ -161,3 +161,142 @@ async def test_strategy_inference_is_distinct_from_worker_model_decision(baselin
         assert any(row["kind"] == "strategy.inference" for row in result.records)
         requests = [row for row in result.records if row["kind"] == "provider.request"]
         assert len(requests) == 2 and "INFERRED_GUIDANCE" in str(requests[-1])
+
+
+SEMANTIC_ACTION = """from typing import Literal
+from pydantic import BaseModel, ConfigDict
+from experimental.curator.harness.action import ActionEvent, ActionDecision
+from experimental.curator.harness.preparation import PreparationRequest
+from experimental.curator.harness.prompts import Prompt
+from experimental.curator.harness.strategies import ActionStrategy
+
+class Criteria(BaseModel):
+    goal: str
+
+class Judgment(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+    verdict: Literal["satisfied", "needs_revision", "insufficient_evidence"]
+    explanation: str
+
+CHECK = Prompt.from_file(__file__, "review.md", Criteria)
+
+class Action(ActionStrategy[None, None]):
+    def __init__(self, task, infer, host):
+        self.task, self.infer, self.host = task, infer, host
+
+    def prepare(self, request: PreparationRequest) -> None:
+        self.host.prompt("action:CHECK")
+
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.kind != "proposal" or event.stage != "CHECK_STAGE":
+            return ActionDecision()
+        result = await self.infer(
+            instruction=CHECK.render(Criteria(goal=self.task.text)),
+            data={"candidate": event.text, "calls": [call.model_dump(mode="json") for call in event.calls]},
+            output_type=Judgment,
+        )
+        if result.verdict == "satisfied":
+            return ActionDecision()
+        if event.stage == "dispatch":
+            return ActionDecision(control="reject", feedback=result.explanation)
+        if "revise" in event.allowed_controls:
+            return ActionDecision(control="revise", feedback=result.explanation)
+        return ActionDecision(control="finish", reply="The required check could not establish completion.")
+
+def create(state, task, *, infer, host):
+    return Action(task, infer, host)
+"""
+
+
+def semantic_artifact(stage):
+    return {
+        "values": {
+            "action.strategy": {"factory": "action:create", "events": ["proposal"], "dispatch": stage == "dispatch"}
+        },
+        "files": {
+            "action.py": SEMANTIC_ACTION.replace("CHECK_STAGE", stage),
+            "review.md": "Evaluate the candidate against $goal using only supplied evidence. "
+            "Distinguish a violation from insufficient evidence and explain the needed correction.",
+        },
+    }
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+async def test_semantic_result_resamples_the_main_loop_with_one_attempt_per_proposal(baseline, tmp_path):
+    baseline.task = Task(text="Do not claim completion without supporting evidence.")
+    provider = partial(
+        replay_provider,
+        responses=[
+            LLMResponse(content="Unsupported candidate"),
+            LLMResponse(content='{"verdict":"needs_revision","explanation":"State what remains unverified."}'),
+            LLMResponse(content="Corrected candidate: verification is still outstanding."),
+            LLMResponse(content='{"verdict":"satisfied","explanation":"The limitation is explicit."}'),
+        ],
+    )
+    async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=45) as worker:
+        proposed = semantic_artifact("reply")
+        inspection = await worker.inspect()
+        await worker.install(inspection.declaration.accept(plan_for(*proposed["values"]), proposed))
+        execution = await worker.run("Report the outcome.")
+        assert not execution.errors
+        assert "Corrected candidate" in execution.text and "Unsupported candidate" not in execution.text
+        judgments = [row for row in execution.records if row["kind"] == "strategy.inference.result"]
+        assert len(judgments) == 2 and len({row["operation_id"] for row in judgments}) == 2
+        requests = [row for row in execution.records if row["kind"] == "provider.request"]
+        assert len(requests) == 4
+        assert sum(row["method"] == "chat" for row in requests) == 2
+        assert any(
+            "State what remains unverified." in str(row["parameters"]["messages"])
+            for row in requests
+            if row["method"] != "chat"
+        )
+        assert any(
+            row["kind"] == "action.control"
+            and row["receipt"]["control"] == "revise"
+            and row["receipt"]["status"] == "applied"
+            and row["receipt"]["source_id"] == judgments[0]["source_id"]
+            for row in execution.records
+        )
+        assert (await worker.inspect()).facts["inference"]["attempts_per_operation_chain"] == 1
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "judgment",
+    [
+        '{"verdict":"insufficient_evidence","explanation":"The requested destination is not established."}',
+        "invalid judgment JSON",
+    ],
+)
+async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_tool(baseline, tmp_path, judgment):
+    destination = baseline.workdir / "unapproved.txt"
+    baseline.task = Task(text="Write only to an established destination.")
+    baseline.config.permissions.tools["write_file"] = "allow"
+    provider = partial(
+        replay_provider,
+        responses=[
+            response("write_file", {"path": str(destination), "content": "must not be written"}),
+            LLMResponse(content=judgment),
+            LLMResponse(content="No file was written."),
+        ],
+    )
+    async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=45) as worker:
+        proposed = semantic_artifact("dispatch")
+        inspection = await worker.inspect()
+        await worker.install(inspection.declaration.accept(plan_for(*proposed["values"]), proposed))
+        execution = await worker.run("Prepare the requested output.")
+        assert not destination.exists()
+        assert len([row for row in execution.records if row["kind"] == "strategy.inference"]) == 1
+        if judgment.startswith("{"):
+            assert any(
+                row["kind"] == "action.control"
+                and row["receipt"]["control"] == "reject"
+                and row["receipt"]["status"] == "applied"
+                for row in execution.records
+            )
+        else:
+            assert any(
+                row["kind"] == "strategy.inference.error" and row["error_kind"] == "result" for row in execution.records
+            )

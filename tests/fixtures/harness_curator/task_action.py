@@ -1,44 +1,32 @@
-"""Action example requiring execution evidence before accepting a final claim."""
+"""Require observed evidence in the current turn before accepting a final claim."""
 
-from typing import Literal
-
-from pydantic import BaseModel, ConfigDict
-
+from experimental.curator.harness.action import ActionDecision, ActionEvent
 from experimental.curator.harness.strategies import ActionStrategy
 
 REQUIRE_EVIDENCE = True
 
 
-class Proposal(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    has_evidence: bool
-    pending_tools: bool
-
-
-class Failure(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    question: str
-
-
-class Decision(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-    kind: Literal["approve", "retry", "finish"]
-    text: str = ""
-
-
-class Action(ActionStrategy[Proposal, Failure, Decision]):
+class Action(ActionStrategy[None, None]):
     def __init__(self, state):
         self.state = state
 
-    async def assess(self, proposal: Proposal) -> Decision:
-        if REQUIRE_EVIDENCE and not proposal.has_evidence and not proposal.pending_tools:
-            self.state["retries"] = self.state.get("retries", 0) + 1
-            return Decision(kind="retry", text="Call evidence_probe before finishing.")
-        return Decision(kind="approve")
-
-    async def recover(self, failure: Failure) -> Decision:
-        self.state["recoveries"] = self.state.get("recoveries", 0) + 1
-        return Decision(kind="finish", text="Evidence was not obtained; the task remains incomplete.")
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.kind == "outcome" and any(call.name == "evidence_probe" for call in event.proposed_calls):
+            for row in reversed(event.messages):
+                if row.get("role") == "tool" and row.get("name") == "evidence_probe":
+                    if any(line.startswith("FACT:") for line in row.get("content", "").splitlines()):
+                        self.state["evidence_turn"] = event.scope.turn_id
+                    break
+        if event.kind == "proposal" and event.stage == "reply" and REQUIRE_EVIDENCE:
+            if event.scope.turn_id is None or self.state.get("evidence_turn") != event.scope.turn_id:
+                if "revise" in event.allowed_controls:
+                    self.state["retries"] = self.state.get("retries", 0) + 1
+                    return ActionDecision(control="revise", feedback="Call evidence_probe before finishing.")
+                return ActionDecision(control="finish", reply="Evidence was not obtained; the task remains incomplete.")
+        if event.kind == "failure":
+            self.state["recoveries"] = self.state.get("recoveries", 0) + 1
+            return ActionDecision(control="finish", reply="Evidence was not obtained; the task remains incomplete.")
+        return ActionDecision()
 
 
 def create(state, task):

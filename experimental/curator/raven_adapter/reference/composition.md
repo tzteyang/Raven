@@ -2,7 +2,7 @@
 
 ## Scope and generation ownership
 
-A composed deployment has a root Harness and existing child registrations. Both use the same public four-strategy protocols, target declarations, Python artifacts and local generation stages. A child runs a full Raven AgentLoop through native ACP. It is not a Charter-only implementation and cannot delegate to a third level.
+A composed deployment has a root Harness and host-prepared child registrations. Both use the same four strategy authoring targets and local generation stages. A child runs a full Raven AgentLoop through native ACP and cannot delegate further. The host chooses available baselines and permissions; Curator chooses business decomposition and customization; the running root agent chooses actual calls under those rules. Available children do not require delegation for every task.
 
 The host supplies the child baselines and grants. The native playbook remains authoritative for node tasks, inputs, dependencies, outputs and child names. Runtime instance handles and ACP sessions remain native identities; a registration name is not a session ID. Do not infer node IDs from their spelling: playbook instantiation can give runtime nodes different IDs.
 
@@ -10,7 +10,7 @@ The host supplies the child baselines and grants. The native playbook remains au
 
 The root's inspection includes `scope` and `composition`. Child fact sources describe actual assembled processes; preparation configuration is not execution proof. For each current, added or retired playbook node, the root explains its decision in `Plan.node_reasons`.
 
-A nonempty `<playbook>/nodes/<node>/requirements.json` contains the shared `Requirement` array. Requirements state behavior, evidence, strength and acceptance, not prescribed code. They delegate implementation to the child Curator. Omitted files preserve existing requirements. Explicit removal withdraws management of that node. When the final managed use of a child is withdrawn, the host restores the original artifact supplied for that deployment, which may itself be a previously customized Harness.
+A nonempty `<playbook>/nodes/<node>/requirements.json` contains the shared `Requirement` array. Generated Planning.prepare passes native PlaybookSpec and node requirements to PlanningHost.playbook; the host materializes them before inspecting the proposed graph. Requirements state behavior, evidence, strength and acceptance, not prescribed code. They request implementation from the child Curator. A node without requirements may still call its existing child. Retaining a strategy retains its preparation; revising preparation defines its complete effects, so omit retired requirements from that result. Omitting an asset update alone does not retire its consumer. When the final managed use of a child is withdrawn, the host restores the original artifact supplied for that deployment, which may itself be previously customized.
 
 For a child selected by nonempty node requirements, `assigned_nodes` includes all known uses of that registration in the proposed playbooks, even nodes without requirements. Those other nodes provide impact context, not additional modification requests. Their tasks and handoffs also participate in the child input identity, so changing a known use invalidates a previously generated result. This does not enumerate ad hoc calls or equate a registration with a runtime session.
 

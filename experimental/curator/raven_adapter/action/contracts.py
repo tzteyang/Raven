@@ -1,52 +1,39 @@
-"""Action decisions translated into host-supported review and terminal recovery."""
+"""Select Action events, a model request entry and optional mandatory dispatch checks."""
 
 from pydantic import Field, model_validator
 
+from ...harness.action import EventKind
+from ...harness.interaction import InteractionTool
 from ..strategy import TaskBinding
-from ..targets import EntryPoint
 
 TARGET = "action.strategy"
 
 
 class ActionBinding(TaskBinding):
-    """Semantic decisions and native scheduling remain distinct responsibilities."""
+    """Bind the selected public operations to their actual native consumers.
 
-    guidance: EntryPoint | None = Field(
-        default=None,
-        description="translate(step: StepView) -> ProposalT | None before each model decision. None skips guidance. "
-        "Otherwise calls async strategy.guide(proposal) -> str | None and supplies its text as this "
-        "participant's replaceable addendum. A selected guide must be implemented; no extra model call "
-        "is needed for ordinary template rendering.",
-    )
+    review can request bounded resampling but is not fail-closed enforcement.
+    dispatch installs a native ToolGate calling the same live owner; gate errors
+    refuse the call. Requests queue supported controls for the post-tool boundary,
+    with requested/applied/rejected receipts rather than an invented execution.
+    """
 
-    proposal: EntryPoint | None = Field(
-        default=None,
-        description="translate(step: StepView) -> ProposalT | None at execute_tools and after_iteration. "
-        "None skips assessment. Distinguish proposed calls from results using phase, not response text.",
+    events: tuple[EventKind, ...] = ("proposal",)
+    tool: InteractionTool | None = None
+    requests: bool = Field(
+        default=False, description="Enable typed peer requests without requiring a model-facing tool."
     )
-    decision: EntryPoint | None = Field(
-        default=None,
-        description="translate(decision: DecisionT) -> ReviewResult | None, paired with proposal. "
-        "ReviewResult is experimental.curator.raven_adapter.targets.action.ReviewResult. "
-        "Native composition and retry budgets apply; rollback never undoes external tool effects. "
-        "reason is diagnostic; inject carries correction to the model.",
-    )
-    failure: EntryPoint | None = Field(
-        default=None,
-        description="translate(step: StepView) -> FailureT | None at answerless. This is terminal recovery, "
-        "not permission to restart the loop; native synthesis or rerun may make this path unreachable.",
-    )
-    reply: EntryPoint | None = Field(
-        default=None,
-        description="translate(decision: DecisionT) -> str | None, paired with failure. Convert a supported "
-        "terminal decision to truthful reply text, or None to defer. Reject unsupported recovery effects. "
-        "All translations are synchronous and cannot mutate strategy state.",
+    dispatch: bool = Field(
+        default=False,
+        description="Install a native per-call ToolGate for mandatory dispatch checks. "
+        "Requires proposal in events. The dispatch event supports continue/reject; "
+        "native permissions remain independent and earlier refusals may prevent the gate from running.",
     )
 
     @model_validator(mode="after")
-    def translation_pairs(self):
-        if (self.proposal is None) != (self.decision is None):
-            raise ValueError("action proposal and decision must be supplied together")
-        if (self.failure is None) != (self.reply is None):
-            raise ValueError("action failure and reply must be supplied together")
+    def usable_operations(self):
+        if len(self.events) != len(set(self.events)):
+            raise ValueError("action event kinds must be unique")
+        if self.dispatch and "proposal" not in self.events:
+            raise ValueError("action dispatch checks require proposal events")
         return self

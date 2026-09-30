@@ -1,25 +1,29 @@
 # Strategy behavior, prompt resources and model calls
 
-## What the public operations express
+## Operations and consumers
 
-The four Strategy protocols define collaboration operations. They do not prescribe one algorithm, one prompt shape or one model invocation per method. Deterministic code can implement an operation; an explicitly supplied model client can help implement it. An async annotation alone does not supply that dependency.
+Memory initializes context organization, handles typed information interaction, composes each actual input and optionally compacts declared pressure paths. Planning initializes session state and handles typed interactions, publishing a committed view and optional guidance. Query mode preserves state and projection; business replies are separate. Capability registers candidate resources and selects active capabilities. Action handles typed host events and agent/peer requests. Each operation has concrete inputs, state ownership and an actual consumer.
 
-The current public operations form a runnable minimum, not an exhaustive description of all possible Harness behavior. Memory covers recall and retention. Planning covers plan initialization, viewing and revision. Capability covers inert resource construction and selection. Action covers assessment and recovery, plus optional pre-decision guidance. Memory can also compose and compact message projections when the composition binding is enabled. Separate operations should be added only when an independent caller needs their semantics, rather than turning every implementation detail into a public method.
+These contracts do not prescribe a private method chain or one model call per operation. Deterministic implementations are valid. Independent lifecycle operations should be added only when a real caller needs them.
 
-## Three different prompt paths
+## Three prompt paths
 
-1. **Guidance for the worker model.** A strategy returns task information or a decision; a host translation renders it into a supported model-input path. Planning and Memory context renderers and Capability's selection renderer produce replaceable addenda. Action's native resample translation uses inject to carry a correction; reason alone is diagnostic. These paths use the worker's next normal model call, not a second model call inside the strategy.
-2. **Agent-requested guidance or operation.** The worker can read an installed skill or invoke a registered tool. Skill bodies and tool descriptions teach use; a tool may return instructions or structured state. Planning has a direct generated tool binding. Capability can supply ordinary tools and skill packages. Memory and Action currently have no automatic tool wrapper that exposes their active bound instances.
-3. **Inference inside a strategy.** Summarizing evidence, evaluating a proposal or revising a plan may need an auxiliary model call. The concrete strategy should receive a host-granted model callable/client explicitly, own the prompt and typed result handling, and leave translation callbacks synchronous. A semantic strategy factory can explicitly accept the optional keyword-only infer dependency. The host supplies a bounded async infer(messages) callable returning text; consult its supplied contract. Deterministic strategies need not accept it. Do not create credentials or infer permissions from async. Native plugin factories have their own supplied context contract; consult that contract rather than assuming it applies to a Strategy factory.
+1. Worker guidance: Memory projections, Capability skill/guidance delivery, Planning context and Action guidance enter the normal worker model request. Action revision feedback enters through native rollback injection. Diagnostic reasons alone are not injected.
+2. Agent interaction: actual Skills and registered tools expose the authored protocols. Memory.interact, Action.handle_request and the existing Planning tool resolve the same live owners used elsewhere. Capability registration is candidate-scoped and does not hot-install resources inside a turn.
+3. Single-step inference: a factory may request keyword-only infer. It accepts instruction, JSON data and a concrete output_type; the host returns a strictly validated result from one worker-model attempt. The strategy owns the judgment prompt and result consumer. Read the supplied StrategyInference contract and [inference guide](inference.md), and inspect worker.inference for actual limits. This is not a tool-capable Agent loop. Translations remain synchronous; credentials and invocation identity stay host-owned.
 
 ## Prompt organization
 
-Use the supplied Prompt type and declare its module:symbol object reference in prompt.resources. Its UTF-8 template lives in Artifact.files and loads relative to the declaring module's __file__. Prompt.render validates the declared Pydantic input model and substitutes named variables once. Separate stable instructions and output requirements from task data, retrieved evidence and current state. Fill variables at the point where their values are known. Keep input provenance and the expected output contract explicit.
+Use Prompt when a reusable template is useful. UTF-8 templates live in Artifact.files and load relative to the declaring module. The owning strategy may index its module:symbol reference through host.prompt during prepare. Prompt.render validates a concrete input model and substitutes named variables once; strategy code chooses its actual consumer.
 
-Do not add a mandatory prompt or model field to every public strategy. A static rendering function, a skill and an auxiliary model's system prompt have different consumers. The strategy owns task-specific reasoning rules; the adapter owns native timing and message placement. Register each resource once and make its consumers explicit.
+Separate stable instructions from current user data, evidence and state. Memory.initialize can establish an organization while compose uses current source content, effective capabilities and working state. Do not freeze current questions, directories, model bindings or Skill selections in an initial prompt.
 
-## Current integration boundaries
+Do not force a model dependency, a prompt field or a fixed profile layout on every strategy. The adapter owns host timing and constraints; the strategy owns domain rules and interpretation.
 
-The existing semantic bindings do not cover every possible interaction: Memory composition covers context assembly and budget-triggered compaction of that projection, but does not replace the native mid-iteration shrink path. Capability has no general runtime installation operation. Action guidance supplies a replaceable pre-decision addendum; mandatory tool blocking still requires native gates. Native context, advice, tool, skill and gate targets remain selectable, but their existence does not make those missing public operations implicitly available.
+## Cooperation and evidence
 
-Strategies can compose explicitly constructed delegates. The adapter does not automatically inject other active strategy instances. Do not duplicate another strategy's checkpoint or rebuild an independent owner and describe it as shared state. Check host support before proposing such a mechanism; report a concrete integration gap if it cannot be assembled.
+StrategyPeers supplies narrow reads and requests to existing owners. Optional shared Memory knowledge has explicit task scope; ordinary working state has session scope. Read-only projection cannot modify a peer. Cyclic awaited calls are refused. Record partial success honestly rather than assuming a cross-strategy transaction.
+
+For both initial customization and later revision, connect supplied information to real installed behavior and verify the actual result. A resource list, a returned decision, or an untriggered mechanism does not by itself establish success or failure.
+
+Runtime methods need concrete input and return annotations so the host can validate generated data. Missing annotations produce an operation-specific authoring error. Preserve the synchronous PreparationRequest -> None signature for prepare; inherit it when no setup is needed.

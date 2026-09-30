@@ -76,6 +76,9 @@ def declaration_for(identity, unavailable, *, names=None, fields=None, phases=No
 def describe_runtime(runtime: RavenRuntime, baseline: Baseline, authored: Artifact, records, sources) -> dict:
     from raven.context_engine.segments.render import BOOTSTRAP_FILES
 
+    from ..materials import skill_package_inputs
+    from ..preparation import describe_preparation
+
     loop = runtime.loop
     sources = {name: dict(entry) for name, entry in sources.items()}
     for name, entry in sources.items():
@@ -112,6 +115,7 @@ def describe_runtime(runtime: RavenRuntime, baseline: Baseline, authored: Artifa
         "allow_delegation": baseline.allow_delegation,
         "playbooks": library.names() if library is not None else [],
         "uploads": [str(path) for path in uploaded],
+        "skill_packages": skill_package_inputs(baseline.config.workspace_path),
         "source_roots": [str(path) for path in baseline.source_roots],
         "mode": baseline.mode,
         "origin": baseline.origin.value,
@@ -133,8 +137,13 @@ def describe_runtime(runtime: RavenRuntime, baseline: Baseline, authored: Artifa
         "skills": skills,
         "bootstrap": bootstrap,
         "configuration": redact(baseline.export()),
+        "context_window": {
+            "configured_tokens": baseline.config.agents.defaults.context_window_tokens,
+            "effective_tokens": runtime.loop.context_window_tokens,
+        },
         "authored": redact(authored.model_dump(mode="json")),
         "assembly_evidence": records,
+        "preparation_contracts": describe_preparation(baseline),
     }
     if baseline.mode is not None:
         from dataclasses import asdict
@@ -195,26 +204,26 @@ def describe_bound(bound, records=None):
     data["facts"]["planning"] = bound.planning.facts() if bound.planning else None
     strategies = {name: strategy.facts() for name, strategy in bound.strategies.items()}
     data["facts"].update(strategies)
+    if bound.capability is not None:
+        data["facts"]["capability_resources"] = bound.capability.catalog.facts()
     data["facts"]["prompts"] = bound.prompts
-    data["identity"] = fingerprint({"baseline": data["identity"], "planning": data["facts"]["planning"], **strategies})
+    data["facts"]["inference"] = bound.inference.describe() if bound.inference is not None else None
+    data["facts"]["prepared"] = redact(bound.prepared.model_dump(mode="json"))
+    data["identity"] = fingerprint(
+        {
+            "baseline": data["identity"],
+            "planning": data["facts"]["planning"],
+            "inference": data["facts"]["inference"],
+            **strategies,
+        }
+    )
     return data
 
 
 def unavailable_targets(baseline: Baseline) -> dict[str, str]:
-    from raven.agent.loop.turn_path import _SKIP_AFTER_SEND_ORIGINS, _SKIP_USER_INBOUND_ORIGINS
-
     result = {}
-    if not baseline.allow_delegation:
-        result["planning.playbooks"] = "this host is a leaf Harness and cannot delegate further"
     if baseline.task is None:
         for target in catalogue():
             if target.binding.endswith(".strategy"):
                 result[target.name] = "Bind an explicit current task before generating a task strategy."
-    if baseline.origin in _SKIP_USER_INBOUND_ORIGINS:
-        result["memory.intake"] = "This origin skips the generic inbound hook."
-    if baseline.origin in _SKIP_AFTER_SEND_ORIGINS:
-        result["memory.archive"] = "This origin skips after_send."
-    if not baseline.resident:
-        result["action.services"] = "Services require a resident host."
-        result["memory.session_observers"] = "Session observers require a resident host."
     return result

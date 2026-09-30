@@ -1,15 +1,20 @@
 """Worker state descriptions shared by contracts and generation plans."""
 
-from typing import Literal
+from typing import ClassVar, Literal
 from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
+
+from ...audience import CURATOR
 
 
 class StateUse(BaseModel):
     """Describe state ownership and lifetime without creating a state store."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        name: CURATOR for name in ("resource", "scope", "access", "lifecycle")
+    }
 
     resource: str = Field(min_length=1)
     scope: Literal["turn", "session", "task", "generation", "worker"]

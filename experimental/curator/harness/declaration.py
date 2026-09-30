@@ -12,6 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 from pydantic.json_schema import GenerateJsonSchema
 
 from .artifact import Artifact, Candidate, Plan, Selection
+from .attribution import Attribution
 from .state import StateUse
 
 
@@ -87,6 +88,13 @@ class Target:
         return _prune_definitions(self.project_schema(schema_for(self.payload)))
 
     def project_schema(self, schema: dict[str, Any]) -> dict[str, Any]:
+        if self.binding == "action.strategy" and "events" in schema.get("properties", {}):
+            schema = {**schema, "properties": {**schema["properties"]}}
+            events = schema["properties"]["events"]
+            schema["properties"]["events"] = {**events, "items": {"type": "string", "enum": list(self.phases)}}
+            if set(events.get("default", ())) - set(self.phases):
+                schema["properties"]["events"].pop("default", None)
+                schema["required"] = [*schema.get("required", ()), "events"]
         if self.fields is None:
             return schema
         if "properties" not in schema:
@@ -107,7 +115,10 @@ class Target:
             unknown = value.keys() - set(self.fields)
             if unknown:
                 raise ValueError(f"{self.name}: fields not granted: {sorted(unknown)}")
-        return parse_as(self.payload, value)
+        parsed = parse_as(self.payload, value)
+        if self.binding == "action.strategy" and set(parsed.events) - set(self.phases):
+            raise ValueError("action event phase not granted")
+        return parsed
 
     def parse_result(self, value: Any, *, phase: str | None = None) -> Any:
         if self.result is None:
@@ -218,10 +229,23 @@ class Declaration:
             schema["properties"]["targets"]["maxItems"] = 0
         return schema
 
-    def parse_selection(self, value: Any) -> Selection:
+    def parse_selection(self, value: Any, attribution: Attribution) -> Selection:
+        """A selection whose every target is granted and grounded on diagnoses the attribution submitted."""
         selection = Selection.model_validate(value)
         for name in selection.targets:
             self.target(name)
+            cited = selection.grounds.get(name, ())
+            if not cited:
+                raise ValueError(
+                    f"target {name} cites no diagnosis in grounds; every selected target addresses at least one "
+                    f"diagnosed input, one of {sorted(attribution.abouts)}"
+                )
+            unknown = [about for about in cited if about not in attribution.abouts]
+            if unknown:
+                raise ValueError(
+                    f"target {name} cites diagnoses that were not submitted: {unknown}; "
+                    f"the diagnosed inputs are {sorted(attribution.abouts)}"
+                )
         return selection
 
     def plan_schema(self) -> dict[str, Any]:
@@ -230,6 +254,7 @@ class Declaration:
             change_ref = schema["properties"]["changes"]["items"]["$ref"]
             change_schema = schema["$defs"][change_ref.rsplit("/", 1)[-1]]
             change_schema["properties"]["target"]["enum"] = [target.name for target in self.targets]
+            change_schema["required"] = sorted({*change_schema.get("required", ()), "treatment"})
         else:
             schema["properties"]["changes"]["maxItems"] = 0
         return schema
@@ -252,7 +277,7 @@ class Declaration:
         values_ref = schema["properties"]["values"]["$ref"]
         values = schema["$defs"][values_ref.rsplit("/", 1)[-1]]
         for target in self._selected(plan):
-            if target.fields is not None:
+            if target.fields is not None or target.binding == "action.strategy":
                 prop = values["properties"][target.name]
                 ref = prop.get("$ref")
                 original = schema["$defs"][ref.rsplit("/", 1)[-1]] if ref else prop
@@ -278,17 +303,14 @@ class Declaration:
             }
             for target in self._selected(plan)
         ]
-        content = [target.name for target in self._selected(plan) if target.binding.endswith("_files")]
-        if content:
-            schema["properties"]["remove_paths"]["propertyNames"] = {"enum": content}
-        else:
-            schema["properties"]["remove_paths"]["maxProperties"] = 0
+        schema["properties"]["remove_files"]["uniqueItems"] = True
         if not schema["allOf"]:
             schema.pop("allOf")
         if plan.changes:
             schema["properties"]["remove"]["items"]["enum"] = [target.name for target in self._selected(plan)]
         if not plan.changes:
             schema["properties"]["remove"]["maxItems"] = 0
+            schema["properties"]["remove_files"]["maxItems"] = 0
         return _prune_definitions(schema)
 
     def _artifact_model(self, plan: Plan) -> type[Artifact]:
@@ -304,6 +326,10 @@ class Declaration:
             __base__=Artifact,
             values=(values, Field(description=Artifact.model_fields["values"].description)),
             files=(files.annotation, file_field),
+            remove_files=(
+                Artifact.model_fields["remove_files"].annotation,
+                Artifact.model_fields["remove_files"] if selected else Field(default=(), max_length=0),
+            ),
         )
 
     def accept(self, plan: Plan, value: Any) -> Candidate:
@@ -326,16 +352,16 @@ class Declaration:
         selected = {target.name for target in self._selected(plan)}
         if set(artifact.values) | set(artifact.remove) != selected:
             raise ValueError("supply a value or explicit removal for exactly each selected target")
-        for name in artifact.remove_paths:
-            if not self.target(name).binding.endswith("_files"):
-                raise ValueError("path retirement is available only for content targets")
         for name, value in artifact.values.items():
             self.target(name).parse(value)
         return Candidate(baseline=self.baseline, contract_id=self.contract_id, plan=plan, artifact=artifact)
 
     def validate(self, candidate: Candidate) -> Candidate:
+        """The candidate checked again against this declaration, still carrying the attribution and selection it
+        came from: activation records them as what the installed revision answers."""
         if candidate.baseline != self.baseline:
             raise ValueError("candidate baseline does not match the current declaration")
         if candidate.contract_id != self.contract_id:
             raise ValueError("candidate contract does not match the current declaration")
-        return self.accept(candidate.plan, candidate.artifact)
+        accepted = self.accept(candidate.plan, candidate.artifact)
+        return replace(accepted, attribution=candidate.attribution, selection=candidate.selection)

@@ -1,26 +1,27 @@
 # Memory strategy on Raven
 
-## Material and construction
+Memory also supports code-owned candidate prepare through an optional keyword-only MemoryHost dependency. This precedes session initialization; see [candidate preparation](preparation.md). The observe flag selects the same class's _observe method. Optional intake/archive flags select its async _intake and _archive host methods, with actual lifecycle inputs from memory/contracts.py.
 
-Generate `memory.strategy` with MemoryBinding and a concrete MemoryStrategy. The binding inherits TaskBinding: its factory receives the mutable JSON checkpoint and host Task. All method arguments and returns require concrete JSON-serializable annotations. The host derives runtime checks from these annotations. The public protocol, binding classes and StepView source accompany this material in the generation request.
+Generate memory.strategy with MemoryBinding. The factory receives session state and Task; optional keyword-only shared holds task-wide JSON knowledge, infer supplies a typed single-step judgment during an active turn, plan reads the current plan, and peers provides named cross-strategy operations. Do not store live Python objects in checkpoints. Read the supplied StrategyInference contract before choosing a model-backed operation; it shares one attempt with its sequential peer chain.
 
-## Read and retention paths
+## Real input lifecycle
 
-Before each model call, `query(step)` may request recall; `context(result)` renders a string into this participant's replaceable system addendum. Both entries must be supplied together. None from query skips retrieval; None from context supplies no addendum. An empty concrete query remains a query.
+The adapter captures ContextSource from native SegmentBuilder outputs, including profile, identity, memory and Skills. A custom ContextEngine can provide context_sources(session_key). require_sources defaults to true; an opaque engine fails clearly rather than silently pretending its initial contents are editable.
 
-After an iteration, `retain(step)` may produce a record for the strategy's retain method. None skips that observation. This path does not depend on the user_inbound or after_send paths. StepView contains a current transcript, history, question, phase and response. Tool contents retain native untrusted-data boundary markers; response is a proposal, not execution proof. Repeated recovery observations must not duplicate evidence.
+After actual assembly and scope binding, initialize runs once for that active session owner. Its validated result reaches every compose call. The host composes at the final native model-request boundary, after tool selection and root delegation protection. A tool interaction can therefore affect the next request in the same turn. The loop transcript is not rewritten by this per-call projection.
 
-## State, failure and verification
+Required source text and current user messages survive unchanged. Unknown runtime addenda are protected. Native sources retain their own formatting and lifecycle; do not assume every product has the same profile text. Token allowance and tool/result validation are host-owned.
 
-The task checkpoint is memory.json. Only successful typed operations persist it. Recall is read-only; retention may change it. A failed operation restores this mapping while preserving the live owner and its explicit delegates. Private state, external stores and effects of explicitly called dependencies are outside this rollback. Factory migrations must be explicit and preserve progress on reconstruction.
+## Commands and state
 
-Native participant exceptions may be treated as no opinion. The adapter records failures; this path is not a mandatory security gate. Verify context in actual provider requests, retention against execution results, and persistence across turns and Harness installation. Constructor checks alone do not verify retrieval quality.
+tool declares a name and description. Its schema is derived from the concrete command in InteractionRequest, exposed under request; scope, origin and request_id are host-created. requests enables peer interaction without a model tool. observe is a synchronous MemoryObservation-to-command translation and enters the same interact operation with observation provenance.
 
+Session state and explicit shared task knowledge are saved separately. Repeated initialization preserves progress; revisions may explicitly migrate owned state. compose/compact are read-only, including peer-write prohibitions. Invalid results restore this owner's JSON mappings, not other owners' completed operations or external effects.
 
-## Budgeted context composition
+## Compaction
 
-Set composition=true to enable the public compose and compact operations. Import ContextRequest and ContextView from experimental.curator.harness.strategies.memory; both methods must use these concrete annotations. This lane is exclusive with query/context addendum ownership; retain remains optional and independent.
+compact selects projection, proactive and/or overflow paths. Projection runs when compose exceeds the actual model-input allowance. Selected native pressure paths share Raven's compression retry count; proactive uses the native trigger ratio, while image and other provider recovery remain delegated. Before a first model call, a native pressure request can have capabilities=None; no future effective view is fabricated.
 
-The adapter wraps the native ContextEngine through its existing instance socket. It first receives native assembled messages, preserves system/developer messages and the current last message, and computes an input allowance from the native window minus output and tools reserves. compose selects or organizes this projection; if still over the host estimate, compact must reduce it. Required messages must survive unchanged and in order; tool calls and results must stay paired. Over-budget or invalid results fail explicitly. These operations are read-only with respect to the strategy checkpoint and do not silently overwrite raw history.
+A failed or ineffective reduction is observable and is never reported as changed. If required content cannot fit, expose the failure. Verify actual provider inputs, retained state, source protection and native recovery, not merely method invocation.
 
-This supports assembly-time projection. The native MemoryModule retains its own mid-iteration shrink behavior; no module replacement is implied. Use an applicable probe to check projection behavior, budget fit and failure handling. Factory construction alone does not exercise these methods.
+A valid compose result that remains over allowance, including when projection compaction is not selected, produces a local context-pressure response at the model-input boundary. The native Loop then uses its existing overflow shrink and retry budget; the adapter does not start a separate retry loop or send the oversized request to the provider. This recovery is bounded and may still fail when required content cannot fit or generated content grows again. Invalid message pairing or protected-source changes remain contract errors and do not enter this recovery path.

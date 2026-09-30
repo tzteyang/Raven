@@ -5,7 +5,6 @@ import os
 import shutil
 import sys
 import tempfile
-from contextlib import contextmanager
 from copy import deepcopy
 from pathlib import Path
 from typing import Any
@@ -32,13 +31,10 @@ def extend_artifact(active: Artifact, proposed: Artifact) -> Artifact:
         raise ValueError(f"cannot retire targets that are not currently authored: {sorted(missing)}")
     values = {name: value for name, value in active.values.items() if name not in proposed.remove}
     values = merge(values, proposed.values)
-    for target, paths in proposed.remove_paths.items():
-        held = active.values.get(target)
-        if not isinstance(held, dict) or set(paths) - held.keys():
-            raise ValueError(f"cannot retire content that is not currently authored: {target}")
-        for path in paths:
-            values[target].pop(path, None)
-    return Artifact(values=values, files={**active.files, **proposed.files})
+    if set(proposed.remove_files) - active.files.keys():
+        raise ValueError("cannot retire supporting files that are not currently authored")
+    files = {name: text for name, text in active.files.items() if name not in proposed.remove_files}
+    return Artifact(values=values, files={**files, **proposed.files})
 
 
 def write_package(root: Path, artifact: Artifact) -> Path:
@@ -104,65 +100,23 @@ def load_factory(reference: str, package: Path):
     return value
 
 
-def native_settings(baseline: Baseline, artifact: Artifact, declaration) -> Baseline:
+def native_settings(baseline: Baseline, prepared) -> Baseline:
+    """Apply only typed effects produced by executing the owning strategy."""
     data = baseline.export()
-    for name, value in artifact.values.items():
-        binding = declaration.target(name).binding
-        if binding.startswith("config.") or binding.startswith("raven_config."):
-            root, *parts = binding.split(".")
-            node = data["config" if root == "config" else "extensions"]
-            for part in parts[:-1]:
-                node = node[part]
-            node[parts[-1]] = merge(node[parts[-1]], value)
+    data["config"] = merge(data["config"], prepared.config)
+    data["extensions"] = merge(data["extensions"], prepared.extensions)
     effective = Baseline.restore(data)
-    # A tool the host disables stays disabled (no sandbox for a shell, nobody to answer a question): an authored
-    # disabled_tools list only adds to the host's.
     held = baseline.config.tools.disabled_tools
-    tools = effective.config.tools
-    tools.disabled_tools = [*held, *(name for name in tools.disabled_tools if name not in held)]
+    effective.config.tools.disabled_tools = [
+        *held,
+        *(name for name in effective.config.tools.disabled_tools if name not in held),
+    ]
     return effective
-
-
-CONTENT_ROOTS = {
-    "bootstrap_files": ".",
-    "skill_files": "skills",
-    "playbook_files": "playbooks",
-}
-
-
-def content_base(home: Path, binding: str) -> Path:
-    return home / CONTENT_ROOTS[binding]
-
-
-def content_updates(home: Path, artifact: Artifact, declaration) -> dict[Path, str]:
-    updates = {}
-    for name, value in artifact.values.items():
-        binding = declaration.target(name).binding
-        if binding not in CONTENT_ROOTS:
-            continue
-        base = content_base(home, binding)
-        for relative, text in value.items():
-            path = base / relative_path(relative)
-            _check_parent(home, path)
-            updates[path] = text
-    return updates
 
 
 def _check_parent(home: Path, path: Path) -> None:
     if not path.parent.resolve().is_relative_to(home.absolute()):
         raise ValueError(f"content parent escapes agent home: {path}")
-
-
-def save_content(home: Path, artifact: Artifact, declaration) -> dict:
-    saved = {}
-    for path in content_updates(home, artifact, declaration):
-        if path.is_symlink():
-            saved[path] = (os.readlink(path), 0)
-        elif path.exists():
-            saved[path] = (path.read_bytes(), path.stat().st_mode & 0o777)
-        else:
-            saved[path] = (None, 0)
-    return saved
 
 
 def _write(path: Path, content: bytes, mode: int = 0o600) -> None:
@@ -189,21 +143,25 @@ def restore_content(home: Path, saved: dict) -> None:
             _write(path, content, mode)
 
 
-@contextmanager
-def install_content(home: Path, artifact: Artifact, declaration):
-    saved = save_content(home, artifact, declaration)
-    try:
-        for path, text in content_updates(home, artifact, declaration).items():
-            previous, mode = saved[path]
-            _write(path, text.encode(), mode if isinstance(previous, bytes) else 0o600)
-        yield
-    except BaseException:
-        restore_content(home, saved)
-        raise
+def remap_paths(paths, mapping) -> tuple[Path, ...]:
+    """Move each path under the copy of the root it lies in; a path outside every mapped root stays where it is."""
+    roots = sorted(((Path(a).resolve(), Path(b).resolve()) for a, b in mapping), key=lambda pair: -len(str(pair[0])))
+    result = []
+    for path in paths:
+        path = Path(path).resolve()
+        moved = next(
+            (copied / path.relative_to(original) for original, copied in roots if path.is_relative_to(original)), path
+        )
+        result.append(moved)
+    return tuple(result)
 
 
-def copy_local_state(baseline: Baseline, destination: Path, exclude=()) -> Baseline:
-    """Copy validation inputs while retaining home/workdir ancestry and avoiding self-copy."""
+def copy_local_state(baseline: Baseline, destination: Path, exclude=(), *, remap=()) -> Baseline:
+    """Copy validation inputs while retaining home/workdir ancestry and avoiding self-copy.
+
+    The baseline's file roots move with the copy: a root inside the home or the workdir follows it, and `remap` names
+    further (original, copied) pairs, such as a parent's home and workdir when a child is copied beside it.
+    """
     home, workdir = baseline.config.workspace_path, baseline.workdir
     excluded = {Path(path).resolve() for path in (*exclude, destination)}
 
@@ -233,49 +191,7 @@ def copy_local_state(baseline: Baseline, destination: Path, exclude=()) -> Basel
     result = Baseline.restore(baseline.export())
     result.config.agents.defaults.workspace = str(copied_home)
     result.workdir = copied_workdir
-    return result
-
-
-def edited_content(home, artifact, declaration):
-    """Return authored paths whose current content belongs to an outside editor."""
-    return {
-        path
-        for path, text in content_updates(home, artifact, declaration).items()
-        if path.is_symlink() or not path.is_file() or path.read_text() != text
-    }
-
-
-def release_edited(home, active, submitted, proposed, declaration):
-    """Preserve outside edits; refuse an attempted overwrite and relinquish unchanged bindings."""
-    edited = edited_content(home, active, declaration)
-    if not edited:
-        return proposed
-    clash = sorted(str(path) for path in edited & content_updates(home, submitted, declaration).keys())
-    if clash:
-        raise ValueError(
-            f"authored content was edited outside curation and now belongs to its editor; leave it out of the candidate: {clash}"
-        )
-    values = {}
-    for name, value in proposed.values.items():
-        binding = declaration.target(name).binding
-        if binding in CONTENT_ROOTS:
-            base = content_base(home, binding)
-            value = {relative: text for relative, text in value.items() if base / relative_path(relative) not in edited}
-            if not value:
-                continue
-        values[name] = value
-    return Artifact(values=values, files=proposed.files)
-
-
-def retired_content(home, active, proposed, declaration, originals):
-    """Restore only previously captured paths still owned by this deployment."""
-    old, retained = content_updates(home, active, declaration), content_updates(home, proposed, declaration)
-    edited = edited_content(home, active, declaration)
-    result = {}
-    for path in old.keys() - retained.keys():
-        if path in edited:
-            continue
-        if path not in originals:
-            raise ValueError(f"original content was not captured: {path}")
-        result[path] = originals[path]
+    mapping = ((home, copied_home), (workdir, copied_workdir), *remap)
+    result.file_roots = remap_paths(baseline.file_roots, mapping)
+    result.read_roots = remap_paths(baseline.read_roots, mapping)
     return result

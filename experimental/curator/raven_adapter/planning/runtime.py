@@ -1,95 +1,119 @@
-"""Run a generated planning strategy with per-session checkpoints and native interaction paths."""
+"""Bind typed planning interactions, session projections and ordered native callbacks."""
 
 import asyncio
-import json
 from copy import deepcopy
-from inspect import getdoc, iscoroutinefunction, signature
-from pathlib import Path
-from typing import Any, TypeVar, get_type_hints
-
-from pydantic import ConfigDict, create_model
+from inspect import iscoroutinefunction, signature
+from typing import get_type_hints
+from uuid import uuid4
 
 from raven.agent.hook.participant import ParticipantHook
+from raven.contracts.loop_hooks import HookDecision
 from raven.contracts.participant import AgentParticipant, Intake
-from raven.contracts.tool import Tool
 
-from ...harness.declaration import parse_as, schema_for, typed
+from ...harness.declaration import schema_for, typed
+from ...harness.interaction import InteractionRequest, InteractionScope
+from ...harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
+from ...harness.preparation import PreparationRequest
 from ...harness.strategies import PlanningStrategy
-from ..calls import translator
+from ..calls import OperationGroup, interaction_mode, owner_operation, read_only_operation, strategy_method
 from ..inference import strategy_factory
+from ..inspection import fingerprint
+from ..interaction_tools import interaction_tool
 from ..observe import plain
-from ..strategy import Scopes
-from .contracts import TOOL_NAME, PlanningBinding, PlanningObservation
+from ..strategy import Scopes, concrete, method_types
+from .contracts import PlanningObservation
 
 
 class BoundPlanning:
-    """One plan per session, shared by that session's tool calls, model context and observed iterations.
+    """One state owner per session, publishing projections only after valid checkpoints."""
 
-    A session's plan is initialized from the task on its first use, so each conversation starts its own plan.
-    """
-
-    def __init__(self, config: PlanningBinding, task, path: Path, package: Path, recorder, *, infer=None):
+    def __init__(self, config, task, path, package, recorder, *, infer=None, peers=None, host=None, scope=None):
         self.config, self.task, self.path, self.recorder = config, task, path, recorder
         self.lock = asyncio.Lock()
+        self.operations = peers.operations if peers is not None else OperationGroup()
+        self.projections = {}
+        self.initialized = set()
+        self.latest_projection = None
         self.factory = lambda state: strategy_factory(
-            config.factory, package, state, protocol=PlanningStrategy, infer=infer
+            config.factory,
+            package,
+            state,
+            protocol=PlanningStrategy,
+            infer=infer,
+            plan=self.read,
+            peers=peers,
+            host=host,
         )
         self.scopes = Scopes("planning", task, path, self.factory, per_session=True)
-        for name in ("initialize", "view", "revise"):
+        self.scope = scope or (
+            lambda: InteractionScope(
+                harness_id=str(path.parent),
+                task_id=task.id,
+                revision=package.name,
+                session_key=self.scopes.key(),
+                turn_id=recorder.turn_id,
+            )
+        )
+        annotations = {}
+        for name in ("initialize", "interact"):
             method = getattr(self.strategy, name, None)
             if not iscoroutinefunction(method) or getattr(type(self.strategy), name, None) is getattr(
                 PlanningStrategy, name
             ):
                 raise TypeError(f"planning strategy must implement async {name}")
-            count = len(signature(getattr(PlanningStrategy, name)).parameters) - 1
-            signature(method).bind(*[object() for _ in range(count)])
-        annotations = {name: get_type_hints(getattr(self.strategy, name)) for name in ("initialize", "view", "revise")}
-        self.view_type = annotations["view"]["return"]
-        self.change_type = annotations["revise"][next(iter(signature(self.strategy.revise).parameters))]
-        if any(annotations[name]["return"] != self.view_type for name in ("initialize", "revise")):
-            raise TypeError("planning initialize, view and revise must return the same concrete view type")
-        for annotation in (self.view_type, self.change_type):
-            if annotation is Any or isinstance(annotation, TypeVar) or not schema_for(annotation):
-                raise TypeError("planning method types must be concrete")
-        self.to_change = translator(config.tool, package, 1)
-        self.render = translator(config.context, package, 1)
-        self.observe = translator(config.observe, package, 2)
-        self.request_type = None
-        if self.to_change:
-            parameter = next(iter(signature(self.to_change).parameters))
-            request_type = get_type_hints(self.to_change)[parameter]
-            if request_type is Any or isinstance(request_type, TypeVar) or not schema_for(request_type):
-                raise TypeError("planning tool requires a concrete command annotation")
-            self.request_type = create_model(
-                "PlanningToolRequest", __config__=ConfigDict(extra="forbid"), request=(request_type, ...)
-            )
-        self.current_view = None
-        self.views = {}
+            signature(method).bind(object())
+            inputs, output = method_types("planning", name, method, 1)
+            annotations[name] = (inputs[0], output)
+        initial, self.initial_projection_type = annotations["initialize"]
+        self.request_type, self.result_type = annotations["interact"]
+        if initial is not PlanningInitialization:
+            raise TypeError("planning initialize must accept PlanningInitialization")
+        for value, expected in (
+            (self.initial_projection_type, PlanningProjection),
+            (self.request_type, InteractionRequest),
+            (self.result_type, PlanningResult),
+        ):
+            if not isinstance(value, type) or not issubclass(value, expected):
+                raise TypeError(f"planning requires a concrete {expected.__name__}")
+        result_projection = self.result_type.model_fields["projection"].annotation
+        for projection in (self.initial_projection_type, result_projection):
+            if not isinstance(projection, type) or not issubclass(projection, PlanningProjection):
+                raise TypeError("planning results must contain a concrete PlanningProjection")
+            if set(projection.model_fields) != {"view", "guidance"} or projection.model_computed_fields:
+                raise TypeError("planning projections contain only view and guidance; put domain fields in ViewT")
+        self.view_type = concrete(self.initial_projection_type.model_fields["view"].annotation)
+        if result_projection.model_fields["view"].annotation != self.view_type:
+            raise TypeError("planning initialization and interactions must use the same view type")
+        self.projection_type = PlanningProjection[self.view_type]
+        self.command_type = concrete(self.request_type.model_fields["command"].annotation)
+        self.reply_type = concrete(self.result_type.model_fields["reply"].annotation)
+        if config.observe:
+            strategy_method(self.strategy, "_observe", 2)
 
     @property
-    def state(self) -> dict:
+    def state(self):
         return self.scopes.current().state
 
     @property
     def strategy(self):
         return self.scopes.current().owner
 
-    def _restore(self, state):
+    @property
+    def current_view(self):
+        return plain(deepcopy(self.latest_projection.view)) if self.latest_projection is not None else None
+
+    def _restore(self, before):
         scope = self.scopes.current()
         scope.state.clear()
-        scope.state.update(state)
+        scope.state.update(before)
         scope.owner = self.factory(scope.state)
-
-    async def _enter(self):
-        scope = self.scopes.current()
-        if not scope.resuming:
-            await self._call("initialize", self.task.text, source="task")
-            scope.resuming = True
+        self.initialized.discard(self.scopes.key())
 
     def _translate(self, operation, function, *args, output):
         before = deepcopy(self.state)
         try:
-            result = function(*(deepcopy(value) for value in args))
+            with read_only_operation():
+                result = function(*(deepcopy(value) for value in args))
             if self.state != before:
                 raise ValueError("planning translations must not mutate state")
             return typed(output, result)
@@ -104,132 +128,208 @@ class BoundPlanning:
             )
             raise
 
-    async def _call(self, operation, *args, source):
-        before = deepcopy(self.state)
-        self.recorder.add("planning.call", operation=operation, source=source, arguments=args)
-        try:
-            value = typed(self.view_type, await getattr(self.strategy, operation)(*args))
-            if value is None:
-                raise ValueError("a planning view cannot be None")
-            resuming = self.scopes.current().resuming
-            if (operation == "view" or (operation == "initialize" and resuming)) and self.state != before:
-                raise ValueError(f"planning {operation} changed existing state")
-            updated = deepcopy(self.state)
-            if operation != "view":
-                actual = typed(self.view_type, await self.strategy.view())
-                if self.state != updated or plain(actual) != plain(value):
-                    raise ValueError("planning result and its read-only current view disagree")
-            self.scopes.save()
-            self.current_view = plain(value)
-            self.views[self.scopes.key()] = self.current_view
-        except BaseException as exc:
-            self._restore(before)
-            self.recorder.add(
-                "planning.error",
-                operation=operation,
-                source=source,
-                arguments=args,
-                state=before,
-                error=f"{type(exc).__name__}: {exc}",
-            )
-            raise
-        self.recorder.add("planning.result", operation=operation, source=source, result=value)
-        return value
+    def prepare_candidate(self, request: PreparationRequest):
+        method = self.strategy.prepare
+        parameters = list(signature(method).parameters)
+        hints = get_type_hints(method)
+        if (
+            iscoroutinefunction(method)
+            or len(parameters) != 1
+            or hints.get(parameters[0]) is not PreparationRequest
+            or hints.get("return") is not type(None)
+        ):
+            raise TypeError("planning.prepare must accept PreparationRequest and return None synchronously")
+        self.recorder.add("planning.preparation", status="started", revision=request.revision)
+        self._translate("prepare", method, request, output=type(None))
+        self.recorder.add("planning.preparation", status="completed", revision=request.revision)
 
-    def read(self):
-        """The PlanReader the host supplies to other components: this conversation's last view, detached."""
-        return deepcopy(self.views.get(self.scopes.key()))
+    def _publish(self, projection, source_id=None):
+        self.projections[self.scopes.key()] = deepcopy(projection)
+        self.latest_projection = deepcopy(projection)
+        self.recorder.add("planning.projection", scope=self.scope(), source_id=source_id, projection=projection)
+
+    def _projection(self, value):
+        return self.projection_type(view=deepcopy(value.view), guidance=value.guidance)
 
     async def prepare(self):
-        async with self.lock:
+        if self.scopes.key() in self.initialized:
+            return
+        async with owner_operation("planning", self.lock, group=self.operations, operation="initialize"):
+            if self.scopes.key() in self.initialized:
+                return
             scope = self.scopes.current()
-            await self._call("initialize", self.task.text, source="task")
-            scope.resuming = True
-
-    async def tool_call(self, arguments):
-        async with self.lock:
-            await self._enter()
+            before = deepcopy(self.state)
+            initial = PlanningInitialization(scope=self.scope(), task=self.task.text, restored=scope.resuming)
+            self.recorder.add("planning.call", operation="initialize", source="task", arguments=[initial])
             try:
-                request = parse_as(self.request_type, arguments, strict=True)
-                change = self._translate("tool", self.to_change, request.request, output=self.change_type | None)
-                if change is None:
-                    return await self._call("view", source="tool")
-                return await self._call("revise", change, source="tool")
-            except (ValueError, TypeError) as exc:
-                self.recorder.add("planning.error", operation="tool", source="tool", error=str(exc))
+                with read_only_operation(scope.resuming):
+                    projection = self._projection(
+                        typed(self.initial_projection_type, await self.strategy.initialize(initial))
+                    )
+                if projection.view is None:
+                    raise ValueError("a planning view cannot be None")
+                if scope.resuming and self.state != before:
+                    raise ValueError("planning initialize changed existing state")
+                self.scopes.save()
+            except BaseException as exc:
+                self._restore(before)
+                self.recorder.add(
+                    "planning.error",
+                    operation="initialize",
+                    source="task",
+                    arguments=[initial],
+                    state=before,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
                 raise
+            scope.resuming = True
+            self.initialized.add(self.scopes.key())
+            self._publish(projection)
+            self.recorder.add("planning.result", operation="initialize", source="task", result=projection)
+
+    def read(self):
+        projection = self.projections.get(self.scopes.key())
+        return plain(deepcopy(projection.view)) if projection is not None else None
+
+    async def interact(self, command, *, origin="agent", mode="command", request_id=None):
+        if origin == "agent" and self.config.tool is None:
+            raise ValueError("planning has no selected Agent interaction")
+        if origin == "strategy" and not (self.config.requests or self.config.tool):
+            raise ValueError("planning has no selected peer interaction")
+        mode = interaction_mode(mode)
+        request = self.request_type(
+            scope=self.scope(),
+            request_id=request_id or uuid4().hex,
+            origin=origin,
+            mode=mode,
+            command=typed(self.command_type, command),
+        )
+        await self.prepare()
+        async with owner_operation(
+            "planning",
+            self.lock,
+            group=self.operations,
+            readonly=mode == "query",
+            operation="interact",
+            source_id=request.request_id,
+        ):
+            before = deepcopy(self.state)
+            projection = deepcopy(self.projections[self.scopes.key()])
+            self.recorder.add("planning.call", operation="interact", source=origin, arguments=[request])
+            try:
+                result = typed(self.result_type, await self.strategy.interact(request))
+                published = self._projection(result.projection)
+                if published.view is None:
+                    raise ValueError("a planning view cannot be None")
+                if mode == "query" and (self.state != before or plain(published) != plain(projection)):
+                    raise ValueError("planning query changed retained state or the published projection")
+                if mode == "command":
+                    self.scopes.save()
+            except BaseException as exc:
+                self._restore(before)
+                self.recorder.add(
+                    "planning.error",
+                    operation="interact",
+                    source=origin,
+                    arguments=[request],
+                    state=before,
+                    error=f"{type(exc).__name__}: {exc}",
+                )
+                raise
+            if mode == "command":
+                self._publish(published, request.request_id)
+            self.recorder.add("planning.result", operation="interact", source=origin, result=result)
+            return result
+
+    async def tool_call(self, command, *, mode="command"):
+        return (await self.interact(command, mode=mode)).reply
+
+    def tool(self):
+        if self.config.tool is None:
+            raise ValueError("planning has no selected model interaction")
+        return interaction_tool(self.config.tool, self.command_type, self.tool_call, modes=True)
 
     async def addendum(self):
-        if self.render is None:
+        if not self.config.context:
             return None
-        async with self.lock:
-            await self._enter()
-            view = await self._call("view", source="context")
-            content = self._translate("context", self.render, view, output=str | None)
-            self.recorder.add("planning.context", content=content)
-            return content
+        await self.prepare()
+        content = self.projections[self.scopes.key()].guidance
+        self.recorder.add("planning.context", scope=self.scope(), content=content)
+        return content
 
-    async def after_iteration(self, observation):
-        if self.observe is None:
+    async def observe(self, observation):
+        if observation.phase not in self.config.observe:
             return
-        async with self.lock:
-            await self._enter()
-            view = await self._call("view", source="observation")
-            self.recorder.add("planning.observation", observation=observation)
-            change = self._translate("observe", self.observe, view, observation, output=self.change_type | None)
-            if change is not None:
-                await self._call("revise", change, source="observation")
+        await self.prepare()
+        async with self.operations.enter():
+            async with owner_operation(
+                "planning", self.lock, group=self.operations, operation="observe", source_id=observation.event_id
+            ):
+                view = self.projections[self.scopes.key()].view
+                self.recorder.add("planning.observation", observation=observation)
+                command = self._translate(
+                    "observe",
+                    strategy_method(self.strategy, "_observe", 2),
+                    view,
+                    observation,
+                    output=self.command_type | None,
+                )
+            if command is not None:
+                await self.interact(command, origin="observation", request_id=observation.event_id)
 
-    def facts(self):
-        return {
-            "task_id": self.task.id,
-            "view": deepcopy(self.current_view),
-            "state": deepcopy(self.state),
-            "sessions": self.scopes.sessions(),
-            "view_schema": schema_for(self.view_type),
-            "change_schema": schema_for(self.change_type),
-            "tool_schema": schema_for(self.request_type) if self.request_type else None,
-            "binding": self.config.model_dump(mode="json"),
-        }
+    async def observe_step(self, step, phase):
+        if phase not in self.config.observe:
+            return
+        data = dict(
+            scope=self.scope(),
+            phase=phase,
+            iteration=step.iteration,
+            messages=plain(step.transcript[step.turn_base :]),
+            response=plain(step.response),
+            tools=plain(step.tools),
+        )
+        await self.observe(PlanningObservation(event_id=fingerprint(plain(data)), **data))
 
     def hook(self):
         owner = self
 
         class PlanningParticipant(AgentParticipant):
             async def system_addendum(self, step):
-                try:
-                    content = await owner.addendum()
-                    return Intake(content) if content is not None else None
-                except Exception as exc:
-                    owner.recorder.add("planning.error", operation="context", error=f"{type(exc).__name__}: {exc}")
-                    raise
+                content = await owner.addendum()
+                return Intake(content) if content is not None else None
 
-            async def advise(self, step):
-                if step.phase == "after_iteration" and owner.observe is not None:
-                    try:
-                        await owner.after_iteration(
-                            PlanningObservation(
-                                iteration=step.iteration,
-                                messages=plain(step.transcript[step.turn_base :]),
-                                response=plain(step.response),
-                            )
-                        )
-                    except Exception as exc:
-                        owner.recorder.add("planning.error", operation="observe", error=f"{type(exc).__name__}: {exc}")
-                        raise
+        class PlanningHook(ParticipantHook):
+            async def _observe_phase(self, ctx, phase):
+                try:
+                    await owner.prepare()
+                    await owner.observe_step(self._step(ctx, phase=phase), phase)
+                except Exception as exc:
+                    owner.recorder.add("planning.error", operation=phase, error=f"{type(exc).__name__}: {exc}")
+                    return HookDecision(
+                        short_circuit_result="The task could not continue because its planning update failed."
+                    )
                 return None
 
-        return ParticipantHook("curator-planning", PlanningParticipant)
+            async def before_iteration(self, ctx):
+                failure = await self._observe_phase(ctx, "before_model")
+                return failure if failure is not None else await super().before_iteration(ctx)
 
-    def tool(self):
-        owner = self
+            async def after_iteration(self, ctx):
+                failure = await self._observe_phase(ctx, "after_iteration")
+                return failure if failure is not None else await super().after_iteration(ctx)
 
-        class PlanningTool(Tool):
-            name = TOOL_NAME
-            description = getdoc(owner.to_change) or "Read or revise this conversation's plan."
-            parameters = schema_for(owner.request_type)
+        return PlanningHook("curator-planning", PlanningParticipant, rolls_back=False)
 
-            async def execute(self, **kwargs):
-                return json.dumps(plain(await owner.tool_call(kwargs)), ensure_ascii=False)
-
-        return PlanningTool()
+    def facts(self):
+        projection = self.latest_projection
+        return dict(
+            task_id=self.task.id,
+            view=self.current_view,
+            projection=plain(projection),
+            state=deepcopy(self.state),
+            sessions=self.scopes.sessions(),
+            view_schema=schema_for(self.view_type),
+            command_schema=schema_for(self.command_type),
+            reply_schema=schema_for(self.reply_type),
+            binding=self.config.model_dump(mode="json"),
+        )

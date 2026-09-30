@@ -36,7 +36,7 @@ builder 失败可以导致对应 segment 被省略，并在装配 metadata 中�
 
 ### 3.1 修改 Bootstrap 内容
 
-`memory.prompt` 对应原生 `BOOTSTRAP_FILES` 中的文件，装配时从 agent home 读取。允许的路径从原生常量派生，当前 schema 是具体文件集合的依据。
+Memory.prepare 可调用 host.profile，写入原生 `BOOTSTRAP_FILES` 路径。实际允许路径见 preparation_contracts.profile_paths；内容由 Memory 代码选择和拥有。
 
 它适合相对稳定的规则和背景。必须保持原来仍然有效的内容，并说明修改哪个文件、为什么放在这里、怎样确认其进入实际请求。该入口不等于可以向任意工作目录写入任意文件。
 
@@ -106,7 +106,7 @@ recall 的文本成为模型材料，metadata 不会自动全部渲染到 Prompt
 
 Loop 在迭代前调用 Memory 的主动缩减与图片窗口处理；遇到特定 provider 拒绝后，又可能请求响应式缩减。Memory 决定取舍，Loop 决定是否重试和怎样消耗预算。`changed=False` 意味着该次缩减没有提供新的恢复动作。
 
-`memory.token_config` 对应 TokenWise 请求处理栈，它与 Raven 原生四模块不是同一组对象。原生 `install_from_config` 根据配置安装已实现的请求处理器；字段存在并不意味着安装器使用它。请求处理先于 Action.decide，可调整消息、工具或模型，响应处理用于观察用量等信息。缓存标记是否适用还取决于当前模型绑定的 provider 能力，应在实际请求处核验。
+Memory.prepare 中的 host.tokens(TokenPolicy) 对应 TokenWise 请求处理栈，它与 Raven 原生四模块不是同一组对象。原生 `install_from_config` 根据配置安装已实现的请求处理器；字段存在并不意味着安装器使用它。请求处理先于 Action.decide，可调整消息、工具或模型，响应处理用于观察用量等信息。缓存标记是否适用还取决于当前模型绑定的 provider 能力，应在实际请求处核验。
 
 ContextEngine 的 `owns_compaction` 控制候选历史和 turn 收尾的合并责任；它不取消 Loop 每轮向 Memory 发起的窗口维护。两条路径需要分别考虑。
 

@@ -2,7 +2,7 @@
 
 Each round the owner plays customers from its drill cards, then steps out of the role to judge the drills and
 speaks to the Curator: what went wrong, what matters most, what came back after it was fixed, and which
-materials it now hands over. It reads what the Curator said its last revision changed before it speaks again.
+materials it now hands over. It judges only what the employee did: nothing of the Curator's reaches it.
 
 What the owner knows is fixed: all of the scenario's materials. What varies is when each reaches the employee: all at
 onboarding, as the owner decides after each round, or on a fixed partition of the materials into steps. Whatever the
@@ -12,40 +12,37 @@ was told everything.
 The owner reviews each drill against the card it played this round, with figures computed from its own materials for
 that card and facts read from the delivered deck's structure (`references`); it still decides every verdict itself.
 
-Who turns the owner's review into the Curator's requirements is `analysis`:
-
-- `analyst` (the default): the owner only speaks, the way a real one would: a remark in its own words and the
-  materials it hands over. The base Analyst (`experimental.analyst.run.analyse`) reads those words against the sessions
-  and the execution records, with exactly the materials it reads for any evaluator, and writes the requirements. The
-  owner still keeps a scorecard, one verdict per criterion, but only the value judge reads it (from the analysis
-  record): the criteria, the cards and the references never reach the Analyst or the Curator.
-- `owner`: the agency is this scenario's Analyst (`Agency.review`): the standards come from the owner, so the owner's
-  review is the round's analysis. For every failed criterion it says whether what it already handed over did not take
-  hold (a requirement for the Curator) or the shortfall only waits on material it still holds back (handed over
-  instead).
+The agency is this scenario's assessor (`experimental.iteration.protocols.Assessor`): it holds the standard and only
+speaks, the way a real owner would: a remark in its own words and the materials it hands over. The base Analyst reads
+those words against the sessions and the execution records, with exactly the materials it reads for any assessor, and
+writes the requirements. The owner still keeps a scorecard, one verdict per criterion, but only the value judge reads
+it (from the analysis record under `records`): the criteria, the cards and the references never reach the Analyst or
+the Curator.
 """
 
 import base64
 import json
 import re
+from contextlib import nullcontext
 from pathlib import Path
 from typing import Literal
+from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..analyst import role
-from ..analyst.activity import activity
-from ..analyst.feedback import Feedback
-from ..analyst.run import Limits, analyse
+from ..automation.channel import said
+from ..automation.files import page_images, read_delivered
+from ..automation.traveller import transcript
 from ..curator.generation.context.render import tool
 from ..curator.harness.declaration import schema_for
+from ..curator.raven_adapter.materialize import _write
+from ..curator.raven_adapter.observe import plain
+from ..iteration.compartment import texts_of
 from ..iteration.exchange import exchange, messages
-from ..iteration.protocols import Item, Signal
-from ..requirements import Requirement
-from .files import page_images, read_delivered
+from ..iteration.protocols import Handover, Item, Signal
+from ..scenario import Disclosure
 from .reference import Rules, references
 from .scenario import Scenario
-from .traveller import transcript
 
 NAME = "submit_review"
 DELIVERABLE_LIMIT = 120_000
@@ -67,11 +64,10 @@ TEXT_FILES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml"})
 PRIVATE = frozenset({"sessions", "subagents", "uploads", "skills", "memory", "agent_memory", "user_memory", "decks"})
 SOURCE = "agency"
 REFERENCES = "references.jsonl"
-Plan = Literal["all", "staged"] | tuple[tuple[str, ...], ...]
+# The parts of the review packet that are the partner's own work: what it said, delivered, researched and filed.
+PARTNER_WORK = ("conversations", "deliverables", "research", "colleague_reports", "filed", "back_office", "deck_pages")
 Delivery = Literal["pool", "dialog"]
-Analysis = Literal["owner", "analyst"]
-_PROMPT = Path(__file__).resolve().parent / "prompts" / "agency.md"
-_OWNER = Path(__file__).resolve().parent / "prompts" / "owner.md"
+_PROMPT = Path(__file__).resolve().parent / "prompts" / "owner.md"
 
 
 class Verdict(BaseModel):
@@ -84,37 +80,6 @@ class Verdict(BaseModel):
     note: str = ""
 
 
-class Shortfall(BaseModel):
-    """The behavior behind failed criteria, and whether the employee already had what it needed for it."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    criteria: list[str] = Field(min_length=1, description="Ids of the failed criteria this behavior is behind.")
-    cause: Literal["not_held", "material_missing"] = Field(
-        description="not_held: what you already handed over or told the trainer covers it and it still went wrong; "
-        "material_missing: it is covered only by a material you still hold back."
-    )
-    material: str | None = Field(default=None, description="For material_missing: the withheld material covering it.")
-    behavior: str = Field(min_length=1, description="The situation and what you expect, as a rule for any customer.")
-    observed: str = Field(min_length=1, description="What the employee did instead, naming the drill.")
-    evidence: list[str] = Field(min_length=1, description="The employee's words or files that show it, with the drill.")
-    acceptance: str = Field(min_length=1, description="One statement the next drills can confirm or refute.")
-    strength: Literal["must_hold", "should"] = Field(
-        description="must_hold when your materials state it as holding every time; should when a miss is tolerable."
-    )
-
-
-class Review(BaseModel):
-    """`handover` names the withheld materials the owner decides to give the employee after this round."""
-
-    model_config = ConfigDict(extra="forbid")
-
-    verdicts: list[Verdict] = Field(min_length=1)
-    shortfalls: list[Shortfall] = Field(default_factory=list)
-    remark: str = Field(min_length=1)
-    handover: list[str] = Field(default_factory=list)
-
-
 class Mark(Verdict):
     """A verdict on the owner's own scorecard, which only the value judge reads."""
 
@@ -124,7 +89,7 @@ class Mark(Verdict):
 
 
 class Spoken(BaseModel):
-    """What the owner submits when an Analyst reads its words: its scorecard, its remark and its handover."""
+    """What the owner submits: its scorecard, its remark to the trainer and its handover."""
 
     model_config = ConfigDict(extra="forbid")
 
@@ -133,16 +98,9 @@ class Spoken(BaseModel):
     handover: list[str] = Field(default_factory=list)
 
 
-def waiting(review: Review | Spoken) -> dict[str, str]:
+def waiting(review: Spoken) -> dict[str, str]:
     """Each failed criterion the owner said only waits on a material it still holds back, with that material."""
-    if isinstance(review, Spoken):
-        return {verdict.id: verdict.waits_on for verdict in review.verdicts if verdict.waits_on}
-    return {
-        criterion: shortfall.material
-        for shortfall in review.shortfalls
-        if shortfall.cause == "material_missing" and shortfall.material
-        for criterion in shortfall.criteria
-    }
+    return {verdict.id: verdict.waits_on for verdict in review.verdicts if verdict.waits_on}
 
 
 def cut(text: str, limit: int) -> str:
@@ -202,29 +160,6 @@ def research(exchanges) -> dict[str, str]:
                 if "Research" in str(node.get("subagent")) and path.is_file():
                     found[str(node["node"])] = cut(path.read_text(errors="replace"), RESEARCH_LIMIT)
     return found
-
-
-def partition(steps, materials, rounds: int | None = None) -> tuple[tuple[str, ...], ...]:
-    """Check that `steps` split every material into disjoint, non-empty-at-onboarding steps that fit before the last round."""
-    steps = tuple(tuple(step) for step in steps)
-    named = [name for step in steps for name in step]
-    if not steps or not steps[0]:
-        raise ValueError("a partition gives something at onboarding")
-    if sorted(named) != sorted(set(named)) or set(named) != set(materials):
-        raise ValueError(f"a partition must give every material exactly once; materials: {sorted(materials)}")
-    if rounds is not None and len(steps) > rounds:
-        raise ValueError(f"a partition of {len(steps)} steps does not finish before the last of {rounds} rounds")
-    return steps
-
-
-def revision(plan) -> dict | None:
-    """The Curator's last revision as its reply to the owner: what it understood, in the owner's own terms.
-
-    The plan's changes name harness targets and mechanisms, which the owner knows nothing about, so they stay out.
-    """
-    if plan is None:
-        return None
-    return {"understanding": plan.understanding}
 
 
 def reports(exchanges) -> list[dict]:
@@ -328,31 +263,38 @@ def back_office(exchanges) -> list[dict]:
     return rows
 
 
-def attached(paths) -> tuple[str, ...]:
-    """Uploaded files as a signal's attachments: relative to the agent home, `uploads/<material>/<file>`."""
-    return tuple(f"uploads/{Path(path).parent.name}/{Path(path).name}" for path in paths)
+def attached(paths, kinds) -> tuple[Handover, ...]:
+    """Uploaded files as a signal's handovers, one per material, its files relative to the agent home as
+    `uploads/<material>/...` however deep they sit in the package; `kinds` gives each material's kind."""
+    files: dict[str, list[str]] = {}
+    for path in paths:
+        parts = Path(path).parts
+        start = parts.index("uploads")
+        files.setdefault(parts[start + 1], []).append(Path(*parts[start:]).as_posix())
+    return tuple(Handover(name, kinds[name], tuple(items)) for name, items in files.items())
 
 
-class Agency(role.Analyst):
-    """`prepare` puts the plan's opening materials in place; `evaluate` judges a round and releases what the owner hands over.
+class Agency:
+    """`prepare` puts the plan's opening materials in place; `evaluate` judges a round, records the owner's scorecard
+    and answers with what the owner says, releasing what it hands over.
 
-    `review` turns that judgement into the round's feedback, the way `analysis` says (see the module docstring); with
-    `analyst` the base Analyst runs on `analyst_model` within `analyst_limits`.
-
-    `reply` returns the Curator's latest plan (or None); the owner reads it as the Curator's answer to its last remark.
+    The owner judges what the employee did and knows nothing of how it is trained: no plan or reply of the Curator
+    reaches it.
     `cards` returns each drill's current playing of its card (see `Traveller.card`), keyed by drill name; the owner
     reads it and the references take their trip facts from it. With `records`, each judged drill's card and references
     are appended to `references.jsonl` there. `workdirs` maps each drill to the `workdir` and `home` of the replica it
-    played on (see `experimental.simulation.employee.Together`); `workdir` is the employee's own, where every replica
+    played on (see `experimental.automation.employee.Together`); `workdir` is the employee's own, where every replica
     started.
     `deliver` says how materials reach the employee: `dialog` hands them to the Curator the way an owner would, the
     opening materials uploaded to the employee's `uploads` folder with an onboarding message (`opening`), later ones
     uploaded the same way and also pasted into the remark; `pool` copies them straight into its skill pool, bypassing
     the Curator.
-    `plan` says when materials are given: `all` at onboarding; `staged` gives the scenario's initial set, then what the
-    owner chooses after each round; a partition (a tuple of disjoint steps covering every material) gives step 0 at
-    onboarding and step k with the review of round k. With `rounds`, whatever is still withheld is handed over with
-    the review before the last round.
+    `disclosure` says when materials are given (see `experimental.scenario.disclosure`); by default the staged
+    schedule, the scenario's initial set and then what the owner chooses with each review.
+    `records` is the run's root: the owner's scorecard and any failed judgement go to its `analysis` folder, where the
+    value judge and the record reader find them beside the Analyst's records; `references.jsonl` goes there too.
+    With `boundaries`, every review is made in the party's compartment, sparing the partner's own work
+    (`PARTNER_WORK`), which the partner was free to show, so the owner's own knowledge is held to the party's seal.
     """
 
     def __init__(
@@ -362,53 +304,45 @@ class Agency(role.Analyst):
         skills: Path,
         *,
         workdir: Path,
-        plan: Plan = "staged",
+        disclosure: Disclosure | None = None,
         deliver: Delivery = "dialog",
-        rounds: int | None = None,
         uploads: Path | None = None,
         shared: Path | None = None,
-        reply=None,
         cards=None,
         records: Path | None = None,
         workdirs: dict | None = None,
-        analysis: Analysis = "analyst",
-        analyst_model=None,
-        analyst_limits: Limits = Limits(),
         model=None,
+        effort=None,
         max_calls=4,
         timeout=180,
+        boundaries=None,
     ):
-        if isinstance(plan, tuple):
-            partition(plan, scenario.materials, rounds)
-        elif plan not in ("all", "staged"):
-            raise ValueError(f"unknown disclosure plan: {plan}")
+        disclosure = disclosure or scenario.disclosure()
+        if set(disclosure.materials) != set(scenario.handed):
+            raise ValueError(
+                f"the disclosure schedules other materials than the scenario hands over: {sorted(scenario.handed)}"
+            )
         if deliver not in ("pool", "dialog") or (deliver == "dialog" and uploads is None):
             raise ValueError(f"unknown delivery {deliver!r}, or a dialog delivery without an uploads folder")
-        if analysis not in ("owner", "analyst"):
-            raise ValueError(f"unknown analysis {analysis!r}")
-        super().__init__((), provider, model=model)
+        documents = sorted(name for name in scenario.handed if not (scenario.materials[name] / "SKILL.md").is_file())
+        if deliver == "pool" and documents:
+            raise ValueError(
+                f"the skill pool finds a material only by its SKILL.md, which {documents} lack; deliver them by dialog"
+            )
         self.scenario, self.provider, self.skills, self.workdir = scenario, provider, Path(skills), Path(workdir)
         self.deliver, self.uploads, self.uploaded = deliver, Path(uploads) if uploads else None, []
         self.shared = Path(shared) if shared else None
-        self.plan, self.model, self.max_calls, self.timeout = plan, model, max_calls, timeout
-        self.rounds = rounds
-        self.analysis, self.analyst_model, self.analyst_limits = analysis, analyst_model, analyst_limits
-        self.reply = reply or (lambda: None)
+        self.disclosure, self.model, self.effort = disclosure, model, effort
+        self.max_calls, self.timeout = max_calls, timeout
         self.cards = cards or dict
         self.records = Path(records) if records else None
         self.workdirs = workdirs if workdirs is not None else {}
+        self.boundaries = boundaries
         self.rules = Rules.load(scenario)
+        self.kinds = dict(scenario.kinds)
         self.released: list[str] = []
         self.reviews: list[dict] = []
         self.judged = 0
-
-    def _reply(self) -> dict | None:
-        """The Curator's reply, marked `is_new` false when no revision came since the owner last read it."""
-        reply = revision(self.reply())
-        if reply is None:
-            return None
-        shown, self._shown = getattr(self, "_shown", None), reply["understanding"]
-        return {**reply, "is_new": reply["understanding"] != shown}
 
     def _filed(self, name) -> dict[str, str]:
         """What a drill left for colleagues: the files new or changed in its replica's workdir and home.
@@ -429,32 +363,23 @@ class Agency(role.Analyst):
 
     @property
     def chooses(self) -> bool:
-        """Whether the owner decides what to hand over; on a fixed partition the plan decides."""
-        return self.plan == "staged"
+        """Whether the owner decides what to hand over; on a fixed partition the schedule decides."""
+        return self.disclosure.chooses
 
     def due(self, review: int) -> list[str]:
-        """What the plan hands over with the review of round `review`, whatever the owner chooses."""
-        if isinstance(self.plan, tuple):
-            due = list(self.plan[review]) if review < len(self.plan) else []
-        else:
-            due = []
-        if self.rounds is not None and review >= self.rounds - 1:
-            due += [name for name in self.withheld if name not in due]
-        return [name for name in due if name not in self.released]
+        """What the schedule hands over with the review of round `review`, whatever the owner chooses."""
+        return self.disclosure.due(review, self.released)
 
     @property
     def withheld(self) -> list[str]:
-        return [name for name in self.scenario.materials if name not in self.released]
+        return [name for name in self.scenario.handed if name not in self.released]
 
     def prepare(self) -> None:
         self.scenario.withdraw(self.skills)
         if self.uploads:
             self.scenario.withdraw_uploads(self.uploads, *([self.shared] if self.shared else []))
         self.released, self.reviews, self.uploaded, self.judged = [], [], [], 0
-        if isinstance(self.plan, tuple):
-            opening = list(self.plan[0])
-        else:
-            opening = list(self.scenario.materials if self.plan == "all" else self.scenario.initial)
+        opening = list(self.disclosure.opening)
         if self.deliver == "dialog":
             self.uploaded = self.scenario.upload(opening, self.uploads, shared=self.shared)
             self.released.extend(opening)
@@ -466,7 +391,7 @@ class Agency(role.Analyst):
         if self.deliver != "dialog":
             return ()
         files = "\n".join(f"- {path}" for path in self.uploaded)
-        attachments = attached(self.uploaded)
+        attachments = attached(self.uploaded, self.kinds)
         return (Signal(SOURCE, self.scenario.onboarding.replace("{files}", files), attachments=attachments),)
 
     def _release(self, names) -> list[str]:
@@ -476,8 +401,8 @@ class Agency(role.Analyst):
         self.released.extend(new)
         return new
 
-    def _parse(self, sessions, arguments) -> Review | Spoken:
-        review = (Spoken if self.analysis == "analyst" else Review).model_validate(arguments)
+    def _parse(self, sessions, arguments) -> Spoken:
+        review = Spoken.model_validate(arguments)
         expected = [criterion.id for criterion in self.scenario.criteria]
         got = [verdict.id for verdict in review.verdicts]
         if sorted(got) != sorted(expected):
@@ -489,34 +414,17 @@ class Agency(role.Analyst):
         if stray:
             raise ValueError(f"handover may name only withheld materials {self.withheld}; got {sorted(stray)}")
         coming = {*review.handover, *self.due(self.judged + 1)} if self.chooses else set(self.withheld)
-        if isinstance(review, Spoken):
-            for verdict in review.verdicts:
-                if verdict.waits_on is None:
-                    continue
-                if verdict.result != "fail":
-                    raise ValueError(f"only a failed verdict waits on a material; {verdict.id} is {verdict.result}")
-                if verdict.waits_on not in self.withheld:
-                    raise ValueError(
-                        f"a verdict waits only on a material still withheld {self.withheld}; got {verdict.waits_on!r}"
-                    )
-                if verdict.waits_on not in coming:
-                    raise ValueError(f"hand over {verdict.waits_on!r}, the material a verdict waits on")
-            return review
-        failed = {verdict.id for verdict in review.verdicts if verdict.result == "fail"}
-        covered = {criterion for shortfall in review.shortfalls for criterion in shortfall.criteria}
-        if failed - covered:
-            raise ValueError(f"give a shortfall for every failed criterion; missing: {sorted(failed - covered)}")
-        if covered - failed:
-            raise ValueError(f"shortfalls name only failed criteria; these did not fail: {sorted(covered - failed)}")
-        for shortfall in review.shortfalls:
-            if shortfall.cause == "not_held" and shortfall.material is not None:
-                raise ValueError("only a material_missing shortfall names a material")
-            if shortfall.cause == "material_missing" and shortfall.material not in self.withheld:
+        for verdict in review.verdicts:
+            if verdict.waits_on is None:
+                continue
+            if verdict.result != "fail":
+                raise ValueError(f"only a failed verdict waits on a material; {verdict.id} is {verdict.result}")
+            if verdict.waits_on not in self.withheld:
                 raise ValueError(
-                    f"a missing material is one still withheld {self.withheld}; got {shortfall.material!r}"
+                    f"a verdict waits only on a material still withheld {self.withheld}; got {verdict.waits_on!r}"
                 )
-            if shortfall.cause == "material_missing" and shortfall.material not in coming:
-                raise ValueError(f"hand over {shortfall.material!r}, the material a shortfall waits on")
+            if verdict.waits_on not in coming:
+                raise ValueError(f"hand over {verdict.waits_on!r}, the material a verdict waits on")
         return review
 
     def _record(self, sessions, drawn, found) -> None:
@@ -535,106 +443,25 @@ class Agency(role.Analyst):
                 }
                 log.write(json.dumps(row, ensure_ascii=False) + "\n")
 
+    def record(self, entry: dict) -> None:
+        """Keep the owner's private record beside the run's analysis records, where the value judge reads it."""
+        if self.records is None:
+            return
+        _write(self.records / "analysis" / f"{uuid4().hex}.json", json.dumps(plain(entry), ensure_ascii=False).encode())
+
     async def evaluate(self, sessions) -> Signal:
-        signal, _, _ = await self._judge(sessions)
-        return signal
-
-    async def review(self, worker, sessions, *, previous_signals=(), previous_feedback=None, history=()) -> role.Review:
-        """The owner's judgement of the round as the Analyst's feedback; the Curator hears the owner's own words.
-
-        A requirement is raised for each shortfall the employee had the materials for; one that waits on material is
-        set aside, the material handed over instead. The decision follows in code: curate on any requirement, stop
-        when everything passed and nothing is held back, supplement when only material is handed over.
-        """
-        earlier = list(self.reviews)
+        """The owner's words on the round: its remark, whether it is satisfied and what it hands over, never its
+        verdicts. The scorecard is recorded first, so a failed round keeps it; a failed judgement is recorded too."""
         try:
-            signal, judged, handed = await self._judge(sessions)
+            scorecard, judged, _ = await self._judge(sessions)
         except Exception as exc:
-            self.record(worker, {"source": SOURCE, "error": str(exc)})
+            self.record({"source": SOURCE, "error": str(exc)})
             raise
-        given = tuple(handed) if self.deliver == "dialog" else ()
-        if self.analysis == "analyst":
-            context = {"previous_signals": previous_signals, "previous_feedback": previous_feedback, "history": history}
-            return await self._analysed(worker, sessions, signal, judged, given, **context)
-        # TODO: the single-layer owner analysis is kept only to reproduce runs made before the two-layer design
-        # (owner speaks, base Analyst writes the requirements); it is planned for removal.
-        severity = {criterion.id: criterion.severity for criterion in self.scenario.criteria}
-        raised = [shortfall for shortfall in judged.shortfalls if shortfall.cause == "not_held"]
-        requirements = []
-        for shortfall in raised:
-            failed_before = sum(bool(set(shortfall.criteria) & set(entry["failed"])) for entry in earlier)
-            told_before = any(set(shortfall.criteria) & set(entry.get("raised", ())) for entry in earlier)
-            firm = failed_before or any(severity.get(criterion) == "red_line" for criterion in shortfall.criteria)
-            requirements.append(
-                Requirement(
-                    behavior=shortfall.behavior,
-                    observed=shortfall.observed,
-                    evidence=tuple(shortfall.evidence),
-                    expectation="unmet" if told_before else "new",
-                    acceptance=shortfall.acceptance,
-                    strength="must_hold" if firm else shortfall.strength,
-                    recurrence=failed_before,
-                )
-            )
-        filtered = tuple(
-            f"{', '.join(shortfall.criteria)}: waits on material "
-            + (
-                f"handed over with this review ({shortfall.material})"
-                if shortfall.material in handed
-                else "not given yet"
-            )
-            for shortfall in judged.shortfalls
-            if shortfall.cause == "material_missing"
-        )
-        passed = all(verdict.result == "pass" for verdict in judged.verdicts)
-        giving = f" With this review the owner hands over: {', '.join(given)}." if given else ""
-        if requirements:
-            decision = "curate"
-            reason = f"{len(requirements)} behavior(s) did not hold although the employee had the owner's materials for them."
-        elif passed and not self.withheld and not given:
-            decision, reason = "stop", "Every criterion passed and the owner has handed over all of its materials."
-        elif given:
-            decision, reason = "supplement", "Nothing the employee had the materials for fell short."
-        else:
-            decision, reason = "continue", "Nothing the employee had the materials for fell short."
-        feedback = Feedback(
-            decision=decision, reason=reason + giving, requirements=tuple(requirements), filtered=filtered
-        )
-        self.record(
-            worker,
-            {
-                "source": SOURCE,
-                "signals": (signal,),
-                "shortfalls": [shortfall.model_dump() for shortfall in judged.shortfalls],
-                "requirement_criteria": [shortfall.criteria for shortfall in raised],
-                "feedback": feedback,
-            },
-        )
-        heard = (Signal(SOURCE, signal.text, attachments=signal.attachments),)
-        return role.Review((signal,), feedback, tuple(activity(sessions)), heard, given)
+        self.record({"source": SOURCE, "scorecard": scorecard, "waiting_on_material": waiting(judged)})
+        return Signal(SOURCE, scorecard.text, satisfied=scorecard.satisfied, attachments=scorecard.attachments)
 
-    async def _analysed(self, worker, sessions, scorecard, judged, given, **context) -> role.Review:
-        """The owner's words as the base Analyst reads them for any evaluator: its remark, whether it is satisfied and
-        what it hands over, never its verdicts. The scorecard is recorded first, so a failed analysis keeps it."""
-        spoken = Signal(SOURCE, scorecard.text, satisfied=scorecard.satisfied, attachments=scorecard.attachments)
-        self.record(worker, {"source": SOURCE, "scorecard": scorecard, "waiting_on_material": waiting(judged)})
-        try:
-            feedback = await analyse(
-                worker,
-                self.provider,
-                (spoken,),
-                sessions,
-                model=self.analyst_model,
-                limits=self.analyst_limits,
-                **context,
-            )
-        except Exception as exc:
-            exc.signals = (spoken,)
-            raise
-        return role.Review((spoken,), feedback, tuple(activity(sessions)), None, given)
-
-    async def _judge(self, sessions) -> tuple[Signal, Review | Spoken, list[str]]:
-        """The owner's call: its signal, its submission and the materials it handed over with it."""
+    async def _judge(self, sessions) -> tuple[Signal, Spoken, list[str]]:
+        """The owner's call: its scorecard as a signal, its submission and the materials it handed over with it."""
         drawn = self.cards()
         found = {
             name: references(self.rules, exchanges, getattr(drawn.get(name), "trip", None))
@@ -647,13 +474,14 @@ class Agency(role.Analyst):
         packet = {
             "profile": self.scenario.profile,
             "criteria": [criterion.model_dump() for criterion in self.scenario.criteria],
-            "materials": {name: self.scenario.text(name) for name in self.scenario.materials},
+            "materials": {
+                name: self.scenario.text(name) for name in self.scenario.materials if self.scenario.stands_behind(name)
+            },
             "given_to_the_assistant": list(self.released),
             "withheld": self.withheld,
             "handing_over_now": self.due(self.judged + 1),
             "you_choose_handover": self.chooses,
             "your_earlier_reviews": self.reviews,
-            "curator_reply": self._reply(),
             "cards": {name: drawn[name].text for name in sessions if name in drawn},
             "references": {name: facts for name, facts in found.items() if facts},
             "conversations": {name: transcript(exchanges) for name, exchanges in sessions.items()},
@@ -664,38 +492,37 @@ class Agency(role.Analyst):
             "back_office": {name: rows for name, exchanges in sessions.items() if (rows := back_office(exchanges))},
         }
         packet["deck_pages"], pictures = looks(sessions)
-        spoken = self.analysis == "analyst"
-        request = messages((_OWNER if spoken else _PROMPT).read_text(), packet)
+        request = messages(_PROMPT.read_text(), packet)
         if pictures:
             lead = {"type": "text", "text": "The pages of the delivered decks, in the order `deck_pages` lists them."}
             request.append({"role": "user", "content": [lead, *pictures]})
-        _, review = await exchange(
-            self.provider,
-            request,
-            [
-                tool(
-                    NAME,
-                    "Submit your scorecard (one verdict per criterion), your remark to the trainer, and any materials "
-                    "you now hand over.",
-                    schema_for(Spoken),
-                )
-                if spoken
-                else tool(
-                    NAME,
-                    "Submit one verdict per criterion, a shortfall for every failure, your remark to the trainer, and "
-                    "any materials you now hand over.",
-                    schema_for(Review),
-                )
-            ],
-            submit={NAME: lambda arguments: self._parse(sessions, arguments)},
-            model=self.model,
-            max_calls=self.max_calls,
-            timeout=self.timeout,
-            label="agency",
-        )
+        partner = [
+            *(tuple(said(exchange_) for exchange_ in exchanges) for exchanges in sessions.values()),
+            *texts_of([packet[key] for key in PARTNER_WORK]),
+        ]
+        scope = nullcontext() if self.boundaries is None else self.boundaries.compartment("party", spoken=partner)
+        with scope as entered:
+            _, review = await exchange(
+                self.provider if entered is None else entered.provider(self.provider),
+                request,
+                [
+                    tool(
+                        NAME,
+                        "Submit your scorecard (one verdict per criterion), your remark to the trainer, and any materials "
+                        "you now hand over.",
+                        schema_for(Spoken),
+                    )
+                ],
+                submit={NAME: lambda arguments: self._parse(sessions, arguments)},
+                model=self.model,
+                effort=self.effort,
+                max_calls=self.max_calls,
+                timeout=self.timeout,
+                label="agency",
+            )
         criteria = {criterion.id: criterion for criterion in self.scenario.criteria}
         items = tuple(
-            Item(v.id, v.result, v.session, expected=criteria[v.id].check, actual=v.actual, note=v.note)
+            Item(v.id, v.result, v.session, expected=criteria[v.id].check, actual=v.actual, note=v.note, basis="check")
             for v in review.verdicts
         )
         self.judged += 1
@@ -706,14 +533,15 @@ class Agency(role.Analyst):
             self.uploaded.extend(uploaded)
             files = "\n".join(f"- {path}" for path in uploaded)
             note = self.scenario.handover.replace("{files}", files) if self.scenario.handover else files
-            text = "\n\n---\n\n".join([text, note, *(self.scenario.document(name).strip() for name in handed)])
+            # The owner voices only what it stands behind: a candidate it never confirmed goes over as files alone,
+            # or its words would carry the candidate to the Analyst as the owner's own.
+            voiced = [self.scenario.document(name).strip() for name in handed if self.scenario.stands_behind(name)]
+            text = "\n\n---\n\n".join([text, note, *voiced])
         entry = {
             "round": len(self.reviews) + 1,
             "remark": review.remark.strip(),
             "failed": sorted({v.id for v in review.verdicts if v.result == "fail"}),
         }
-        if not spoken:
-            entry["raised"] = sorted({c for s in review.shortfalls if s.cause == "not_held" for c in s.criteria})
         self.reviews.append(
             {**entry, "waiting_on_material": sorted(set(waiting(review).values())), "handed_over": handed}
         )
@@ -722,6 +550,6 @@ class Agency(role.Analyst):
             text,
             items,
             satisfied=all(item.result == "pass" for item in items),
-            attachments=attached(uploaded),
+            attachments=attached(uploaded, self.kinds),
         )
         return signal, review, handed

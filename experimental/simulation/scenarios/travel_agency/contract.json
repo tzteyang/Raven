@@ -1,0 +1,35 @@
+{
+  "materials": {
+    "service-sop": {"kind": "norm"},
+    "booking-policy": {"kind": "norm"},
+    "plan-deck-spec": {"kind": "norm"},
+    "brand-design-guide": {"kind": "norm"},
+    "handover-ticket": {"kind": "fact"},
+    "price-list": {"kind": "fact"},
+    "value-package": {"kind": "fact"},
+    "comfort-package": {"kind": "fact"},
+    "premium-package": {"kind": "fact"},
+    "plan-deck-template": {"kind": "fact"},
+    "plan-deck-sample": {"kind": "exemplar"},
+    "consultation-scripts": {"kind": "exemplar"}
+  },
+  "checks": {
+    "ai-identity-disclosed": {"derived_from": ["service-sop"]},
+    "intake-and-confirmation": {"derived_from": ["service-sop"]},
+    "question-discipline": {"derived_from": ["service-sop"]},
+    "product-per-matrix": {"derived_from": ["service-sop"]},
+    "quote-sheet-correct": {"derived_from": ["service-sop", "booking-policy"]},
+    "no-discount-with-alternatives": {"derived_from": ["service-sop", "booking-policy"]},
+    "acceptance-before-hold-and-deck": {"derived_from": ["service-sop"]},
+    "handover-and-next-steps": {"derived_from": ["service-sop", "booking-policy"]},
+    "no-invented-facts-and-safety": {"derived_from": ["service-sop"]},
+    "no-internal-chatter": {"derived_from": ["service-sop"]},
+    "deck-delivered-and-consistent": {"derived_from": ["service-sop"]},
+    "deck-facts-researched": {"derived_from": ["service-sop", "plan-deck-spec"]},
+    "deck-structure": {"derived_from": ["plan-deck-spec"]},
+    "deck-template-and-brand": {"derived_from": ["plan-deck-spec"]},
+    "deck-content-rules": {"derived_from": ["brand-design-guide"]},
+    "deck-aesthetics": {"derived_from": ["brand-design-guide"]},
+    "deck-no-forbidden-content": {"derived_from": ["plan-deck-spec"]}
+  }
+}

@@ -22,9 +22,10 @@ def files():
 def binding():
     return PlanningBinding(
         factory="task_planning:create",
-        tool="planning_bindings:command",
-        context="planning_bindings:context",
-        observe="planning_bindings:observe",
+        tool={"name": "curator_planning", "description": "Read or update the task plan."},
+        context=True,
+        observe=("before_model", "after_iteration"),
+        requests=True,
     )
 
 
@@ -49,12 +50,15 @@ async def test_one_checkpoint_connects_tool_context_evidence_and_reconstruction(
     await tool.execute(request={"operation": "complete", "item": "Verify"})
     assert '"Verify":true' in await planning.addendum()
     evidence = PlanningObservation(
+        scope=planning.scope(),
+        event_id="event",
+        phase="after_iteration",
         iteration=1,
         messages=[{"role": "tool", "name": "planning_probe", "tool_call_id": "check", "content": "EVIDENCE:failed"}],
         response=None,
     )
-    await planning.after_iteration(evidence)
-    await planning.after_iteration(evidence)
+    await planning.observe(evidence)
+    await planning.observe(evidence)
     assert planning.state["seen"] == ["check"]
     assert planning.facts()["view"]["items"] == {"Verify": False}
     before = planning.path.read_bytes()
@@ -86,25 +90,28 @@ async def test_observation_contract_failure_retains_replay_inputs_and_owned_stat
     await planning.prepare()
     before = planning.path.read_bytes()
     observation = PlanningObservation(
+        scope=planning.scope(),
+        event_id="event",
+        phase="after_iteration",
         iteration=2,
         messages=[{"role": "tool", "name": "planning_probe", "tool_call_id": "result", "content": "EVIDENCE:passed"}],
         response=None,
     )
     with pytest.raises(PydanticSerializationError, match="Stamp"):
-        await planning.after_iteration(observation)
+        await planning.observe(observation)
     assert planning.path.read_bytes() == before
     error = next(row for row in planning.recorder.rows if row["kind"] == "planning.error")
     assert error["operation"] == "observe"
     assert error["arguments"][1] == observation.model_dump(mode="json")
     assert error["state"] == planning.state
-    assert not any(row["kind"] == "planning.call" and row["operation"] == "revise" for row in planning.recorder.rows)
+    assert not any(row["kind"] == "planning.call" and row["operation"] == "interact" for row in planning.recorder.rows)
     contents["planning_bindings.py"] = contents["planning_bindings.py"].replace(
         'change.stamp = {"sequence": 1}',
         'change = type(change).model_validate({**change.model_dump(), "stamp": {"sequence": 1}})',
     )
     repaired = make(tmp_path, contents=contents)
     await repaired.prepare()
-    await repaired.after_iteration(PlanningObservation.model_validate(error["arguments"][1]))
+    await repaired.observe(PlanningObservation.model_validate(error["arguments"][1]))
     assert repaired.current_view["items"] == {"Verify": True}
 
 
@@ -230,21 +237,139 @@ async def test_other_components_read_a_detached_copy_of_their_own_conversations_
         SESSION.reset(token)
 
 
-@pytest.mark.parametrize("inheritance", ["missing", "lookalike", "indirect"])
-def test_planning_factory_requires_the_public_protocol_in_its_inheritance_chain(tmp_path, inheritance):
+@pytest.mark.asyncio
+@pytest.mark.parametrize("effect", ["state", "projection"])
+async def test_queries_cannot_change_state_or_publish_different_guidance(tmp_path, effect):
     contents = files()
-    line = "class Planning(PlanningStrategy[View, Change]):"
-    if inheritance == "missing":
-        replacement = "class Planning:"
-    elif inheritance == "lookalike":
-        replacement = "class PlanningStrategy:\n    pass\n\n\nclass Planning(PlanningStrategy):"
-    else:
-        replacement = (
-            "class SharedPlanning(PlanningStrategy[View, Change]):\n    pass\n\n\nclass Planning(SharedPlanning):"
-        )
-    contents["task_planning.py"] = contents["task_planning.py"].replace(line, replacement)
-    if inheritance == "indirect":
-        assert make(tmp_path, contents=contents).strategy is not None
-    else:
-        with pytest.raises(TypeError, match="explicitly inheriting PlanningStrategy"):
-            make(tmp_path, contents=contents)
+    replacement = (
+        '            self.state["unexpected"] = True\n'
+        if effect == "state"
+        else '            projection = projection.model_copy(update={"guidance": "NEW_GUIDANCE"})\n'
+    )
+    contents["task_planning.py"] = contents["task_planning.py"].replace(
+        "            return PlanningResult[View, View](reply=projection.view, projection=projection)",
+        replacement + "            return PlanningResult[View, View](reply=projection.view, projection=projection)",
+    )
+    planning = make(tmp_path, contents=contents)
+    await planning.prepare()
+    before, view = planning.path.read_bytes(), planning.read()
+    with pytest.raises(ValueError, match="query changed"):
+        await planning.tool().execute(request={"operation": "view"}, mode="query")
+    assert planning.path.read_bytes() == before
+    assert planning.read() == view
+    assert "unexpected" not in planning.state
+    assert "NEW_GUIDANCE" not in planning.latest_projection.guidance
+
+
+@pytest.mark.asyncio
+async def test_business_refusal_can_record_a_blocker_and_returns_only_its_reply(tmp_path):
+    contents = files()
+    source = contents["task_planning.py"].replace("GUARD_COMPLETION = False", "GUARD_COMPLETION = True")
+    source = source.replace("Command | Evidence, View]", "Command | Evidence, dict]")
+    source = source.replace("PlanningResult[View, View]", "PlanningResult[View, dict]")
+    source = source.replace("reply=projection.view,", "reply=projection.view.model_dump(),")
+    source = source.replace(
+        '                raise ValueError("completion requires verified execution evidence")',
+        '                self.state["blocker"] = "Missing execution evidence"\n'
+        '                return PlanningResult[View, dict](reply={"accepted": False, "reason": self.state["blocker"]}, projection=self._projection())',
+    )
+    contents["task_planning.py"] = source
+    planning = make(tmp_path, contents=contents)
+    result = json.loads(await planning.tool().execute(request={"operation": "complete", "item": "Verify"}))
+    assert result == {"accepted": False, "reason": "Missing execution evidence"}
+    assert planning.state["blocker"] == "Missing execution evidence"
+    assert planning.read()["items"] == {"Verify": False}
+    assert "projection" not in result
+
+
+@pytest.mark.asyncio
+async def test_failed_checkpoint_does_not_publish_a_new_plan(tmp_path, monkeypatch):
+    planning = make(tmp_path)
+    await planning.prepare()
+    before = planning.path.read_bytes()
+
+    def fail():
+        raise OSError("checkpoint unavailable")
+
+    monkeypatch.setattr(planning.scopes, "save", fail)
+    with pytest.raises(OSError, match="checkpoint unavailable"):
+        await planning.interact({"operation": "complete", "item": "Verify"})
+    assert planning.path.read_bytes() == before
+    assert planning.read()["items"] == {"Verify": False}
+    assert planning.state["items"] == {"Verify": False}
+
+
+@pytest.mark.asyncio
+async def test_projection_subclasses_share_the_same_public_view_contract(tmp_path):
+    contents = files()
+    code = contents["task_planning.py"].replace("PlanningProjection[View]", "Projection")
+    code = code.replace("PlanningResult[View, View]", "Result")
+    code = code.replace(
+        "class Planning(",
+        "class Projection(PlanningProjection[View]):\n    pass\n\n\n"
+        "class Result(PlanningResult[View, View]):\n    pass\n\n\nclass Planning(",
+    )
+    contents["task_planning.py"] = code
+    planning = make(tmp_path, contents=contents)
+    await planning.prepare()
+    await planning.interact({"operation": "complete", "item": "Verify"})
+    result = await planning.interact({"operation": "view"}, mode="query")
+    assert result.reply.items == {"Verify": True}
+    before = planning.path.read_bytes()
+    restored = make(tmp_path, contents=contents)
+    await restored.prepare()
+    assert restored.read() == planning.read()
+    assert restored.path.read_bytes() == before
+
+
+def test_projection_subclasses_cannot_hide_a_different_view_contract(tmp_path):
+    contents = files()
+    code = contents["task_planning.py"].replace(
+        "class Planning(", "class OtherView(View):\n    pass\n\n\nclass Planning("
+    )
+    contents["task_planning.py"] = code.replace("PlanningResult[View, View]", "PlanningResult[OtherView, View]")
+    with pytest.raises(TypeError, match="same view type"):
+        make(tmp_path, contents=contents)
+
+
+def test_projection_domain_extensions_belong_in_the_view(tmp_path):
+    contents = files()
+    code = contents["task_planning.py"].replace("PlanningProjection[View]", "Projection")
+    contents["task_planning.py"] = code.replace(
+        "class Planning(",
+        'class Projection(PlanningProjection[View]):\n    extra_domain_field: str = "value"\n\n\nclass Planning(',
+    )
+    with pytest.raises(TypeError, match="put domain fields in ViewT"):
+        make(tmp_path, contents=contents)
+
+
+@pytest.mark.asyncio
+async def test_planning_factory_reader_is_session_scoped_and_only_reads_committed_state(tmp_path):
+    from experimental.curator.raven_adapter.strategy import SESSION
+
+    contents = files()
+    contents["task_planning.py"] = contents["task_planning.py"].replace(
+        '            self.state["items"][change.item] = True',
+        '            self.state["items"][change.item] = True\n            self.observed_committed = self.plan_reader()',
+    )
+    contents["task_planning.py"] += (
+        "\n_original_create = create\ndef create(state, *, plan):\n"
+        "    owner = _original_create(state)\n    owner.plan_reader = plan\n"
+        "    owner.initial_read = plan()\n    return owner\n"
+    )
+    planning = make(tmp_path, contents=contents)
+    assert planning.strategy.initial_read is None
+    await planning.prepare()
+    await planning.interact({"operation": "complete", "item": "Verify"})
+    assert planning.strategy.observed_committed["items"] == {"Verify": False}
+    detached = planning.strategy.plan_reader()
+    detached["items"]["Verify"] = False
+    assert planning.read()["items"] == {"Verify": True}
+    token = SESSION.set("other-session")
+    try:
+        assert planning.strategy.initial_read is None
+        await planning.prepare()
+        assert planning.strategy.plan_reader()["items"] == {"Verify": False}
+    finally:
+        SESSION.reset(token)
+    assert planning.read()["items"] == {"Verify": True}

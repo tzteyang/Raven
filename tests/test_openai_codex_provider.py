@@ -263,6 +263,28 @@ def test_convert_messages_wires_tool_output_into_function_call_output():
     assert items[0]["output"][1]["type"] == "input_image"
 
 
+def test_convert_messages_preserves_all_system_contributions_and_developer_role():
+    instructions, items = _convert_messages(
+        [
+            {"role": "system", "content": "Preference: cobalt"},
+            {
+                "role": "system",
+                "content": [{"type": "text", "text": "Native identity", "cache_control": {"type": "ephemeral"}}],
+            },
+            {"role": "developer", "content": "Use verified evidence."},
+            {"role": "user", "content": "What is the preference?"},
+        ]
+    )
+    assert instructions == "Preference: cobalt\n\nNative identity"
+    assert [item["role"] for item in items] == ["developer", "user"]
+    assert items[0]["content"][0]["text"] == "Use verified evidence."
+
+
+def test_convert_messages_refuses_unsupported_system_blocks_instead_of_dropping_them():
+    with pytest.raises(ValueError, match="text content"):
+        _convert_messages([{"role": "system", "content": [{"type": "image_url", "image_url": {"url": _TINY_PNG_URI}}]}])
+
+
 def _capture_body(monkeypatch) -> list[dict]:
     """Run ``chat`` without a network call or a credential, keeping the body.
 

@@ -6,7 +6,7 @@ Choose the smallest coherent set of supported changes that addresses the underst
 
 ## Inputs
 
-Use available_targets as the effective scope. Relate its effects, channels, phases, state conditions and required knowledge to the current implementation and evidence established during understanding.
+Use available_targets as the effective scope and `diagnosis` as the ground: the accepted diagnoses of every input, each with the responsible mechanism, its state and the evidence. Relate each target's effects, channels, phases, state conditions and required knowledge to the diagnosed inputs it would address.
 
 ## Work
 
@@ -18,7 +18,7 @@ Use available_targets as the effective scope. Relate its effects, channels, phas
 
 ## Handoff
 
-Submit targets and understanding through the selection action. In understanding, state the task diagnosis, evidence, the reason for each choice and unresolved questions for design. Select enough to establish a plausible direction; detailed mechanism investigation belongs to the next stage. An empty targets list means retain the existing Harness. The later plan must cover exactly these targets; change selection explicitly if investigation reveals a different need.
+Submit targets, grounds and understanding through the selection action. `grounds` maps every chosen target to the diagnoses (their `about`) it addresses; a target that addresses no diagnosed input is not selected. In understanding, state the reason for each choice and unresolved questions for design; the diagnoses were made before this stage and are not revised here. Select enough to establish a plausible direction; detailed mechanism investigation belongs to the next stage. An empty targets list means retain the existing Harness. The later plan must cover exactly these targets; change selection explicitly if investigation reveals a different need.
 
 ## Completion check
 

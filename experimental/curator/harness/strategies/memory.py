@@ -1,79 +1,67 @@
-"""Information retrieval and retention implemented by a task's memory owner."""
+"""Initialization, information interaction and projection owned by one Memory strategy."""
 
 from abc import abstractmethod
 from typing import Protocol
 
-from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
+from ..context import CompactionRequest, ContextRequest, ContextView, InitialContext
+from ..interaction import InteractionRequest
+from ..preparation import StrategyPreparation
 
 
-class ContextRequest(BaseModel):
-    """Candidate model messages, a token allowance and protected message indices.
+class MemoryStrategy[InitializationT, CommandT, ReplyT](StrategyPreparation, Protocol):
+    """Own context organization and the meaning of information operations.
 
-    The host owns the token allowance and its token estimator. Protected
-    messages must survive unchanged and in order. Projection does not delete
-    the underlying task history or retained memory.
-    """
+    A factory binds explicit resources and owned state. initialize establishes
+    or restores organization from actual baseline sources; compose uses current
+    sources, state and effective capabilities on every model call. Concrete
+    interaction commands define retrieval, recording, correction or other
+    domain operations without prescribing a fixed CRUD vocabulary.
 
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    messages: list[dict[str, JsonValue]]
-    budget: int = Field(ge=0)
-    required: list[int]
-
-    @model_validator(mode="after")
-    def valid_indices(self):
-        if self.required != sorted(set(self.required)) or any(i < 0 or i >= len(self.messages) for i in self.required):
-            raise ValueError("required indices must be unique, ordered and within messages")
-        return self
-
-
-class ContextView(BaseModel):
-    """A concrete message projection whose budget and protected content the host checks."""
-
-    model_config = ConfigDict(extra="forbid", frozen=True)
-    messages: list[dict[str, JsonValue]]
-
-
-class MemoryStrategy[QueryT, ContextT, RecordT, ReceiptT](Protocol):
-    """Own the selection, provenance and retention rules for task information.
-
-    Concrete types express relevance, evidence and retention intent. Dependencies
-    and storage are explicit constructor arguments. A retrieved statement is not
-    automatically trusted, and a retention receipt is not proof of task success.
+    Candidate prepare selects durable profile/storage dependencies; initialize
+    organizes one session, and compose projects its current inputs. Supplied
+    expert text is material, not proof that a procedure or control was applied.
+    Use Planning for plan mutations and Action for execution judgments.
     """
 
     @abstractmethod
-    async def recall(self, query: QueryT) -> ContextT:
-        """Return detached relevant information without changing retained state.
+    async def initialize(self, initial: InitialContext) -> InitializationT:
+        """Establish or resume this session's initial context organization.
 
-        Empty results are valid. Unavailable stores and invalid queries are
-        errors, not fabricated empty successes. Preserve source and uncertainty.
+        Preserve restored progress and distinguish shared task knowledge from
+        session working state. The concrete result is supplied to compose; it
+        may describe a layout or policy but must not freeze dynamic inputs.
+        No private template-method sequence or baseline text layout is required.
         """
         ...
+
+    async def interact(self, request: InteractionRequest[CommandT]) -> ReplyT:
+        """Handle a typed information request using its host-supplied provenance.
+
+        Agent claims and host execution observations remain distinct. Return an
+        actual outcome, including a valid no-op or refusal; dependency failures
+        remain errors. Repeated evidence must not accidentally duplicate facts.
+        The host selects this operation explicitly for tools or observations.
+        Query mode forbids writes to session and shared information, including
+        through peers. A nested command cannot relax an upstream query boundary.
+        """
+        raise NotImplementedError("memory interaction is not provided")
 
     @abstractmethod
-    async def retain(self, record: RecordT) -> ReceiptT:
-        """Evaluate what to remember, update owned state and report the outcome.
-
-        The concrete request may insert, correct or forget information. A valid
-        no-op is distinct from failure. Repeated evidence must not accidentally
-        duplicate facts; invalid requests preserve the preceding valid state.
-        """
-        ...
-
     async def compose(self, request: ContextRequest) -> ContextView:
-        """Select and organize context within the host allowance.
+        """Organize the actual model-call input without rewriting retained state.
 
-        Return a projection, not a rewritten persistent archive. Hosts may
-        invoke compact when this projection still exceeds the allowance.
-        This operation is explicitly selected by the context binding.
+        Use the current source content and effective capability view. Required
+        messages and source text survive unchanged. The result is a detached
+        projection, not the session archive or a claim that a resource was used.
         """
-        raise NotImplementedError("context composition is not implemented")
+        ...
 
-    async def compact(self, request: ContextRequest) -> ContextView:
-        """Reduce a context projection while preserving required messages and evidence.
+    async def compact(self, request: CompactionRequest) -> ContextView:
+        """Reduce a projection at a declared pressure point.
 
-        Summarization can use explicitly supplied inference; deterministic
-        pruning is also valid. Fail when requirements cannot fit, rather than
-        dropping protected content or claiming success without reducing size.
+        Preserve required content and tool/result pairing. A projection that
+        cannot fit must fail explicitly. Image/provider recovery and loop
+        retries remain host responsibilities. Persisting a summary requires an
+        explicit information operation rather than hidden writes here.
         """
-        raise NotImplementedError("context compaction is not implemented")
+        raise NotImplementedError("memory compaction is not provided")

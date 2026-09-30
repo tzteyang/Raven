@@ -1,1 +1,2 @@
-"""The travel-agency demo: a scenario, a simulated traveller and a simulated agency on top of the iteration loop."""
+"""The simulated cultivations: the travel agency and the supplied expert packages, each a scenario with its simulated owner,
+drill cards and rulers, run on the generic customer and assembly of `experimental.automation`."""

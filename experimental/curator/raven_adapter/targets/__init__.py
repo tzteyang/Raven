@@ -13,8 +13,8 @@ from ...harness.state import StateUse
 class EntryPoint(RootModel[Annotated[str, Field(pattern=_FACTORY_REF_RE)]]):
     """A supplied or generated module:symbol reference; each binding checks the loaded kind.
 
-    For HostWiring.hooks targets the symbol is a zero-argument factory that returns the participant
-    instance whose selected methods run; it is never the method itself.
+    A strategy binding names a synchronous factory returning its explicit public
+    strategy implementation. Supporting objects follow their owning code's contracts.
     """
 
 
@@ -35,8 +35,26 @@ PLUGIN_STATE = StateUse(
 
 def catalogue():
     """Return candidates; actual reachability and the manual determine grants."""
-    from . import action, capability, memory, planning, prompts
+    from pathlib import Path
+
+    from ...harness.inference import InferenceError, StrategyInference
+    from ...harness.preparation import PreparationRequest, StrategyPreparation
+    from ..preparation import ActionHost, CapabilityHost, MemoryHost, PlanningHost, StrategyHost
+    from . import action, capability, memory, planning
     from .knowledge import complete
 
-    targets = (*memory.TARGETS, *planning.TARGETS, *capability.TARGETS, *action.TARGETS, *prompts.TARGETS)
-    return tuple(replace(target, knowledge=complete(target.knowledge)) for target in targets)
+    targets = (*memory.TARGETS, *planning.TARGETS, *capability.TARGETS, *action.TARGETS)
+    hosts = {"memory": MemoryHost, "planning": PlanningHost, "capability": CapabilityHost, "action": ActionHost}
+    common = (
+        PreparationRequest,
+        StrategyPreparation,
+        StrategyHost,
+        StrategyInference,
+        InferenceError,
+        Path(__file__).resolve().parents[2] / "harness/reference/inference.md",
+        Path(__file__).resolve().parents[1] / "reference/preparation.md",
+        Path(__file__).resolve().parents[1] / "reference/pitfalls/artifact.md",
+    )
+    return tuple(
+        replace(target, knowledge=complete((*target.knowledge, *common, hosts[target.roles[0]]))) for target in targets
+    )

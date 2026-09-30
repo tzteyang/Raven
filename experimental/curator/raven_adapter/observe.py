@@ -2,18 +2,17 @@
 
 import json
 from collections.abc import Mapping
+from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import fields, is_dataclass, replace
-from inspect import iscoroutinefunction, signature
+from inspect import iscoroutinefunction
 from pathlib import Path
 
 from pydantic import BaseModel
 
 from raven.contracts.loop_hooks import AgentHook, HookDecision
-from raven.contracts.participant import AgentParticipant, StepView
+from raven.contracts.participant import StepView
 from raven.permissions.turn import current_turn
-
-from .inference import supplied
 
 
 def plain(value):
@@ -60,8 +59,16 @@ class Recorder:
     def __init__(self, path: Path):
         self.path = path
         self.rows: list[dict] = []
-        self.turn_id: str | None = None
+        self._turn_id = ContextVar("curator_recorded_turn", default=None)
         path.parent.mkdir(parents=True, exist_ok=True)
+
+    @property
+    def turn_id(self):
+        return self._turn_id.get()
+
+    @turn_id.setter
+    def turn_id(self, value):
+        self._turn_id.set(value)
 
     def add(self, kind: str, **data) -> None:
         turn = current_turn()
@@ -153,7 +160,19 @@ class LoopObserver(AgentHook):
 
     def __init__(self, recorder: Recorder):
         self.recorder = recorder
-        self.metadata = None
+        self._metadata = {}
+
+    @property
+    def metadata(self):
+        return self._metadata.get(self.recorder.turn_id or current_turn().turn_id)
+
+    @metadata.setter
+    def metadata(self, value):
+        key = self.recorder.turn_id or current_turn().turn_id
+        if value is None:
+            self._metadata.pop(key, None)
+        else:
+            self._metadata[key] = value
 
     async def capture(self, ctx):
         self.metadata = ctx.metadata
@@ -174,74 +193,3 @@ class LoopObserver(AgentHook):
 for _phase, _method in vars(AgentHook).items():
     if iscoroutinefunction(_method):
         setattr(LoopObserver, _phase, LoopObserver.capture)
-
-
-def build_participant(factory, targets, dependencies=None):
-    """Construct the participant an entry point stands for and check it carries the selected methods.
-
-    `dependencies` are the host-supplied keyword-only dependencies the entry point may declare, such as `plan`.
-    """
-    names = ", ".join(target.name for target in targets)
-    try:
-        inner = factory(**supplied(factory, dependencies or {}))
-    except TypeError as exc:
-        raise TypeError(
-            f"{names}: the entry point must be a factory taking no positional arguments (it may declare the "
-            f"keyword-only host dependency plan) and returning the participant instance, not the method "
-            f"itself: {exc}"
-        ) from exc
-    for target in targets:
-        name = target.contract.__name__
-        method = getattr(inner, name, None)
-        if not callable(method):
-            raise TypeError(f"{target.name}: the selected method is missing")
-        if getattr(type(inner), name, None) is getattr(AgentParticipant, name):
-            raise TypeError(f"{target.name}: the selected method is not implemented")
-        count = len(signature(target.contract).parameters) - 1
-        signature(method).bind(*[object() for _ in range(count)])
-    return inner
-
-
-def participant_factory(factory, targets, recorder: Recorder, dependencies=None):
-    """Expose only selected native methods, with a shared instance for one turn."""
-
-    def construct():
-        try:
-            inner = build_participant(factory, targets, dependencies)
-            methods = {target.contract.__name__: _participant_method(inner, target, recorder) for target in targets}
-            return type("DeclaredParticipant", (AgentParticipant,), methods)()
-        except Exception as exc:
-            recorder.add(
-                "participant.error",
-                targets=[target.name for target in targets],
-                phase="construction",
-                error=f"{type(exc).__name__}: {exc}",
-            )
-            raise
-
-    return construct
-
-
-def _participant_method(inner, target, recorder):
-    async def call(self, *args, **kwargs):
-        step = next((arg for arg in (*args, *kwargs.values()) if isinstance(arg, StepView)), None)
-        phase = step.phase if step else None
-        if phase not in target.phases:
-            recorder.add("participant.skipped", target=target.name, phase=phase)
-            return None
-        recorder.add(
-            "participant.call", target=target.name, phase=phase, iteration=step.iteration, rollbacks=step.rollbacks
-        )
-        try:
-            result = await getattr(inner, target.contract.__name__)(
-                *(_copy_observation(arg) for arg in args),
-                **{key: _copy_observation(arg) for key, arg in kwargs.items()},
-            )
-            result = target.parse_result(result, phase=phase)
-        except Exception as exc:
-            recorder.add("participant.error", target=target.name, phase=phase, error=f"{type(exc).__name__}: {exc}")
-            raise
-        recorder.add("participant.result", target=target.name, phase=phase, result=result)
-        return result
-
-    return call

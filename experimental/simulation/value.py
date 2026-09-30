@@ -10,8 +10,11 @@ planning, action, in the root or a child harness), and it held in every judged r
 it completed at least `MIN_ROUNDS` rounds, at least `CULTIVATED` rules were cultivated, planning or action enforced at
 least one rule (a hard case or a held case, below: a prompt or skill revision alone never makes the case), its last
 round met the core (no red-line rule missed, at most `TOLERATED` standard rules missed), every drill of the last round
-still delivered a deck, and its isolation scan found no breach (`experimental.simulation.isolation`). It is **partial** when it shows cultivated, hard or held rules but misses
+still delivered a deck, and its isolation scan found no breach (`experimental.automation.isolation`). It is **partial** when it shows cultivated, hard or held rules but misses
 another condition; a run whose employee left its bounds is **invalid**, whatever else it shows.
+
+A curation answers, or sediments, a rule through a change that addresses a requirement grounded on the rule, by the
+ids the loop recorded (the record's links, see `experimental.simulation.record`).
 
 A hard case is read the same deterministic way:
 
@@ -23,9 +26,9 @@ A hard case is read the same deterministic way:
   a planning step, or for a tool gate or hook refused a tool, with a reason that enforces this rule. Rows of other
   targets, rows that only ran, and interventions for other reasons (another rule, or a wrong block) do not count; a
   rule sedimented through several targets is still one case.
-- Which rule an intervention enforces is read from `attribution` when the record has one (a model reads each reason
-  against the rules, see `experimental.simulation.attribution`); otherwise from the reason naming the rule's id or
-  sharing an SOP section marker with it.
+- Which rule an intervention enforces is read from the record's `attribution`, where a model read each reason
+  against the rules (see `experimental.simulation.attribution`); a record without one credits no intervention to any
+  rule.
 - A rule is a **held case** when planning or action was installed for it at onboarding, it passed every judged round,
   and that target intervened for it. There is no "before" to compare with, so it is weaker evidence.
 """
@@ -90,13 +93,9 @@ def _reasons(row: dict) -> dict[str, int]:
 
 def _enforces(record: dict, criterion: str, row: dict, reason: str) -> bool:
     links = (record.get("attribution") or {}).get("links")
-    if isinstance(links, dict):
-        return criterion in links.get(reason_key(row.get("scope", "root"), row.get("target", ""), reason), ())
-    from .record import _marker_match, _names, markers
-
-    rule = next((entry.get("rule", "") for entry in record.get("ledger", []) if entry["criterion"] == criterion), "")
-    cited = markers(reason)
-    return _names(reason, criterion) or bool(cited and _marker_match(cited, markers(rule)))
+    if not isinstance(links, dict):
+        return False
+    return criterion in links.get(reason_key(row.get("scope", "root"), row.get("target", ""), reason), ())
 
 
 def _acted(record: dict, criterion: str, landing: dict) -> tuple[int, int]:

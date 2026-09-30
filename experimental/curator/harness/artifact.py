@@ -2,10 +2,12 @@
 
 from dataclasses import dataclass
 from pathlib import PurePosixPath
-from typing import Annotated
+from typing import Annotated, ClassVar, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
+from ...audience import CURATOR, INTERNAL, RECORD_ONLY
+from .attribution import Attributed
 from .state import StateUse
 
 
@@ -23,30 +25,60 @@ def relative_path(value: str) -> str:
 
 ArtifactPath = Annotated[str, AfterValidator(relative_path)]
 
+# Who may receive each field of the plan types (experimental.audience). A plan's understanding is the Curator's
+# answer to the feedback, which the Analyst reads back next round; the design, the state, the grounds and the node
+# reasons are the Curator's own; a change's expected behavior and verification go to the record only, where their
+# accuracy can be measured before any role is shown them.
+
 
 class Change(BaseModel):
     """One selected host target and the behavior its change should improve."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        "target": INTERNAL,
+        "reason": INTERNAL,
+        "expected": RECORD_ONLY,
+        "verification": RECORD_ONLY,
+        "treatment": INTERNAL,
+    }
 
     target: str = Field(min_length=1)
     reason: str = Field(min_length=1)
     expected: str = Field(min_length=1)
     verification: str = Field(min_length=1)
+    treatment: Literal["modify", "replace", "add"] | None = Field(
+        default=None,
+        description="Whether the change modifies the diagnosed mechanism, replaces it, or adds one beside it.",
+    )
 
 
 class Selection(BaseModel):
-    """An initial diagnosis and chosen entries, before their mechanism is designed."""
+    """The chosen entries, each grounded on the diagnoses it addresses, before their mechanism is designed."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        "understanding": CURATOR,
+        "targets": INTERNAL,
+        "grounds": CURATOR,
+    }
 
-    understanding: str = Field(min_length=1)
+    understanding: str = Field(
+        min_length=1, description="The reason for each choice and the open questions for design."
+    )
     targets: tuple[str, ...] = ()
+    grounds: dict[str, tuple[str, ...]] = Field(
+        default_factory=dict,
+        description="For each selected target, the diagnosed inputs (their about values) it addresses.",
+    )
 
     @model_validator(mode="after")
     def unique_targets(self) -> "Selection":
         if len(self.targets) != len(set(self.targets)):
             raise ValueError("each selected target must occur once")
+        stray = set(self.grounds) - set(self.targets)
+        if stray:
+            raise ValueError(f"grounds name targets that were not selected: {sorted(stray)}")
         return self
 
 
@@ -54,6 +86,13 @@ class Plan(BaseModel):
     """Selection lives in changes; state descriptions belong to the proposed mechanism."""
 
     model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        "understanding": INTERNAL,
+        "design": CURATOR,
+        "changes": INTERNAL,
+        "state": CURATOR,
+        "node_reasons": CURATOR,
+    }
 
     understanding: str = Field(min_length=1)
     design: str = Field(
@@ -63,7 +102,11 @@ class Plan(BaseModel):
     state: tuple[StateUse, ...] = ()
     node_reasons: dict[ArtifactPath, Annotated[str, Field(min_length=1)]] = Field(
         default_factory=dict,
-        description="For a composed root, explain each node's keep/change/withdraw decision. Requirements determine delegation; reasons are analysis, not another management switch.",
+        description="For a composed root, explain every current, added and retired Playbook node using its exact "
+        "playbook_name/node_id key. Read existing keys from composition.nodes and derive new keys from the "
+        "prepared Playbooks. Use an empty mapping when both node sets are empty, even if child Harnesses exist. "
+        "Child Harness names belong in the design narrative, not these keys. Nonempty node requirements request "
+        "child customization; runtime invocation is a separate decision. Reasons explain decisions, not another switch.",
     )
 
     @model_validator(mode="after")
@@ -99,9 +142,10 @@ class Artifact(BaseModel):
         description="Explicitly retire selected, currently authored target bindings. Omission preserves an existing binding.",
     )
 
-    remove_paths: dict[str, tuple[ArtifactPath, ...]] = Field(
-        default_factory=dict,
-        description="Explicitly retire currently authored paths in selected content targets. Supply that target's value, which may be empty. Other omitted paths remain authored.",
+    remove_files: tuple[ArtifactPath, ...] = Field(
+        default=(),
+        description="Explicitly retire supporting source or asset files. Other omitted files remain authored. "
+        "Strategy preparation defines the complete desired resource/content set for the revised implementation.",
     )
 
     @model_validator(mode="after")
@@ -109,14 +153,8 @@ class Artifact(BaseModel):
         supplied = self.values.model_fields_set if isinstance(self.values, BaseModel) else self.values.keys()
         if len(self.remove) != len(set(self.remove)) or set(self.remove) & supplied:
             raise ValueError("retire each target once and do not also supply its value")
-        for target, paths in self.remove_paths.items():
-            if not paths or len(paths) != len(set(paths)):
-                raise ValueError("retired content paths must be nonempty and unique")
-            if target in self.remove or target not in supplied:
-                raise ValueError("path retirement requires a supplied target value")
-            value = self.values[target] if isinstance(self.values, dict) else getattr(self.values, target)
-            if not isinstance(value, dict) or set(paths) & value.keys():
-                raise ValueError("cannot write and retire the same content path")
+        if len(self.remove_files) != len(set(self.remove_files)) or set(self.remove_files) & self.files.keys():
+            raise ValueError("retired supporting files must be unique and cannot also be supplied")
         for path in self.files:
             parents = PurePosixPath(path).parents
             if any(str(parent) in self.files for parent in parents):
@@ -126,12 +164,16 @@ class Artifact(BaseModel):
 
 @dataclass(frozen=True)
 class Candidate:
-    """Host-attached baseline identity alongside a plan and its schema-checked artifact."""
+    """Host-attached baseline identity alongside a plan and its schema-checked artifact; `attribution` is the
+    attribution the plan was chosen from, with the identity of the attributor that made it, and `selection` the
+    selection that grounded each target on it."""
 
     baseline: str
     contract_id: str
     plan: Plan
     artifact: Artifact
+    attribution: Attributed | None = None
+    selection: Selection | None = None
 
 
 @dataclass(frozen=True)

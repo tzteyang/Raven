@@ -1,4 +1,4 @@
-"""Keep task intent, host facts, previous expectations and observations distinct."""
+"""Keep task intent, host facts, the previous plan and observations distinct."""
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy

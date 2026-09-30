@@ -1,79 +1,120 @@
-"""An authored file edited outside curation belongs to its editor: the host stops authoring it and never writes over it."""
+"""Prepared native content preserves outside edits, exact originals and withdrawal semantics."""
 
 from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.harness import Artifact
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.worker import Worker
-from raven.config.raven import RavenConfig
-from raven.config.schema import Config
-
-DECLARATION = SimpleNamespace(target=lambda name: SimpleNamespace(binding="skill_files"))
-SKILLS = {"price-list/SKILL.md": "placeholder", "scripts/SKILL.md": "scripts"}
+from experimental.curator.raven_adapter.content import ContentInstallation
+from experimental.curator.raven_adapter.observe import Recorder
+from experimental.curator.raven_adapter.preparation import PreparedHarness
 
 
-def worker_with_authored_skills(tmp_path):
-    home = tmp_path / "home"
-    config = Config.model_validate({"agents": {"defaults": {"workspace": str(home)}}})
-    worker = Worker(Baseline(config, RavenConfig(), tmp_path), tmp_path / "worker")
-    worker.artifact = Artifact(values={"planning.skills": dict(SKILLS)})
-    for relative, text in SKILLS.items():
-        path = home / "skills" / relative
-        path.parent.mkdir(parents=True)
-        path.write_text(text)
-        worker._content_baseline[path] = (None, 0)
-    return worker, home / "skills" / "price-list" / "SKILL.md"
-
-
-def test_untouched_authored_files_stay_authored_and_can_be_retired(tmp_path):
-    worker, price = worker_with_authored_skills(tmp_path)
-    assert worker._release_edited(Artifact(values={}), worker.artifact, DECLARATION) == worker.artifact
-    assert worker._retired_content(Artifact(values={}), DECLARATION) == {
-        price: (None, 0),
-        price.parent.parent / "scripts" / "SKILL.md": (None, 0),
-    }
-
-
-def test_a_file_the_owner_edited_is_released_from_a_carried_over_binding(tmp_path):
-    worker, price = worker_with_authored_skills(tmp_path)
-    price.write_text("the agency's real price list")
-    released = worker._release_edited(Artifact(values={}), worker.artifact, DECLARATION)
-    assert released.values == {"planning.skills": {"scripts/SKILL.md": "scripts"}}
-    assert worker._retired_content(released, DECLARATION) == {}
-    assert price.read_text() == "the agency's real price list"
-
-
-def test_submitting_content_for_a_file_the_owner_edited_is_refused(tmp_path):
-    worker, price = worker_with_authored_skills(tmp_path)
-    price.write_text("the agency's real price list")
-    for content in ("placeholder v2", "the agency's real price list"):
-        submitted = Artifact(values={"planning.skills": {"price-list/SKILL.md": content}})
-        with pytest.raises(ValueError, match="now belongs to its editor; leave it out of the candidate"):
-            worker._release_edited(submitted, worker.artifact, DECLARATION)
-
-
-def test_playbook_files_are_written_under_the_agent_home_playbooks_folder(tmp_path):
-    from experimental.curator.harness import Artifact, Declaration
-    from experimental.curator.raven_adapter.materialize import content_updates
-    from experimental.curator.raven_adapter.targets import catalogue
-
-    declaration = Declaration(
-        "baseline", tuple(target for target in catalogue() if target.name == "planning.playbooks")
+def install(tmp_path, files):
+    home, root = tmp_path / "home", tmp_path / "runtime"
+    home.mkdir(exist_ok=True)
+    root.mkdir(exist_ok=True)
+    transaction = ContentInstallation(
+        home, root, PreparedHarness(content={"memory": files}), Recorder(root / "records.jsonl")
     )
-    artifact = Artifact(values={"planning.playbooks": {"plan-delivery/playbook.md": "spec"}}, files={})
-    assert content_updates(tmp_path, artifact, declaration) == {
-        tmp_path / "playbooks" / "plan-delivery" / "playbook.md": "spec"
-    }
+    transaction.apply()
+    return transaction
 
 
-def test_the_host_checks_each_authored_playbook_was_loaded():
+def test_untouched_prepared_files_can_be_revised_and_withdrawn(tmp_path):
+    first = install(tmp_path, {"TOOLS.md": "first", "agent_memory/profile/soul.md": "retained"})
+    second = install(tmp_path, {"TOOLS.md": "second", "agent_memory/profile/soul.md": "retained"})
+    assert (first.home / "TOOLS.md").read_text() == "second"
+    install(tmp_path, {})
+    assert not (first.home / "TOOLS.md").exists()
+    assert not (first.home / "agent_memory/profile/soul.md").exists()
+    assert second.saved[first.home / "TOOLS.md"][0] == b"first"
+
+
+def test_an_outside_edit_is_relinquished_and_survives_restart_and_withdrawal(tmp_path):
+    first = install(tmp_path, {"TOOLS.md": "generated", "agent_memory/profile/soul.md": "retained"})
+    path = first.home / "TOOLS.md"
+    path.write_text("The owner's corrected rules")
+    held = install(tmp_path, {"TOOLS.md": "generated", "agent_memory/profile/soul.md": "retained"})
+    assert "TOOLS.md" not in held.prepared.files()
+    install(tmp_path, {"TOOLS.md": "generated", "agent_memory/profile/soul.md": "retained"})
+    install(tmp_path, {})
+    assert path.read_text() == "The owner's corrected rules"
+
+
+def test_a_revised_proposal_cannot_overwrite_an_outside_editor(tmp_path):
+    first = install(tmp_path, {"TOOLS.md": "generated"})
+    path = first.home / "TOOLS.md"
+    path.write_text("Human change")
+    with pytest.raises(ValueError, match="outside editor"):
+        install(tmp_path, {"TOOLS.md": "revised generated rules"})
+    assert path.read_text() == "Human change"
+
+
+def test_rollback_restores_prior_ledger_and_the_exact_previous_revision(tmp_path):
+    first = install(tmp_path, {"TOOLS.md": "first"})
+    ledger = first.path.read_bytes()
+    second = install(tmp_path, {"TOOLS.md": "second", "agent_memory/profile/soul.md": "new"})
+    second.rollback()
+    assert first.path.read_bytes() == ledger
+    assert (first.home / "TOOLS.md").read_text() == "first"
+    assert not (first.home / "agent_memory/profile/soul.md").exists()
+    install(tmp_path, {})
+    assert not (first.home / "TOOLS.md").exists()
+
+
+def test_withdrawal_restores_original_symlink_and_file_permissions(tmp_path):
+    home = tmp_path / "home"
+    home.mkdir()
+    original = tmp_path / "original.md"
+    original.write_text("Original shared profile")
+    (home / "TOOLS.md").symlink_to(original)
+    executable = home / "run.sh"
+    executable.write_text("Original script")
+    executable.chmod(0o755)
+    install(tmp_path, {"TOOLS.md": "Owned profile", "run.sh": "Owned script"})
+    assert not (home / "TOOLS.md").is_symlink()
+    assert executable.stat().st_mode & 0o777 == 0o755
+    install(tmp_path, {})
+    assert (home / "TOOLS.md").is_symlink()
+    assert executable.read_text() == "Original script"
+    assert executable.stat().st_mode & 0o777 == 0o755
+
+
+def test_content_cannot_write_through_an_escaping_parent(tmp_path):
+    home, outside = tmp_path / "home", tmp_path / "outside"
+    home.mkdir()
+    outside.mkdir()
+    (home / "agent_memory").symlink_to(outside, target_is_directory=True)
+    with pytest.raises(ValueError, match="escapes"):
+        install(tmp_path, {"agent_memory/profile/soul.md": "Unexpected write"})
+    assert not list(outside.rglob("*"))
+
+
+def test_prepared_playbooks_require_a_real_native_consumer():
     from experimental.curator.raven_adapter.bind import _verify_playbooks
 
     runtime = SimpleNamespace(loop=SimpleNamespace(_playbooks=SimpleNamespace(names=lambda: ["plan-delivery"])))
-    _verify_playbooks(runtime, Artifact(values={"planning.playbooks": {"plan-delivery/playbook.md": "spec"}}, files={}))
+    _verify_playbooks(runtime, PreparedHarness(content={"planning": {"playbooks/plan-delivery/playbook.md": "spec"}}))
     with pytest.raises(ValueError, match="was not loaded"):
-        _verify_playbooks(runtime, Artifact(values={"planning.playbooks": {"other/playbook.md": "spec"}}, files={}))
-    with pytest.raises(ValueError, match="<name>/playbook.md"):
-        _verify_playbooks(runtime, Artifact(values={"planning.playbooks": {"plan-delivery/notes.md": "x"}}, files={}))
+        _verify_playbooks(runtime, PreparedHarness(content={"planning": {"playbooks/missing/playbook.md": "spec"}}))
+
+
+def test_a_playbook_that_did_not_load_is_reported_with_the_loaders_own_reason(tmp_path):
+    from experimental.curator.raven_adapter.bind import _verify_playbooks
+    from raven.playbook.store import PlaybookStore
+
+    (tmp_path / "broken").mkdir()
+    (tmp_path / "broken" / "playbook.md").write_text(
+        "---\nname: broken\ndescription: A procedure.\n---\n\n```yaml playbook-spec\naction: go\n```\n"
+    )
+    (tmp_path / "bare").mkdir()
+    (tmp_path / "bare" / "playbook.md").write_text("A procedure without frontmatter.\n")
+    library = SimpleNamespace(names=lambda: [], store=PlaybookStore(tmp_path), _known_agents=lambda: None)
+    runtime = SimpleNamespace(loop=SimpleNamespace(_playbooks=library))
+    for name, reason in (("broken", "ValidationError.*action"), ("bare", "no frontmatter")):
+        prepared = PreparedHarness(content={"planning": {f"playbooks/{name}/playbook.md": "spec"}})
+        with pytest.raises(ValueError, match=f"(?s)was not loaded: {name}/playbook.md: .*{reason}"):
+            _verify_playbooks(runtime, prepared)
+    disabled = SimpleNamespace(loop=SimpleNamespace(_playbooks=None))
+    with pytest.raises(ValueError, match="library is not enabled"):
+        _verify_playbooks(disabled, PreparedHarness(content={"planning": {"playbooks/broken/playbook.md": "spec"}}))

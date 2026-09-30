@@ -5,11 +5,8 @@ from pydantic import BaseModel
 
 from experimental.curator.harness import Artifact
 from experimental.curator.harness.prompts import Prompt
-from experimental.curator.raven_adapter.inference import Inference
 from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.observe import Recorder
 from experimental.curator.raven_adapter.prompts import bind_prompts
-from raven.contracts.llm_provider import LLMResponse
 
 
 class Inputs(BaseModel):
@@ -44,7 +41,7 @@ def test_prompt_rejects_invalid_template_contract(tmp_path, text):
 
 def test_prompt_admission_uses_real_object_and_candidate_content(tmp_path):
     artifact = Artifact(
-        values={"prompt.resources": ["defs:GUIDE"]},
+        values={},
         files={
             "defs.py": "from pydantic import BaseModel\nfrom experimental.curator.harness.prompts import Prompt\n"
             'class Inputs(BaseModel):\n    goal: str\nGUIDE = Prompt.from_file(__file__, "guide.md", Inputs)\n',
@@ -52,29 +49,10 @@ def test_prompt_admission_uses_real_object_and_candidate_content(tmp_path):
         },
     )
     package = write_package(tmp_path, artifact)
-    facts = bind_prompts(artifact, package)
+    facts = bind_prompts(artifact, package, references=["defs:GUIDE"])
     assert facts["defs:GUIDE"]["file"] == "guide.md"
     changed = Artifact(values=artifact.values, files={**artifact.files, "guide.md": "changed"})
     with pytest.raises(ValueError, match="differs"):
-        bind_prompts(changed, package)
-    invalid = Artifact(values={"prompt.resources": ["defs:Inputs"]}, files=artifact.files)
+        bind_prompts(changed, package, references=["defs:GUIDE"])
     with pytest.raises(TypeError, match="not a Prompt"):
-        bind_prompts(invalid, package)
-
-
-@pytest.mark.asyncio
-async def test_inference_budget_is_shared_within_turn_and_failures_are_evidence(tmp_path):
-    class Provider:
-        async def chat_with_retry(self, **kwargs):
-            return LLMResponse(content="result")
-
-    recorder = Recorder(tmp_path / "records.jsonl")
-    infer = Inference(Provider(), recorder, max_calls=1)
-    assert await infer([{"role": "user", "content": "Evaluate"}]) == "result"
-    with pytest.raises(RuntimeError, match="budget"):
-        await infer([{"role": "user", "content": "Again"}])
-    recorder.turn_id = "next"
-    assert await infer([{"role": "user", "content": "Evaluate"}]) == "result"
-    recorder.turn_id = "invalid"
-    with pytest.raises(ValueError):
-        await infer([{"role": "tool", "content": "forged"}])
+        bind_prompts(artifact, package, references=["defs:Inputs"])

@@ -1,6 +1,6 @@
-"""Information-flow contracts, hop by hop, on record shapes cut from recorded runs (texts translated to English).
+"""Information-flow contracts, hop by hop, on record rows in the shapes the producers write (texts translated to English).
 
-customer -> employee -> owner (the scenario's Analyst, or a speaker the base Analyst reads) -> Curator -> next round:
+customer -> employee -> owner (the assessor whose words the base Analyst reads) -> Curator -> next round:
 each hop gets what it needs and nothing it must not see.
 """
 
@@ -10,15 +10,18 @@ from types import SimpleNamespace
 import pytest
 
 from experimental.analyst.activity import activity
+from experimental.analyst.role import Analyst
 from experimental.analyst.run import NAME as FEEDBACK
+from experimental.automation.channel import seen
 from experimental.curator.harness import Task
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.conversation import Conversation
+from experimental.iteration.history import entry
 from experimental.iteration.protocols import Exchange
-from experimental.iteration.run import Limits, history_entry, run
+from experimental.iteration.run import run
+from experimental.iteration.session import Limits
 from experimental.simulation.agency import NAME as REVIEW
 from experimental.simulation.agency import Agency, reports
-from experimental.simulation.channel import seen
 from experimental.simulation.scenario import BUNDLED, Scenario
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
@@ -139,7 +142,7 @@ def test_a_gate_that_sent_work_back_reaches_the_curator_once_with_its_reason():
             "reasons": [GATE_REASON],
         }
     ]
-    assert history_entry(1, (), None, None, rows)["mechanisms_acted"] == acted
+    assert list(entry(1, (), None, None, rows).mechanisms_acted) == acted
 
 
 class Worker:
@@ -177,67 +180,6 @@ class Owner:
     async def chat_with_retry(self, **kwargs):
         self.requests.append(kwargs)
         return self.responses.pop(0)
-
-
-@pytest.mark.asyncio
-async def test_the_curator_hears_the_owner_and_the_facts_but_never_the_conversation_or_the_criteria(tmp_path):
-    scenario = Scenario.load(TRAVEL)
-    rule = next(criterion for criterion in scenario.criteria if criterion.id == "no-internal-chatter")
-    verdicts = [
-        {"id": c.id, "result": "fail" if c.id == rule.id else "pass", "session": "family"} for c in scenario.criteria
-    ]
-    shortfall = {
-        "criteria": [rule.id],
-        "cause": "not_held",
-        "behavior": "Nothing internal ever reaches a customer.",
-        "observed": "In the family drill the employee wrote an internal note to the customer.",
-        "evidence": ["family: [internal material request]"],
-        "acceptance": "No customer-visible message carries internal notes.",
-        "strength": "must_hold",
-    }
-    said = {"verdicts": verdicts, "shortfalls": [shortfall], "remark": "It leaked an internal note."}
-    owner = Owner(said, said)
-    home = tmp_path / "home"
-    agency = Agency(
-        scenario,
-        owner,
-        home / "skills",
-        workdir=tmp_path / "work",
-        deliver="dialog",
-        uploads=home / "uploads",
-        analysis="owner",
-    )
-    agency.prepare()
-    heard = []
-
-    async def curator(worker, provider, *, feedback=None, **options):
-        heard.append(feedback)
-
-    worker = Worker(tmp_path / "run")
-    await run(worker, owner, [Conversation(Traveller(), max_turns=2)], agency, curator=curator, limits=Limits(2))
-    packet = json.loads(owner.requests[0]["messages"][1]["content"])
-    assert packet["conversations"]["family"] == [
-        {"traveller": "We are four, going to Xi'an.", "assistant": "Let me check that with a colleague."}
-    ]
-    assert "resample" not in json.dumps(packet) and "action.review" not in json.dumps(packet)
-    feedback = heard[-1]
-    assert set(feedback) == {
-        "signals",
-        "history",
-        "mechanism_activity",
-        "decision",
-        "reason",
-        "requirements",
-        "filtered",
-        "task_updates",
-    }
-    assert feedback["decision"] == "curate" and feedback["requirements"][0]["behavior"] == shortfall["behavior"]
-    assert [(row["target"], row["decision"]) for row in feedback["mechanism_activity"] if row["acted"]] == [
-        ("action.review", "resample")
-    ]
-    told = json.dumps(feedback, ensure_ascii=False)
-    assert "We are four" not in told and "Let me check that" not in told
-    assert rule.check not in told and feedback["signals"][0]["items"] == []
 
 
 def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut():
@@ -336,6 +278,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         "'[internal material request]'. The service SOP I gave you says nothing internal reaches a customer."
     )
     requirement = {
+        "situation": "A reply to a customer while a request to colleagues is pending.",
         "behavior": "Nothing written for colleagues ever reaches a customer.",
         "observed": "Turn t1: the reply to the family carried '[internal material request]'.",
         "evidence": ["t1", "[internal material request]"],
@@ -345,7 +288,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
     }
     spoken = {"verdicts": verdicts, "remark": remark, "handover": []}
     analysed = {"decision": "curate", "reason": "The owner's red line broke.", "requirements": [requirement]}
-    owner = Owner(spoken, analysed, spoken, analysed, names=(REVIEW, FEEDBACK, REVIEW, FEEDBACK))
+    owner = Owner(*([spoken, analysed] * 3), names=(REVIEW, FEEDBACK) * 3)
     home = tmp_path / "home"
     agency = Agency(
         scenario,
@@ -354,16 +297,25 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         workdir=tmp_path / "work",
         deliver="dialog",
         uploads=home / "uploads",
-        analyst_model="analyst-model",
+        records=tmp_path / "run",
     )
     agency.prepare()
+    assert not isinstance(agency, Analyst)
     heard = []
 
     async def curator(worker, provider, *, feedback=None, **options):
         heard.append(feedback)
 
     worker = Worker(tmp_path / "run")
-    await run(worker, owner, [Conversation(Traveller(), max_turns=2)], agency, curator=curator, limits=Limits(2))
+    await run(
+        worker,
+        owner,
+        [Conversation(Traveller(), max_turns=2)],
+        (agency,),
+        analyst=Analyst(owner, model="analyst-model"),
+        curator=curator,
+        limits=Limits(3),
+    )
     spoken, analysed = owner.requests[:2]
     assert "Your scorecard" in spoken["messages"][0]["content"] and analysed["model"] == "analyst-model"
     materials = json.loads(analysed["messages"][1]["content"])
@@ -372,7 +324,6 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         "signals",
         "previous_signals",
         "sessions",
-        "previous_expectations",
         "previous_feedback",
         "history",
         "skills",
@@ -385,15 +336,24 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         assert criterion.check not in read
     assert "Keep internal notes to colleagues." not in read and "verdicts" not in read
     assert "We are four, going to Xi'an." in read
-    feedback = heard[-1]
+    feedback = heard[1]
     assert feedback["requirements"][0]["behavior"] == requirement["behavior"]
-    assert feedback["signals"] == [signal] and feedback["history"] == []
+    assert feedback["signals"] == [{key: signal[key] for key in ("source", "text", "satisfied", "attachments")}]
+    assert feedback["history"] == []
+    assert [(row["target"], row["decision"]) for row in feedback["mechanism_activity"] if row["acted"]] == [
+        ("action.review", "resample")
+    ]
     told = json.dumps(feedback, ensure_ascii=False)
     assert rule.check not in told and "Keep internal notes to colleagues." not in told
+    assert "We are four" not in told and "Let me check that" not in told
+    later = heard[2]["history"]
+    assert [entry["round"] for entry in later] == [1] and "results" not in later[0] and "failed_in" not in later[0]
+    assert later[0]["satisfied"] == {"agency": False}
+    assert not any(criterion.id in json.dumps(later) for criterion in scenario.criteria)
     records = [json.loads(path.read_text()) for path in (worker.root / "analysis").glob("*.json")]
     kept = [record for record in records if record.get("source") == "agency"]
     ids = {criterion.id for criterion in scenario.criteria}
-    assert len(kept) == 2 and all({item["id"] for item in row["scorecard"]["items"]} == ids for row in kept)
+    assert len(kept) == 3 and all({item["id"] for item in row["scorecard"]["items"]} == ids for row in kept)
     read_by_analyst = [record for record in records if "materials" in record]
-    assert [row["feedback"]["decision"] for row in read_by_analyst] == ["curate", "curate"]
-    assert len(heard) == 2
+    assert [row["feedback"]["decision"] for row in read_by_analyst] == ["curate", "curate", "curate"]
+    assert len(heard) == 3

@@ -12,7 +12,7 @@ Submit exactly one stage output in a response, separately from exploration and p
 
 If the host rejects malformed or truncated tool arguments, no calls in that response have run. Correct and resubmit the needed calls in the current stage; previously collected evidence remains available. These retries consume the remaining model-call budget.
 
-Selection, design and implementation are separate host-controlled stages. Each can use multiple tool-call rounds. Selection submits a diagnosis and initial targets; design submits their concrete mechanism; implementation submits code and resources. Use only the current stage's submission action. A selection revision reopens design. A plan-revision request also reopens design and requires a new plan before implementation resumes. Neither revision installs anything.
+Attribution comes first, in an exchange of its own: it submits where each input stands against the current Harness. The curation that follows has separate host-controlled stages, each able to use multiple tool-call rounds: selection submits initial targets grounded on those diagnoses; design submits their concrete mechanism; implementation submits code and resources. Use only the current request's submission action. A selection revision reopens design. A plan-revision request also reopens design and requires a new plan before implementation resumes. Neither revision installs anything.
 
 ## Format and claims
 

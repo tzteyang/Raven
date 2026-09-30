@@ -1,27 +1,33 @@
 # Action strategy on Raven
 
-## Construction and semantic decisions
+ActionBinding selects event kinds, optional requests and an optional model tool. requests enables peer-only handling. Enabled methods must be implemented with the supplied concrete common types. Factories receive session state and Task and can request infer, plan or peers dependencies.
 
-Generate `action.strategy` with ActionBinding. Its TaskBinding factory receives the owned JSON checkpoint and host Task. The concrete async assess and recover methods must share one concrete decision return type. The public strategy does not return a native verdict unless that is an intentional concrete representation; separate synchronous translations normally convert semantic decisions to host effects.
+## Event consumers
 
-## Pre-decision guidance
+progress runs before an iteration and supports continuation, guidance and a terminal reply. proposal at a batch or reply supports native bounded resampling and completion. With dispatch=true, the native ToolGate sends a single dispatch proposal, supporting continue/reject; gate errors refuse the call. Native permissions remain independent.
 
-The optional guidance translator receives StepView and returns the concrete assessment input type or None. A request calls async guide on the strategy, returning str or None. This operation may render a declared Prompt resource. The native system_addendum consumer replaces prior guidance before the next model call. Selecting guidance requires an implemented method; an inherited unsupported method is rejected during construction.
+outcome receives actual transcript evidence after a tool iteration. failure at terminal_answerless supports only the terminal choices stated in the event; native synthesis, early exit or scheduled rerun can make that point unreachable. control reports application receipts. An unselected kind has no implied call or state change.
 
-## Assessment path
+The host checks the event's allowed controls before accepting state changes. Unsupported effects are errors. Hook evaluation failures stop through a truthful reply; interrupted required pre-decision checks cannot degrade into a silent provider call. Guidance becomes a per-call input contribution. revise feedback becomes native rollback injection; reason is diagnostic.
 
-The paired proposal and decision entries run through native review at execute_tools and after_iteration. Proposal None skips assessment. The translator receives detached StepView; distinguish unexecuted tool proposals from real transcript results. The decision translation must produce the supplied ReviewResult or None. Native composition decides accept, bounded resample or end. reason is diagnostic; inject puts corrections into subsequent model input. A rollback cannot undo tools that already ran.
+## Requests and control receipts
 
-## Recovery path
+A tool exposes only the concrete command under request. The callback resolves the current session owner and returns its domain answer plus a host control receipt. Controls are queued for after the tool batch. Multiple conflicting queued controls are rejected; a queued finish does not itself stop sibling tools. Mandatory ordering constraints use dispatch checks.
 
-The paired failure and reply entries run through native salvage at answerless. Both can return None to defer. The strategy still produces its semantic decision; reply converts a supported terminal choice into text. It must reject choices that require an unavailable restart. Native synthesis or a scheduled rerun can bypass this path. This is not a general recovery scheduler.
+A requested receipt is not application. Native rollback counters establish accepted/refused revision; actual appended terminal replies establish finish application. Ending without such evidence produces a rejected receipt. A dispatch refusal has the native gate's concrete non-execution consumer. Receipts and actual execution remain available to Curator.
 
-## Persistence and failure
+Streaming draft content is withheld by the native draft mechanism. When Action replaces a candidate reply, the adapter discards that draft before native release, so rejected text is not first shown to the user. Existing later native transformations and their actual ordering remain part of the inspected harness.
 
-Successful typed decisions persist action.json; invalid arguments or results restore its owned mapping. Other owners' state and external side effects are not part of that transaction. The factory may explicitly migrate restored state; private attributes are reconstructed at generation installation, not rolled back after each operation. Participant failures may be swallowed by native composition and must not be interpreted as fail-closed enforcement. The adapter records them. Mandatory per-tool blocking uses the existing ToolGate target.
+## Collaboration and validation
 
-Verify real provider retries, injected correction, refused or executed tool calls, final replies, and retained state. A decision record alone is not proof that native composition applied that decision.
+The optional infer dependency uses the worker provider for a typed, single-step
+judgment inside the current operation. Curator authors its prompt, selected
+evidence and result-to-control mapping. Inspect worker.inference for the actual
+limits and read the supplied StrategyInference guide. Inference results carry
+no independent control authority; the current event still limits their effect.
+An operation and its sequential peer calls share one attempt, including failed
+attempts. Do not repair an invalid judgment by invoking the model again.
 
-## Reading the plan
+StrategyPeers reads detached views and invokes typed operations of the real owner. Cycle and read-only checks occur before peer writes. One owner's failure does not roll back another owner's success. Tool interaction, event rules and the gate share one active Action owner; no second policy instance or duplicate plan is created.
 
-A planning strategy owns the conversation's stage, gates and collected facts; other components enforce against it instead of keeping their own copy. The action strategy factory, a participant entry point (review, salvage, advise) and a plugin component factory (tool gate, hook, tool) may declare a keyword-only `plan` parameter; the host passes a `PlanReader`. Call it when judging, not when constructing: it returns a detached copy of the plan planning last produced for the conversation now running, or None before planning has run for it or when no planning strategy is bound, and a component must treat None as "no plan yet" rather than as permission. The plan covers what planning observed up to the last completed iteration; the output under judgment is in the component's own arguments. A gate that refuses a call should say which stage or condition is unmet, so the model can do the missing step instead of retrying.
+Verify mandatory refusal without a voluntary self-check, permitted execution, real correction input, truthful terminal replies, exhausted budgets, model-request controls, streaming visibility and revision preservation. A method result alone is not proof of behavior.

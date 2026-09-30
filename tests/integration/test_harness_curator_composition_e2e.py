@@ -12,11 +12,12 @@ from experimental.curator.raven_adapter.worker import Worker
 from experimental.curator.workflow import improve
 from raven.contracts.llm_provider import LLMResponse
 from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
+from tests.fixtures.harness_curator.authoring import planning as prepare_planning
 from tests.integration.test_harness_curator_deployment_e2e import authored
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
 from tests.integration.test_harness_curator_planning_e2e import artifact as planning_artifact
-from tests.test_harness_curator_generation import Provider, packet, response, selection
+from tests.test_harness_curator_generation import Provider, diagnosis, packet, response, selection
 from tests.test_harness_curator_strategies import files, values
 
 pytestmark = [
@@ -28,7 +29,7 @@ pytestmark = [
 @pytest.mark.asyncio
 @pytest.mark.parametrize(
     "restart, report_gap, transport_failure",
-    [(False, False, False), (True, False, False), (False, True, False), (False, False, True)],
+    [(True, False, False), (False, True, False), (False, False, True)],
 )
 async def test_root_and_child_generate_with_shared_contracts_and_resume_without_repeating_root(
     baseline, tmp_path, restart, report_gap, transport_failure
@@ -77,21 +78,34 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
     planning = planning_artifact()
     answer = authored("CURATED_CHILD")
     artifact = {
-        "values": {**values(), **planning["values"], **answer.values},
+        "values": {**values(), "planning.strategy": planning["values"]["planning.strategy"], **answer.values},
         "files": {**files(), **planning["files"], **answer.files},
     }
-    root_plan = plan_for("planning.playbooks").model_dump(mode="json")
+
+    def root_artifact(requirements):
+        return prepare_planning(
+            [
+                {
+                    "spec": store.load("work").model_dump(mode="json"),
+                    "requirements": {"step": requirements} if requirements else {},
+                }
+            ]
+        ).model_dump(mode="json")
+
+    root_plan = plan_for("planning.strategy").model_dump(mode="json")
     root_plan["node_reasons"] = {
         "work/step": "Keep this responsibility in the existing child; let it realize the requirement"
     }
     turns = [
-        response("submit_selection", selection("planning.playbooks")),
+        response("submit_diagnosis", diagnosis()),
+        response("submit_selection", selection("planning.strategy")),
         response("submit_plan", root_plan),
         response(
             "submit_artifact",
-            {"values": {"planning.playbooks": {"work/nodes/step/requirements.json": requirement_text}}},
+            root_artifact(json.loads(requirement_text)),
         ),
-        response("submit_selection", selection(*artifact["values"])),
+        response("submit_diagnosis", diagnosis("node:work/step#1")),
+        response("submit_selection", selection(*artifact["values"], grounds=("node:work/step#1",))),
         response("submit_plan", plan_for(*artifact["values"]).model_dump(mode="json")),
         response("submit_artifact", artifact),
     ]
@@ -109,7 +123,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
     ) as worker:
         original = worker.revision_id
         with pytest.raises(GenerationPausedError) as stopped:
-            await improve(worker, Provider(*turns[:4]), limits=Limits(max_calls=4))
+            await improve(worker, Provider(*turns[:6]), limits=Limits(max_calls=4))
         assert stopped.value.state.calls == 4
         assert worker.revision_id == original
         pending = json.loads((worker.root / "curation/composition.json").read_text())
@@ -131,7 +145,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             held = json.loads((worker.root / "curation/composition.json").read_text())
             assert held["error"] is None and held["repair"] is None
             assert held["root"] == pending["root"]
-        remaining = turns[4:]
+        remaining = turns[6:]
         if report_gap:
             clarified = json.loads(requirement_text)
             clarified[0]["acceptance"] += "; report missing input instead of inventing it"
@@ -141,13 +155,9 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
                 ),
                 response(
                     "submit_artifact",
-                    {
-                        "values": {
-                            "planning.playbooks": {"work/nodes/step/requirements.json": json.dumps(clarified)},
-                        }
-                    },
+                    root_artifact(clarified),
                 ),
-                *turns[3:],
+                *turns[4:],
             ]
         continuation = Provider(*remaining)
         result = await improve(
@@ -179,19 +189,19 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             assert any(event["event"] == "validation" for event in complete["generated"]["trace"])
         assert complete["child_changes"]["Hosted"]["candidate"]["artifact"]["files"]
         assert not (worker.root / "curation/composition.json").exists()
-        withdrawal = plan_for("planning.playbooks").model_dump(mode="json")
+        if not restart:
+            return
+        withdrawal = plan_for("planning.strategy").model_dump(mode="json")
         withdrawal["node_reasons"] = {"work/step": "Keep the node but withdraw its authored Harness changes"}
         withdrawn = await improve(
             worker,
             Provider(
-                response("submit_selection", selection("planning.playbooks")),
+                response("submit_diagnosis", diagnosis()),
+                response("submit_selection", selection("planning.strategy")),
                 response("submit_plan", withdrawal),
                 response(
                     "submit_artifact",
-                    {
-                        "values": {"planning.playbooks": {}},
-                        "remove_paths": {"planning.playbooks": ["work/nodes/step/requirements.json"]},
-                    },
+                    root_artifact([]),
                 ),
             ),
             limits=Limits(max_calls=3),

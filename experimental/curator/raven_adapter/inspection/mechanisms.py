@@ -83,7 +83,7 @@ def describe(facts, sources, declaration):
             f"Registered tool {name}; the component reference provides its definition and usage contract. Execution uses the registry's parameter and permission checks.",
             (("tools", i),),
             (f"tool.{name}", "reference.tools-and-extensions"),
-            ("capability.select_tools", "capability.tool_config"),
+            ("capability.strategy",),
         )
     for name in facts.get("bootstrap", {}):
         add(
@@ -93,7 +93,7 @@ def describe(facts, sources, declaration):
             "Current bootstrap content; its consumer and composition are described by the context reference. Presence does not prove every request includes it.",
             (("bootstrap", name),),
             (f"bootstrap.{name}", "reference.context-and-resources"),
-            ("memory.prompt",),
+            ("memory.strategy",),
         )
     for i, skill in enumerate(facts.get("skills", ())):
         ref = f"skill.{skill['source']}/{skill['name']}"
@@ -104,7 +104,7 @@ def describe(facts, sources, declaration):
             "Discovered skill and its usage knowledge. Registry availability does not establish that its body was read or its procedure executed.",
             (("skills", i),),
             (ref, "reference.context-and-resources"),
-            ("planning.skills", "planning.skill_config"),
+            ("capability.strategy",),
         )
     for i, hook in enumerate(facts.get("hooks", ())):
         add(
@@ -128,7 +128,7 @@ def describe(facts, sources, declaration):
             "Activated plugin manifest and configuration. Factories may decline; contributed names alone do not prove construction or execution. Disabling a plugin affects all its contributions.",
             (("plugins", i),),
             (*references, "reference.tools-and-extensions"),
-            ("capability.plugins",),
+            ("capability.strategy",),
             gaps=() if references else ("Plugin implementation package was not located.",),
         )
     authored = facts.get("authored", {}).get("values", {})
@@ -165,7 +165,7 @@ def describe(facts, sources, declaration):
             "The todo tool and CodeParticipant share a session-bound TodoStore. Reads are detached; writes replace the full list and persist before acknowledgement. Statuses are agent reports, not independently verified completion. The hook restores the saved plan only when its current revision is absent from the visible transcript. A generated PlanningStrategy does not automatically replace this mechanism or acquire its store.",
             (("tools", todo), ("hooks", code_hook)),
             ("tool.todo", f"hook.{code_hook}", "reference.code-planning"),
-            ("capability.plugins", "capability.tool_config"),
+            ("capability.strategy",),
         )
     return tuple(result)
 

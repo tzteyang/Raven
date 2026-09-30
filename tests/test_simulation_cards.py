@@ -4,10 +4,11 @@ import random
 
 import pytest
 
-from experimental.simulation.cards import draw, split
+from experimental.automation.traveller import Traveller
+from experimental.scenario.contract import frontmatter
+from experimental.simulation.cards import draw
 from experimental.simulation.reference import Rules
 from experimental.simulation.scenario import BUNDLED, Scenario
-from experimental.simulation.traveller import Traveller
 from raven.contracts.llm_provider import LLMResponse
 
 TRAVEL = BUNDLED / "travel_agency"
@@ -53,10 +54,10 @@ def test_every_card_draws_fresh_facts_but_keeps_its_product_season_and_budget_fi
 
 
 def test_one_seed_draws_the_same_facts_and_a_card_without_values_plays_as_written():
-    values, body = split("---\nvalues:\n  who: [Ann, Bo]\n  n: {from: 1, to: 9}\n---\n{who} has {n}.\n")
-    first, again = (draw("x", values, body, random.Random("s")) for _ in range(2))
+    head, body = frontmatter("---\nvalues:\n  who: [Ann, Bo]\n  n: {from: 1, to: 9}\n---\n{who} has {n}.\n")
+    first, again = (draw("x", head["values"], body, random.Random("s")) for _ in range(2))
     assert first == again and first.trip is None and "{" not in first.text
-    assert split("Plain card.") == ({}, "Plain card.")
+    assert frontmatter("Plain card.") == ({}, "Plain card.")
     assert draw("plain", {}, "Keep {braces}.", random.Random(1)).text == "Keep {braces}."
     trip = {"start": {"from": "10-30", "to": "10-30"}, "nights": 3}
     with pytest.raises(ValueError, match="phone"):

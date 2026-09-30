@@ -1,0 +1,6 @@
+# Known pitfalls: planning.strategy
+
+These are facts about host validation, not instructions for this task: planning checks that earlier curations failed more than once, mined from 373 curation records of 96 runs up to 2026-09-29, with how often each recurred.
+
+- **A restored `initialize` is read-only.** When a session scope is restored (`PlanningInitialization.restored` is true), `initialize` must return its view without changing the state mapping; the host compares the state before and after and refuses any change ("planning initialize changed existing state"). Migrate or fill defaults of restored state in the factory, not in `initialize` (3 failures in 3 runs, each fixed only after reading the planning runtime).
+- **Raven skips an invalid playbook.** A playbook whose `playbook.md` does not load is left out of the library, and the host check then reports that it was not loaded, with the loader's reason. The reasons met so far: a literal `\n` written after a YAML block scalar indicator instead of real line breaks; a field outside `PlaybookSpec` and its node specs, such as `action` (extra fields are forbidden); and a node prompt that uses another node's output without that node in its `dependsOn` (3 failures in 3 runs).

@@ -6,6 +6,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..harness import Candidate, Plan, Validation
 from ..harness.artifact import Selection
+from ..harness.attribution import Attributed
 from ..raven_adapter.inspection import fingerprint
 from .context.collect import Context
 
@@ -15,6 +16,7 @@ class GenerationState(BaseModel):
 
     input_id: str
     stage: Literal["select", "design", "implement", "repair"] = "select"
+    attribution: Attributed | None = None
     selection: Selection | None = None
     plan: Plan | None = None
     candidate: Candidate | None = None
@@ -46,9 +48,10 @@ class GenerationState(BaseModel):
     def check(self, context, limits):
         if self.input_id != self.identity(context):
             raise ValueError("curation inputs changed; cannot resume this generation")
-        if any(
-            getattr(limits, f"max_{name}") < getattr(self, name) for name in ("calls", "queries", "checks", "repairs")
-        ):
+        # A submission refused on the last call gets one more call (see `run.ask`), so the calls spent may exceed the
+        # budget by one; resuming with the same budget then pauses again instead of failing.
+        spent = {"calls": self.calls - 1, "queries": self.queries, "checks": self.checks, "repairs": self.repairs}
+        if any(getattr(limits, f"max_{name}") < used for name, used in spent.items()):
             raise ValueError("resume limits are cumulative and cannot be below consumed budgets")
 
     def advance(self, stage):

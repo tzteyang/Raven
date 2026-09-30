@@ -10,6 +10,7 @@ from experimental.curator.raven_adapter.deployment import Child
 from experimental.curator.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
+from tests.fixtures.harness_curator.authoring import capability
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
 from tests.integration.test_harness_curator_planning_e2e import response
@@ -26,14 +27,16 @@ async def recorded_probe_failure(bound):
 
 def authored(reply):
     return Artifact(
-        values={"memory.intake": "behavior:Behavior"},
+        values={"action.strategy": {"factory": "behavior:create", "events": ["input"]}},
         files={
-            "behavior.py": f"""
-from raven.contracts.participant import AgentParticipant, Intake
-class Behavior(AgentParticipant):
-    async def intake(self, text, step):
-        return Intake(text, reply={reply!r})
-"""
+            "behavior.py": f"""from experimental.curator.harness.strategies import ActionStrategy
+from experimental.curator.harness.action import InputEvent, ActionDecision
+class Action(ActionStrategy[str, str]):
+    async def _handle_input(self, event: InputEvent) -> ActionDecision:
+        return ActionDecision(control="finish", reply={reply!r})
+def create(state, task):
+    return Action()
+""",
         },
     )
 
@@ -95,19 +98,12 @@ async def test_child_change_uses_native_playbook_and_failed_activation_restores_
         assert not observed_failure.passed and "swallowed callback" in str(observed_failure.errors)
         assert worker.revision_id == original
         child_view = await worker.inspect_agent("Hosted")
-        root_candidate = root_view.declaration.accept(
-            plan_for("capability.select_tools"),
-            {
-                "values": {"capability.select_tools": "selection:Selection"},
-                "files": {
-                    "selection.py": "from raven.contracts.participant import AgentParticipant\n"
-                    "class Selection(AgentParticipant):\n"
-                    "    async def select_tools(self, offered, step):\n"
-                    "        return []\n"
-                },
-            },
+        root_artifact = capability([])
+        root_artifact.files["capability_impl.py"] = root_artifact.files["capability_impl.py"].replace(
+            "return CapabilitySelection()", "return CapabilitySelection(tools=())"
         )
-        child_candidate = child_view.declaration.accept(plan_for("memory.intake"), authored("CHILD_REVISED"))
+        root_candidate = root_view.declaration.accept(plan_for("capability.strategy"), root_artifact)
+        child_candidate = child_view.declaration.accept(plan_for("action.strategy"), authored("CHILD_REVISED"))
         await worker.install(root_candidate, children={"Hosted": child_candidate})
         assert worker.revision_id != original
         assert worker.children["Sibling"].artifact == authored("SIBLING_UNCHANGED")
@@ -133,10 +129,10 @@ async def test_child_change_uses_native_playbook_and_failed_activation_restores_
         accepted = worker.revision_id
         root_view, child_view = await worker.inspect(), await worker.inspect_agent("Hosted")
         bad = child_view.declaration.accept(
-            plan_for("memory.intake"),
+            plan_for("action.strategy"),
             Artifact(
-                values={"memory.intake": "broken:create"},
-                files={"broken.py": "def create():\n    raise RuntimeError('activation refused')\n"},
+                values={"action.strategy": {"factory": "broken:create", "events": ["input"]}},
+                files={"broken.py": "def create(state, task):\n    raise RuntimeError('activation refused')\n"},
             ),
         )
         with pytest.raises(WorkerError):

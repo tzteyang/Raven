@@ -26,8 +26,8 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from ..automation.employee import FORWARDED
 from .__main__ import CHAINS
-from .employee import FORWARDED
 from .record import REDACTED, SUMMARY, build_record, export_record, redact
 from .scenario import Scenario
 
@@ -105,12 +105,13 @@ def _scrub(value) -> tuple[object, int]:
     return value, 0
 
 
-CONFIG_COPIES = ("config.json", "deployment.json", ".config.rendered.*.json")
+CONFIG_COPIES = ("config.json", "deployment.json", "deployment/*.json", ".config.rendered.*.json")
 
 
 def scrub(records: Path) -> int:
-    """Redact credentials in every configuration copy the worker wrote anywhere under a run's records (the root and
-    each child harness keep their own, down to version folders); returns how many."""
+    """Redact credentials in every configuration copy written anywhere under a run's records: the worker's own and
+    each child harness's, down to version folders, and the product configurations `employee.pin` writes under
+    `deployment/` for the employee and every replica; returns how many."""
     total = 0
     for pattern in CONFIG_COPIES:
         for path in Path(records).rglob(pattern):
@@ -154,9 +155,7 @@ def candidates(args) -> list[tuple[str, list[str]]]:
     ]
     if args.random_partitions:
         scenario = Scenario.load(args.scenario)
-        materials = list(
-            scenario.without(args.without).materials if getattr(args, "without", None) else scenario.materials
-        )
+        materials = list((scenario.without(args.without) if getattr(args, "without", None) else scenario).handed)
         onboard = list(getattr(args, "onboard", None) or ())
         unknown = set(onboard) - set(materials)
         if unknown:
@@ -176,7 +175,6 @@ def command(plan: list[str], args, *, config: Path, workdir: Path, records: Path
     argv += ["--timeout", str(args.timeout)]
     for flag, value in (
         ("--curator-model", args.curator_model),
-        ("--analysis", getattr(args, "analysis", None)),
         ("--analyst-model", args.analyst_model),
         ("--simulation-model", args.simulation_model),
         ("--traveller-model", args.traveller_model),
@@ -299,12 +297,12 @@ def finish(run: Run, args) -> dict:
                 (run.records / name).write_text(redact(text))
     isolation = None
     try:
-        from .isolation import write as check_isolation
+        from ..automation.isolation import write as check_isolation
 
         isolation = check_isolation(run.records, run.state, args.forbid) if run.records.is_dir() else None
     except Exception as exc:  # noqa: BLE001 -- an unscanned run is judged not isolated, never lost
         run.notes.append(f"isolation scan failed: {exc!r}")
-    from .files import page_images
+    from ..automation.files import page_images
 
     decks = sorted(run.records.rglob("*.pptx")) if run.records.is_dir() else []
     for deck in (deck for deck in decks if "deliverables" in deck.relative_to(run.records).parts):
@@ -431,7 +429,6 @@ def cli():
     parser.add_argument("--concurrent-drills", type=int, default=1, help="Drills each run plays at once in a round")
     parser.add_argument("--timeout", type=float, default=3600)
     parser.add_argument("--curator-model")
-    parser.add_argument("--analysis", choices=("owner", "analyst"))
     parser.add_argument("--analyst-model")
     parser.add_argument("--simulation-model")
     parser.add_argument("--traveller-model")

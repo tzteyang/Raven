@@ -14,12 +14,12 @@ from tests.test_harness_curator_generation import plan
 
 
 def test_generated_mechanism_roles_come_from_contracts_and_do_not_expand_grants():
-    declaration = Declaration("current", catalogue()).restrict(["planning.skills"])
-    facts = {"authored": {"values": {"planning.skills": {"guide/SKILL.md": "guide"}}}}
-    sources = {"planning.skills": {"path": "unused"}}
+    declaration = Declaration("current", catalogue()).restrict(["capability.strategy"])
+    facts = {"authored": {"values": {"capability.strategy": {"factory": "capability:create"}}}}
+    sources = {"capability.strategy": {"path": "unused"}}
     mechanisms = describe(facts, sources, declaration)
     assert len(mechanisms) == 1 and mechanisms[0].roles == ("capability",)
-    assert mechanisms[0].targets == ("planning.skills",)
+    assert mechanisms[0].targets == ("capability.strategy",)
     assert project(mechanisms, role="planning") == ()
     assert project(mechanisms, channel="model_input") == mechanisms
     validate(mechanisms, facts, sources, declaration)
@@ -47,18 +47,20 @@ def test_unknown_hooks_remain_visible_without_inventing_responsibilities():
 
 def test_explicit_retirement_is_checked_and_omission_preserves_bindings():
     scope = Declaration("current", catalogue())
-    active = Artifact(values={"action.config": {"temperature": 0.2}, "memory.prompt": {"TOOLS.md": "guide"}})
-    keep = scope.accept(plan("action.config"), {"values": {"action.config": {"temperature": 0.4}}})
-    assert extend_artifact(active, keep.artifact).values["memory.prompt"] == {"TOOLS.md": "guide"}
-    removal = scope.accept(plan("memory.prompt"), {"values": {}, "remove": ["memory.prompt"]})
-    assert extend_artifact(active, removal.artifact).values == {"action.config": {"temperature": 0.2}}
+    active = Artifact(
+        values={"action.strategy": {"factory": "action:first"}, "memory.strategy": {"factory": "memory:create"}}
+    )
+    keep = scope.accept(plan("action.strategy"), {"values": {"action.strategy": {"factory": "action:second"}}})
+    assert extend_artifact(active, keep.artifact).values["memory.strategy"] == {"factory": "memory:create"}
+    removal = scope.accept(plan("memory.strategy"), {"values": {}, "remove": ["memory.strategy"]})
+    assert extend_artifact(active, removal.artifact).values == {"action.strategy": {"factory": "action:first"}}
     for payload in (
         {"values": {}},
-        {"values": {}, "remove": ["action.config"]},
-        {"values": {"memory.prompt": {}}, "remove": ["memory.prompt"]},
+        {"values": {}, "remove": ["action.strategy"]},
+        {"values": {"memory.strategy": {}}, "remove": ["memory.strategy"]},
     ):
         with pytest.raises(ValueError):
-            scope.accept(plan("memory.prompt"), payload)
+            scope.accept(plan("memory.strategy"), payload)
     with pytest.raises(ValueError, match="not currently authored"):
         extend_artifact(Artifact(values={}), removal.artifact)
 
@@ -109,27 +111,31 @@ def test_retirement_cannot_reset_fields_outside_the_current_grant(tmp_path):
     from raven.config.schema import Config
 
     worker = Worker(Baseline(Config(), RavenConfig(), tmp_path), tmp_path / "worker")
-    worker.artifact = Artifact(values={"action.config": {"temperature": 0.2, "max_tool_iterations": 8}})
-    scope = Declaration("current", catalogue()).restrict(["action.config"], fields={"action.config": ["temperature"]})
-    candidate = scope.accept(plan("action.config"), {"values": {}, "remove": ["action.config"]})
+    worker.artifact = Artifact(
+        values={"action.strategy": {"factory": "action:create", "events": ["proposal"], "requests": True}}
+    )
+    scope = Declaration("current", catalogue()).restrict(
+        ["action.strategy"], fields={"action.strategy": ["factory", "events"]}
+    )
+    candidate = scope.accept(plan("action.strategy"), {"values": {}, "remove": ["action.strategy"]})
     with pytest.raises(ValueError, match="fields not granted"):
         worker._accept(candidate, Inspection(scope, {}, {}))
-    assert worker.artifact.values["action.config"]["max_tool_iterations"] == 8
+    assert worker.artifact.values["action.strategy"]["requests"] is True
 
 
 def test_existing_strategy_state_is_visible_even_when_its_modification_is_not_granted():
     from experimental.curator.generation.context.collect import collect
-    from experimental.curator.generation.stages.understand import materials
+    from experimental.curator.generation.stages.shared import materials
 
     context = collect(
         "Adjust behavior",
-        Declaration("current", catalogue()).restrict(["action.config"]),
+        Declaration("current", catalogue()).restrict(["action.strategy"]),
         facts={"planning": {"state": {"progress": "retained"}}},
         sources={},
         read_source=lambda **kwargs: {},
     )
     assert materials(context)["worker"]["planning"]["state"]["progress"] == "retained"
-    assert [target.name for target in context.declaration.targets] == ["action.config"]
+    assert [target.name for target in context.declaration.targets] == ["action.strategy"]
 
 
 def test_prepared_config_uses_the_same_declared_mode_resolution_as_agent_preparation(tmp_path):

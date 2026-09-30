@@ -20,9 +20,18 @@ Check interaction conditions. A tool request and observed execution evidence may
 
 Define verification in terms of observations: what call or input should occur, what state or result should change, and what evidence would contradict the proposal. Include meaningful empty, repeated, rejected or failed operations when they affect the mechanism. A schema check alone cannot validate a behavioral claim.
 
+When interpretation needs a model judgment, select the optional single-step infer
+dependency instead of creating another agent loop. Specify its trigger, authored
+judgment prompt, supplied evidence, concrete result type and actual consumer.
+Explain insufficient-evidence and call-failure behavior separately. Check
+worker.inference and the supplied contract: one operation and its peer chain
+share one attempt. A deterministic rule remains sufficient when no semantic
+interpretation is needed. Curator designs this mechanism; the worker model
+performs the runtime judgment.
+
 ## Output
 
-Submit one plan using the provided plan-submission action. Use understanding for the factual basis, diagnosis and any remaining nonblocking uncertainty. The person who gave the feedback reads it as your answer, so write it in the language of the task and its feedback and in their terms: what you understood and what the assistant will do differently, without target, strategy, file, tool or module names, which belong in design and changes. Use design for the concrete invocation path, semantic operations, essential types, explicit dependencies, state ownership and failure behavior. This must guide implementation without leaving the core mechanism to be invented there. For each changes entry, connect reason, expected behavior and verification to its target. Cover exactly the current selection. Use state descriptions for resources whose ownership or lifetime the mechanism depends on. If the chosen entries are wrong or incomplete, revise selection first; the host will reopen design with the corresponding contracts. Report a gap if a critical unknown cannot be resolved.
+Submit one plan using the provided plan-submission action. Use understanding for the factual basis, diagnosis and any remaining nonblocking uncertainty. The person who gave the feedback reads it as your answer, so write it in the language of the task and its feedback and in their terms: what you understood and what the assistant will do differently, without target, strategy, file, tool or module names, which belong in design and changes. Use design for the concrete invocation path, semantic operations, essential types, explicit dependencies, state ownership and failure behavior. This must guide implementation without leaving the core mechanism to be invented there. For each changes entry, say in `treatment` whether it modifies the diagnosed mechanism, replaces it or adds one beside it, and connect reason, expected behavior and verification to its target. Cover exactly the current selection. Use state descriptions for resources whose ownership or lifetime the mechanism depends on. If the chosen entries are wrong or incomplete, revise selection first; the host will reopen design with the corresponding contracts. Report a gap if a critical unknown cannot be resolved.
 
 ## Completion check
 
