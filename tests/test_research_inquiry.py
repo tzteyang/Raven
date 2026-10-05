@@ -83,12 +83,13 @@ def test_a_passage_is_quoted_when_the_page_holds_it_whole_whatever_its_case_widt
     assert not quoted("the entry fee is 50", "The entry fee is 500 euros.")
 
 
-def test_a_short_chinese_clause_is_a_passage_while_a_fragment_of_a_few_characters_is_not():
-    page = "第十三条 符合下列情形之一的，个人信息处理者方可处理个人信息：（一）取得个人的同意；（二）为订立合同所必需。"
-    assert quoted("（一）取得个人的同意；", page)
-    assert quoted("取得个人的同意", page)
-    assert not quoted("个人的同意", page)
-    assert not quoted("取得个人的拒绝", page)
+def test_a_short_passage_of_wide_characters_is_a_passage_while_a_fragment_of_a_few_is_not():
+    ideographs = [chr(0x4E00 + index) for index in range(12)]
+    page = "Item 1: " + "".join(ideographs[:9]) + "; item 2: " + "".join(ideographs[9:]) + "."
+    assert quoted("".join(ideographs[:9]), page)
+    assert quoted("".join(ideographs[:7]), page)
+    assert not quoted("".join(ideographs[:6]), page)
+    assert not quoted("".join(ideographs[2:9]) + ideographs[11], page)
     assert not quoted("fee is five", "the fee is five")
 
 
