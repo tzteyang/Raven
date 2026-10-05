@@ -188,3 +188,8 @@ def sealed_for(scenario: Scenario, role: Role) -> Sealed:
         hidden.extend(text for text in (scenario.aids.rulers, scenario.aids.labels) if text)
     visible.extend(text for text in (scenario.exchange.onboarding, scenario.exchange.handover) if text)
     return Sealed.of(hidden, visible=visible, tokens=tokens)
+
+
+def carried(texts, sealed):
+    """Identify audiences whose sealed evidence appears in outgoing text."""
+    return [role for role, seal in sealed.items() if any(seal.hits(text) for text in texts if text)]

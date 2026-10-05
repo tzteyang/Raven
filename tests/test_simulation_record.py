@@ -1071,9 +1071,9 @@ def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_c
 
 
 def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_place(tmp_path):
-    from experimental.research.package import digest
+    from experimental.scenario.digest import digest
     from experimental.simulation.scenario import BUNDLED
-    from tests.test_research_induction import make_scenario
+    from tests.research_helpers import make_scenario
 
     shop = make_scenario(tmp_path / "shop")
     settings = {"scenario": "shop", "scenario_dir": str(shop), "scenario_digest": digest(shop)}

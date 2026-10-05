@@ -32,7 +32,7 @@ from .generation.context.collect import collect
 from .generation.run import GenerationError, GenerationInterruptedError, Limits, generate
 from .generation.state import GenerationState
 from .harness.attribution import Attributed
-from .raven_adapter.exploration import Exploration
+from .raven_adapter.exploration import Exploration, Withheld
 from .raven_adapter.inspection import fingerprint
 from .raven_adapter.materialize import _write
 from .raven_adapter.observe import plain
@@ -40,6 +40,30 @@ from .raven_adapter.observe import plain
 PENDING = "pending.json"
 CANDIDATE = "candidate.json"
 ATTRIBUTION = "attribution"
+
+
+def unfinished(worker) -> bool:
+    """Whether local, composite or attribution work still owns its frozen inputs."""
+    root = getattr(worker, "root", None)
+    if root is None:
+        return False
+    from .composition.state import pending
+
+    directory = Path(root) / "curation"
+    return (directory / PENDING).is_file() or pending(directory)
+
+
+def information_scope(worker, feedback) -> None:
+    """Restore research-only source exclusions from the curation's recorded information handoff."""
+    information = feedback.get("information", {}) if isinstance(feedback, dict) else {}
+    if not isinstance(information, dict):
+        return
+    excluded = information.get("excluded_sources", ())
+    if not isinstance(excluded, (tuple, list)) or any(not isinstance(path, str) for path in excluded):
+        raise ValueError("information source exclusions must be paths")
+    if excluded:
+        current = getattr(worker, "withheld", Withheld())
+        worker.withheld = Withheld(paths=tuple(dict.fromkeys((*current.paths, *excluded))), markers=current.markers)
 
 
 async def improve(
@@ -197,6 +221,7 @@ async def _generate_local(
             model = pending["model"]
         if observations is None and pending.get("observations") is not None:
             observations = pending["observations"]
+    information_scope(worker, feedback)
     inspection = await worker.inspect()
     task = inspection.facts.get("task")
     if task is None:

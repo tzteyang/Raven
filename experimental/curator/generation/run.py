@@ -14,11 +14,12 @@ from math import isfinite
 
 from raven.agent.tools.registry import call_failed
 from raven.contracts.llm_provider import LLMProvider
-from raven.contracts.tool import RAW_ARGUMENTS_KEY, SKIPPED_AFTER_BLOCKED_CALL, Continuation
+from raven.contracts.tool import SKIPPED_AFTER_BLOCKED_CALL, Continuation
 from raven.permissions.turn import set_current_tool_call_id
 from raven.providers.prompt_cache import accepts_cache_control, cache_control, claim_marks
 from raven.security.trust import wrap_untrusted
 
+from ...model_calls import argument_errors
 from ..harness import Attributed, Candidate, Plan, Validation
 from ..raven_adapter.observe import plain
 from .context import query, render
@@ -91,30 +92,6 @@ class GapReportedError(GenerationError):
     def __init__(self, stage, reason, trace=()):
         super().__init__(f"{stage}: {reason}", trace)
         self.stage, self.reason = stage, reason
-
-
-def _argument_errors(response):
-    invalid_calls = []
-    for call in response.tool_calls:
-        meta = call.run_meta
-        if response.truncated or response.finish_reason == "length" or (meta and meta.truncation):
-            error = (
-                "The response or tool arguments were truncated at the per-call output limit, which counts your "
-                "reasoning too. Resubmit a complete call that fits: split a large module into several smaller files "
-                "staged one per call, and keep drafts out of your reasoning."
-            )
-        elif RAW_ARGUMENTS_KEY in call.arguments or (meta and meta.arguments_repaired):
-            error = "Tool arguments were not a valid JSON object. Resubmit with correctly encoded arguments."
-            raw = call.arguments.get(RAW_ARGUMENTS_KEY)
-            if isinstance(raw, str):
-                try:
-                    json.loads(raw)
-                except json.JSONDecodeError as exc:
-                    error += f" Parser: {exc}"
-        else:
-            continue
-        invalid_calls.append({"tool_call_id": call.id, "tool": call.name, "error": error})
-    return invalid_calls
 
 
 CHECK = "check_candidate"
@@ -286,7 +263,7 @@ async def ask(
             trace.append({"stage": stage, "event": "model.note", "content": response.content})
         assistant = render.assistant_message(response)
         messages.append(assistant)
-        invalid_calls = _argument_errors(response)
+        invalid_calls = argument_errors(response)
         submitting = any(call.name in parsers for call in response.tool_calls)
         if submitting and state.calls >= limits.max_calls:
             grace = 1

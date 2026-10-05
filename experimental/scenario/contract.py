@@ -207,8 +207,8 @@ class Aids(_Model):
 
 class Origin(_Model):
     """Where one material came from: given by the party, or induced or researched before the cultivation, with the
-    ids of the rules or findings it holds. `confirmed` says the party stands behind it, as it always does behind what
-    it gave; a material written by the research stage must say so, since standing is what the evaluation side draws on."""
+    ids of the rules or findings it holds. `confirmed` records adoption independently of who supplied the material;
+    generated materials must declare it explicitly."""
 
     origin: Literal["given", "induced", "researched"] = "given"
     confirmed: bool | None = None
@@ -217,9 +217,8 @@ class Origin(_Model):
     @model_validator(mode="after")
     def standing_is_stated(self) -> "Origin":
         if self.origin == "given":
-            if self.confirmed is False:
-                raise ValueError("a material the party gave is one it stands behind")
-            return self.model_copy(update={"confirmed": True})
+            object.__setattr__(self, "confirmed", True if self.confirmed is None else self.confirmed)
+            return self
         if self.confirmed is None:
             raise ValueError(f"say whether the party confirmed this {self.origin} material")
         return self
@@ -298,8 +297,9 @@ class Scenario(_Model):
         raise KeyError(item)
 
     def confirmed(self, material: str) -> bool:
-        """Whether the party stands behind a material: it gave it, or confirmed what a research stage made of its
-        materials. Only such a material may be held against the partner (`experimental.simulation.scenario`)."""
+        """Whether the party adopts this material; supplied references may explicitly remain unconfirmed.
+
+        Only adopted material may be held against the partner (`experimental.simulation.scenario`)."""
         if material not in self.materials:
             raise KeyError(material)
         origin = self.provenance.materials.get(material)

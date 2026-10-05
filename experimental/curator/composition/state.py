@@ -12,6 +12,13 @@ from ..generation.state import GenerationState
 from ..harness import Validation
 
 COUNTERS = ("calls", "queries", "checks", "repairs")
+COMPOSITION = "composition.json"
+SCOPE = "attribution-scope"
+
+
+def pending(directory: Path) -> bool:
+    """Only active composite or standalone attribution state owns inputs; abandoned scopes do not."""
+    return (directory / COMPOSITION).is_file() or (directory / SCOPE / "root/curation/pending.json").is_file()
 
 
 class Progress(BaseModel):

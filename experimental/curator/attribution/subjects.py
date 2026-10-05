@@ -1,7 +1,7 @@
 """What an attribution must cover: every input of the curation it precedes.
 
-A root curation's inputs are the Analyst's requirements (by id), the materials handed over with the signals and,
-when there is neither, the task. A child Harness's curation also carries the node requirements its parent routed
+A root curation's inputs are the reviewed information version, Analyst requirements and material handovers;
+when none is present, the task. A child Harness's curation also carries the node requirements its parent routed
 to it, each addressed as `node:<playbook>/<node>#<n>`, and the parent's feedback routed to that child.
 """
 
@@ -17,6 +17,9 @@ def _material(item) -> str | None:
 def _collect(feedback, found: list[str]) -> None:
     if not isinstance(feedback, dict):
         return
+    information = feedback.get("information")
+    if isinstance(information, dict) and information.get("version"):
+        found.append(f"information:{information['version']}")
     requirements = feedback.get("requirements")
     if isinstance(requirements, list):
         for number, row in enumerate(requirements, 1):

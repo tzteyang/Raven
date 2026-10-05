@@ -122,9 +122,8 @@ class Scenario:
         return document(self.materials[material]).read_text()
 
     def stands_behind(self, material: str) -> bool:
-        """Whether the owner holds the partner to this material: it gave it, or confirmed it after a research stage
-        induced it (`experimental.scenario.contract.Scenario.confirmed`); an unconfirmed one is handed over as a
-        candidate and judged by no one."""
+        """Whether the owner adopts this material; an unconfirmed reference may be handed over but does not
+        supply an evaluation norm (`experimental.scenario.contract.Scenario.confirmed`)."""
         return self.contract is None or self.contract.confirmed(material)
 
     def standing_norms(self, names) -> dict[str, str]:

@@ -25,8 +25,12 @@ async def run(
     attributor=None,
     holdout=None,
     prior=(),
+    prepare=None,
 ):
     """Curate once from the task, then iterate until every assessor is satisfied, the analyst stops, or rounds run out.
+
+    Optional `prepare` runs only before onboarding. An unready information result stops the run before any trial;
+    its reviewed version is carried into subsequent curation without automatic later collection.
 
     `opening` signals, such as an owner handing over its materials, reach that first curation as its feedback. Each
     round every assessor measures the sessions into a `Signal`, the Analyst (`model` picks its model unless
@@ -50,6 +54,7 @@ async def run(
         boundaries=boundaries,
         attributor=attributor,
         prior=prior,
+        prepare=prepare,
     )
     try:
         if not await session.onboard(opening):

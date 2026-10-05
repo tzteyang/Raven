@@ -891,12 +891,32 @@ def test_each_child_reaches_only_its_own_home_and_what_its_parent_hands_it(tmp_p
 
 
 async def test_the_owner_hands_over_a_candidate_it_never_confirmed_as_files_and_never_voices_it(tmp_path):
-    from experimental.research.package import CANDIDATES, CONFIRMED
     from experimental.scenario import load
-    from tests.test_research_package import researched
+    from tests.research_helpers import make_scenario
 
-    _, out = researched(tmp_path)
-    scenario = Scenario.of(load(out.root))
+    CONFIRMED, CANDIDATES = "adopted-method", "candidate-method"
+    root = make_scenario(tmp_path / "shop")
+    contract = json.loads((root / "contract.json").read_text())
+    spec = json.loads((root / "scenario.json").read_text())
+    for name, text in ((CONFIRMED, "State the total price."), (CANDIDATES, "Never offer a discount.")):
+        folder = root / "materials" / name
+        folder.mkdir()
+        (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Supplied method\n---\n{text}\n")
+        contract["materials"][name] = {"kind": "norm"}
+        spec["plans"]["two"][1].append(name)
+    (root / "contract.json").write_text(json.dumps(contract))
+    (root / "scenario.json").write_text(json.dumps(spec))
+    (root / "provenance.json").write_text(
+        json.dumps(
+            {
+                "materials": {
+                    CONFIRMED: {"origin": "given", "confirmed": True},
+                    CANDIDATES: {"origin": "given", "confirmed": False},
+                }
+            }
+        )
+    )
+    scenario = Scenario.of(load(root))
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Fine so far."}))
     uploads = tmp_path / "home" / "uploads"
     agency = Agency(

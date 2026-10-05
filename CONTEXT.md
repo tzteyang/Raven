@@ -248,20 +248,91 @@ sedimented (every requirement raised so far, kept as a regression check). The `S
 judges each round against it and returns a `Signal`.
 
 **Research stage** (`experimental/research/`):
-Before a cultivation, the handed-over scenario read into one slot per category, the rules its
-exemplars and counterexamples show and its norms leave unstated induced, the facts or common rules of
-the trade its empty slots need researched on the web, and each settled by the party (confirmed,
-amended, rejected or undecided), written as a new scenario directory with its `provenance.json`.
-What the party held back stays in it, received by the party alone. The loop never runs it and loads
-its output like any other scenario.
+Information collection before a Curator invocation. The expert-construction path runs a task-driven
+collector with native Raven tools, delegated research and user questions, followed by a separate
+review. Its `Information snapshot` is handed to Curator only when review accepts it and no blocking
+question remains. `simulation.experts` invokes it before initial construction; automatic collection
+on later cultivation rounds is not implemented.
+
+Interaction materials enter information coverage assessment directly, including product packages
+provided as interaction inputs. Separately supplied research references can generate optional
+`Research guidance` only after a research need is selected. They do not determine whether the
+overall construction has input material and do not force external research.
+
+The offline CLI and Scenario onboarding use the same collector. `research.scenario` projects the
+actual release and seals later materials; the offline output is a reviewed Result and records, not
+a rewritten Scenario. `Session.prepare` runs only before initial curation, stops onboarding on an
+unready result and records its version. Later curation receives that version without automatically
+collecting again. The legacy material-presence classifier, fixed induction/settlement pipeline and
+Scenario package writer have been removed. Web acquisition and quote verification remain reusable.
+`simulation.information.PartyAnswers` is an optional simulated user-answer adapter: its private inputs
+stay with the party, outgoing answers are checked against the release, and review never implies adoption.
+
+**Information snapshot** (`experimental/research/information.py`):
+An expert description covering role, tasks, knowledge, abilities, methods, judgement, cases, and
+performance/learning, plus operating resources, unresolved questions and the retained evidence it
+cites. Each section reports coverage and its reason. The content-derived identity pins what a
+Curator invocation receives. A collection Request can carry a previous snapshot and a focused
+objective and explicit answers to previous questions, with `answers_version` matching that snapshot; sections and unresolved questions outside
+that focus remain unchanged. The Result records section, resource and question changes, its base identity and the reviewed version.
+Publication checks content/version consistency and the Curator-owned local/composite unfinished state.
+A publication journal makes interrupted content/version writes recoverable.
+Information coverage does not assert that a Harness has implemented the described abilities.
+`CollectionLimits.total_timeout` defaults to 3600 seconds for the whole collector invocation, including delegated
+work and reviews. ResearchAssignment carries only the remaining allowance; acquisition and review see their
+remaining time, and no child receives a fresh overall deadline.
+Budget exhaustion preserves acquired evidence, the latest proposal or an explicitly unassessed description,
+conversation and attempt records. Result.stop_reason distinguishes completion, deadline, call/review exhaustion,
+errors and cancellation; only completed, accepted, unblocked results may reach Curator. The offline entry may
+use `research.calls.ClaudeCalls` as its model transport: restricted CLI calls select offered host tools; the host
+collector still owns execution. Review calls have only a structured submission function.
+
+**Information input manifest** (`research.information.Manifest`):
+The task, objective, invocation scope, released source digests, context digest and observed environment
+bound to a Snapshot, including version-bound answers and source-exclusion policy. Offline replay requires a ready Result whose reviewed version matches its snapshot
+and whose manifest matches the current invocation. A bare Snapshot is evidence for reassessment, not
+an accepted replay. A mismatched result is refused before model calls.
+
+**Research group** (`experimental/research/collection.py`, `ResearchTask`):
+A coherent work problem associated with one or more information dimensions, known evidence ids and a semantic
+ResearchBrief. The collector can call `prepare_research` for an identified need before grouping; it receives any
+optional guidance first. The host then resolves known evidence into a `ResearchAssignment` and delegates it. Multiple groups can reuse the same evidence and guidance;
+dimensions are output categories, not a requirement to launch one research agent per category.
+The collector owns grouping and repair decisions. There is no independent pre-execution brief audit.
+A delegation returns an attempt handle and review feedback. The collector may explicitly use `previous_attempt`
+to revise its latest unaccepted attempt within the per-group revision allowance; the host never retries autonomously.
+
+**Research brief** (`research.information.ResearchBrief`):
+The researcher's self-contained handoff: background, known information, questions, scope, deliverable and
+acceptance criteria. The collector expresses relevant evidence and optional guidance in words, with their authority
+and limitations. Dimension associations and collection identifiers remain outside this handoff.
+
+**Reviewed research** (`experimental/research/review.py`):
+One bounded acquisition, source check and tool-free semantic review per delegation. The delivery includes findings, synthesis,
+source disagreements and unresolved needs with their next acquisition channel. Review sees independently retrieved
+source views. Rejected candidates remain in execution records; only accepted retained content enters collection evidence.
+Previous reviews and source views accompany an explicitly requested repair. Review history is retained for final
+synthesis, but is not itself professional evidence. Quote matching, semantic acceptance, organisational adoption
+and demonstrated competence remain distinct.
+An unresolved public-research or native-inspection blocker makes information incomplete; a user-only blocker requires input.
+
+**Research guidance** (`experimental/research/information.py`, `ResearchGuide`):
+Optional questions, relationships and grouping hints for the research step, linked to dimensions.
+It may be supplied directly or derived lazily from product-case references by `research/guidance.py`.
+Derived guidance is shared within a collection invocation and can be reused by later Requests.
+It is not factual Evidence and does not fill an expert information section by itself. The separate
+guidance workspace reads research-only cases; the collector reads interaction inputs and host sources.
+Extraction is a bounded source-reading exchange, without a separate review-and-rewrite loop. Source references
+are structurally validated; the collector treats directions as hypotheses, never as established professional knowledge.
 
 **Finding** (`experimental/research/inquiry.py`):
-One fact about the world, or one common rule of the trade, that a research returned: its wording as
-its source states it, the pages it was read from, a passage copied from one of them, and the
-handed-over materials that say otherwise. It is kept only when the passage occurs whole in a page the
-stage reads itself, whoever researched it (Claude Code, Codex or the stage's own model).
-_Avoid_: calling a finding a rule: a rule is induced from the party's own instances, a finding is
-read from the web.
+One sourced fact or source-recommended practice returned by research: its wording, cited pages,
+a supporting passage, and narrative tensions with known inputs. Conflicts are not material identifiers.
+It is kept only when its passage occurs in a source view the host can read. Known truncated views can
+expand within a verification ceiling; JSON string escapes and rendered markup are decoded without
+joining unrelated JSON fields. Retained finding identifiers preserve original submission positions.
+The synthesis should name sources rather than assuming filtering preserves a dense positional list.
+_Avoid_: treating a finding that describes an industry practice as an adopted organisational rule.
 
 **Window Shrink** (`agent/window/`, paper `contracts/harness.py:MemoryModule.shrink`):
 How a Turn's transcript is made to fit again after it is assembled. The Memory role is

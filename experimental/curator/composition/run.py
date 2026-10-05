@@ -14,18 +14,15 @@ from ..raven_adapter.deployment import child_directory
 from ..raven_adapter.inspection import Inspection, file_source, fingerprint
 from ..raven_adapter.materialize import _write
 from ..raven_adapter.observe import plain
-from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, propose
+from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, information_scope, propose
 from ..workflow import attribute as attribute_local
 from .context import child_observations, execution_turns, merge_sources
 from .requirements import feedback_for
-from .state import Progress
+from .state import COMPOSITION, SCOPE, Progress
 
 
 def _save(path, state):
     _write(path, state.model_dump_json(indent=2).encode())
-
-
-SCOPE = "attribution-scope"
 
 
 def _surface_attributions(scope_root, worker_root):
@@ -160,7 +157,7 @@ async def improve(
 
     actual_children = {name: await worker.agent_state(name) for name in worker.children}
     inspection = await worker.inspect()
-    path = worker.root / "curation/composition.json"
+    path = worker.root / "curation" / COMPOSITION
     state = Progress.model_validate_json(path.read_text()) if path.exists() else None
     if state is not None and not resume:
         _cleanup(state.directory)
@@ -169,6 +166,7 @@ async def improve(
         feedback = state.feedback if feedback is None else feedback
         model = state.model if model is None else model
         observations = state.observations if observations is None else observations
+    information_scope(worker, feedback)
     directory = Path(state.directory) if state is not None else worker.root / "curation/scopes" / uuid4().hex
     inputs, executions = {}, {}
     for name, actual in actual_children.items():

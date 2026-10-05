@@ -65,11 +65,14 @@ from ..iteration.exchange import ExchangeError
 from ..iteration.records import cultivation
 from ..iteration.run import run
 from ..iteration.session import Limits
-from ..research.package import digest
+from ..research.information import Result as InformationResult
+from ..research.scenario import scenario_preparer
 from ..scenario import ROLES
+from ..scenario.digest import digest
 from ..scenario.sealed import sealed_for
 from .agency import Agency
 from .attribution import write as attribute_run
+from .information import PartyAnswers
 from .record import PLACEHOLDERS, placed
 from .scenario import Scenario
 
@@ -304,6 +307,31 @@ async def main(args):
                     assessors,
                     model=args.analyst_model or args.curator_model,
                     opening=agency.opening(),
+                    prepare=scenario_preparer(
+                        contract,
+                        lambda: agency.released,
+                        employee.baseline.config.workspace_path / "uploads"
+                        if args.deliver == "dialog"
+                        else skills(employee),
+                        records=root / "information",
+                        ask=PartyAnswers(
+                            provider,
+                            contract,
+                            args.information_answer_material,
+                            lambda: agency.released,
+                            records=root / "party-answers",
+                            model=args.simulation_model,
+                            timeout=args.timeout,
+                        )
+                        if getattr(args, "information_answer_material", None)
+                        else None,
+                        researcher=getattr(args, "information_research", "exchange")
+                        if getattr(args, "information_research", "exchange") != "none"
+                        else None,
+                        replay=InformationResult.model_validate_json(args.information.read_text())
+                        if getattr(args, "information", None)
+                        else None,
+                    ),
                     curator_model=args.curator_model,
                     boundaries=boundaries,
                     prior=prior,
@@ -373,6 +401,18 @@ def cli():
         allow_abbrev=False,
     )
     parser.add_argument("--config", type=Path, required=True, help="Raven JSON configuration")
+    parser.add_argument("--information", type=Path, help="Reviewed offline result matching the current opening inputs")
+    parser.add_argument(
+        "--information-research",
+        choices=("exchange", "claude", "codex", "none"),
+        default="exchange",
+        help="Research channel for initial information preparation only",
+    )
+    parser.add_argument(
+        "--information-answer-material",
+        nargs="+",
+        help="Materials the simulated party may use for initial preparation questions",
+    )
     parser.add_argument(
         "--scenario", type=Path, default=Path("travel_agency"), help="Scenario directory or bundled name"
     )

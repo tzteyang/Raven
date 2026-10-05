@@ -34,11 +34,16 @@ class Address(BaseModel):
 
 
 class Web:
-    def __init__(self, search, fetch, *, page_chars: int = PAGE_CHARS, log: Path | None = None):
+    def __init__(
+        self, search, fetch, *, page_chars: int = PAGE_CHARS, verification_chars: int = 240_000, log: Path | None = None
+    ):
         self._search, self._fetch = search, fetch
         self.page_chars = page_chars
         self.log = Path(log) if log else None
         self.pages: dict[str, str] = {}
+        self.truncated: dict[str, bool] = {}
+        self._limits: dict[str, int] = {}
+        self.verification_chars = max(page_chars, verification_chars)
 
     @classmethod
     def of(cls, config, *, searching: bool = True, **options) -> "Web":
@@ -86,11 +91,24 @@ class Web:
         text, _ = await self._read(url)
         return text
 
-    async def _read(self, url: str) -> tuple[str | None, str | None]:
+    def can_expand(self, url: str) -> bool:
+        return self.truncated.get(url, False) and self._limits.get(url, self.page_chars) < self.verification_chars
+
+    async def expand(self, url: str) -> str | None:
+        """Increase a known truncated view within the verification ceiling; preserve prior text on read failure."""
+        if not self.can_expand(url):
+            return self.pages.get(url)
+        limit = min(self.verification_chars, self._limits.get(url, self.page_chars) * 2)
+        text, _ = await self._read(url, max_chars=limit)
+        return text or self.pages.get(url)
+
+    async def _read(self, url: str, *, max_chars: int | None = None) -> tuple[str | None, str | None]:
         if not url.startswith(("http://", "https://")):
             self._note({"tool": READ, "url": url, "error": "not an http or https address"})
             return None, "give the page's http or https address"
-        raw = await self._fetch.execute(url=url, maxChars=self.page_chars)
+        limit = self.page_chars if max_chars is None else max_chars
+        self._limits[url] = limit
+        raw = await self._fetch.execute(url=url, maxChars=limit)
         try:
             page = json.loads(raw)
         except json.JSONDecodeError:
@@ -100,6 +118,7 @@ class Web:
             self._note({"tool": READ, "url": url, "error": str(error)[:300]})
             return None, str(error)
         self.pages[url] = page["text"]
+        self.truncated[url] = bool(page.get("truncated"))
         self._note({"tool": READ, "url": url, "chars": len(page["text"]), "truncated": bool(page.get("truncated"))})
         return page["text"], None
 

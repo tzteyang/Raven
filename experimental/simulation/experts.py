@@ -1,16 +1,14 @@
-"""Curate supplied expert packages through the normal employee and managed child deployment."""
+"""Construct an expert from interaction inputs with optional guidance for grouped research."""
 
 import argparse
 import asyncio
-import hashlib
 import json
 import math
-import shutil
 from dataclasses import dataclass
 from pathlib import Path
 
 from raven.core.config_stack import load_runtime_config
-from raven.providers.factory import make_lazy_provider
+from raven.providers.factory import make_lazy_provider, make_resolving_provider
 
 from ..automation.employee import AREA, HOME, hire_task
 from ..curator.generation.run import Limits
@@ -18,6 +16,17 @@ from ..curator.harness import Task
 from ..curator.raven_adapter.exploration import Withheld
 from ..curator.raven_adapter.observe import ObservedProvider, Recorder, plain
 from ..curator.workflow import improve
+from ..research.collection import CollectionLimits
+from ..research.curator import (
+    INFORMATION_FILE,
+    collect_for_curator,
+    handover_information,
+    information_feedback,
+    stage_materials,
+)
+from ..research.guidance import Guidance
+from ..research.information import DIMENSIONS, Answers, Dimension, Request, ResearchGuide, Result, Snapshot
+from ..research.terminal import answer as terminal_answer
 
 
 @dataclass(frozen=True)
@@ -59,56 +68,26 @@ class Expert:
             raise ValueError("expert description must be text")
         return cls(root, name, entries, description, found[0].relative_to(root).as_posix())
 
-    @property
-    def material_path(self) -> str:
-        return f"uploads/experts/{self.name}"
-
     def task(self) -> Task:
         """Bind the worker's business mission, without Curator construction instructions."""
         return Task(text=self.description.strip() or f"Assist users according to the supplied {self.name} profile.")
 
-    def curation_request(self, objective: str | None = None) -> str:
+    @staticmethod
+    def curation_request(objective: str | None = None) -> str:
         """Ask Curator to build the harness; this text is not a customer deliverable."""
         text = (
-            f"Build the {self.name} expert from the complete product package at {self.material_path}.\n"
-            f"Read its manifest {self.manifest}, referenced agent/rule documents, supplied Skills and "
-            "relevant supporting files. Preserve their intended methods, workflow and reusable resources in "
-            "the resulting expert. Treat product-specific commands and dependencies according to this "
-            "deployment's actual capabilities; report unsupported requirements explicitly.\n"
+            f"Build the expert from the reviewed information at {INFORMATION_FILE}.\n"
+            "Use its professional scope, knowledge, methods, judgement, cases and performance expectations. "
+            "Respect stated evidence limits, unresolved questions and operating prerequisites. "
+            "Interaction inputs remain available for inspection and informed adoption. "
+            "Research-only guidance suggests questions and is not established expert knowledge.\n"
             "Decide the division of work using the available root and child Harnesses. Explain what runs "
-            "locally, what uses existing capabilities and what needs customization. The package is input "
-            "material; do not run its original product installer.\n"
-            f"Manifest entry paths: {json.dumps(self.entries, ensure_ascii=False)}"
+            "locally, what uses existing capabilities and what needs customization. "
+            "Report unsupported requirements explicitly."
         )
         if objective:
             text += f"\nOwner objective:\n{objective}"
         return text
-
-    def stage(self, home: Path) -> dict:
-        """Copy the complete package into uploads; no native Skill/profile is activated."""
-        files = []
-        for path in sorted(self.root.rglob("*")):
-            if path.is_symlink() or not (path.is_file() or path.is_dir()):
-                raise ValueError(f"expert packages require regular files/directories: {path}")
-            if path.is_file():
-                files.append(
-                    {
-                        "path": path.relative_to(self.root).as_posix(),
-                        "digest": hashlib.sha256(path.read_bytes()).hexdigest(),
-                        "bytes": path.stat().st_size,
-                        "mode": path.stat().st_mode & 0o777,
-                    }
-                )
-        target = home / self.material_path
-        target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copytree(self.root, target)
-        return {
-            "expert": self.name,
-            "source": str(self.root),
-            "staged": self.material_path,
-            "entries": self.entries,
-            "files": files,
-        }
 
 
 def _save(root: Path, name: str, value) -> None:
@@ -144,7 +123,7 @@ async def _snapshot(worker, root: Path, name: str) -> dict:
 
 
 async def run(
-    expert: Expert,
+    expert: Expert | None,
     config: Path,
     root: Path,
     *,
@@ -153,28 +132,61 @@ async def run(
     limits: Limits = Limits(),
     curation_timeout: float = 900,
     request_timeout: float = 300,
+    collection_limits: CollectionLimits = CollectionLimits(),
+    researcher: str | None = "exchange",
+    research_model: str | None = None,
+    research_effort: str | None = None,
+    research_budget: float | None = None,
+    ask=None,
+    task: Task | None = None,
+    materials: tuple[Path, ...] = (),
+    research_references: tuple[Path, ...] = (),
+    guidance: tuple[ResearchGuide, ...] = (),
+    previous: Snapshot | None = None,
+    focus: tuple[Dimension, ...] = DIMENSIONS,
+    answers: dict[str, str] | None = None,
+    answers_version: str | None = None,
+    prepared: Result | None = None,
 ) -> dict:
     """Run one fresh, bounded curation and optional real tasks; failures retain their evidence."""
     root = root.expanduser().resolve()
     if any(not math.isfinite(value) or value <= 0 for value in (curation_timeout, request_timeout)):
         raise ValueError("timeouts must be finite and positive")
-    if root.is_relative_to(expert.root) or expert.root.is_relative_to(root):
-        raise ValueError("run output and source expert must be separate trees")
+    if task is None:
+        if expert is None:
+            raise ValueError("provide a business task or an expert package as an interaction input")
+        task = expert.task()
+    if not task.text.strip():
+        raise ValueError("the business task must not be empty")
+    material_paths = tuple(dict.fromkeys((*((expert.root,) if expert else ()), *materials)))
+    for source in (*material_paths, *research_references):
+        source = Path(source).resolve()
+        if root.is_relative_to(source) or source.is_relative_to(root):
+            raise ValueError("run output and input sources must be separate trees")
+    collection_request = Request(
+        objective=objective or f"Prepare expert information for this task: {task.text}",
+        context={"business_task": task.text},
+        previous=previous,
+        focus=focus,
+        answers=answers or {},
+        answers_version=answers_version,
+        guidance=guidance,
+    )
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
     work = root / "workdir"
     work.mkdir()
     withheld = Withheld(
         paths=("tests/test_simulation_*", "experimental/docs/expert-package*", "experimental/docs/curator-docs*"),
-        markers=(b"experimental.simulation", b"experimental/simulation", expert.name.encode()),
+        markers=(b"experimental.simulation", b"experimental/simulation", *((expert.name.encode(),) if expert else ())),
     )
     stage = "prepare"
-    report = {"expert": expert.name, "requests_completed": 0, "observed_child_executions": []}
+    report = {"expert": expert.name if expert else "custom", "requests_completed": 0, "observed_child_executions": []}
     _save(root, "status.json", {**report, "stage": stage})
     try:
         model = load_runtime_config(str(config.resolve()), str(root / AREA / HOME)).agents.defaults.model
         report["model"] = model
         worker = hire_task(
-            expert.task(),
+            task,
             config,
             workdir=work,
             root=root,
@@ -182,12 +194,25 @@ async def run(
             timeout=request_timeout,
             withheld=withheld,
         )
-        _save(root, "inputs.json", expert.stage(worker.baseline.config.workspace_path))
+        staged = stage_materials(material_paths, worker.baseline.config.workspace_path)
+        _save(
+            root,
+            "inputs.json",
+            {
+                "materials": [
+                    {"source": str(source), "staged": str(target), "purpose": "interaction"}
+                    for source, target in zip(material_paths, staged)
+                ],
+                "research_references": [
+                    {"source": str(path), "purpose": "research_guidance"} for path in research_references
+                ],
+            },
+        )
         setup = {
             **report,
             "limits": limits,
             "task": worker.baseline.task,
-            "curation_request": expert.curation_request(objective),
+            "curation_request": Expert.curation_request(objective),
             "configured_subagents": [
                 {"name": row.name, "kind": row.kind, "enabled": row.enabled}
                 for row in worker.baseline.config.subagents.agents
@@ -201,16 +226,47 @@ async def run(
             await _snapshot(worker, root, "before.json")
             report["available_children"] = list(worker.children)
             _save(root, "setup.json", {**setup, **report})
+            stage = "information"
+            _save(root, "status.json", {**report, "stage": stage})
+            factory = make_resolving_provider if researcher == "exchange" and research_model else make_lazy_provider
+            provider = ObservedProvider(factory(worker.baseline.config), Recorder(root / "provider.jsonl"))
+            information = await collect_for_curator(
+                worker,
+                provider,
+                collection_request,
+                materials=staged,
+                research_references=research_references,
+                records=root / "information",
+                ask=ask,
+                model=model,
+                researcher=researcher,
+                research_model=research_model,
+                research_effort=research_effort,
+                research_budget=research_budget,
+                limits=collection_limits,
+                replay=prepared,
+            )
+            report["information_version"] = information.snapshot.identity
+            report["information_status"] = information.status
+            if not information.ready:
+                report.update(status=information.status, stage=stage)
+                _save(root, "result.json", report)
+                _save(root, "status.json", report)
+                return report
+            handover_information(worker, information)
             stage = "curation"
             _save(root, "status.json", {**report, "stage": stage})
-            provider = ObservedProvider(make_lazy_provider(worker.baseline.config), Recorder(root / "provider.jsonl"))
             async with asyncio.timeout(curation_timeout):
                 generated = await improve(
                     worker,
                     provider,
                     model=model,
                     limits=limits,
-                    feedback={"source": "owner", "text": expert.curation_request(objective)},
+                    feedback={
+                        "source": "owner",
+                        "text": Expert.curation_request(objective),
+                        "information": information_feedback(information),
+                    },
                 )
             _save(root, "generation.json", generated)
             after = await _snapshot(worker, root, "after.json")
@@ -227,7 +283,7 @@ async def run(
             for index, request in enumerate(requests, 1):
                 _save(root, "status.json", {**report, "stage": stage, "request": index})
                 async with asyncio.timeout(request_timeout):
-                    execution = await worker.run(request, session_key=f"expert:{expert.name}")
+                    execution = await worker.run(request, session_key=f"expert:{worker.baseline.task.id}")
                 _save(root, f"execution-{index}.json", {"request": request, "execution": execution})
                 report["requests_completed"] = index
                 report["observed_child_executions"] = sorted(
@@ -249,7 +305,30 @@ async def run(
 
 def main() -> None:
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("--expert", type=Path, required=True)
+    target = parser.add_mutually_exclusive_group(required=True)
+    target.add_argument("--expert", type=Path, help="Product package supplied as an interaction input")
+    target.add_argument("--task-file", type=Path, help="The expert's business task, independently of any product case")
+    parser.add_argument(
+        "--material", type=Path, action="append", default=[], help="Interaction input file or directory"
+    )
+    parser.add_argument(
+        "--research-reference",
+        type=Path,
+        action="append",
+        default=[],
+        help="Optional product-case material used only to guide research",
+    )
+    parser.add_argument("--research-guidance", type=Path, help="Prepared guidance.json from an earlier research step")
+    parser.add_argument(
+        "--information", type=Path, help="Reviewed offline result matching this task, inputs and environment"
+    )
+    parser.add_argument(
+        "--previous-information", type=Path, help="An existing snapshot.json for focused supplementation"
+    )
+    parser.add_argument("--focus", choices=DIMENSIONS, nargs="+", default=list(DIMENSIONS))
+    parser.add_argument(
+        "--answers-file", type=Path, help="JSON object with version and answers for the previous snapshot"
+    )
     parser.add_argument("--config", type=Path, required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--objective-file", type=Path)
@@ -260,10 +339,32 @@ def main() -> None:
     parser.add_argument("--curator-repairs", type=int, default=2)
     parser.add_argument("--curation-timeout", type=float, default=900)
     parser.add_argument("--request-timeout", type=float, default=300)
+    parser.add_argument("--information-calls", type=int, default=16)
+    parser.add_argument("--information-reviews", type=int, default=3)
+    parser.add_argument(
+        "--research-tasks", type=int, default=6, help="Maximum delegated research groups, not a required count"
+    )
+    parser.add_argument(
+        "--guidance-calls", type=int, default=3, help="Maximum calls for optional case-guidance extraction"
+    )
+    parser.add_argument("--research", choices=("exchange", "claude", "codex", "none"), default="exchange")
+    parser.add_argument("--research-model")
+    parser.add_argument("--research-effort", choices=("low", "medium", "high", "xhigh", "max"))
+    parser.add_argument(
+        "--research-budget", type=float, help="Optional Claude CLI monetary cap; omitted for subscription use"
+    )
+    parser.add_argument("--research-timeout", type=float, default=3600)
+    parser.add_argument("--collection-timeout", type=float, default=3600)
+    parser.add_argument("--research-revisions", type=int, default=1)
+    parser.add_argument("--research-questions", type=int, default=2)
+    parser.add_argument("--submission-reserve", type=float, default=600)
+    parser.add_argument("--interactive", action="store_true", help="Answer information questions on the terminal")
     args = parser.parse_args()
+    answer_set = Answers.model_validate_json(args.answers_file.read_text()) if args.answers_file else None
+
     result = asyncio.run(
         run(
-            Expert.load(args.expert),
+            Expert.load(args.expert) if args.expert else None,
             args.config,
             args.output,
             objective=args.objective_file.read_text() if args.objective_file else None,
@@ -277,6 +378,35 @@ def main() -> None:
             ),
             curation_timeout=args.curation_timeout,
             request_timeout=args.request_timeout,
+            collection_limits=CollectionLimits(
+                calls=args.information_calls,
+                reviews=args.information_reviews,
+                research_tasks=args.research_tasks,
+                guidance_calls=args.guidance_calls,
+                research_timeout=args.research_timeout,
+                total_timeout=args.collection_timeout,
+                research_revisions=args.research_revisions,
+                research_questions=args.research_questions,
+                reserve=args.submission_reserve,
+            ),
+            researcher=None if args.research == "none" else args.research,
+            research_model=args.research_model,
+            research_effort=args.research_effort,
+            research_budget=args.research_budget,
+            ask=terminal_answer if args.interactive else None,
+            task=Task(text=args.task_file.read_text().strip()) if args.task_file else None,
+            materials=tuple(args.material),
+            research_references=tuple(args.research_reference),
+            guidance=Guidance.model_validate_json(args.research_guidance.read_text()).groups
+            if args.research_guidance
+            else (),
+            previous=Snapshot.model_validate_json(args.previous_information.read_text())
+            if args.previous_information
+            else None,
+            focus=tuple(args.focus),
+            answers=answer_set.answers if answer_set else None,
+            answers_version=answer_set.version if answer_set else None,
+            prepared=Result.model_validate_json(args.information.read_text()) if args.information else None,
         )
     )
     print(json.dumps(result, ensure_ascii=False, indent=2))

@@ -163,11 +163,13 @@ class Session:
         boundaries: Boundaries | None = None,
         attributor=None,
         prior=(),
+        prepare=None,
     ):
         if worker.baseline.task is None:
             raise ValueError("a session requires a worker bound to a current task")
         self.worker, self.provider = worker, provider
         self.curator = improve if curator is None else curator
+        self.prepare = prepare
         if boundaries is not None and boundaries.log is None:
             boundaries = replace(boundaries, log=worker.root / "boundaries.jsonl")
         self.boundaries = boundaries
@@ -192,7 +194,7 @@ class Session:
         self.curations = _Records(worker.root / "curation", exclude={PENDING, "composition.json"})
         self.attributions = _Records(worker.root / "attribution")
         self.path = Path(path) if path else worker.root / "iteration" / f"{uuid4().hex}.json"
-        self.record = {
+        self.record: dict = {
             "task_id": worker.baseline.task.id,
             "task": worker.baseline.task.text,
             "status": "running",
@@ -228,7 +230,7 @@ class Session:
         session.record.update(
             {
                 key: record[key]
-                for key in ("opening", "initial_curation", "initial_attribution", "questions", "error")
+                for key in ("opening", "initial_curation", "initial_attribution", "questions", "error", "information")
                 if key in record
             }
         )
@@ -315,6 +317,8 @@ class Session:
         self.record["status"] = "running"
         self.record.pop("stop", None)
         feedback = self._heard(feedback)
+        if self.record.get("information", {}).get("status") == "ready":
+            feedback = {**(feedback or {}), "information": self.record["information"]["handoff"]}
         spoken = [*spoken, *self._prior_spoken()]
         try:
             async with self._compartment("curator", spoken=spoken) as scope:
@@ -343,12 +347,34 @@ class Session:
         return "done"
 
     async def onboard(self, opening=()) -> bool:
-        """The first curation, from the task and whatever `opening` hands over; False when it paused and may be called again."""
+        """Prepare inputs when configured, then curate once; False when preparation is unready or curation pauses."""
         self._require(
             not self.rounds and (not self.onboarded or self.status == "paused"), "onboarding comes first", resuming=True
         )
         if not self.onboarded:
             self.record["opening"] = plain(tuple(opening))
+            self.save()
+        if self.prepare is not None and self.record.get("information", {}).get("status") != "ready":
+            async with self._compartment("curator", spoken=self._prior_spoken()) as scope:
+                result = await self.prepare(
+                    self.worker,
+                    scope.provider(self.provider),
+                    feedback=scope.admit(self._heard({"signals": plain(heard(opening))}), "information.input"),
+                    model=self.curator_model,
+                    admit=scope.admit,
+                )
+                from ..research.curator import information_feedback
+
+                self.record["information"] = {
+                    "status": result.status,
+                    "version": result.snapshot.identity,
+                    "handoff": information_feedback(result) if result.ready else None,
+                    "questions": [item.model_dump(mode="json") for item in result.snapshot.description.unresolved],
+                }
+            if not result.ready:
+                self.record["status"] = result.status
+                self.save()
+                return False
             self.save()
         try:
             status = await self._curate({"signals": plain(heard(opening))} if opening else None)

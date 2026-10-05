@@ -33,12 +33,15 @@ experimental/
 │   ├── disclosure.py            #   披露日程：开场与每次评审交出什么
 │   └── sealed.py                #   差分封印：从契约推出每个角色不能看到的内容
 │
-├── research/                    # 【通用】调研阶段：培养开始前，把交出的资料读进契约类别，写出新场景目录
-│   ├── slots.py                 #   每个类别一个槽位：给了什么、缺口怎么补
-│   ├── induction.py             #   从范例与反例归纳已有规范没说的规则
-│   ├── confirm.py               #   交互方逐条确认、修正、驳回（决定文件，或模拟交互方）
-│   ├── package.py               #   复制场景（去掉没交出的资料），写入规则包与 provenance.json
-│   └── prompts/                 #   归纳与确认提示词
+├── research/                    # 【通用】Curator 前共享的信息收集、审核与版本化交付
+│   ├── information.py           #   八个专家维度、证据、资源、未决问题及内容版本
+│   ├── collection.py            #   agent 自主收集：原生工具、研究委派、询问用户；独立审核与有界修正
+│   ├── guidance.py              #   仅调研需要时，从可选产品案例提炼研究问题与分组线索
+│   ├── curator.py               #   Raven exploration 适配；审核通过后向 Curator 交付
+│   ├── scenario.py              #   已交付材料投影、首轮准备与离线结果复用
+│   ├── inquiry.py               #   研究结果与原文引用核验
+│   ├── researchers.py           #   研究 agent 或独立模型交换
+│   └── prompts/                 #   收集、引导、研究与审核提示词
 │
 ├── curator/                     # 【通用】读取、生成、校验、安装 Harness
 │   ├── workflow.py              #   入口 improve / propose / attribute
@@ -121,23 +124,24 @@ experimental/
 
 ## 运行
 
+独立专家构建、离线准备与 Scenario 首轮共用同一收集流程。缺口由 LLM 根据内容判断，不再按材料类别是否存在触发。离线结果是信息快照与审核记录，不是新的场景目录；旧 `--out / --records / --without / --decisions / --from-records` 编排已移除。
+
 ```bash
 # 旅行社模拟：一次运行（需要自备带 key 的配置文件）
 uv run python -m experimental.simulation --config <config.json> --home <基线 home> \
   --state-dir <新的空目录> --scenario travel_agency --chain documents --rounds 4
 
-# 调研阶段：培养前从范例与反例归纳规则，交互方确认后写出新场景目录（再用 --scenario 指向它）
-uv run python -m experimental.research --scenario <场景目录> --out <新目录> --records <新目录> \
-  --config <config.json> --without <没交出的资料> --party-knows <模拟交互方按哪些资料确认>
+# 离线准备：只使用指定披露计划的首轮材料，输出审核结果与记录
+uv run python -m experimental.research --scenario <场景目录> --disclose staged \
+  --output <新的准备目录> --config <config.json> --research exchange
 
-# 同上，另外用网页研究空的事实槽：研究者可选 claude、codex 或 exchange（本阶段模型加配置里的 Serper 与 Jina）
-uv run python -m experimental.research --scenario <场景目录> --out <新目录> --records <新目录> \
-  --config <config.json> --research claude --research-model sonnet --research-budget 2 \
-  --party-knows <模拟交互方按哪些资料确认>
+# 或明确指定此次已交付材料；允许询问真人
+uv run python -m experimental.research --scenario <场景目录> --release <材料名> \
+  --output <新的准备目录> --config <config.json> --interactive
 
-# 交互方写好的决定文件：只结算往期运行记下的条目
-uv run python -m experimental.research --scenario <场景目录> --out <新目录> --records <新目录> \
-  --from-records <往期 --records> --decisions <决定文件>
+# Scenario 首轮可复用离线审核结果；任务、材料、环境不匹配时拒绝，需要重新评估
+uv run python -m experimental.simulation --scenario <场景目录> --config <config.json> \
+  --state-dir <新的运行目录> --information <准备目录/result.json>
 
 # 留出集：这些题卡每轮演练，只由按声明检查项评分的自动 Assessor 评，Analyst 与 Curator 看不到
 uv run python -m experimental.simulation --config <config.json> --state-dir <新的空目录> \
@@ -146,15 +150,89 @@ uv run python -m experimental.simulation --config <config.json> --state-dir <新
 # 真人 CLI：真人既是对话方也是评价者
 uv run python -m experimental.iteration --help
 
-# 完整专家包：正常根／子部署；可重复 --request-file 提交构建后的真实任务
+# 从业务任务和交互材料开始；没有产品案例也能进行信息收集
+uv run python -m experimental.simulation.experts --config <config.json> \
+  --task-file <业务任务.md> --material <交互材料目录> --output <新的运行目录> \
+  --research exchange --interactive
+
+# 可选：产品案例仅为调研提供引导，不作为本次交互输入
+uv run python -m experimental.simulation.experts --config <config.json> \
+  --task-file <业务任务.md> --research-reference <产品案例目录> --output <新的运行目录> \
+  --research exchange --research-tasks 3
+
+# 产品包也可以明确作为交互输入：先评估已有信息与缺口，不强制抽象或重新调研
 uv run python -m experimental.simulation.experts --config <config.json> \
   --expert <专家包目录> --output <新的运行目录> \
-  --request-file <客户需求.md>
+  --research exchange --interactive --request-file <客户需求.md>
 
 # 测试
 uv run pytest tests/test_harness_curator_*.py tests/test_analyst_*.py tests/test_iteration_*.py tests/test_simulation_*.py \
   tests/test_scenario_*.py tests/test_assessor_*.py tests/test_research_*.py
 ```
+
+首轮构建先输出 `information/` 记录：八个维度的说明、获取证据、研究任务组、候选版本、审核意见和未决问题。
+只有审核接受且没有阻断问题，才将整理后的说明写入员工的 `uploads/information/` 并调用 Curator。
+`--material` 和 `--expert` 的材料保留在员工上传目录，按交互输入评估与采用；`--research-reference` 的材料
+只供单独的调研引导读取，不进入员工上传目录。只有实际委派调研且选择使用引导时，才执行一次有界提炼，
+结果在多个研究组间复用。一个组可以关联多个信息字段，材料已充分时不启动调研。
+`--interactive` 允许在终端回答信息问题；
+未启用或未回答时保留问题；仅有用户渠道的阻断问题时为 `needs_input`。仍需公共调研、本地检查，或审核修正预算耗尽时为 `incomplete`，不会继续改造。
+`--research exchange` 使用配置中的网页工具和独立研究对话，也可选 `claude`、`codex` 或 `none`。
+主流程模型由配置文件决定，调研模型单独指定。例如，配置主流程为 DeepSeek 后，可用
+`--research claude --research-model claude-sonnet-5-5 --research-effort xhigh`
+运行 Claude Code 调研；`--research-effort` 不会改变主流程的推理设置。离线准备与专家构建入口
+均支持这些选项，具体模型和 effort 是否可用取决于本机 CLI 与账号。
+Claude Code 的预算是客户端控制值，最后一次调用可能使报告金额超过上限；运行记录保留
+客户端报告的模型、耗时、金额与终止原因。这些金额不是账号账单，引用核验通过也不等于结论充分。
+默认不设置美元上限；确需客户端金额控制时才传 `--research-budget`。
+`--research-timeout` 默认 3600 秒，是单次研究与审核的上限；`--collection-timeout` 默认 3600 秒，
+限制一次信息收集的整个闭环，包括引导、调研、审核和修订，先到的时限生效。
+每次委派只获得整轮剩余时间减去 `--submission-reserve`（默认 600 秒）后的部分，这段保留时间留给
+提交描述和最终审核；剩余可研究时间不足 300 秒时宿主拒绝再开调研，收集器只能带着缺口提交。
+每组调研的时间窗里再留 150 秒给引文核验和审核，研究代理只能用其余部分。
+研究组上限由 `--research-tasks` 指定，每组最多 `--research-questions`（默认 2）个问题，
+`--research-revisions` 默认每组最多修订一次。收集器被要求先一次读完列出的材料（`read_sources`），
+再把只有用户能答的问题提出来，最后才委派公开证据的调研。
+
+收集 agent 负责判断缺口、分组、任务书、修订和结束。每次委派只执行一次调研、来源核验和受限模型审核；
+被退回时，返回审核问题、尝试编号和剩余额度，由收集 agent 决定是否用 `previous_attempt` 修订，
+或换渠道、保留缺口结束。尝试编号只用于程序衔接，不写进语义任务书。
+不再为任务书设置独立审稿循环，可选案例引导也只做有界提炼。
+审核无查询工具，不独立规划或调研。旧审核意见随修订传递，最终汇总仍要检查未解决的意见。
+
+未通过审核的正文保留在尝试记录中，不进入知识证据。网页截断、JSON 转义和 PDF 断词的核验处理保持；
+失败原因与原始记录保持可追溯。超时或调用耗尽会保存 `result.json`、`snapshot.json`、`conversation.json`
+和 `research-attempts.json`，返回 `incomplete` 及 `stop_reason`，不会继续构建 Harness。
+下一次可以用已有快照和聚焦字段重新评估；不自动恢复全部失败任务或重跑整套调研。
+
+离线入口支持 `--collector claude` 或 `--collector codex`，配合 `--model <模型> --collection-effort <强度>`，
+通过 Claude Code 或 Codex 的受限结构化调用驱动同一个收集流程。CLI 只选择宿主提供的工具，由宿主执行；
+审核同样只提交判断。两者都用本机 CLI 的登录，不需要 Raven 配置里的 key；Codex 会在只读沙箱里运行、不加载用户配置，
+收集调用不开网页搜索。默认 `--collector provider` 仍使用 Raven 配置中的模型。
+
+一次真实模型检查只验证有界闭环：收集和审核实时运行，调研使用已有记录回放，不新增网页搜索。
+整次上限 300 秒、一个研究组、无自动修订，不重复启动；输入是旧销售教练试验中已保存的
+`candidate-2.json` 与 `sources-2.json`，只取其中一条职业标准发现。
+默认 `RESEARCH_COLLECTION_MODE=replay` 使用固定交付；设为 `source_review` 时，研究模型只根据该发现
+对应的已保存来源页面实时生成交付，并允许收集 agent 自行决定一次修订。两种模式均使用生产收集流程，
+整轮上限仍为 300 秒，不新增网页搜索；是否实际修订取决于收集 agent 的判断，测试脚本不指定分支。
+
+```bash
+RESEARCH_CLAUDE_CONFIG_DIR=/path/to/.claude \
+RESEARCH_COLLECTION_RECORDS=/outside/repo/new-run \
+RESEARCH_COLLECTION_FIXTURE=/outside/repo/retained-group \
+uv run pytest tests/integration/test_research_real_llm.py -k claude_collection_closed_loop -v -s -o addopts=''
+```
+
+测试脚本只提供环境、输入与证据回放，不另写规划器、审核循环或手动决定修订路径。
+结构化检查通过或按预算正确结束，不等于完整职业画像已经充分，更不等于专家工作能力得到证明。
+
+Scenario 默认在入职前准备信息；`--information-research none` 关闭外部研究渠道，不跳过信息评估。可选 `--information-answer-material <材料名>` 让模拟交互方回答必要问题，私有资料只在回答适配器内使用。离线入口的对应选项是 `--answer-material`。内容审核不代替交互方采纳，研究结果也不自动成为评价标准。
+
+后续信息补充可传 `--previous-information <snapshot.json>`、`--focus knowledge methods` 和
+`--answers-file <带版本的答复JSON>`；已生成的 `guidance/guidance.json` 可以用 `--research-guidance` 复用。答复文件格式为 `{"version": "sha256:上一快照摘要", "answers": {"问题ID": "答复"}}`，版本不匹配时拒绝使用。独立专家入口也可用 `--information <离线result.json>` 复用匹配的已审核结果。
+非关注字段及未决问题保持，输出记录本次改变的维度与上一版本。命令仍创建新运行；已有 Harness 的自动轮间
+收集和暂停改造后的重启未接入。API 发布信息前会检查当前版本，防止覆盖过期输入或改写暂停改造的依据。
 
 ## 本地 Studio
 

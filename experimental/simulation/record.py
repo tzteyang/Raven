@@ -85,7 +85,7 @@ from ..automation.employee import AREA, REPLICAS
 from ..automation.isolation import RESULT as ISOLATION
 from ..curator.raven_adapter.targets import catalogue
 from ..iteration import records
-from ..research.package import digest
+from ..scenario.digest import digest
 from .agency import REFERENCES
 from .attribution import RESULT as ATTRIBUTION
 from .scenario import BUNDLED
@@ -1153,6 +1153,11 @@ def _steps(run: dict, curations: list[dict], rounds: list[dict], root: Path) -> 
         for curation in curations
         if curation["round"] == 0
     ]
+    if preparation := run.get("information"):
+        steps.insert(
+            0,
+            {"step": "information", "round": 0, "state": preparation["status"], "version": preparation.get("version")},
+        )
     for item in rounds:
         number = item["number"]
         steps.append({"step": "trial", "round": number, "state": "unfinished" if item["partial"] else "done"})

@@ -406,3 +406,73 @@ async def test_every_curation_hears_the_prior_the_party_brings_and_a_resume_keep
     resumed = Session.resume(worker, object(), session.path)
     assert resumed.prior == (brought,)
     assert Session.open(FakeWorker(tmp_path / "alone"), object())._heard(None) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocked", [False, True])
+async def test_unready_information_prevents_curation_and_trials(tmp_path, curations, analyses, blocked):
+    from experimental.research.information import Question, Result, Review, Snapshot
+    from tests.test_research_collection import accepted, snapshot
+
+    original = snapshot()
+    if blocked:
+        description = original.description.model_copy(
+            update={
+                "unresolved": (
+                    Question(
+                        id="q",
+                        dimension="role",
+                        question="Who owns the decision?",
+                        reason="Required authority is missing.",
+                    ),
+                )
+            }
+        )
+        original = Snapshot(description=description, evidence=original.evidence)
+    verdict = (
+        accepted()
+        if blocked
+        else {"accepted": False, "reason": "Insufficient evidence", "issues": ["Resolve the task scope."]}
+    )
+    result = Result(snapshot=original, review=Review.model_validate(verdict))
+
+    async def prepare(*args, **kwargs):
+        return result
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), prepare=prepare)
+    assert not await session.onboard(OPENING)
+    assert session.status == ("needs_input" if blocked else "incomplete")
+    assert not session.onboarded and not curations
+    with pytest.raises(StepError, match="after onboarding"):
+        await session.trial(student("Should not run"))
+    saved = json.loads(session.path.read_text())
+    assert saved["information"]["status"] == result.status
+
+
+@pytest.mark.asyncio
+async def test_information_is_prepared_once_and_its_version_reaches_later_curation(tmp_path, curations, analyses):
+    from experimental.research.information import Result, Review
+    from tests.test_research_collection import accepted, snapshot
+
+    preparations = []
+    result = Result(snapshot=snapshot(), review=Review.model_validate(accepted()))
+
+    async def prepare(worker, provider, **kwargs):
+        preparations.append(kwargs["feedback"])
+        return result
+
+    analyses.scripted.extend([CURATE, CONTINUE])
+    worker = FakeWorker(tmp_path)
+    await run(
+        worker,
+        object(),
+        [student("Plan a trip", "Plan again")],
+        [Verifier(failing("Ask the budget."), passing())],
+        prepare=prepare,
+        opening=OPENING,
+        limits=Limits(max_rounds=3),
+    )
+    assert len(preparations) == 1 and len(curations) == 2
+    assert all(call["feedback"]["information"]["version"] == result.snapshot.identity for call in curations)
+    assert "items" not in preparations[0]["signals"][0]
