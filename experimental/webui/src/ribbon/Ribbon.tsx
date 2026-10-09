@@ -22,14 +22,14 @@ import type { Tab } from './layout'
 
 const REFRESH = 20000
 const STATUS: Record<string, string> = {
-  running: '进行中',
-  finished: '已结束',
-  paused: '已暂停',
-  stopped: '已停止',
-  error: '出错',
-  stalled: '停滞',
-  incomplete: '未完成',
-  needs_input: '等待输入',
+  running: 'Running',
+  finished: 'Finished',
+  paused: 'Paused',
+  stopped: 'Stopped',
+  error: 'Error',
+  stalled: 'Stalled',
+  incomplete: 'Incomplete',
+  needs_input: 'Needs input',
 }
 
 function initial(): string | null {
@@ -99,20 +99,20 @@ export function Ribbon(): JSX.Element {
     <div className="rb-app">
       <header className="rb-top">
         <RavenMark size={20} />
-        <h1>{thread?.title ?? entry?.name ?? '培养路线'}</h1>
+        <h1>{thread?.title ?? entry?.name ?? 'Cultivation route'}</h1>
         {entry && <span className={`rb-status rb-${entry.status}`}>{STATUS[entry.status] ?? entry.status}</span>}
         <span className="grow" />
-        <select className="rb-pick" value={id ?? ''} onChange={(event) => setId(event.target.value)} aria-label="选择运行">
+        <select className="rb-pick" value={id ?? ''} onChange={(event) => setId(event.target.value)} aria-label="Choose a run">
           {runs.map((run) => (
             <option key={run.id} value={run.id}>{run.name}</option>
           ))}
         </select>
-        <a className="rb-link" href={`/studio${id ? `?run=${encodeURIComponent(id)}` : ''}`}>经典视图</a>
+        <a className="rb-link" href={`/studio${id ? `?run=${encodeURIComponent(id)}` : ''}`}>Classic view</a>
       </header>
       <main className="rb-main">
         <section className="rb-left">
           {error && <p className="rb-error">{error}</p>}
-          {!route && !error && <p className="rb-quiet rb-pad">读取中…</p>}
+          {!route && !error && <p className="rb-quiet rb-pad">Loading...</p>}
           {route && (
             <>
               <RouteView route={route} seed={id ?? ''} selected={selected} onSelect={choose} />

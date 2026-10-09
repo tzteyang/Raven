@@ -30,22 +30,22 @@ export interface Message {
   body: (onSelect: (key: string) => void) => ReactNode
 }
 
-const DECISIONS: Record<string, string> = { curate: '改造', continue: '继续', stop: '停止', supplement: '补充材料', clarify: '澄清' }
+const DECISIONS: Record<string, string> = { curate: 'Curate', continue: 'Continue', stop: 'Stop', supplement: 'Supplement materials', clarify: 'Clarify' }
 const STAGES: [string, string][] = [
-  ['diagnose', '归因'],
-  ['select', '选面'],
-  ['design', '设计'],
-  ['implement', '实现'],
-  ['validate', '校验'],
-  ['repair', '修复'],
-  ['install', '安装'],
+  ['diagnose', 'Diagnose'],
+  ['select', 'Select'],
+  ['design', 'Design'],
+  ['implement', 'Implement'],
+  ['validate', 'Validate'],
+  ['repair', 'Repair'],
+  ['install', 'Install'],
 ]
-const MARKS: Record<Mark, string> = { add: '增', modify: '改', move: '换面', retire: '撤' }
+const MARKS: Record<Mark, string> = { add: 'added', modify: 'modified', move: 'moved', retire: 'retired' }
 
 /* The thread names a reviewer by its whole description; the page needs only which role it is. */
 export function roleOf(speaker: string): Role {
-  if (/own work|self|自评/i.test(speaker)) return 'self'
-  if (/standard|标准/i.test(speaker)) return 'standard'
+  if (/own work|self/i.test(speaker)) return 'self'
+  if (/standard/i.test(speaker)) return 'standard'
   return 'owner'
 }
 
@@ -55,14 +55,14 @@ function line(text: string, size = 46): string {
 }
 
 function curationSummary(leg: Leg, next: Leg | undefined): string {
-  if (leg.end === 'curating') return '正在改造…'
-  if (leg.end === 'failed') return '这次改造没有装上'
-  if (leg.end === 'knot') return '改造完成，代码未变'
+  if (leg.end === 'curating') return 'Curating...'
+  if (leg.end === 'failed') return 'This curation was not installed'
+  if (leg.end === 'knot') return 'Curation finished, code unchanged'
   if (leg.end !== 'waist' || !next) return ''
   const counts: Partial<Record<Mark, number>> = {}
   for (const mark of Object.values(next.marks)) counts[mark] = (counts[mark] ?? 0) + 1
   const parts = (Object.keys(MARKS) as Mark[]).filter((mark) => counts[mark]).map((mark) => `${MARKS[mark]} ${counts[mark]}`)
-  return `改造为 ${next.version}${parts.length ? ` · 条目${parts.join(' ')}` : ''}`
+  return `Curated into ${next.version}${parts.length ? ` · commitments ${parts.join(' ')}` : ''}`
 }
 
 function Stages({ leg }: { leg: Leg }): JSX.Element | null {
@@ -72,7 +72,7 @@ function Stages({ leg }: { leg: Leg }): JSX.Element | null {
   const done = root.stages.filter((stage) => stage.state === 'done').length
   return (
     <div className="rb-todo">
-      <div className="rb-todo-h">改造步骤 <span>{done} / {shown.length}</span></div>
+      <div className="rb-todo-h">Curation steps <span>{done} / {shown.length}</span></div>
       <ul>
         {shown.map(([id, label]) => {
           const stage = root.stages.find((item) => item.id === id)!
@@ -80,7 +80,7 @@ function Stages({ leg }: { leg: Leg }): JSX.Element | null {
             <li key={id} data-state={stage.state}>
               <i className={`rb-tick${stage.state === 'current' ? ' rb-live' : ''}`} />
               <span>{label}</span>
-              {stage.calls > 0 && <s>{stage.calls} 次调用</s>}
+              {stage.calls > 0 && <s>{stage.calls} calls</s>}
             </li>
           )
         })}
@@ -99,7 +99,7 @@ export function messagesOf(route: Route): Message[] {
       mark: legKey(i),
       leg: i,
       role: 'version',
-      summary: leg.opening ? `${leg.version} · 开场` : `${leg.version}${count !== null ? ` · ${count} 条条目` : ''}`,
+      summary: leg.opening ? `${leg.version} · opening` : `${leg.version}${count !== null ? ` · ${count} commitments` : ''}`,
       live: false,
       body: () => null,
     })
@@ -109,7 +109,7 @@ export function messagesOf(route: Route): Message[] {
         mark: foldKey(i),
         leg: i,
         role: 'trial',
-        summary: `在 ${leg.version} 上试用 ${leg.trials.length} 场${leg.playing ? '，进行中' : ''}`,
+        summary: `${leg.trials.length} trials on ${leg.version}${leg.playing ? ', running' : ''}`,
         live: leg.playing,
         body: (onSelect) => (
           <ul className="rb-trial-list">
@@ -118,7 +118,7 @@ export function messagesOf(route: Route): Message[] {
                 <i className={`rb-dot${trial.status === 'running' ? ' rb-live' : ''}`} />
                 <b>{trial.title}</b>
                 <span>{line(trial.exchanges[0]?.user ?? '', 30)}</span>
-                <s>{trial.exchanges.length} 轮</s>
+                <s>{trial.exchanges.length} turns</s>
               </li>
             ))}
           </ul>
@@ -152,7 +152,7 @@ export function messagesOf(route: Route): Message[] {
         mark: flagKey(i),
         leg: i,
         role: 'analyst',
-        summary: `判断：${DECISIONS[feedback.decision] ?? feedback.decision}${feedback.requirements.length ? ` · ${feedback.requirements.length} 条需求` : ''}`,
+        summary: `Decision: ${DECISIONS[feedback.decision] ?? feedback.decision}${feedback.requirements.length ? ` · ${feedback.requirements.length} requirements` : ''}`,
         live: false,
         body: () => (
           <>
@@ -161,7 +161,7 @@ export function messagesOf(route: Route): Message[] {
               {feedback.requirements.map((requirement, k) => (
                 <li key={requirement.id ?? k}>
                   <code>{requirement.id}</code>
-                  <span className={`rb-strength rb-${requirement.strength}`}>{requirement.strength === 'must_hold' ? '必须' : '应当'}</span>
+                  <span className={`rb-strength rb-${requirement.strength}`}>{requirement.strength === 'must_hold' ? 'Must' : 'Should'}</span>
                   <span>{line(requirement.behavior, 60)}</span>
                 </li>
               ))}
@@ -212,7 +212,7 @@ export function stageOf(route: Route, messages: Message[], selected: string | nu
     const trial = selected.startsWith('trial-') && !selected.startsWith('trial-fold-')
       ? leg.trials.find((item) => trialKey(item.id) === selected)
       : undefined
-    if (trial) return { role: 'trial', line: `${trial.title} · ${trial.exchanges.length} 轮` }
+    if (trial) return { role: 'trial', line: `${trial.title} · ${trial.exchanges.length} turns` }
     const hit = messages.find((message) => message.mark === selected)
     if (hit && hit.role !== 'version') return { role: hit.role, line: hit.summary }
     if (hit) return stageOf(route, messages, null, 'harness', index)
@@ -223,13 +223,13 @@ export function stageOf(route: Route, messages: Message[], selected: string | nu
     for (const mark of Object.values(leg.marks)) counts[mark] = (counts[mark] ?? 0) + 1
     const parts = (Object.keys(MARKS) as Mark[]).filter((mark) => counts[mark]).map((mark) => `${MARKS[mark]} ${counts[mark]}`)
     const live = leg.commitments ? active(leg.commitments).length : 0
-    return { role, line: `${live} 条现行条目${parts.length ? `，较上一版${parts.join(' ')}` : ''}` }
+    return { role, line: `${live} current commitments${parts.length ? `, vs the version before ${parts.join(' ')}` : ''}` }
   }
   const own = messages.find((message) => message.leg === leg.index && message.role === role)
   if (own) return { role, line: own.summary }
-  if (role === 'curator') return { role, line: '这一段没有改造' }
-  if (role === 'trial') return { role, line: `${leg.version} 还没有试用` }
-  return { role, line: '这一段还没有判断' }
+  if (role === 'curator') return { role, line: 'No curation in this leg' }
+  if (role === 'trial') return { role, line: `No trials on ${leg.version} yet` }
+  return { role, line: 'No decision in this leg yet' }
 }
 
 export function Chat({ messages, route, focus, selected, onSelect }: {

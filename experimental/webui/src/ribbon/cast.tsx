@@ -30,10 +30,10 @@ export type Role = 'owner' | 'self' | 'standard' | 'trial' | 'analyst' | 'curato
 
 export const CAST: Record<Role, { name: string; icon: IconSvgElement; raven: string | null }> = {
   version: { name: 'Harness', icon: Layers01Icon, raven: agent },
-  trial: { name: '试用', icon: PlayCircleIcon, raven: content },
-  owner: { name: '负责人', icon: SproutIcon, raven: null },
-  self: { name: '自评', icon: CheckListIcon, raven: agent },
-  standard: { name: '标准评审', icon: Analytics01Icon, raven: data },
+  trial: { name: 'Trial', icon: PlayCircleIcon, raven: content },
+  owner: { name: 'Owner', icon: SproutIcon, raven: null },
+  self: { name: 'Self review', icon: CheckListIcon, raven: agent },
+  standard: { name: 'Standard', icon: Analytics01Icon, raven: data },
   analyst: { name: 'Analyst', icon: Search01Icon, raven: research },
   curator: { name: 'Curator', icon: SourceCodeIcon, raven: coding },
 }

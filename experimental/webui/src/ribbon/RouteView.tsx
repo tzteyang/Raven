@@ -99,7 +99,7 @@ export function RouteView({ route, seed, selected, onSelect }: {
         height={shape.height}
         tabIndex={0}
         role="img"
-        aria-label="迭代路线"
+        aria-label="Iteration route"
         onClick={() => onSelect(null)}
         onKeyDown={walk}
       >

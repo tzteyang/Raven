@@ -53,7 +53,7 @@ export interface Layout {
   order: string[]
 }
 
-const DECISIONS: Record<string, string> = { curate: '改造', continue: '继续', stop: '停止', supplement: '补充', clarify: '澄清' }
+const DECISIONS: Record<string, string> = { curate: 'Curate', continue: 'Continue', stop: 'Stop', supplement: 'Supplement', clarify: 'Clarify' }
 const THREAD = 2.4
 const BEADS = 6
 
@@ -146,7 +146,7 @@ export function layout(route: Route, width: number, seed: string): Layout {
       x: start.x + outward * 26,
       y: i === 0 ? start.y + 22 : start.y + 2,
       text: same ? `${leg.version}′` : leg.version,
-      sub: route.recorded ? `${leg.commitments ? leg.commitments.filter((item) => !item.retired).length : 0} 条` : `${total} 个面`,
+      sub: route.recorded ? `${leg.commitments ? leg.commitments.filter((item) => !item.retired).length : 0} commitments` : `${total} surfaces`,
     }
     if (leg.opening && leg.requests.length) {
       const p = at(0.42, 0, 0)

@@ -32,18 +32,18 @@ type Sub =
 
 const TABS: [Tab, string][] = [
   ['harness', 'Harness'],
-  ['process', '过程'],
-  ['trials', '试用'],
-  ['review', '评估'],
+  ['process', 'Process'],
+  ['trials', 'Trials'],
+  ['review', 'Review'],
 ]
 
-const MARKS: Record<Mark, string> = { add: '新增', modify: '修改', move: '换面', retire: '撤销' }
-const DECISIONS: Record<string, string> = { curate: '改造', continue: '继续', stop: '停止', supplement: '补充材料', clarify: '澄清' }
+const MARKS: Record<Mark, string> = { add: 'Added', modify: 'Modified', move: 'Moved', retire: 'Retired' }
+const DECISIONS: Record<string, string> = { curate: 'Curate', continue: 'Continue', stop: 'Stop', supplement: 'Supplement materials', clarify: 'Clarify' }
 
 /** A served input as a short tag: a requirement id stays, a material loses its prefix, a versioned key its digest. */
 export function served(value: string): string {
-  if (value === 'task') return '任务'
-  if (value.startsWith('information:')) return `资料 ${value.split(':').pop()!.slice(0, 6)}`
+  if (value === 'task') return 'task'
+  if (value.startsWith('information:')) return `information ${value.split(':').pop()!.slice(0, 6)}`
   if (value.startsWith('material:')) return value.slice('material:'.length)
   if (value.startsWith('expectation:')) return value.slice('expectation:'.length)
   return value
@@ -77,19 +77,19 @@ function HarnessTab({ route, leg, onDiff }: { route: Route; leg: Leg; onDiff: (v
   if (!leg.commitments) {
     return (
       <div className="rb-doc">
-        <p className="rb-quiet">这次运行早于承诺条目的记录，带子按已安装的策略面显示。</p>
+        <p className="rb-quiet">This run predates commitment records; the ribbon shows the installed strategy surfaces.</p>
         <Code targets={targets} view={made} onDiff={onDiff} />
       </div>
     )
   }
   const current = active(leg.commitments)
   if (!current.length && !leg.retired.length) {
-    return <div className="rb-doc"><p className="rb-quiet">{leg.version} 还没有 authored 代码，也没有承诺条目。</p></div>
+    return <div className="rb-doc"><p className="rb-quiet">{leg.version} has no authored code and no commitments yet.</p></div>
   }
   const order = [...SURFACES, ...new Set(current.map((item) => item.surface).filter((surface) => !SURFACES.includes(surface)))]
   return (
     <div className="rb-doc">
-      <h2 className="rb-doc-t">{leg.version}<span>{current.length} 条现行条目</span></h2>
+      <h2 className="rb-doc-t">{leg.version}<span>{current.length} current commitments</span></h2>
       {order.map((surface) => {
         const items = current.filter((item) => item.surface === surface)
         if (!items.length) return null
@@ -102,11 +102,11 @@ function HarnessTab({ route, leg, onDiff }: { route: Route; leg: Leg; onDiff: (v
       })}
       {leg.retired.length > 0 && (
         <section className="rb-surface rb-retired">
-          <h3>本版撤销</h3>
+          <h3>Retired in this version</h3>
           <ul>
             {leg.retired.map((item) => (
               <li key={item.id} className="rb-cm">
-                <div className="rb-cm-h"><code className="rb-cm-id">{item.id}</code><span className="rb-mark rb-mark-retire">撤销</span></div>
+                <div className="rb-cm-h"><code className="rb-cm-id">{item.id}</code><span className="rb-mark rb-mark-retire">Retired</span></div>
                 <p className="rb-cm-text">{item.statement}</p>
                 <p className="rb-reason">{item.retired}</p>
               </li>
@@ -123,11 +123,11 @@ function Code({ targets, view, onDiff }: { targets: string[]; view: CurationView
   if (!view || !targets.length) return null
   return (
     <section className="rb-code">
-      <h3>本版代码</h3>
+      <h3>Code of this version</h3>
       <div>
         {targets.map((target) => (
           <button key={target} type="button" className="rb-chip rb-btn" onClick={() => onDiff(view, target)}>
-            {surfaceName(target)} · 改前改后
+            {surfaceName(target)} · before and after
           </button>
         ))}
       </div>
@@ -153,14 +153,14 @@ function ReviewTab({ leg }: { leg: Leg }): JSX.Element {
             {feedback.requirements.map((requirement, k) => (
               <li key={requirement.id ?? k}>
                 <code>{requirement.id}</code>
-                <span className={`rb-strength rb-${requirement.strength}`}>{requirement.strength === 'must_hold' ? '必须' : '应当'}</span>
+                <span className={`rb-strength rb-${requirement.strength}`}>{requirement.strength === 'must_hold' ? 'Must' : 'Should'}</span>
                 <span>{requirement.behavior}</span>
               </li>
             ))}
           </ul>
         </section>
       ) : (
-        !leg.requests.length && <p className="rb-quiet">这一段还没有评审与判断。</p>
+        !leg.requests.length && <p className="rb-quiet">No review or decision in this leg yet.</p>
       )}
     </div>
   )
@@ -215,7 +215,7 @@ export function Detail({ route, run, leg: index, tab, trial, stage, onTab }: {
   const rawScope = sub?.kind === 'raw' ? sub.card.curation?.scopes.find((scope) => scope.name === sub.scope) ?? null : null
   return (
     <aside className="rb-detail">
-      <Hero stage={stage} version={`${leg.version}${leg.opening ? ' · 开场' : ''}`} />
+      <Hero stage={stage} version={`${leg.version}${leg.opening ? ' · opening' : ''}`} />
       <nav className="rb-tabs">
         {TABS.map(([key, label]) => (
           <button key={key} type="button" className={key === tab ? 'on' : ''} onClick={() => onTab(key)}>
@@ -226,7 +226,7 @@ export function Detail({ route, run, leg: index, tab, trial, stage, onTab }: {
       <div className="rb-body">
         {sub ? (
           <div className="rb-sub">
-            <button type="button" className="rb-back" onClick={() => setSub(null)}>← 返回</button>
+            <button type="button" className="rb-back" onClick={() => setSub(null)}>&larr; Back</button>
             {sub.kind === 'diff' && <DiffPane view={sub.view} scope={sub.scope} root={sub.root} target={sub.target} />}
             {sub.kind === 'inspect' && <InspectorPane card={sub.card} />}
             {sub.kind === 'raw' && rawScope && <RawOutputPane scope={rawScope} />}
@@ -237,12 +237,12 @@ export function Detail({ route, run, leg: index, tab, trial, stage, onTab }: {
           leg.process ? (
             <ProcessCard card={leg.process} mode="replay" latest={leg.index === route.legs.length - 1} actions={actions} />
           ) : (
-            <p className="rb-quiet rb-pad">这一段还没有判断与策展。</p>
+            <p className="rb-quiet rb-pad">No decision or curation in this leg yet.</p>
           )
         ) : tab === 'trials' ? (
           shown ? (
             <div className="rb-sub">
-              <button type="button" className="rb-back" onClick={() => setOpenTrial(null)}>← 全部试用</button>
+              <button type="button" className="rb-back" onClick={() => setOpenTrial(null)}>&larr; All trials</button>
               <TrialPane trial={shown} run={run} />
             </div>
           ) : leg.trials.length ? (
@@ -252,7 +252,7 @@ export function Detail({ route, run, leg: index, tab, trial, stage, onTab }: {
               ))}
             </div>
           ) : (
-            <p className="rb-quiet rb-pad">这一版还没有试用。</p>
+            <p className="rb-quiet rb-pad">No trials on this version yet.</p>
           )
         ) : (
           <ReviewTab leg={leg} />
