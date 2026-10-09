@@ -75,6 +75,14 @@ class OpenAIResponsesProvider(LLMProvider):
     ) -> LLMResponse:
         stored_model = model or self.default_model
         instructions, input_items = _convert_messages(messages)
+        # A replayed function call carries no item id. The id names an item of
+        # a stored response, and a server that stores responses (Azure OpenAI)
+        # then demands that response's reasoning item beside it, which the
+        # transcript does not keep; without the id the call is the client's own
+        # and only its call_id has to match the output that follows.
+        for item in input_items:
+            if item.get("type") == "function_call":
+                item.pop("id", None)
         body: dict[str, Any] = {
             "model": self.wire_model_id(stored_model),
             "input": input_items,
