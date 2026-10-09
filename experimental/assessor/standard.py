@@ -3,24 +3,26 @@
 A `Standard` has three legitimate sources, and each criterion carries its source, strength and provenance:
 
 - declared: the scenario's own checks, must_hold;
-- derived: checkable items a model draws from the handed-over norms (`derive`), should until the party confirms them
-  (`Standard.confirmed`); only norms are read, never exemplars nor the partner's own output, and the derivation is
-  shown the party's criteria and asked only for what they leave uncovered, so the party's come first;
+- derived: checkable items the standard critic writes from the handed-over norms and revises every round
+  (`experimental.assessor.critic`), should until the counterpart confirms them (`Standard.confirmed`); only norms are
+  read, never exemplars nor the partner's own output, and the critic is shown the other sources' criteria as already
+  held, so the counterpart's come first;
 - sedimented: every requirement raised so far, kept as a resident regression check with the requirement's own
-  strength (`Standard.sedimented`), so the loop keeps guarding what was confirmed even when the party is silent.
+  strength (`Standard.sedimented`), so the loop keeps guarding what was confirmed even when the counterpart is silent.
 
 `StandardAssessor` judges a round's sessions against the standard with a model and returns its verdicts as a `Signal`
 for the Analyst to translate; it has no voice of its own. Only must_hold criteria decide whether it is satisfied, so
 satisfying derived criteria alone never ends a run, and with no must_hold criterion exercised it does not judge. The
 loop hands it the history before each assessment (`sediment`). The standard is evaluation apparatus: its fields reach
-the party and the Analyst only, and the assessor runs in the Analyst's compartment when it is given the boundaries.
+the counterpart and the Analyst only, and the assessor runs in the Analyst's compartment when it is given the boundaries.
 """
 
+import json
 from collections.abc import Callable, Iterable, Mapping, Sequence
 from contextlib import nullcontext
 from dataclasses import asdict, dataclass, field, replace
 from pathlib import Path
-from typing import Literal
+from typing import TYPE_CHECKING, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -30,12 +32,15 @@ from ..curator.harness.declaration import schema_for
 from ..iteration.exchange import exchange, messages
 from ..iteration.protocols import Item, Sessions, Signal
 
+if TYPE_CHECKING:
+    from .critic import Critic
+
 Source = Literal["declared", "derived", "sedimented"]
 Strength = Literal["must_hold", "should"]
 SOURCES: tuple[Source, ...] = ("declared", "derived", "sedimented")
 BASIS = {"declared": "check", "derived": "material", "sedimented": "requirement"}
 NAME = "standard"
-JUDGE, DERIVE = "submit_verdicts", "submit_criteria"
+JUDGE = "submit_verdicts"
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 TEXT_FILES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html"})
 FILE_LIMIT = 40_000
@@ -44,7 +49,7 @@ FILE_LIMIT = 40_000
 @dataclass(frozen=True)
 class Criterion:
     """One checkable statement: `situation` says when it applies and `acceptance` what counts as meeting it, when the
-    text itself does not."""
+    text itself does not; `quote` is the norm passage a derived criterion rests on, verbatim."""
 
     id: str = field(metadata=audience(*EVALUATION))
     text: str = field(metadata=audience(*EVALUATION))
@@ -53,11 +58,12 @@ class Criterion:
     provenance: str = field(metadata=audience(*EVALUATION))
     situation: str = field(default="", metadata=audience(*EVALUATION))
     acceptance: str = field(default="", metadata=audience(*EVALUATION))
+    quote: str = field(default="", metadata=audience(*EVALUATION))
 
 
 @dataclass(frozen=True)
 class Standard:
-    """The criteria a round is held to, the party's first; ids are unique across the sources."""
+    """The criteria a round is held to, the counterpart's first; ids are unique across the sources."""
 
     criteria: tuple[Criterion, ...] = field(default=(), metadata=audience(*EVALUATION))
 
@@ -93,13 +99,8 @@ class Standard:
         taken = {criterion.id for criterion in kept}
         return Standard((*kept, *(criterion for id, criterion in raised.items() if id not in taken)))
 
-    def derived(self, criteria: Iterable[Criterion]) -> "Standard":
-        """This standard with derived criteria added after the party's; an id already taken is not replaced."""
-        taken = {criterion.id for criterion in self.criteria}
-        return Standard((*self.criteria, *(criterion for criterion in criteria if criterion.id not in taken)))
-
     def confirmed(self, ids: Iterable[str]) -> "Standard":
-        """The party confirmed these derived criteria: they now hold every time."""
+        """The counterpart confirmed these derived criteria: they now hold every time."""
         ids = set(ids)
         unknown = ids - {criterion.id for criterion in self.criteria if criterion.source == "derived"}
         if unknown:
@@ -110,6 +111,24 @@ class Standard:
                 for criterion in self.criteria
             )
         )
+
+
+@dataclass(frozen=True)
+class Decidability:
+    """Whether the last judging could decide a derived criterion, and the judge's note when it could not."""
+
+    decided: bool
+    note: str = ""
+
+
+def decidability(items: Sequence[Item], standard: "Standard") -> dict[str, Decidability]:
+    """Per derived criterion of `standard`, whether the round's verdicts decided it; never whether it passed."""
+    derived = {criterion.id for criterion in standard.criteria if criterion.source == "derived"}
+    return {
+        item.id: Decidability(item.result != "unknown", item.note if item.result == "unknown" else "")
+        for item in items
+        if item.id in derived
+    }
 
 
 class Verdict(BaseModel):
@@ -126,21 +145,6 @@ class Verdicts(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     verdicts: list[Verdict] = Field(min_length=1)
-
-
-class Drawn(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    text: str = Field(min_length=1, description="The checkable statement, in the norm's own language.")
-    situation: str = Field(default="", description="When it applies, if not every time.")
-    material: str = Field(description="The norm it comes from, by name.")
-    section: str = Field(default="", description="Where in that norm, such as a heading or a step.")
-
-
-class Criteria(BaseModel):
-    model_config = ConfigDict(extra="forbid")
-
-    criteria: list[Drawn] = Field(default_factory=list)
 
 
 def satisfied(standard: Standard, items: Sequence[Item]) -> bool | None:
@@ -164,7 +168,7 @@ def _delivered(path: str) -> str:
 
 def conversations(sessions: Sessions) -> dict[str, list[dict]]:
     """Each session as the judge reads it: the user's messages, the assistant's replies, the text of any text
-    file handed over with a reply (other files by name), and whether a reply never came in time."""
+    file handed over with a reply (other files by name), and why a reply never came, if it did not."""
     told = {}
     for name, exchanges in sessions.items():
         rows = []
@@ -173,9 +177,8 @@ def conversations(sessions: Sessions) -> dict[str, list[dict]]:
             files = {Path(path).name: _delivered(path) for path in exchange_.execution.deliverables}
             if files:
                 row["delivered"] = files
-            outcome = exchange_.execution.outcome
-            if outcome.get("timed_out"):
-                row["stopped"] = f"no reply within {outcome.get('timeout')} seconds; the turn was stopped"
+            if exchange_.stopped:
+                row["stopped"] = exchange_.stopped
             rows.append(row)
         told[name] = rows
     return told
@@ -193,73 +196,16 @@ def _checked(standard: Standard, sessions: Sessions, arguments) -> Verdicts:
     return verdicts
 
 
-async def derive(
-    provider,
-    norms: Mapping[str, str],
-    standard: Standard,
-    *,
-    model=None,
-    effort=None,
-    max_calls=4,
-    timeout=180,
-    trace=None,
-) -> tuple[Criterion, ...]:
-    """Checkable criteria drawn from the handed-over norms (name to text) that `standard` leaves uncovered, each of
-    strength should with the norm and section it comes from."""
-    if not norms:
-        return ()
-    packet = {
-        "norms": dict(norms),
-        "party_criteria": [
-            {"text": criterion.text, "situation": criterion.situation}
-            for criterion in standard.criteria
-            if criterion.source != "derived"
-        ],
-    }
-
-    def parse(arguments) -> Criteria:
-        drawn = Criteria.model_validate(arguments)
-        stray = {item.material for item in drawn.criteria} - set(norms)
-        if stray:
-            raise ValueError(f"criteria may come only from the norms given {sorted(norms)}; got {sorted(stray)}")
-        return drawn
-
-    _, drawn = await exchange(
-        provider,
-        messages((PROMPTS / "derive.md").read_text(), packet),
-        [
-            tool(
-                DERIVE,
-                "Submit the checkable criteria the norms state and the party's criteria miss.",
-                schema_for(Criteria),
-            )
-        ],
-        submit={DERIVE: parse},
-        model=model,
-        effort=effort,
-        max_calls=max_calls,
-        timeout=timeout,
-        trace=trace,
-        label="derive",
-    )
-    taken, made, number = {criterion.id for criterion in standard.criteria}, [], 0
-    for item in drawn.criteria:
-        number += 1
-        while f"derived-{number}" in taken:
-            number += 1
-        provenance = f"material:{item.material}" + (f" {item.section}" if item.section else "")
-        made.append(Criterion(f"derived-{number}", item.text, "derived", "should", provenance, item.situation))
-    return tuple(made)
-
-
 class StandardAssessor:
     """An Assessor that holds each round to a `Standard` with a model; see the module docstring.
 
-    `sources` names which sources it keeps: the declared ones it is given, the derived ones it draws from the norms
-    handed over so far (`norms`, a mapping or a callable returning one, read before every assessment, so a norm handed
-    over later is derived from then), and the sedimented ones the loop hands it through `sediment`. `boundaries`, when
-    given, run its model calls in the Analyst's compartment, sparing the round's user messages and the criteria it
-    holds, which were vetted where they came from.
+    `sources` names which sources it keeps: the declared ones it is given, the derived ones its `critic` writes and
+    revises before every assessment from the norms handed over so far (`norms`, a mapping or a callable returning one,
+    read each time, so a norm handed over later is read from then) and the last judging's decidability, and the
+    sedimented ones the loop hands it through `sediment`. `boundaries`, when given, run its model calls, the critic's
+    included, in the Analyst's compartment, sparing the round's user messages and the criteria it holds, which were
+    vetted where they came from. With `keep`, its `record` is written there after every assessment, finished or not,
+    so a run stopped between rounds keeps every revision and judging so far.
     """
 
     def __init__(
@@ -275,17 +221,22 @@ class StandardAssessor:
         timeout=300,
         boundaries=None,
         name=NAME,
+        critic: "Critic | None" = None,
+        keep: Path | None = None,
     ):
         self.sources = tuple(sources)
         unknown = set(self.sources) - set(SOURCES)
         if unknown:
             raise ValueError(f"unknown sources: {sorted(unknown)}")
+        if "derived" in self.sources and critic is None:
+            raise ValueError("the derived source needs a critic to write it")
+        self.critic = critic
+        self.evidence: dict[str, Decidability] = {}
         self.provider, self.standard = provider, standard.of(*self.sources)
         fixed = {} if norms is None or callable(norms) else dict(norms)
         self.norms = norms if callable(norms) else lambda: fixed
-        self.drawn_from: set[str] = set()
         self.model, self.effort, self.max_calls, self.timeout = model, effort, max_calls, timeout
-        self.boundaries, self.name = boundaries, name
+        self.boundaries, self.name, self.keep = boundaries, name, keep
         self.trace: list[dict] = []
 
     def sediment(self, history: Sequence[Mapping]) -> None:
@@ -309,25 +260,20 @@ class StandardAssessor:
         return self.boundaries.compartment("analyst", spoken=[*spoken, *handed])
 
     async def evaluate(self, sessions: Sessions) -> Signal | None:
-        fresh = {}
-        if "derived" in self.sources:
-            fresh = {name: text for name, text in self.norms().items() if name not in self.drawn_from}
-        if not sessions or not (fresh or self.standard.criteria):
+        try:
+            return await self._evaluate(sessions)
+        finally:
+            if self.keep is not None:
+                Path(self.keep).write_text(json.dumps(self.record(), ensure_ascii=False, indent=2))
+
+    async def _evaluate(self, sessions: Sessions) -> Signal | None:
+        norms = dict(self.norms()) if self.critic is not None else {}
+        if not sessions or not (norms or self.standard.criteria):
             return None
         with self._scope(sessions) as scope:
             provider = self.provider if scope is None else scope.provider(self.provider)
-            if fresh:
-                drawn = await derive(
-                    provider,
-                    fresh,
-                    self.standard,
-                    model=self.model,
-                    effort=self.effort,
-                    timeout=self.timeout,
-                    trace=self.trace,
-                )
-                self.standard = self.standard.derived(drawn)
-                self.drawn_from |= fresh.keys()
+            if norms:
+                self.standard = await self.critic.revise(provider, norms, self.standard, self.evidence)
             if not self.standard.criteria:
                 return None
             packet = {
@@ -368,15 +314,17 @@ class StandardAssessor:
             )
             for verdict in verdicts.verdicts
         )
+        if self.critic is not None:
+            self.evidence = decidability(items, self.standard)
         must = {id for id, criterion in criteria.items() if criterion.strength == "must_hold"}
         rates = {"must_hold_pass_rate": _rate(items, must), "should_pass_rate": _rate(items, set(criteria) - must)}
         metrics = {key: rate for key, rate in rates.items() if rate is not None}
         return Signal(self.name, items=items, metrics=metrics, satisfied=satisfied(self.standard, items))
 
     def record(self) -> dict:
-        """The standard as it stands, the norms it was derived from and the trace of its model calls."""
+        """The standard as it stands, the trace of its judging calls and, with a critic, the critic's revisions."""
         return {
             "criteria": [asdict(criterion) for criterion in self.standard.criteria],
-            "derived_from": sorted(self.drawn_from),
             "trace": list(self.trace),
+            **({"critic": self.critic.record()} if self.critic is not None else {}),
         }

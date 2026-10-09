@@ -4,7 +4,7 @@ import json
 
 import pytest
 
-from experimental.assessor.standard import Criterion, Standard, StandardAssessor, conversations, derive, satisfied
+from experimental.assessor.standard import Criterion, Standard, StandardAssessor, conversations, satisfied
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.compartment import Boundaries
 from experimental.iteration.conversation import Conversation
@@ -52,7 +52,7 @@ def verdict(id, result, session=None, actual="", note=""):
     return {"id": id, "result": result, "session": session, "actual": actual, "note": note}
 
 
-def test_the_standard_keeps_its_sources_apart_and_the_party_first():
+def test_the_standard_keeps_its_sources_apart_and_the_counterpart_first():
     declared = Standard.declared([("asks-budget", "Ask the budget first."), ("no-booking", "Never book.")])
     assert [(c.id, c.source, c.strength, c.provenance) for c in declared.criteria] == [
         ("asks-budget", "declared", "must_hold", "check:asks-budget"),
@@ -75,7 +75,7 @@ def test_the_standard_keeps_its_sources_apart_and_the_party_first():
     )
     assert kept.sedimented(earlier[:1]).of("sedimented").criteria[0].text == "Quote in yuan."
     drawn = (Criterion("derived-1", "Name the source of every price.", "derived", "should", "material:sop Step 4"),)
-    grown = kept.derived((*drawn, Criterion("R1", "A clash.", "derived", "should", "material:sop")))
+    grown = Standard((*kept.criteria, *drawn))
     assert [criterion.id for criterion in grown.criteria][-1] == "derived-1" and len(grown.criteria) == 5
     assert grown.confirmed(["derived-1"]).criteria[-1].strength == "must_hold"
     with pytest.raises(ValueError, match="only derived criteria"):
@@ -86,8 +86,11 @@ def test_the_standard_keeps_its_sources_apart_and_the_party_first():
 
 
 def test_only_must_hold_criteria_decide_whether_the_standard_is_met():
-    standard = Standard.declared([("asks-budget", "Ask the budget first.")]).derived(
-        [Criterion("derived-1", "Name every source.", "derived", "should", "material:sop")]
+    standard = Standard(
+        (
+            *Standard.declared([("asks-budget", "Ask the budget first.")]).criteria,
+            Criterion("derived-1", "Name every source.", "derived", "should", "material:sop"),
+        )
     )
     assert satisfied(standard.of("derived"), [Item("derived-1", "pass")]) is None
     assert satisfied(standard, [Item("asks-budget", "unknown"), Item("derived-1", "fail")]) is None
@@ -144,42 +147,6 @@ async def test_the_assessor_judges_every_criterion_and_refuses_a_partial_scoreca
 
 
 @pytest.mark.asyncio
-async def test_derivation_reads_only_the_norms_handed_over_and_fills_what_the_party_leaves():
-    norms = {"sop": "Step 4: name the source of every price."}
-    standard = Standard.declared([("asks-budget", "Ask the budget first.")])
-    stray = {"criteria": [{"text": "Be kind.", "material": "sample-chat"}]}
-    good = {"criteria": [{"text": "Name the source of every price.", "material": "sop", "section": "Step 4"}]}
-    provider = Provider(response("submit_criteria", stray), response("submit_criteria", good))
-    trace = []
-    drawn = await derive(provider, norms, standard, trace=trace)
-    assert [(c.id, c.source, c.strength, c.provenance) for c in drawn] == [
-        ("derived-1", "derived", "should", "material:sop Step 4")
-    ]
-    assert "only from the norms given" in next(row["error"] for row in trace if row["event"] == "output.rejected")
-    told = json.loads(provider.requests[0]["messages"][1]["content"])
-    assert told == {"norms": norms, "party_criteria": [{"text": "Ask the budget first.", "situation": ""}]}
-    assert await derive(Provider(), {}, standard) == ()
-    handed = {"sop": norms["sop"]}
-    later = Provider(
-        response("submit_criteria", good),
-        response("submit_verdicts", {"verdicts": [verdict("derived-1", "pass")]}),
-        response("submit_criteria", {"criteria": []}),
-        response("submit_verdicts", {"verdicts": [verdict("derived-1", "unknown")]}),
-    )
-    assessor = StandardAssessor(later, standard, sources=("derived",), norms=lambda: handed)
-    sessions = {"family": [Exchange("Hi", execution("t1", "Hello"))]}
-    first = await assessor.evaluate(sessions)
-    assert [item.id for item in first.items] == ["derived-1"] and first.satisfied is None
-    handed["price-rules"] = "Prices are quoted in yuan."
-    await assessor.evaluate(sessions)
-    derived_from = [json.loads(request["messages"][1]["content"]) for request in later.requests[::2]]
-    assert [sorted(packet["norms"]) for packet in derived_from] == [["sop"], ["price-rules"]]
-    assert assessor.record()["derived_from"] == ["price-rules", "sop"]
-    with pytest.raises(ExchangeError, match="submission budget exhausted"):
-        await derive(Provider(*[response("submit_criteria", stray)] * 2), norms, standard, max_calls=2)
-
-
-@pytest.mark.asyncio
 async def test_the_loop_hands_its_history_to_an_assessor_that_keeps_a_standard(tmp_path, analyses):
     card = "We are a family of two adults and one child with a budget of 8000 for the first week of October."
     requirement = Requirement(**{**REQUIREMENT, "id": "R1", "situation": "A traveller asks for a plan."})
@@ -217,7 +184,7 @@ async def test_a_declared_criterion_is_never_spared_while_a_sedimented_one_may_q
     card = "We are two adults and one child flying from Hangzhou to Reykjavik in the first week of December."
     boundaries = Boundaries({"analyst": Sealed.of([check, card])}, log=tmp_path / "boundaries.jsonl")
     sessions = {"family": [Exchange("Hi there", execution("t1", "Hello, where to?"))]}
-    quoted = raised("R1", f"Confirm the party when the traveller writes: {card}", situation="A family writes in.")
+    quoted = raised("R1", f"Confirm the counterpart when the traveller writes: {card}", situation="A family writes in.")
     hidden = StandardAssessor(
         Provider(), Standard.declared([("surcharge", check)]), sources=("declared",), boundaries=boundaries
     )
