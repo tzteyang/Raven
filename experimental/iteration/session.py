@@ -156,6 +156,7 @@ class Session:
         analyst=None,
         curator=None,
         analyst_model=None,
+        analyst_effort=None,
         curator_model=None,
         limits=Limits(),
         probe=None,
@@ -164,12 +165,14 @@ class Session:
         attributor=None,
         prior=(),
         prepare=None,
+        measuring=frozenset(),
     ):
         if worker.baseline.task is None:
             raise ValueError("a session requires a worker bound to a current task")
         self.worker, self.provider = worker, provider
         self.curator = improve if curator is None else curator
         self.prepare = prepare
+        self.measuring = frozenset(measuring)
         if boundaries is not None and boundaries.log is None:
             boundaries = replace(boundaries, log=worker.root / "boundaries.jsonl")
         self.boundaries = boundaries
@@ -177,6 +180,7 @@ class Session:
             analyst = Analyst(
                 self._guarded(provider, "analyst"),
                 model=analyst_model,
+                effort=analyst_effort,
                 limits=limits.analyst,
                 sealed=boundaries.sealed.get("curator") if boundaries is not None else None,
             )
@@ -203,6 +207,7 @@ class Session:
             "rounds": self.rounds,
             "history": self.history,
             **({"prior": [cultivation.record() for cultivation in self.prior]} if self.prior else {}),
+            **({"measuring": sorted(self.measuring)} if self.measuring else {}),
         }
         self.sessions: Sessions = {}
         self.signals: list[Signal] = []
@@ -222,7 +227,9 @@ class Session:
         """Continue the run a record describes: its rounds, history and any round in progress come back as they were."""
         record = json.loads(Path(path).read_text())
         prior = [Cultivation.of(value) for value in record.get("prior", ())]
-        session = cls(worker, provider, path=path, **{"prior": prior, **options})
+        session = cls(
+            worker, provider, path=path, **{"prior": prior, "measuring": record.get("measuring", ()), **options}
+        )
         if record["task_id"] != session.record["task_id"]:
             raise ValueError("the record belongs to another task")
         session.rounds.extend(_round(item) for item in record["rounds"])
@@ -242,7 +249,7 @@ class Session:
         session.held_out_signals = [_signal(signal) for signal in pending.get("holdout_signals", ())]
         if session.rounds:
             last = session.rounds[-1]
-            session.previous_signals, session.previous_feedback = last.signals, last.feedback
+            session.previous_signals, session.previous_feedback = session._acted(last.signals), last.feedback
             if "review" in pending and last.feedback is not None:
                 session.review = _Pending(last.feedback, tuple(pending["review"].get("activity", ())))
                 session.outcome = Outcome("curate")
@@ -269,6 +276,11 @@ class Session:
                 record["pending"]["review"] = {"activity": list(self.review.activity)}
         _write(self.path, json.dumps(plain(record), ensure_ascii=False).encode())
 
+    def _acted(self, signals) -> tuple[Signal, ...]:
+        """The signals the loop acts on: all but those of a measuring source, which stay with the round as its
+        measurement and reach neither the Analyst, the decision to stop, the history nor the Curator."""
+        return tuple(signal for signal in signals if signal.source not in self.measuring)
+
     def _require(self, condition: bool, message: str, *, resuming: bool = False) -> None:
         if self.record["status"] in ("finished", "error"):
             raise StepError(f"the session is {self.record['status']}")
@@ -287,7 +299,7 @@ class Session:
 
     def _spoken(self, current: Sessions | None = None) -> list[tuple[str, ...]]:
         """What every conversant said in the rounds so far, one stream per session, `current` included: the Analyst
-        reads it and the party may quote any of it to the Curator, so neither compartment seals it."""
+        reads it and the counterpart may quote any of it to the Curator, so neither compartment seals it."""
         rounds = [round.sessions for round in self.rounds]
         if current is not None and all(current is not sessions for sessions in rounds):
             rounds.append(current)
@@ -300,7 +312,7 @@ class Session:
         return [stream for cultivation in self.prior for stream in cultivation.spoken]
 
     def _heard(self, feedback: dict | None) -> dict | None:
-        """The feedback of a curation with the prior the party brought, when it brought one."""
+        """The feedback of a curation with the prior the counterpart brought, when it brought one."""
         if not self.prior:
             return feedback
         return {**(feedback or {}), "prior": heard_prior(self.prior)}
@@ -313,7 +325,7 @@ class Session:
 
         Returns `done`, `paused` (the call may be repeated to resume) or `asked`: the Curator reported a gap it
         cannot close with what it was given, nothing was revised, and its question waits in the record's
-        `questions` for whoever can answer it, a person on the page or the party's next handover."""
+        `questions` for whoever can answer it, a person on the page or the counterpart's next handover."""
         self.record["status"] = "running"
         self.record.pop("stop", None)
         feedback = self._heard(feedback)
@@ -360,7 +372,6 @@ class Session:
                     self.worker,
                     scope.provider(self.provider),
                     feedback=scope.admit(self._heard({"signals": plain(heard(opening))}), "information.input"),
-                    model=self.curator_model,
                     admit=scope.admit,
                 )
                 from ..research.curator import information_feedback
@@ -433,26 +444,32 @@ class Session:
         self.save()
 
     async def assess(self, *assessors) -> tuple[Signal, ...]:
+        """Each assessor's signal joins the round and the record as soon as it is given, so one that fails after
+        others have spoken ends the run with their words kept in the round."""
         self._require(self.review is None, "assessment comes before the analysis")
-        try:
-            signals = await assess(assessors, self.sessions, self.history)
-        except Exception as exc:
-            self._abort(exc, self.signals)
-            raise
-        self.signals.extend(signals)
-        self.save()
-        return signals
+        given = []
+        for assessor in assessors:
+            try:
+                signals = await assess((assessor,), self.sessions, self.history)
+            except Exception as exc:
+                self._abort(exc, self.signals)
+                raise
+            given.extend(signals)
+            self.signals.extend(signals)
+            self.save()
+        return tuple(given)
 
     async def analyse(self) -> Outcome:
         """The Analyst reads the round; the round is recorded, and the outcome says what the loop would do next."""
         self._require(self.sessions and self.review is None, "the analysis needs trials and runs once per round")
         signals = tuple(self.signals)
+        acted = self._acted(signals)
         try:
             async with self._compartment("analyst", spoken=self._spoken(self.sessions)):
                 review = await self.analyst.review(
                     self.worker,
                     self.sessions,
-                    signals,
+                    acted,
                     previous_signals=self.previous_signals,
                     previous_feedback=self.previous_feedback,
                     history=tuple(self.history),
@@ -463,8 +480,8 @@ class Session:
             raise
         feedback = review.feedback
         if self.history:
-            self.history[-1] = mark(self.history[-1], feedback, signals)
-        wanted = feedback.decision == "curate" or any(signal.attachments for signal in signals)
+            self.history[-1] = mark(self.history[-1], feedback, acted)
+        wanted = feedback.decision == "curate" or any(signal.attachments for signal in acted)
         curated = wanted and feedback.decision != "stop" and len(self.rounds) + 1 < self.limits.max_rounds
         self.rounds.append(
             Round(
@@ -477,7 +494,7 @@ class Session:
                 holdout_signals=tuple(self.held_out_signals),
             )
         )
-        self.previous_signals, self.previous_feedback = signals, feedback
+        self.previous_signals, self.previous_feedback = acted, feedback
         # The round now holds its sessions and signals; only the review waits for the curation.
         self.sessions, self.signals, self.held_out, self.held_out_signals = {}, [], {}, []
         self.review = review
@@ -485,9 +502,9 @@ class Session:
             self.outcome = Outcome("curate")
         elif feedback.decision == "stop":
             self.outcome = Outcome("stop", "the analyst stopped the run")
-        elif not signals:
+        elif not acted:
             self.outcome = Outcome("stop", "no assessor produced a signal")
-        elif satisfied(signals):
+        elif satisfied(acted):
             self.outcome = Outcome("stop", "every assessor is satisfied")
         elif len(self.rounds) >= self.limits.max_rounds:
             self.outcome = Outcome(
@@ -512,7 +529,11 @@ class Session:
             "curation follows an analysis that asked for it",
             resuming=True,
         )
-        sessions, signals, feedback = self.rounds[-1].sessions, self.rounds[-1].signals, self.rounds[-1].feedback
+        sessions, signals, feedback = (
+            self.rounds[-1].sessions,
+            self._acted(self.rounds[-1].signals),
+            self.rounds[-1].feedback,
+        )
         try:
             status = await self._curate(
                 {

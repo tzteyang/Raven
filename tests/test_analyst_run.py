@@ -146,7 +146,7 @@ async def test_invalid_submissions_are_returned_and_the_budget_is_final(tmp_path
         LLMResponse(content="Let me think."),
     )
     with pytest.raises(ExchangeError, match="analyst: submission budget exhausted") as info:
-        await analyse(worker, provider, signals, sessions, limits=Limits(max_calls=2))
+        await analyse(worker, provider, signals, sessions, limits=Limits(max_calls=2, grace=0))
     assert [row["event"] for row in info.value.trace] == [
         "model.call",
         "output.rejected",
@@ -176,6 +176,21 @@ def test_limits_reject_non_positive_bounds():
     for bad in ({"max_calls": 0}, {"call_timeout": 0}, {"call_timeout": float("inf")}):
         with pytest.raises(ValueError, match="finite positive"):
             Limits(**bad)
+    with pytest.raises(ValueError, match="nonnegative"):
+        Limits(grace=-1)
+
+
+@pytest.mark.asyncio
+async def test_a_query_on_the_last_call_is_retried_under_the_grace(tmp_path, sessions):
+    worker = FakeWorker(tmp_path)
+    provider = Provider(
+        response(RECORDS, {"turn_id": "t1"}),
+        response(RECORDS, {"turn_id": "t2"}),
+        response(NAME, {"decision": "continue", "reason": "Nothing to change."}),
+    )
+    feedback = await analyse(worker, provider, (Signal("human", "Hm."),), sessions, limits=Limits(max_calls=2))
+    assert feedback.decision == "continue"
+    assert [entry["function"]["name"] for entry in provider.requests[2]["tools"]] == [NAME]
 
 
 @pytest.mark.asyncio

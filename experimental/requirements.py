@@ -15,7 +15,7 @@ class Requirement(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     # Who may receive each field (experimental.audience): a requirement is written for the Curator, its
-    # grounds for the party and the Analyst only.
+    # grounds for the counterpart and the Analyst only.
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
         **{
             name: frozenset({"analyst", "curator"})
@@ -34,7 +34,7 @@ class Requirement(BaseModel):
                 "materials",
             )
         },
-        "grounds": frozenset({"party", "analyst"}),
+        "grounds": frozenset({"counterpart", "analyst"}),
     }
 
     id: str = ""

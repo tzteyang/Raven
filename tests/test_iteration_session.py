@@ -276,6 +276,54 @@ async def test_an_analysis_failure_is_recorded_as_the_loop_records_it(tmp_path, 
 
 
 @pytest.mark.asyncio
+async def test_a_measuring_source_is_recorded_with_the_round_but_reaches_neither_the_analyst_the_stop_nor_the_curator(
+    tmp_path, curations, analyses
+):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    owner = Signal("agency", "All passed, well done.", satisfied=True)
+    session = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3), measuring={"agency"})
+    await session.onboard()
+    await session.trial(student("Plan a trip"))
+    await session.assess(Verifier(owner), Verifier(failing("Never asked the budget.")))
+    assert await session.analyse() == Outcome("curate")
+    assert [signal.source for signal in analyses.calls[0]["signals"]] == ["verifier"]
+    assert await session.curate()
+    assert [signal["source"] for signal in curations[-1]["feedback"]["signals"]] == ["verifier"]
+    await session.trial(student("Plan again"))
+    await session.assess(Verifier(owner), Verifier(passing()))
+    assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    assert [signal.source for signal in analyses.calls[1]["previous_signals"]] == ["verifier"]
+    record = json.loads(session.path.read_text())
+    assert record["measuring"] == ["agency"]
+    assert [[signal["source"] for signal in item["signals"]] for item in record["rounds"]] == [
+        ["agency", "verifier"]
+    ] * 2
+    resumed = Session.resume(FakeWorker(tmp_path), object(), session.path)
+    assert resumed.measuring == {"agency"} and [signal.source for signal in resumed.previous_signals] == ["verifier"]
+
+
+@pytest.mark.asyncio
+async def test_an_assessor_failing_after_another_spoke_ends_the_run_with_the_spoken_signal_kept_in_the_round(
+    tmp_path, curations, analyses
+):
+    class Broken:
+        async def evaluate(self, sessions):
+            raise FileNotFoundError("critic.md")
+
+    session = Session.open(FakeWorker(tmp_path), object())
+    await session.onboard()
+    await session.trial(student("Hi"))
+    with pytest.raises(FileNotFoundError):
+        await session.assess(Verifier(failing("Never asked the budget.")), Broken())
+    record = json.loads(session.path.read_text())
+    assert record["status"] == "error" and "critic.md" in record["error"]
+    assert [[signal["text"] for signal in item["signals"]] for item in record["rounds"]] == [
+        ["Never asked the budget."]
+    ]
+    assert "pending" not in record
+
+
+@pytest.mark.asyncio
 async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_analyst_nor_the_curator(
     tmp_path, curations, analyses
 ):
@@ -351,7 +399,9 @@ async def test_a_resumed_session_keeps_the_names_of_its_onboarding_attributions(
 
 
 @pytest.mark.asyncio
-async def test_every_curation_hears_the_prior_the_party_brings_and_a_resume_keeps_it(tmp_path, curations, analyses):
+async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resume_keeps_it(
+    tmp_path, curations, analyses
+):
     from experimental.iteration.compartment import Boundaries, BoundaryError
     from experimental.iteration.history import Entry, Raised
     from experimental.iteration.records import Cultivation, cultivation
@@ -424,6 +474,7 @@ async def test_unready_information_prevents_curation_and_trials(tmp_path, curati
                         dimension="role",
                         question="Who owns the decision?",
                         reason="Required authority is missing.",
+                        blocking=True,
                     ),
                 )
             }
@@ -476,3 +527,27 @@ async def test_information_is_prepared_once_and_its_version_reaches_later_curati
     assert len(preparations) == 1 and len(curations) == 2
     assert all(call["feedback"]["information"]["version"] == result.snapshot.identity for call in curations)
     assert "items" not in preparations[0]["signals"][0]
+
+
+async def test_a_conversant_who_comes_back_later_lets_the_worker_run_meanwhile():
+    class Paced:
+        name, pause = "lead", 150.0
+
+        def __init__(self):
+            self.said = ["Watch the six stores.", "How many looks so far?", None]
+
+        async def speak(self, exchanges):
+            return self.said.pop(0)
+
+    class Worker:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, text, *, session_key, **paced):
+            self.calls.append(paced)
+            return SimpleNamespace(outcome={}, records=[], deliverables=())
+
+    worker, waiting = Worker(), Worker()
+    await Conversation(Paced(), max_turns=3).run(worker)
+    await Conversation(Scripted("student", "Plan a trip"), max_turns=1).run(waiting)
+    assert worker.calls == [{"away": 150.0}, {"away": 150.0}] and waiting.calls == [{}]

@@ -9,7 +9,8 @@ from .protocols import Exchange, Sessions
 
 
 class Conversant(Protocol):
-    """Whoever talks to the worker; None ends the conversation."""
+    """Whoever talks to the worker; None ends the conversation. One that has a `pause` is away that many seconds after
+    each answer before it speaks again, and the worker's background work runs meanwhile (see `Worker.run`)."""
 
     name: str
 
@@ -25,17 +26,20 @@ class Conversation:
     async def run(self, worker) -> Sessions:
         """Each run is a fresh worker session, so rounds do not continue one another's history; its key carries the
         conversant's opaque label, not its name, since the worker's records reach the Curator. A turn that ran
-        past the worker's timeout ends the conversation with that turn kept as it got: the conversant waited and
-        had no answer, which is for the assessors to judge, and the worker was stopped."""
+        past the worker's timeout, or that the worker ended without answering, ends the conversation with that turn
+        kept as it got: the conversant had no answer, which is for the assessors to judge (`Exchange.stopped`)."""
         exchanges, session_key = [], f"curator:{opaque(self.conversant.name)}:{uuid4().hex}"
+        away = {"away": pause} if (pause := getattr(self.conversant, "pause", 0)) else {}
         for _ in range(self.max_turns):
             text = await self.conversant.speak(exchanges)
             if text is None:
                 break
             try:
-                execution = await worker.run(text, session_key=session_key)
+                execution = await worker.run(text, session_key=session_key, **away)
             except TurnTimeoutError as exc:
                 exchanges.append(Exchange(text, exc.execution))
                 break
             exchanges.append(Exchange(text, execution))
+            if exchanges[-1].stopped:
+                break
         return {self.conversant.name: exchanges}

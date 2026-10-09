@@ -6,7 +6,7 @@ criterion's name alone tells the Curator the standard it is measured against. Wh
 types (`protocols`, `history`, `experimental.requirements`); this module applies the projection, so the loop passes every
 signal, history entry and execution observation bound for the Curator through here, whoever the assessor is.
 
-Earlier cultivations the party brings (the scenario's prior) reach the Curator the same way: their histories,
+Earlier cultivations the counterpart brings (the scenario's prior) reach the Curator the same way: their histories,
 projected, under opaque labels (`heard_prior`).
 
 Of the round's executions the Curator receives the turns the Analyst cited: a requirement's evidence names turn ids,
@@ -49,7 +49,7 @@ def heard_history(entries) -> list[dict]:
 
 
 def heard_prior(cultivations) -> list[dict]:
-    """Earlier cultivations the party brings (`experimental.iteration.records.Cultivation`) as the Curator may hear
+    """Earlier cultivations the counterpart brings (`experimental.iteration.records.Cultivation`) as the Curator may hear
     them: each one's history projected like this run's under an opaque label, and nothing else of its record (no
     scorecard, judgement, session name or path)."""
     return [

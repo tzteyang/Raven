@@ -6,14 +6,17 @@ hints and reasoning are never sent to a channel, so they are not part of what th
 treats as said to the customer.
 """
 
-from pathlib import Path
+from ..curator.raven_adapter.observe import delivered_files
 
 DEGRADED = "organ_degraded"
 
 
-def seen(records, delivered=()) -> str:
-    """The turn's customer-facing text in order; a delivery's caption counts once one of its files was kept."""
-    kept = {Path(str(path)).name for path in delivered}
+def seen(records) -> str:
+    """The turn's customer-facing text in order; a delivery's caption counts once the delivery handed over a file.
+
+    A delivery is read from its completed call, as the channel outlet reads it: a call refused before it ran, or one
+    whose every file failed, carries no delivery and so sent nothing.
+    """
     parts = []
     for row in records:
         if row.get("kind") != "runner.event":
@@ -23,14 +26,11 @@ def seen(records, delivered=()) -> str:
             parts.append(str(event.get("content") or ""))
         elif row.get("event_type") == "Notice" and str(event.get("kind") or "").lower() == DEGRADED:
             parts.append(str(event.get("detail") or ""))
-        elif event.get("name") == "deliver_files" and event.get("phase") == "start":
-            arguments = event.get("arguments") or {}
-            files = {Path(str(item.get("path") or "")).name for item in arguments.get("files") or []}
-            if files & kept:
-                parts.append(str(arguments.get("message") or ""))
+        elif delivered_files(row):
+            parts.append(str(event["metadata"]["raven_delivery"].get("message") or ""))
     return "\n".join(part for part in parts if part.strip())
 
 
 def said(exchange) -> str:
     """What the customer received in reply to one message."""
-    return seen(exchange.execution.records, exchange.execution.deliverables)
+    return seen(exchange.execution.records)

@@ -24,8 +24,12 @@ _PROMPT = Path(__file__).resolve().parent / "prompts" / "analyst.md"
 
 @dataclass(frozen=True)
 class Limits:
+    """`grace` is how many undelivered replies (no tool call, a query on the submission-only last call, arguments off
+    the schema) are retried without charging `max_calls` (`experimental.iteration.exchange`)."""
+
     max_calls: int = 4
     call_timeout: float = 120
+    grace: int = 2
 
     def __post_init__(self):
         if (
@@ -35,6 +39,8 @@ class Limits:
             or self.call_timeout <= 0
         ):
             raise ValueError("analyst limits must be finite positive bounds")
+        if not isinstance(self.grace, int) or self.grace < 0:
+            raise ValueError("analyst grace must be a nonnegative count")
 
 
 def known_ids(history) -> list[str]:
@@ -124,6 +130,7 @@ async def analyse(
     previous_feedback=None,
     history=(),
     model=None,
+    effort=None,
     limits=Limits(),
     sealed: Sealed | None = None,
     spoken=None,
@@ -184,10 +191,12 @@ async def analyse(
                 submit={NAME: accept},
                 query={RECORDS: lambda arguments: read_records(sessions, arguments)},
                 model=model,
+                effort=effort,
                 max_calls=limits.max_calls,
                 timeout=limits.call_timeout,
                 trace=trace,
                 label="analyst",
+                grace=limits.grace,
             )
         record["feedback"] = feedback
         return feedback

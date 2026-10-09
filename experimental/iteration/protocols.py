@@ -2,7 +2,7 @@
 
 The measuring side's protocol is `experimental.assessor.role.Assessor`; the data it returns is defined here. Each
 field names the roles that may receive it (see `experimental.audience`): what an assessor measured stays
-with the party and the Analyst, what it said may reach the Curator (`experimental.iteration.hearing` applies it).
+with the counterpart and the Analyst, what it said may reach the Curator (`experimental.iteration.hearing` applies it).
 """
 
 from dataclasses import dataclass, field
@@ -21,12 +21,22 @@ class Exchange:
     def assistant(self) -> str:
         return self.execution.text
 
+    @property
+    def stopped(self) -> str | None:
+        """Why the turn ended without a reply, as the conversant met it, or None when the worker answered."""
+        outcome = self.execution.outcome
+        if outcome.get("timed_out"):
+            return f"no reply within {outcome.get('timeout')} seconds; the turn was stopped"
+        if outcome.get("answerless"):
+            return "no reply: the assistant ended the turn without answering"
+        return None
+
 
 @dataclass(frozen=True)
 class Item:
     """One measured item: a criterion, a dataset case or a session, with a verdict or a score.
 
-    `basis` says where the criterion behind `expected` comes from: a party's `check`, a dataset `case`, an earlier
+    `basis` says where the criterion behind `expected` comes from: a counterpart's `check`, a dataset `case`, an earlier
     `requirement` held as a regression check, or a handed-over `material` it was drawn from. The last two restate
     what the Curator already holds, so their wording is not the evaluation side's own."""
 

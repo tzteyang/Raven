@@ -5,6 +5,10 @@ import json
 from raven.contracts.tool import RAW_ARGUMENTS_KEY
 
 
+class MalformedArgumentsError(ValueError):
+    """A native call whose arguments the provider could not parse as JSON: nothing the model meant was delivered."""
+
+
 def argument_errors(response):
     invalid_calls = []
     for call in response.tool_calls:
