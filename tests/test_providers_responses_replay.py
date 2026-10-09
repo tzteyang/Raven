@@ -68,6 +68,6 @@ async def test_a_replayed_function_call_keeps_its_call_id_and_drops_its_item_id(
     await provider.chat(messages, tools=[{"type": "function", "function": {"name": "lookup", "parameters": {}}}])
 
     [body] = _Client.bodies
-    calls = [item for item in body["input"] if item["type"] == "function_call"]
+    calls = [item for item in body["input"] if item.get("type") == "function_call"]
     assert calls == [{"type": "function_call", "call_id": "call_1", "name": "lookup", "arguments": "{}"}]
-    assert [item["call_id"] for item in body["input"] if item["type"] == "function_call_output"] == ["call_1"]
+    assert [item["call_id"] for item in body["input"] if item.get("type") == "function_call_output"] == ["call_1"]
