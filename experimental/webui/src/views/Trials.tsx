@@ -55,7 +55,7 @@ export function InterceptionRow({ row }: { row: Interception }): JSX.Element {
   )
 }
 
-export function Turn({ exchange, drill, version, over }: { exchange: Exchange; drill: string; version: string; over: boolean }): JSX.Element {
+export function Turn({ exchange, drill, version, over, runId }: { exchange: Exchange; drill: string; version: string; over: boolean; runId?: string }): JSX.Element {
   const reply = replyText(exchange.execution)
   const late = timedOut(exchange.execution)
   const rows = interceptions(exchange.execution.records)
@@ -76,7 +76,7 @@ export function Turn({ exchange, drill, version, over }: { exchange: Exchange; d
         <span className="who"><span className="wd" />employee<code>{version}</code></span>
         <div className="ai">{reply ? <Markdown text={reply} /> : late === null ? <span className="quiet">No reply text was recorded.</span> : null}</div>
         {late !== null ? <p className="bad small">The turn ran past the worker&apos;s timeout{late === true ? '' : ` of ${late} s`} and was stopped; the customer had no answer.</p> : null}
-        <Records execution={exchange.execution} />
+        <Records execution={exchange.execution} runId={runId} />
         <Deliverables paths={exchange.execution.deliverables ?? []} />
       </div>
     </div>

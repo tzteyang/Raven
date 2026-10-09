@@ -4,7 +4,8 @@ served one at a time on request.
 A run's model inputs (`provider.request`, `model.input`), capability views, assembled contexts, long strategy calls and
 sub-harness executions (`child.execution`) are most of its size, and the Studio needs their bodies only when a reader
 opens one. `slim` keeps what identifies each and replaces its body with a reference that `raw_record` resolves, in a
-round's trials, its held-out trials and the round still in progress (`pending`). The Curator's and the attributor's
+round's trials, its held-out trials and the round still in progress (`pending`); a sub-harness execution keeps the steps
+`rundir.joined` gave it, so its work reads without fetching it. The Curator's and the attributor's
 records are cut the same way: a query keeps a preview of what it returned, an attributor's request its size, and a
 composite curation drops its checkpoint, which repeats the root's generation.
 """

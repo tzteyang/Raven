@@ -24,7 +24,8 @@ export const T = {
   headModels: 'Models',
 
   speakerYou: 'You',
-  speakerOwner: 'Simulated party · Assessor',
+  speakerOwner: 'Simulated counterpart · Assessor',
+  speakerSelf: 'The employee, reviewing its own work · Assessor',
   speakerAssessor: (name: string) => `${name} · Assessor`,
   onboardingTag: 'Onboarding materials',
   requestTag: 'Curation request',
@@ -330,7 +331,7 @@ export const T = {
   scoreSourceHint: { declared: "The scenario's own checks", derived: 'Derived from the norms handed over', sedimented: 'A requirement raised earlier, kept as a regression check' } as Record<string, string>,
   basis: { check: 'Check', case: 'Dataset case', requirement: 'Regression · earlier requirement', material: 'From materials' } as Record<string, string>,
   basisHint: {
-    check: "The party's own check",
+    check: "The counterpart's own check",
     case: 'A case from the dataset',
     requirement: 'A requirement raised earlier, kept as a regression check; worded from what the Curator already knows',
     material: 'Drawn from the materials handed to the partner; worded from what the Curator already knows',
@@ -365,7 +366,7 @@ export const T = {
   audit: 'Isolation audit',
   auditTitle: 'Isolation audit · boundaries.jsonl',
   auditNote: "Each model role runs in its own compartment, and every piece of information entering it passes a guard. Listed here are each role's entries, admissions, violations and exits; a violation means sealed information reached that role.",
-  auditRoles: { curator: 'Curator', analyst: 'Analyst', partner: 'Partner', conversant: 'Conversant', party: 'Party' } as Record<string, string>,
+  auditRoles: { curator: 'Curator', analyst: 'Analyst', partner: 'Partner', conversant: 'Conversant', counterpart: 'Counterpart' } as Record<string, string>,
   auditEvents: { enter: 'Enter', admit: 'Admit', violation: 'Violation', leave: 'Leave' } as Record<string, string>,
   auditViolations: (n: number) => count(n, 'violation'),
   auditClean: 'No violations',
@@ -378,7 +379,7 @@ export const T = {
   originMark: (origin: string, confirmed: boolean) =>
     `${({ induced: 'Induced', researched: 'Researched' } as Record<string, string>)[origin] ?? origin} · ${confirmed ? 'Confirmed' : 'Unconfirmed'}`,
   originHint: (origin: string, items: string[], confirmed: boolean) =>
-    `${origin === 'researched' ? 'A finding verified in the research stage' : 'A rule the research stage induced from the handed-over materials'}${items.length ? ` (${items.join(', ')})` : ''}; ${confirmed ? 'confirmed by the party' : 'not yet confirmed by the party, so the evaluation side does not judge by it'}`,
+    `${origin === 'researched' ? 'A finding verified in the research stage' : 'A rule the research stage induced from the handed-over materials'}${items.length ? ` (${items.join(', ')})` : ''}; ${confirmed ? 'confirmed by the counterpart' : 'not yet confirmed by the counterpart, so the evaluation side does not judge by it'}`,
   materialFiles: (n: number) => count(n, 'file'),
   latestVersion: 'Latest version',
   liveBaseline: 'Raven clean baseline',

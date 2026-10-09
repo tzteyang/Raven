@@ -87,6 +87,35 @@ export function targetFiles(target: string, artifact: Artifact): string[] {
   return [...modules, ...assets]
 }
 
+const IMPORT = /^[ \t]*(?:from[ \t]+(\.*)([\w.]*)[ \t]+import[ \t]+\(?([\w., \t]+)|import[ \t]+([\w., \t]+))/gm
+
+/** The artifact's Python modules a generated module imports, in the order it imports them, itself left out: the
+    module of a `from` import and any name it imports that is a module of its own. A relative import is read against
+    the module's own folder. */
+export function importsOf(path: string, files: Record<string, string>): string[] {
+  if (!path.endsWith('.py') || !(path in files)) return []
+  const folder = path.split('/').slice(0, -1)
+  const found: string[] = []
+  const add = (parts: string[]) => {
+    const module = parts.join('/')
+    for (const candidate of [`${module}.py`, `${module}/__init__.py`]) {
+      if (module && candidate in files && candidate !== path && !found.includes(candidate)) found.push(candidate)
+    }
+  }
+  const names = (list: string) => list.split(',').map((name) => name.trim().split(/[ \t]+/)[0]).filter(Boolean)
+  for (const match of files[path].matchAll(IMPORT)) {
+    if (match[4] !== undefined) {
+      for (const name of names(match[4])) add(name.split('.'))
+      continue
+    }
+    const dots = match[1].length
+    const module = [...(dots ? folder.slice(0, folder.length - (dots - 1)) : []), ...match[2].split('.').filter(Boolean)]
+    if (match[2]) add(module)
+    for (const name of names(match[3])) add([...module, name])
+  }
+  return found
+}
+
 /** Artifact files no target's code names: supporting files the reader finds only in the artifact. */
 export function looseFiles(artifact: Artifact): string[] {
   const claimed = new Set(Object.keys(artifact.values).flatMap((target) => targetFiles(target, artifact)))

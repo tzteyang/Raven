@@ -6,8 +6,9 @@
    this page draws are typed; everything else stays open so a record growing a
    field is not a change here. */
 
-/** `stalled` is the server's reading of a record that says running while nothing of the run has been written for long. */
-export type RunStatus = 'running' | 'finished' | 'paused' | 'error' | 'stalled'
+/** `stalled` is the server's reading of a record that says running while nothing of the run has been written for long;
+    `incomplete` and `needs_input` are a run whose research stage handed over no information before onboarding. */
+export type RunStatus = 'running' | 'finished' | 'paused' | 'stopped' | 'error' | 'stalled' | 'incomplete' | 'needs_input'
 
 export interface RunEntry {
   id: string
@@ -23,8 +24,11 @@ export interface RunEntry {
   recorded: number
   /** How the owner hands over the materials in this run (documents, staged, by-stage, examples or a partition), from settings.json. */
   chain?: string | null
-  /** employee, curator, analyst, simulation and subagents model names, from settings.json. */
+  /** Each model role's model name, the partner first (an older run names employee, simulation and the like), from
+      settings.json. */
   models?: Record<string, string>
+  /** Each model role's reasoning effort, from settings.json. */
+  efforts?: Record<string, string>
   /** Why the suite stopped the run, from suite-summary.json. */
   stopped?: string | null
   /** The suite's total model spend for the run in USD. */
@@ -49,6 +53,9 @@ export interface Execution {
   /** How the turn ended; a turn that ran past the worker's timeout says `timed_out` with the `timeout` in seconds
       (experimental/curator/raven_adapter/worker.py TurnTimeoutError). */
   outcome?: Record<string, unknown>
+  /** The run view's copy keeps only what the page reads of records it counts (webui/serve.py `slim`); the turn's
+      whole records come from /api/turn. */
+  records_cut?: boolean
 }
 
 export interface Exchange {
@@ -63,13 +70,13 @@ export interface Item {
   expected: string
   actual: string
   note: string
-  /** Where the criterion behind `expected` comes from (experimental/iteration/protocols.py Item): a party's check, a
+  /** Where the criterion behind `expected` comes from (experimental/iteration/protocols.py Item): a counterpart's check, a
       dataset case, an earlier requirement held as a regression check, or a handed-over material it was drawn from. */
   basis?: '' | 'check' | 'case' | 'requirement' | 'material'
 }
 
-/** Where a material came from when the party did not simply give it: induced or researched before the cultivation
-    (experimental/scenario/contract.py Origin), whether the party confirmed it, and the ids of the rules or findings
+/** Where a material came from when the counterpart did not simply give it: induced or researched before the cultivation
+    (experimental/scenario/contract.py Origin), whether the counterpart confirmed it, and the ids of the rules or findings
     it holds. */
 export interface MaterialOrigin {
   origin: string
@@ -375,14 +382,89 @@ export interface StandardCriterion {
   provenance: string
   situation?: string
   acceptance?: string
+  /** For a derived criterion, the norm passage it rests on, verbatim. */
+  quote?: string
 }
 
-/** standard.json, written when the run ends; `calls` counts its model calls by label (derive, standard). */
+/** One change of a standard critic revision (experimental/assessor/critic.py), with its reason. */
+export interface StandardChange {
+  id: string
+  op: 'add' | 'rewrite' | 'retire' | string
+  reason: string
+  explanation: string
+  /** The criterion's text before a rewrite or a retirement. */
+  before: string
+  /** The criterion as added or rewritten, the norm it rests on and the passage it quotes. */
+  text: string
+  material: string
+  quote: string
+}
+
+/** One numbered revision of the derived criteria: the norms new to it, what it changed, and the passages it found
+    nothing checkable in. */
+export interface StandardRevision {
+  version: number
+  new_norms: string[]
+  changes: StandardChange[]
+  unchecked: { material: string; section: string; reason: string }[]
+}
+
+/** standard.json, written when the run ends; `calls` counts its model calls by label (critic, standard). */
 export interface StandardRecord {
   criteria: StandardCriterion[]
+  /** The norms the standard critic read. */
   derived_from: string[]
+  revisions?: StandardRevision[]
   calls?: Record<string, number>
   error?: string
+}
+
+/** The research stage's records under information/ (experimental/research/, read by rundir.research): how the
+    collection before onboarding ended, the review's verdict, each dimension's coverage, and the calls per stage with
+    every reply that was missing, rejected or failed. */
+export interface ResearchRecord {
+  status: string
+  stop_reason: string
+  seconds?: number | null
+  review: { accepted: boolean; reason: string; issues: string[] }
+  title: string
+  sections: { dimension: string; coverage: string; text: string; reason: string; evidence: number; channels?: string[] }[]
+  resources: { name: string; purpose: string; availability: string }[]
+  unresolved: { dimension: string; question: string; reason: string; blocking: boolean }[]
+  stages: { stage: string; calls: number; queries: number; submitted: boolean }[]
+  trouble: { stage: string; event: string; error: string; tools: string[]; charged: boolean }[]
+  /** Evidence count by channel: request (the task), tool (materials read), research (the web), user (the counterpart's answers). */
+  channels?: Record<string, number>
+  /** The research and answer evidence itself: the question each answers, and a finding, a group's synthesis or the
+      counterpart's answer (`kind` empty when it could not answer). */
+  evidence?: {
+    id: string
+    channel: string
+    kind: 'finding' | 'synthesis' | 'answer' | ''
+    question: string
+    attempt: string
+    text: string
+    sources: string[]
+    dimensions: string[]
+  }[]
+  /** Every research group of every wave. */
+  groups?: {
+    wave: string
+    group: number | null
+    status: string
+    dimensions: string[]
+    questions: string[]
+    error: string
+    admitted: number
+    refused: number
+    withheld: number
+    unanswered: number
+    seconds?: number | null
+  }[]
+  /** Each research agent the collector ran: the model asked for and its effort, the models it reported answering
+      with (a Claude Code agent may hand parts to a smaller model) and its calls. */
+  researchers?: { agent: string; asked: string | null; effort: string | null; models: string[]; calls: number }[]
+  errors: string[]
 }
 
 /** One row of boundaries.jsonl: a role's compartment entered, a value admitted, a violation or leaving. */
@@ -426,13 +508,17 @@ export interface Run {
   history?: HistoryEntry[]
   ledger?: Ledger
   questions?: Question[]
+  /** Assessors whose signals only measure each round: recorded, kept from the Analyst and the Curator
+      (experimental/iteration/session.py `measuring`), such as an owner who watches without speaking. */
+  measuring?: string[]
   pending?: Pending
   /** Each session the record names, with the opaque label it goes by wherever the Curator sees it
       (experimental/iteration/hearing.py opaque); the server adds it beside the record. */
   labels?: Record<string, string>
-  /** Each material the party did not simply give, by name, from the provenance the run's settings keep. */
+  /** Each material the counterpart did not simply give, by name, from the provenance the run's settings keep. */
   origins?: Record<string, MaterialOrigin>
   standard?: StandardRecord | null
+  research?: ResearchRecord | null
   boundaries?: Boundaries | null
 }
 

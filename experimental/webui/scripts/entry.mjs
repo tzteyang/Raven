@@ -5,7 +5,8 @@
    Both pages set Chinese in a Song face: the Latin face comes first and Chinese
    falls back to Noto Serif SC, loaded here, then the systems' own Song faces.
    index.html is the run viewer; studio.html is the RSI Studio, which wears
-   ui-web's stylesheet and replaces only its --sans stack (studio.css). */
+   ui-web's stylesheet and replaces only its --sans stack (studio.css);
+   ribbon.html lays the Studio's runs out as a route (src/ribbon). */
 import { writeFileSync } from 'node:fs'
 import { dirname, join } from 'node:path'
 import { fileURLToPath } from 'node:url'
@@ -49,5 +50,18 @@ writeFileSync(
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" />`,
     entry: '/src/studio/main.tsx',
+  }),
+)
+
+writeFileSync(
+  join(root, 'ribbon.html'),
+  page({
+    lang: 'zh-CN',
+    title: 'RSI Route',
+    head: `
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&family=Noto+Serif+SC:wght@400;500;600;700&display=swap" />`,
+    entry: '/src/ribbon/main.tsx',
   }),
 )

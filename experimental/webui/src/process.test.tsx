@@ -205,6 +205,31 @@ describe('a stopped run in the views', () => {
     expect(fetch.mock.calls.length).toBe(calls)
   })
 
+  it('shows the research stage live, each call with its searches and reads', async () => {
+    const live = {
+      logs: [], rows: [], last_event: null, now: 1000, status: 'running',
+      phase: { name: 'researching', round: 0, stage: 'researching', basis: 'the research stage is writing its records (2 research calls, 1 running)' },
+      curator: null,
+      labels: {},
+      research: {
+        started: 700, updated: 990, step: 'researching',
+        calls: [
+          { call: 1, status: 'researching', questions: ['Which laws apply?'], searches: 1, reads: 1, updated: 990, recent: [{ tool: 'search', text: 'ad law' }, { tool: 'read', text: 'https://example.org/law' }] },
+          { call: 2, status: 'ok', questions: [], searches: 0, reads: 0, updated: 900, recent: [] },
+        ],
+      },
+    }
+    vi.stubGlobal('fetch', vi.fn(async () => ({ ok: true, status: 200, json: async () => live })))
+    render(<Live runId="w/r" running />)
+    expect(await screen.findByText('Curator side · research stage')).toBeTruthy()
+    expect(screen.getByText('2 research calls')).toBeTruthy()
+    expect(screen.getByText('1 running')).toBeTruthy()
+    expect(screen.getByText('Which laws apply?')).toBeTruthy()
+    expect(screen.getByText('ad law')).toBeTruthy()
+    expect(screen.getByText('https://example.org/law')).toBeTruthy()
+    expect(screen.queryByText('No turn in the worker log yet.')).toBeNull()
+  })
+
   it('marks the live header stopped and freezes open turns and tool calls', async () => {
     const live = {
       logs: [{ file: 'w1', start: 0, offset: 10, size: 10, reset: true, last_event: 1072 }],

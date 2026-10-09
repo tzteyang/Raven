@@ -4,6 +4,7 @@ import json
 import os
 import shutil
 import threading
+import time
 from functools import partial
 from http.server import ThreadingHTTPServer
 from pathlib import Path
@@ -17,6 +18,8 @@ from experimental.iteration.hearing import opaque
 from experimental.webui import serve
 from experimental.webui.serve import (
     Handler,
+    _glance,
+    _run_paths,
     cached_page,
     compact,
     cursors,
@@ -24,10 +27,15 @@ from experimental.webui.serve import (
     detail,
     index,
     live,
+    page,
     pending_stage,
     phase,
+    run_phase,
+    run_scenario,
     scenario,
+    slim,
     thumbnails,
+    turn_records,
     upload,
     upload_thumbnails,
 )
@@ -78,6 +86,43 @@ def served(tmp_path):
     server.server_close()
 
 
+def test_a_large_answer_is_compressed_for_a_browser_that_takes_gzip(served):
+    import gzip
+    from urllib.request import Request
+
+    base, runs = served
+    write(runs, "w", "r", {"task": "T" * 200_000, "rounds": []})
+    with urlopen(Request(f"{base}/api/runs/w/r", headers={"Accept-Encoding": "gzip"}), timeout=10) as response:
+        assert response.headers["Content-Encoding"] == "gzip"
+        assert json.loads(gzip.decompress(response.read()))["task"] == "T" * 200_000
+    with urlopen(f"{base}/api/runs/w/r", timeout=10) as response:
+        assert response.headers["Content-Encoding"] is None and json.loads(response.read())["task"] == "T" * 200_000
+    with pytest.raises(HTTPError) as small:
+        urlopen(Request(f"{base}/api/runs/w/missing", headers={"Accept-Encoding": "gzip"}), timeout=10)
+    assert small.value.headers["Content-Encoding"] is None and json.loads(small.value.read()) == {
+        "error": "no such run"
+    }
+
+
+def test_pages_are_revalidated_on_every_load_and_api_answers_are_not_marked(served):
+    base, _ = served
+    for path in ("/viewer", "/"):
+        try:
+            with urlopen(base + path, timeout=10) as response:
+                headers = response.headers
+        except HTTPError as error:
+            headers = error.headers
+        assert headers["Cache-Control"] == "no-cache"
+    with urlopen(base + "/api/runs", timeout=10) as response:
+        assert response.headers["Cache-Control"] is None
+
+
+def test_the_root_opens_the_run_viewer_and_the_studio_has_its_own_path():
+    assert page("/") == page("") == page("/viewer") == page("/viewer?run=x") == "/index.html"
+    assert page("/studio") == page("/studio/") == "/studio.html"
+    assert page("/assets/index-abc.js") == "/assets/index-abc.js"
+
+
 def get(url):
     try:
         with urlopen(url, timeout=10) as response:
@@ -104,6 +149,88 @@ def test_index_lists_runs_newest_first_and_detail_joins_records(tmp_path):
     assert run["labels"] == {}
 
 
+def test_the_page_gets_the_run_without_the_curators_copy_of_the_sessions_and_with_counted_records_cut():
+    prompt = "p" * 9000
+    reply = "r" * 9000
+    records = [
+        {"kind": "runner.event", "event_type": "Text", "event": {"content": reply}},
+        {"kind": "model.input", "turn_id": "t1", "messages": [{"content": prompt}], "note": prompt},
+        {
+            "kind": "action.call",
+            "operation": "handle_event",
+            "arguments": [
+                {
+                    "kind": "proposal",
+                    "stage": "s",
+                    "event_id": "e1",
+                    "text": prompt,
+                    "plan": {"x": prompt},
+                    "calls": [{"name": "exec", "arguments": prompt}],
+                }
+            ],
+        },
+        {"kind": "memory.error", "error": "ValueError: " + prompt},
+        {"kind": "dag.progress", "graph": {"nodes": [prompt]}},
+    ]
+    sessions = {"drill": [{"user": "Hi", "execution": {"turn_id": "t1", "records": records}}]}
+    composite = {"composition": {"observations": [{"records": records}] * 3, "root": {"trace": []}}, "generated": {}}
+    run = {
+        "task": "T",
+        "initial_curation": [composite],
+        "rounds": [{"sessions": sessions, "holdout": sessions, "curation": [composite]}],
+    }
+    page = slim(run)
+    execution = page["rounds"][0]["sessions"]["drill"][0]["execution"]
+    kept = execution["records"]
+    assert execution["records_cut"] is True and [row["kind"] for row in kept] == [row["kind"] for row in records]
+    assert kept[0] is records[0] and kept[3] is records[3] and kept[4] is records[4]
+    assert kept[1] == {
+        "kind": "model.input",
+        "turn_id": "t1",
+        "note": "p" * 4000 + "... [5000 characters cut for the page]",
+    }
+    assert kept[2] == {
+        "kind": "action.call",
+        "operation": "handle_event",
+        "arguments": [
+            {"kind": "proposal", "stage": "s", "event_id": "e1", "text": "p" * 200, "calls": [{"name": "exec"}]}
+        ],
+    }
+    assert page["rounds"][0]["holdout"] == page["rounds"][0]["sessions"]
+    for curation in (page["rounds"][0]["curation"][0], page["initial_curation"][0]):
+        assert curation["composition"] == {"root": {"trace": []}, "observations_cut": 3}
+    assert run["rounds"][0]["sessions"]["drill"][0]["execution"]["records"][1]["messages"][0]["content"] == prompt
+    waiting = slim({"rounds": [], "pending": {"sessions": sessions, "signals": []}})["pending"]
+    assert waiting["sessions"] == page["rounds"][0]["sessions"] and waiting["signals"] == []
+    whole = slim(
+        {"rounds": [{"sessions": {"d": [{"user": "Hi", "execution": {"turn_id": "t2", "records": records[:1]}}]}}]}
+    )
+    assert "records_cut" not in whole["rounds"][0]["sessions"]["d"][0]["execution"]
+
+
+def test_a_turns_whole_records_are_a_request_away(tmp_path):
+    records = [{"kind": "model.input", "messages": [{"content": "p" * 9000}]}]
+    write(
+        tmp_path,
+        "w",
+        "r",
+        {
+            "task": "T",
+            "rounds": [
+                {
+                    "sessions": {"d": [{"user": "Hi", "execution": {"turn_id": "t1", "records": records}}]},
+                    "curation": [],
+                }
+            ],
+        },
+    )
+    assert turn_records(tmp_path, "w/r", "t1") == records
+    pending = {"sessions": {"d": [{"user": "Again", "execution": {"turn_id": "t2", "records": records}}]}}
+    write(tmp_path, "v", "p", {"task": "T", "rounds": [], "pending": pending})
+    assert turn_records(tmp_path, "v/p", "t2") == records
+    assert turn_records(tmp_path, "w/r", "t9") is None and turn_records(tmp_path, "../w/r", "t1") is None
+
+
 def test_the_run_list_counts_the_scorecard_a_speaking_owner_kept(tmp_path):
     items = [{"id": "C1", "result": "pass"}, {"id": "C2", "result": "fail"}, {"id": "C3", "result": "unknown"}]
     rounds = [{"signals": [{"source": "agency", "text": "Close.", "items": []}], "analysis": ["s.json", "gone.json"]}]
@@ -128,6 +255,43 @@ def test_only_kept_deliverables_under_the_runs_root_are_served(tmp_path):
     assert deliverable(tmp_path, str(tmp_path / "run" / "config.json")) is None
     assert deliverable(tmp_path, str(kept.parent / ".." / ".." / "config.json")) is None
     assert deliverable(tmp_path, str(outside)) is None
+
+
+def test_a_symlinked_worker_folder_is_served_like_any_other(tmp_path):
+    state = tmp_path / "elsewhere" / "run-1" / "state"
+    write(state.parent.parent, "run-1", "r", {"status": "finished", "rounds": []})
+    (state.parent / "iteration").rename(state.parent / "iteration-moved")
+    state.mkdir(parents=True)
+    (state.parent / "iteration-moved").rename(state / "iteration")
+    kept_file = state / "deliverables" / "turn-1" / "note.md"
+    kept_file.parent.mkdir(parents=True)
+    kept_file.write_text("note")
+    (state / "settings.json").write_text(
+        json.dumps(
+            {
+                "scenario_dir": str(tmp_path / "brand"),
+                "models": {"partner": "a/m", "curator": "b/n", "sub-harness": None},
+                "efforts": {"partner": "low", "curator": "high"},
+            }
+        )
+    )
+    (tmp_path / "brand").mkdir()
+    (tmp_path / "brand" / "scenario.json").write_text(json.dumps({"criteria": [{"id": "b1", "check": "B"}]}))
+    runs = tmp_path / "runs"
+    runs.mkdir()
+    (runs / "view").symlink_to(state, target_is_directory=True)
+    assert [entry["id"] for entry in index(runs)] == ["view/r"]
+    (entry,) = index(runs)
+    assert entry["models"] == {"partner": "a/m", "curator": "b/n"}
+    assert entry["efforts"] == {"partner": "low", "curator": "high"}
+    assert _run_paths(runs, "view/r") == (runs / "view", runs / "view" / "iteration" / "r.json")
+    assert _run_paths(runs, "../elsewhere/run-1/state/r") is None and _run_paths(runs, "view/../r") is None
+    assert deliverable(runs, str(kept_file)) == kept_file.resolve()
+    assert deliverable(runs, str(tmp_path / "elsewhere" / "stray" / "deliverables" / "x.md")) is None
+    assert [row["id"] for row in scenario(run_scenario(runs, "view/r", None))["criteria"]] == ["b1"]
+    (state / "scenario").mkdir()
+    (state / "scenario" / "scenario.json").write_text(json.dumps({"criteria": [{"id": "kept", "check": "K"}]}))
+    assert [row["id"] for row in scenario(run_scenario(runs, "view/r", None))["criteria"]] == ["kept"]
 
 
 def test_scenario_serves_criteria_with_severity_and_degrades_when_missing(tmp_path):
@@ -259,6 +423,25 @@ def test_http_endpoints_serve_scenario_and_refuse_decks_outside_the_root(served,
     assert status == 404
     status, body = get(f"{base}/api/nothing")
     assert status == 404 and body["error"] == "unknown endpoint"
+
+
+def test_http_scenario_follows_the_run_that_asks(served, tmp_path):
+    base, runs = served
+    other = tmp_path / "brand" / "scenario.json"
+    other.parent.mkdir()
+    other.write_text(
+        json.dumps({"initial": ["norms"], "criteria": [{"id": "b1", "check": "B", "severity": "red_line"}]})
+    )
+    write(runs, "w1", "r1", {"status": "finished", "rounds": []})
+    (runs / "w1" / "settings.json").write_text(json.dumps({"scenario_dir": str(other.parent)}))
+    write(runs, "w2", "r2", {"status": "finished", "rounds": []})
+    (runs / "w2" / "settings.json").write_text(json.dumps({"scenario_dir": str(tmp_path / "gone")}))
+    status, body = get(f"{base}/api/scenario?run=w1/r1")
+    assert status == 200 and [row["id"] for row in body["criteria"]] == ["b1"] and body["initial"] == ["norms"]
+    status, body = get(f"{base}/api/scenario?run=w2/r2")
+    assert status == 200 and [row["id"] for row in body["criteria"]] == ["c1"]
+    status, body = get(f"{base}/api/scenario?run=nobody/r9")
+    assert status == 200 and [row["id"] for row in body["criteria"]] == ["c1"]
 
 
 def test_http_thumbnails_report_a_failed_conversion(served):
@@ -528,6 +711,15 @@ def test_live_reports_no_rows_before_the_worker_logs_anything(tmp_path):
     assert reply["rows"] == [] and reply["logs"] == [] and reply["phase"]["name"] == "curating"
 
 
+def test_run_phase_reads_the_phase_and_status_without_the_logs_and_refuses_runs_outside_the_root(tmp_path):
+    root, _, _ = live_run(tmp_path, {"status": "running", "rounds": []}, [{"event": "turn"}])
+    now = time.time()
+    reply = run_phase(root, "run/r1", now)
+    assert set(reply) == {"phase", "status"} and reply["status"] == "running"
+    assert reply["phase"] == live(root, "run/r1", now=now)["phase"]
+    assert run_phase(root, "../run/r1") is None and run_phase(root, "run/missing") is None
+
+
 def phase_of(tmp_path, record, rows=(), quiet=0.0, record_age=100.0, pending=None):
     root, path, log = live_run(tmp_path, record, rows)
     now = 1_000_000.0
@@ -545,6 +737,10 @@ def test_phase_from_status_and_record(tmp_path):
         == "finished"
     )
     assert phase_of(tmp_path / "b", {"status": "error", "error": "boom", "rounds": []})["basis"] == "boom"
+    stopped = phase_of(
+        tmp_path / "s", {"status": "stopped", "stop": "interrupted before the run ended", "rounds": [{}]}
+    )
+    assert (stopped["name"], stopped["basis"]) == ("stopped", "interrupted before the run ended")
     paused = phase_of(tmp_path / "c", {"status": "paused", "rounds": [{}]}, pending={"state": {"stage": "implement"}})
     assert (paused["name"], paused["stage"]) == ("paused", "implement")
     diagnosing = phase_of(tmp_path / "g", {"status": "paused", "rounds": [{}]}, pending={"attribution_state": {"x": 1}})
@@ -746,6 +942,64 @@ def test_index_marks_a_running_record_with_no_recent_writes_as_stalled(tmp_path)
     finished = write(root, "done", "r2", {"status": "finished", "rounds": []})
     os.utime(finished, (now - 3 * 3600, now - 3 * 3600))
     assert {entry["id"]: entry["status"] for entry in index(root, now)}["done/r2"] == "finished"
+
+
+def test_a_run_collecting_its_information_is_researching_with_each_calls_searches_and_reads(tmp_path):
+    root, path, _ = live_run(tmp_path, {"status": "running", "rounds": []})
+    folder = root / "run" / "information"
+    (folder / "research-1" / "acquisition").mkdir(parents=True)
+    (folder / "research-2").mkdir()
+    for name in ("request.json", "assessment.json", "plan-1.json"):
+        (folder / name).write_text("{}")
+    (folder / "research-1" / "brief.json").write_text(json.dumps({"questions": ["Which laws apply?"]}))
+    said = [
+        {"type": "tool_use", "name": "WebSearch", "input": {"query": "ad law"}},
+        {"type": "tool_use", "name": "WebFetch", "input": {"url": "https://example.org/law"}},
+        {"type": "text", "text": "reading"},
+    ]
+    events = [
+        "not json",
+        json.dumps({"type": "system", "subtype": "init"}),
+        json.dumps({"type": "assistant", "message": {"content": said}}),
+    ]
+    (folder / "research-1" / "acquisition" / "events.jsonl").write_text("\n".join(events) + "\n")
+    (folder / "research-2" / "status.json").write_text(json.dumps({"status": "ok"}))
+    now = time.time()
+    found = phase(root / "run", _glance(path), path, now)
+    assert (found["name"], found["round"], found["stage"]) == ("researching", 0, "researching")
+    assert found["basis"].endswith("(2 research calls, 1 running)")
+    progress = live(root, "run/r1", now=now)["research"]
+    first, second = progress["calls"]
+    assert (first["status"], first["questions"], first["searches"], first["reads"]) == (
+        "researching",
+        ["Which laws apply?"],
+        1,
+        1,
+    )
+    assert first["recent"] == [
+        {"tool": "search", "text": "ad law"},
+        {"tool": "read", "text": "https://example.org/law"},
+    ]
+    assert second["status"] == "ok" and second["searches"] == 0
+    (folder / "status.json").write_text(json.dumps({"status": "ready"}))
+    assert live(root, "run/r1", now=now)["research"] is None
+    assert phase(root / "run", _glance(path), path, now)["name"] == "curating"
+
+
+def test_the_run_list_reads_a_record_once_per_version_of_its_file(tmp_path, monkeypatch):
+    path = write(tmp_path, "w", "r", {"status": "running", "task": "t", "rounds": []})
+    reads = []
+    original = serve.Path.read_text
+    monkeypatch.setattr(
+        serve.Path, "read_text", lambda self, *a, **k: (reads.append(self.name), original(self, *a, **k))[1]
+    )
+    assert index(tmp_path)[0]["status"] == "running" and index(tmp_path)[0]["task"] == "t"
+    assert reads.count("r.json") == 1
+    signal = {"source": "owner", "items": [{"result": "pass", "text": "kept out"}, {"result": "fail"}]}
+    path.write_text(json.dumps({"status": "finished", "task": "t", "rounds": [{"signals": [signal]}]}))
+    (entry,) = index(tmp_path)
+    assert (entry["status"], entry["rounds"], entry["passes"]) == ("finished", 1, [[1, 1]])
+    assert reads.count("r.json") == 2
 
 
 def test_composition_progress_reads_the_active_scope_and_cumulative_counts(tmp_path):

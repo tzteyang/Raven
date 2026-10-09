@@ -17,10 +17,11 @@ import re
 import secrets
 import threading
 import time
-from dataclasses import dataclass, fields
+from dataclasses import dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 
+from .. import model_roles
 from ..iteration.records import runs
 from ..scenario import load as load_contract
 from .process import redact
@@ -28,6 +29,9 @@ from .rundir import curator_progress, pending_stage
 from .studio import studio_run
 
 BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency"
+# The model roles of a live session: a person on the page is the counterpart and every conversant, and nothing is
+# collected before onboarding.
+MODEL_ROLES = ("curator", "attribution", "analyst", "judge", "critic", "sub-harness")
 META = "studio.json"
 STEPS = ("onboard", "trial", "say", "close", "signal", "assess", "analyse", "curate", "skip", "finish")
 SESSION_ID = re.compile(r"live-[0-9]{14}-[0-9a-f]{6}")
@@ -45,7 +49,9 @@ class LiveConfig:
     """What `--live-config` names, a JSON object: the Raven `config` every session hires its employee with (read by
     the session's process only, never shown or recorded), the `root` the sessions are kept under, the `scenario`
     directory whose contract bounds them and whose materials a person may hand over, and the run's settings, named as
-    the automated run's command line names them. A relative path is read from the file's own directory."""
+    the automated run's command line names them; `models` and `efforts` map a model role of `MODEL_ROLES` to its model and
+    effort (`experimental.model_roles`), a role not named running on the partner's. A relative path is read from the
+    file's own directory."""
 
     config: Path
     root: Path
@@ -53,17 +59,13 @@ class LiveConfig:
     rounds: int = 4
     turns: int = 8
     timeout: float = 600
-    curator_model: str | None = None
-    curator_effort: str | None = "high"
+    models: dict[str, str] = field(default_factory=dict)
+    efforts: dict[str, str] = field(default_factory=dict)
     curator_calls: int = 48
     curator_queries: int = 72
-    analyst_model: str | None = None
-    attribution_model: str | None = None
     attribution_calls: int = 8
     attribution_queries: int = 24
-    subagent_model: str | None = None
     standard: tuple[str, ...] = ()
-    standard_effort: str | None = "low"
 
     @classmethod
     def load(cls, path: Path) -> "LiveConfig":
@@ -97,6 +99,11 @@ class LiveConfig:
                 raise ValueError(f"{name} must be a positive integer")
         if isinstance(self.timeout, bool) or not isinstance(self.timeout, (int, float)) or self.timeout <= 0:
             raise ValueError("timeout must be a positive number of seconds")
+        for name in ("models", "efforts"):
+            value = getattr(self, name)
+            if not isinstance(value, dict) or not all(isinstance(item, str) for item in (*value, *value.values())):
+                raise ValueError(f"{name} must map model roles to names")
+        model_roles.resolve(self.models, self.efforts, model_roles.Choice("partner"), roles=MODEL_ROLES)
         load_contract(self.scenario)
 
     def spec(self, run_dir: Path, workdir: Path, task: str, record: Path | None = None) -> dict:
@@ -194,7 +201,7 @@ class Live:
 
     def materials(self) -> list[dict]:
         """The materials a person may hand over (the contract's `handed`, those the partner may receive), each as the
-        handover it becomes (its kind and its files as `uploads/<name>/...`) with where it came from when the party did
+        handover it becomes (its kind and its files as `uploads/<name>/...`) with where it came from when the counterpart did
         not simply give it."""
         out = []
         for name in self.contract.handed:
@@ -226,8 +233,8 @@ class Live:
             "settings": {
                 "rounds": config.rounds,
                 "turns": config.turns,
-                "curator": config.curator_model,
-                "analyst": config.analyst_model or config.curator_model,
+                "curator": config.models.get("curator"),
+                "analyst": config.models.get("analyst"),
                 "standard": bool(config.standard),
             },
             "sessions": self.sessions(),

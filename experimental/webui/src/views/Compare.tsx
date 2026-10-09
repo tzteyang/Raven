@@ -2,8 +2,10 @@ import { useState } from 'react'
 
 import { fileUrl } from '../api'
 import { arm, pages, progress, revisions, roundVersions, tone, verdict } from '../derive'
+import { differingRoles } from '../record'
 
 import type { Item, Run } from '../model'
+import type { RoleChoice } from '../record'
 import type { JSX } from 'react'
 
 function passes(run: Run): number[] {
@@ -62,9 +64,12 @@ function Pages({ arms, versions }: { arms: Run[]; versions: string[][] }): JSX.E
 }
 
 /* Two runs of the same scenario side by side, round for round: what the
-   control arm settled at, and what each Harness revision changed. */
-export function Compare({ left, right }: { left: Run; right: Run }): JSX.Element {
+   control arm settled at, and what each Harness revision changed. The model
+   roles the two runs ran on another model or effort are named, since then
+   more than the Curator differs. */
+export function Compare({ left, right, roles = [[], []] }: { left: Run; right: Run; roles?: [RoleChoice[], RoleChoice[]] }): JSX.Element {
   const arms = [left, right]
+  const differing = differingRoles(roles[0], roles[1])
   const reports = arms.map(progress)
   const versions = arms.map((run) => roundVersions(run, revisions(run)))
   const total = arms.map((run) => run.rounds[0]?.signals.flatMap((signal) => signal.items).length ?? 0)
@@ -77,7 +82,13 @@ export function Compare({ left, right }: { left: Run; right: Run }): JSX.Element
     <div className="compare">
       <div className="chips">
         <span className="eyebrow">Comparison</span>
-        <span className="quiet">same scenario, travellers and agency; only the Curator differs</span>
+        {differing.length ? (
+          <span className="differ">
+            model roles that differ: {differing.map((row) => `${row.role} ${row.left} → ${row.right}`).join(' · ')}
+          </span>
+        ) : (
+          <span className="quiet">same scenario, customers and owner{roles[0].length && roles[1].length ? ' and every model role' : ''}; only the Curator differs</span>
+        )}
       </div>
       <div className="table">
         <table>

@@ -222,7 +222,9 @@ export interface CultivationRecord {
   curations: RecordCuration[]
   rounds: RecordRound[]
   ledger: LedgerRow[]
-  cost: { total: number; by_part: Record<string, number> } | null
+  /** What the run spent, by part; `quota` is what ran under a subscription login, priced at its API equivalent and
+      not in the total (experimental/simulation/record.py _research_spend). */
+  cost: { total: number; by_part: Record<string, number>; quota?: Record<string, number> } | null
   /** The value judge's reading of this run (experimental/simulation/value.py), when the record carries one. */
   value: ValueVerdict | null
 }
@@ -390,7 +392,7 @@ export function normalizeRecord(raw: unknown): CultivationRecord {
         }),
       }
     }),
-    cost: typeof cost.total === 'number' ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number> } : null,
+    cost: typeof cost.total === 'number' ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number>, quota: obj(cost.quota) as Record<string, number> } : null,
     value: verdictOf(value.value),
   }
 }
@@ -465,18 +467,51 @@ export const handedAfter = (record: CultivationRecord, round: number): string[] 
 
 const shortModel = (name: string): string => name.split('/').pop() ?? name
 
-/* The models behind a run on one line: employee, curator and sub-harness, the
-   first two merged when they are the same model. Without a sub-harness model
-   the sub-harnesses run on their own deployment's default. */
+/** One model role's model and effort as a run's settings keep them (experimental/model_roles.py). */
+export interface RoleChoice {
+  role: string
+  model: string
+  effort: string
+}
+
+/* Each model role's model and effort, in the settings' order, the partner
+   first; a role without a model name is left out. */
+export function roleChoices(models: unknown, efforts?: unknown): RoleChoice[] {
+  const levels = obj(efforts)
+  return Object.entries(obj(models))
+    .filter((pair): pair is [string, string] => typeof pair[1] === 'string' && pair[1] !== '')
+    .map(([role, model]) => ({ role, model, effort: typeof levels[role] === 'string' ? (levels[role] as string) : '' }))
+}
+
+/* The models behind a run on one line: the roles grouped by the model they ran
+   on, the first role's group first. Short, the first group is its model alone,
+   as the roles not named otherwise. */
 export function modelLine(models: unknown, short = false): string {
-  const row = obj(models)
-  const name = (key: string): string => (typeof row[key] === 'string' && row[key] ? (short ? shortModel(row[key] as string) : (row[key] as string)) : '')
-  const employee = name('employee')
-  const curator = name('curator')
-  if (!employee && !curator) return ''
-  const parts = employee && employee === curator ? [`employee & curator ${employee}`] : [employee && `employee ${employee}`, curator && `curator ${curator}`]
-  parts.push(`sub-harness ${name('subagents') || 'default'}`)
+  const grouped = new Map<string, string[]>()
+  for (const { role, model } of roleChoices(models)) grouped.set(model, [...(grouped.get(model) ?? []), role])
+  return [...grouped]
+    .map(([model, roles], i) => (short && i === 0 ? shortModel(model) : `${roles.join(', ')} ${short ? shortModel(model) : model}`))
+    .join(' · ')
+}
+
+/* The research channel the collector ran, as the run set it up: agent, the
+   model asked for and its effort, and the dollar cap of each call. */
+export function researchLine(research: unknown): string {
+  const row = obj(research)
+  if (typeof row.channel !== 'string' || !row.channel) return ''
+  const parts = [row.channel, typeof row.model === 'string' ? row.model : '', typeof row.effort === 'string' ? row.effort : '']
+  if (typeof row.budget === 'number') parts.push(`at most ${costLabel(row.budget)} a call`)
+  if (row.replayed === true) parts.push('replayed from an earlier run')
   return parts.filter(Boolean).join(' · ')
+}
+
+/** The roles two runs ran on a different model or effort, with each side's choice. */
+export function differingRoles(left: RoleChoice[], right: RoleChoice[]): { role: string; left: string; right: string }[] {
+  const shown = (choice?: RoleChoice): string => (choice ? [shortModel(choice.model), choice.effort].filter(Boolean).join(' ') : 'not recorded')
+  const roles = [...new Set([...left, ...right].map((choice) => choice.role))]
+  return roles
+    .map((role) => ({ role, left: shown(left.find((c) => c.role === role)), right: shown(right.find((c) => c.role === role)) }))
+    .filter((row) => row.left !== row.right)
 }
 
 export const isRed = (severity?: string): boolean => severity === 'red_line'

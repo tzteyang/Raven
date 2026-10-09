@@ -1,0 +1,208 @@
+/* The ribbon page, laid on ui-web's Ink & Amber sheet and the Studio's sheet
+   (both imported before this file). Every colour is a ui-web token or a mix of
+   two, so both themes follow; every class carries the rb- prefix. The ribbon's
+   strands are inks of the page's own greys and its one amber, parted by hairline
+   seams of paper. */
+
+.rb-app { height: 100vh; display: flex; flex-direction: column; background: var(--wash); color: var(--text); font-family: var(--sans); }
+.rb-top { flex: none; height: 52px; display: flex; align-items: center; gap: 10px; padding: 0 18px; }
+.rb-top h1 { font-size: 15px; font-weight: 600; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; max-width: 40%; }
+.rb-status { font-size: 11.5px; padding: 2px 9px; border-radius: 999px; background: var(--raised); color: var(--muted); }
+.rb-status.rb-running { background: var(--amber-dp); color: var(--amber); }
+.rb-pick { height: var(--ctl-h); border-radius: var(--ctl-r); border: 1px solid var(--line); background: var(--paper); color: var(--text); padding: 0 8px; font-size: 12.5px; max-width: 280px; }
+.rb-link { font-size: 12.5px; color: var(--muted); text-decoration: none; padding: 6px 10px; border-radius: var(--ctl-r); }
+.rb-link:hover { background: var(--hover); color: var(--text); }
+
+.rb-main { flex: 1; min-height: 0; display: grid; grid-template-columns: minmax(340px, 440px) minmax(0, 1fr); }
+.rb-left { overflow: auto; padding: 4px 10px 32px 14px; }
+.rb-pad { padding: 16px; }
+.rb-quiet { color: var(--faint); font-size: 12.5px; line-height: 1.6; }
+.rb-error { color: var(--clay); font-size: 12.5px; padding: 12px; }
+
+/* The route. */
+.rb-route { width: 100%; position: relative; }
+.rb-silk { position: absolute; left: 0; top: 0; pointer-events: none; filter: drop-shadow(0 7px 9px rgba(28, 27, 25, .12)); }
+.rb-swatches { display: none; }
+.rb-svg { display: block; position: relative; overflow: visible; outline: none; }
+.rb-g { cursor: pointer; transform-box: fill-box; transform-origin: center;
+  transition: opacity .3s ease, filter .3s ease, transform .34s cubic-bezier(.3, 1.4, .5, 1); }
+.rb-svg.rb-focus .rb-g:not(.rb-sel) { opacity: .16; filter: blur(1.3px); }
+.rb-svg.rb-focus .rb-g[data-near]:not(.rb-sel), .rb-svg.rb-focus .rb-near .rb-g:not(.rb-sel) { opacity: .7; filter: none; }
+.rb-g.rb-sel.rb-small { transform: scale(1.45); }
+.rb-g.rb-sel:not(.rb-small) { transform: scale(1.03); }
+.rb-strand { stroke: var(--paper); stroke-width: .8; stroke-linejoin: round; }
+.rb-memory { fill: color-mix(in srgb, var(--muted) 30%, var(--paper)); background: color-mix(in srgb, var(--muted) 30%, var(--paper)); }
+.rb-planning { fill: color-mix(in srgb, var(--muted) 70%, var(--paper)); background: color-mix(in srgb, var(--muted) 70%, var(--paper)); }
+.rb-capability { fill: color-mix(in srgb, var(--amber) 38%, var(--paper)); background: color-mix(in srgb, var(--amber) 38%, var(--paper)); }
+.rb-action { fill: var(--amber); background: var(--amber); }
+.rb-other { fill: color-mix(in srgb, var(--sky) 45%, var(--paper)); background: color-mix(in srgb, var(--sky) 45%, var(--paper)); }
+.rb-strand.rb-native { fill: var(--paper); stroke: var(--faint); stroke-dasharray: 2.5 2; }
+.rb-painted .rb-strand, .rb-painted .rb-strand.rb-native { fill: transparent; stroke: none; }
+.rb-sw.rb-native { background: var(--paper); border: 1px dashed var(--faint); }
+.rb-bare { fill: none; stroke: var(--muted); stroke-width: 2.4; stroke-linecap: round; }
+.rb-ver { font-family: var(--mono); font-size: 15px; fill: var(--text); text-anchor: middle; }
+.rb-sub { font-size: 10px; fill: var(--faint); text-anchor: middle; }
+.rb-open { fill: var(--paper); stroke: var(--text); stroke-width: 1.4; }
+.rb-bead { fill: var(--paper); stroke: var(--text); stroke-width: 1.5; }
+.rb-sel .rb-bead { stroke: var(--amber); }
+.rb-bead.rb-live { stroke: var(--amber); }
+.rb-fold-n { font-size: 9.5px; font-family: var(--mono); fill: var(--text); text-anchor: middle; pointer-events: none; }
+.rb-flag-pole { stroke: var(--text); stroke-width: 1.3; }
+.rb-flag-head { fill: var(--amber); }
+.rb-flag-t { font-size: 10.5px; fill: var(--text); text-anchor: middle; }
+.rb-hit { fill: none; stroke: transparent; stroke-width: 18; stroke-linecap: round; }
+.rb-clasp { fill: var(--paper); stroke: var(--text); stroke-width: 1.6; }
+.rb-clasp.rb-curating { stroke: var(--amber); }
+.rb-clasp.rb-knot { fill: var(--muted); stroke: var(--paper); }
+.rb-clasp.rb-failed { stroke: var(--clay); }
+.rb-sel .rb-clasp { stroke: var(--amber); }
+.rb-ahead { cursor: default; }
+.rb-ahead-path { fill: none; stroke: var(--faint); stroke-width: 2; stroke-dasharray: 4 5; stroke-linecap: round; }
+.rb-head { fill: var(--amber); }
+.rb-live { animation: rb-pulse 1.6s ease-in-out infinite; }
+@keyframes rb-pulse { 50% { opacity: .3; } }
+@media (prefers-reduced-motion: reduce) {
+  .rb-g { transition: none; }
+  .rb-g.rb-sel.rb-small, .rb-g.rb-sel:not(.rb-small) { transform: none; }
+  .rb-live { animation: none; }
+}
+
+.rb-legend { display: flex; flex-wrap: wrap; gap: 4px 12px; font-size: 11px; color: var(--muted); padding: 0 8px 10px; font-family: var(--mono); }
+.rb-legend span { display: inline-flex; align-items: center; gap: 5px; }
+.rb-sw { display: inline-block; width: 14px; height: 8px; border-radius: 2px; }
+
+/* The conversation under the route. */
+.rb-chat { list-style: none; margin: 0; padding: 2px 6px 32px; display: flex; flex-direction: column; gap: 7px; }
+.rb-dim { opacity: .34; }
+.rb-divider { display: flex; align-items: center; gap: 10px; margin: 10px 0 2px; cursor: pointer; transition: opacity .25s ease; }
+.rb-divider::before, .rb-divider::after { content: ""; flex: 1; height: 1px; background: var(--line); }
+.rb-divider span { display: inline-flex; align-items: center; gap: 6px; font-family: var(--mono); font-size: 11.5px; color: var(--muted);
+  padding: 3px 12px; border-radius: 999px; background: var(--paper); box-shadow: 0 0 0 1px var(--line-soft); }
+.rb-divider.on span { box-shadow: 0 0 0 1.5px var(--amber); color: var(--text); }
+.rb-msg { display: flex; align-items: flex-start; gap: 10px; transition: opacity .25s ease; }
+.rb-msg.rb-mine { justify-content: flex-end; margin: 4px 0; }
+.rb-tile { flex: none; width: 28px; height: 28px; border-radius: 9px; display: grid; place-items: center; font-style: normal;
+  background: var(--surface); color: var(--muted); transition: box-shadow .2s ease; }
+.rb-role-curator .rb-tile { background: var(--amber-dp); color: var(--amber); }
+.rb-role-analyst .rb-tile { background: color-mix(in srgb, var(--sky) 15%, var(--paper)); color: var(--sky); }
+.rb-role-trial .rb-tile { background: var(--raised); color: var(--text); }
+.rb-role-owner .rb-tile { background: color-mix(in srgb, var(--moss) 15%, var(--paper)); color: var(--moss); }
+.rb-role-version .rb-tile { background: var(--raised); color: var(--text); }
+.rb-msg.on .rb-tile { box-shadow: 0 0 0 1.5px var(--paper), 0 0 0 3px var(--amber); }
+.rb-tile.rb-live { animation: rb-pulse 1.6s ease-in-out infinite; }
+.rb-msg-main { flex: 1; min-width: 0; }
+.rb-msg-h { width: 100%; display: flex; align-items: baseline; gap: 8px; min-width: 0; padding: 5px 8px; margin-left: -8px;
+  border: 0; border-radius: 8px; background: none; font: inherit; font-size: 12.5px; line-height: 1.5; text-align: left; cursor: pointer; color: var(--text); }
+.rb-msg-h:hover { background: var(--hover); }
+.rb-msg-h b { flex: none; font-weight: 600; }
+.rb-msg-h span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.rb-msg-card { margin: 2px 0 8px; padding: 11px 13px; background: var(--paper); border-radius: 11px; box-shadow: 0 0 0 1px var(--line-soft);
+  font-size: 13px; line-height: 1.65; color: var(--text); animation: rb-open .22s ease; }
+.rb-say { max-width: 84%; padding: 8px 13px 9px; border-radius: 15px 15px 5px 15px; cursor: pointer; font-size: 12.5px; line-height: 1.6;
+  background: color-mix(in srgb, var(--amber) 9%, var(--paper)); box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--amber) 20%, var(--paper));
+  transition: box-shadow .2s ease; }
+.rb-mine.rb-unfolded .rb-say { max-width: 92%; }
+.rb-msg.rb-mine.on .rb-say { box-shadow: inset 0 0 0 1.5px var(--amber); }
+.rb-say-h { display: flex; align-items: center; gap: 4px; font-size: 11px; color: var(--faint); margin-bottom: 2px; }
+.rb-say-h svg { color: var(--moss); }
+.rb-clamp { margin: 0; color: var(--text); display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+.rb-msg-b { font-size: 13px; line-height: 1.65; cursor: auto; color: var(--text); }
+.rb-said { margin: 0 0 8px; }
+@keyframes rb-open { from { opacity: 0; transform: translateY(-3px); } }
+
+.rb-todo { background: var(--surface); border-radius: 10px; padding: 8px 10px; margin: 2px 0 8px; }
+.rb-todo-h { display: flex; justify-content: space-between; font-size: 11.5px; color: var(--muted); margin-bottom: 4px; }
+.rb-todo ul { list-style: none; margin: 0; padding: 0; }
+.rb-todo li { display: flex; align-items: center; gap: 8px; font-size: 12.5px; padding: 2px 0; }
+.rb-todo li s { margin-left: auto; text-decoration: none; font-size: 11px; color: var(--faint); }
+.rb-tick { position: relative; flex: none; width: 14px; height: 14px; border-radius: 50%; border: 1.5px solid var(--faint); box-sizing: border-box; }
+.rb-todo li[data-state="done"] .rb-tick { background: var(--moss); border-color: var(--moss); }
+.rb-todo li[data-state="done"] .rb-tick::after { content: ""; position: absolute; left: 3.5px; top: 1px; width: 3.5px; height: 6.5px;
+  border: solid var(--paper); border-width: 0 1.5px 1.5px 0; transform: rotate(45deg); }
+.rb-todo li[data-state="current"] .rb-tick { border-color: var(--amber); background: var(--amber-dp); }
+.rb-todo li[data-state="failed"] .rb-tick { border-color: var(--clay); background: color-mix(in srgb, var(--clay) 18%, var(--paper)); }
+.rb-todo li[data-state="paused"] .rb-tick { border-color: var(--gold); }
+.rb-todo li[data-state="todo"] span { color: var(--faint); }
+.rb-ops { display: flex; flex-wrap: wrap; gap: 4px; }
+.rb-trial-list { list-style: none; margin: 0; padding: 0; }
+.rb-trial-list li { display: flex; align-items: baseline; gap: 8px; padding: 4px 6px; border-radius: 8px; cursor: pointer; font-size: 12.5px; }
+.rb-trial-list li:hover { background: var(--hover); }
+.rb-trial-list b { flex: none; font-weight: 500; }
+.rb-trial-list span { min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.rb-trial-list s { margin-left: auto; flex: none; text-decoration: none; font-size: 11px; color: var(--faint); }
+.rb-dot { flex: none; width: 7px; height: 7px; border-radius: 50%; background: var(--moss); align-self: center; }
+.rb-dot.rb-live { background: var(--amber); }
+
+/* The panel on the right, opened by the chosen stage's Raven. */
+.rb-hero { flex: none; display: flex; align-items: center; gap: 16px; padding: 14px 22px 4px; }
+.rb-raven { width: 92px; height: 92px; object-fit: contain; flex: none; filter: drop-shadow(0 8px 10px rgba(28, 27, 25, .16));
+  animation: rb-arrive .42s cubic-bezier(.3, 1.35, .5, 1), rb-bob 3.6s ease-in-out .42s infinite; }
+.rb-emblem { position: relative; isolation: isolate; width: 92px; height: 92px; flex: none; display: grid; place-items: center;
+  animation: rb-arrive .42s cubic-bezier(.3, 1.35, .5, 1); }
+.rb-emblem-bubble { position: relative; width: 70px; height: 60px; border-radius: 30px 30px 30px 30px / 27px 27px 27px 27px;
+  display: grid; place-items: center; color: var(--moss);
+  background: radial-gradient(circle at 30% 22%, rgba(255, 255, 255, .9), transparent 46%),
+    linear-gradient(160deg, color-mix(in srgb, var(--moss) 14%, var(--paper)), color-mix(in srgb, var(--amber) 30%, var(--paper)));
+  box-shadow: inset 0 -5px 9px color-mix(in srgb, var(--amber) 22%, transparent), inset 0 2px 3px rgba(255, 255, 255, .8),
+    0 12px 18px -9px rgba(28, 27, 25, .32); }
+.rb-emblem-bubble::after { content: ""; position: absolute; right: 9px; bottom: -5px; width: 16px; height: 14px; z-index: -1;
+  background: color-mix(in srgb, var(--amber) 30%, var(--paper)); border-radius: 0 0 6px 0; transform: skewX(-28deg); }
+.rb-emblem-bubble svg { transform-origin: 50% 88%; animation: rb-grow .7s cubic-bezier(.3, 1.4, .5, 1) .15s backwards, rb-sway 4.2s ease-in-out .85s infinite; }
+.rb-emblem-spark { position: absolute; right: 4px; top: 6px; color: var(--amber); animation: rb-twinkle 2.6s ease-in-out infinite; }
+@keyframes rb-sway { 50% { transform: rotate(-6deg); } }
+@keyframes rb-grow { from { transform: scale(.2); opacity: 0; } }
+@keyframes rb-twinkle { 50% { opacity: .35; transform: scale(.78) rotate(18deg); } }
+.rb-hero-t { min-width: 0; animation: rb-open .3s ease; }
+.rb-hero-h { display: flex; align-items: center; gap: 8px; }
+.rb-hero-h .rb-tile { width: 24px; height: 24px; border-radius: 8px; }
+.rb-hero-h b { font-size: 15px; font-weight: 600; }
+.rb-hero-h span { font-family: var(--mono); font-size: 12px; color: var(--faint); }
+.rb-hero-t p { margin: 6px 0 0; font-size: 13px; line-height: 1.55; color: var(--muted);
+  display: -webkit-box; -webkit-line-clamp: 2; -webkit-box-orient: vertical; overflow: hidden; }
+@keyframes rb-arrive { from { opacity: 0; transform: translateY(8px) scale(.9); } }
+@keyframes rb-bob { 50% { transform: translateY(-3px); } }
+@media (prefers-reduced-motion: reduce) {
+  .rb-raven, .rb-emblem, .rb-emblem-bubble svg, .rb-emblem-spark, .rb-hero-t, .rb-msg-card { animation: none; }
+}
+
+.rb-detail { margin: 6px 12px 12px 0; background: var(--paper); border-radius: 14px; box-shadow: var(--seam); display: flex; flex-direction: column; min-height: 0; overflow: hidden; }
+.rb-tabs { flex: none; display: flex; align-items: center; gap: 4px; padding: 8px 14px 10px; border-bottom: 1px solid var(--line-soft); }
+.rb-tabs button { font: inherit; font-size: 12.5px; padding: 5px 13px; border-radius: 999px; border: 0; background: none; color: var(--muted); cursor: pointer; }
+.rb-tabs button:hover { background: var(--hover); color: var(--text); }
+.rb-tabs button.on { background: var(--amber-dp); color: var(--text); }
+.rb-body { flex: 1; min-height: 0; overflow: auto; padding: 18px 22px 32px; }
+.rb-back { font: inherit; font-size: 12px; color: var(--muted); background: none; border: 0; padding: 4px 0; margin-bottom: 10px; cursor: pointer; }
+.rb-back:hover { color: var(--text); }
+.rb-trials { display: flex; flex-direction: column; gap: 4px; }
+
+.rb-doc-t { font-family: var(--mono); font-size: 22px; font-weight: 500; margin: 0 0 14px; display: flex; align-items: baseline; gap: 12px; }
+.rb-doc-t span { font-family: var(--sans); font-size: 12.5px; color: var(--faint); font-weight: 400; }
+.rb-surface { margin: 0 0 18px; }
+.rb-surface h3, .rb-code h3, .rb-heard h3 { font-size: 12px; font-weight: 500; color: var(--muted); margin: 0 0 8px; display: flex; align-items: center; gap: 7px; font-family: var(--mono); }
+.rb-surface ul { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: 8px; }
+.rb-cm { background: var(--surface); border-radius: 10px; padding: 10px 12px; }
+.rb-cm[data-mark="add"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--moss) 30%, transparent); }
+.rb-cm[data-mark="move"] { box-shadow: inset 0 0 0 1px color-mix(in srgb, var(--sky) 30%, transparent); }
+.rb-cm-h { display: flex; align-items: center; gap: 8px; margin-bottom: 4px; }
+.rb-cm-id { font-family: var(--mono); font-size: 12px; color: var(--text); }
+.rb-mark { font-size: 10.5px; padding: 1px 7px; border-radius: 999px; }
+.rb-mark-add { background: color-mix(in srgb, var(--moss) 16%, var(--paper)); color: var(--moss); }
+.rb-mark-modify { background: var(--amber-dp); color: var(--amber); }
+.rb-mark-move { background: color-mix(in srgb, var(--sky) 16%, var(--paper)); color: var(--sky); }
+.rb-mark-retire { background: color-mix(in srgb, var(--clay) 14%, var(--paper)); color: var(--clay); }
+.rb-cm-text { margin: 0 0 6px; font-size: 13px; line-height: 1.65; color: var(--text); cursor: pointer;
+  display: -webkit-box; -webkit-line-clamp: 3; -webkit-box-orient: vertical; overflow: hidden; }
+.rb-cm-text.rb-open-text { display: block; }
+.rb-reason { margin: 0; font-size: 12px; color: var(--clay); }
+.rb-serves { display: flex; flex-wrap: wrap; }
+.rb-chip { display: inline-block; font-size: 11px; line-height: 1.6; padding: 0 8px; border-radius: 999px; background: var(--raised); color: var(--muted); margin: 0 4px 4px 0; font-family: var(--mono); }
+.rb-btn { border: 0; cursor: pointer; font-family: var(--sans); }
+.rb-btn:hover { background: var(--amber-dp); color: var(--text); }
+.rb-code { margin-top: 20px; }
+.rb-retired .rb-cm { opacity: .75; }
+.rb-heard { margin: 0 0 18px; }
+.rb-reqs { list-style: none; margin: 8px 0 0; padding: 0; display: flex; flex-direction: column; gap: 6px; font-size: 12.5px; line-height: 1.55; }
+.rb-reqs li { display: flex; gap: 8px; align-items: baseline; }
+.rb-reqs code { font-family: var(--mono); font-size: 12px; flex: none; }
+.rb-strength { flex: none; font-size: 10.5px; padding: 0 6px; border-radius: 999px; background: var(--raised); color: var(--muted); }
+.rb-strength.rb-must_hold { background: var(--amber-dp); color: var(--amber); }

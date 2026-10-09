@@ -43,6 +43,15 @@ def _run(tmp_path):
                                         "records": [
                                             {"kind": "provider.request", "parameters": {}},
                                             {"kind": "action.result", "operation": "assess"},
+                                            tool_event("start", "c1", name="exec", arguments={"command": "read"}),
+                                            tool_event("start", "c2", name="ops_check_later", arguments={}),
+                                            tool_event("complete", "c2", result_preview="wake set", ok=True),
+                                            tool_event("complete", "c1", result_preview="x" * 900, ok=False),
+                                            {
+                                                "kind": "runner.event",
+                                                "event_type": "Text",
+                                                "event": {"content": "done"},
+                                            },
                                         ],
                                     },
                                     {"kind": "runner.event", "event_type": "Text", "event": {"content": "hello"}},
@@ -71,6 +80,14 @@ def _run(tmp_path):
     return tmp_path / "runs", path
 
 
+def tool_event(phase, call, **event):
+    return {
+        "kind": "runner.event",
+        "event_type": "ToolEvent",
+        "event": {"phase": phase, "tool_call_id": call, "name": "", **event},
+    }
+
+
 def request(model):
     return {"kind": "provider.request", "turn_id": model, "parameters": {"model": model, "messages": [], "tools": []}}
 
@@ -91,7 +108,13 @@ def test_slim_keeps_the_shape_and_leaves_a_reference_for_each_cut_record(tmp_pat
         "ref": {"round": 0, "part": "sessions", "session": "family", "turn": 0, "index": 0},
     }
     assert child["records"] == [{"kind": "action.result", "operation": "assess"}]
-    assert child["counts"] == {"provider.request": 1, "action.result": 1}
+    assert child["counts"] == {"provider.request": 1, "action.result": 1, "runner.event": 5}
+    assert child["steps"] == [
+        {"tool": "exec", "arguments": '{"command": "read"}', "result": "x" * 400 + "...", "ok": False},
+        {"tool": "ops_check_later", "arguments": "{}", "result": "wake set", "ok": True},
+        {"text": "done"},
+    ]
+    assert child["steps_omitted"] == 0
     assert text["event"]["content"] == "hello"
     (held,) = run["rounds"][0]["holdout"]["quiet"][0]["execution"]["records"]
     assert held["ref"] == {"round": 0, "part": "holdout", "session": "quiet", "turn": 0, "index": 0}
@@ -364,7 +387,7 @@ def test_joined_rounds_carry_their_verdicts(tmp_path):
 
 
 def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_path):
-    assert annex(tmp_path) == {"standard": None, "boundaries": None, "origins": {}}
+    assert annex(tmp_path) == {"standard": None, "boundaries": None, "origins": {}, "research": None}
     induced = {"origin": "induced", "confirmed": False, "items": ["induced-1"]}
     settings = {"provenance": {"materials": {"induced-candidates": induced, "odd": "not a row"}, "items": []}}
     (tmp_path / "settings.json").write_text(json.dumps(settings))
@@ -372,8 +395,20 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
     (tmp_path / "settings.json").write_text(json.dumps({"provenance": None}))
     assert annex(tmp_path)["origins"] == {}
     criterion = {"id": "C1", "text": "Quote from the list", "source": "declared", "strength": "must_hold"}
-    trace = [{"event": "model.call", "label": "derive"}, {"event": "model.call", "label": "standard"}, {"event": "x"}]
-    standard = {"criteria": [{**criterion, "provenance": "check:C1"}, {"text": "no id"}], "derived_from": ["sop"]}
+    trace = [{"event": "model.call", "label": "standard"}, {"event": "x"}]
+    change = {
+        "id": "derived-1",
+        "op": "add",
+        "reason": "new_norm",
+        "explanation": "The norm states it.",
+        "criterion": {"text": "Name every source.", "quote": "name the source", "material": "sop", "section": "4"},
+    }
+    critic = {
+        "read": ["sop"],
+        "versions": [{"version": 1, "new_norms": ["sop"], "changes": [change, "odd"], "unchecked": []}],
+        "trace": [{"event": "model.call", "label": "critic"}],
+    }
+    standard = {"criteria": [{**criterion, "provenance": "check:C1"}, {"text": "no id"}], "critic": critic}
     (tmp_path / "standard.json").write_text(json.dumps({**standard, "trace": trace}))
     rows = [
         {"time": 1.0, "role": "curator", "event": "enter", "where": "curator", "hits": []},
@@ -384,9 +419,36 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
     (tmp_path / "boundaries.jsonl").write_text("\n".join(json.dumps(row) for row in rows) + "\n{broken\n")
     read = annex(tmp_path)
     assert read["standard"] == {
-        "criteria": [{**criterion, "provenance": "check:C1", "situation": "", "acceptance": ""}],
+        "criteria": [{**criterion, "provenance": "check:C1", "situation": "", "acceptance": "", "quote": ""}],
         "derived_from": ["sop"],
-        "calls": {"derive": 1, "standard": 1},
+        "revisions": [
+            {
+                "version": 1,
+                "new_norms": ["sop"],
+                "changes": [
+                    {
+                        "id": "derived-1",
+                        "op": "add",
+                        "reason": "new_norm",
+                        "explanation": "The norm states it.",
+                        "before": "",
+                        "text": "Name every source.",
+                        "quote": "name the source",
+                        "material": "sop",
+                    }
+                ],
+                "unchecked": [],
+            }
+        ],
+        "calls": {"standard": 1, "critic": 1},
+    }
+    earlier = {"criteria": [], "derived_from": ["sop"], "trace": [{"event": "model.call", "label": "derive"}]}
+    (tmp_path / "standard.json").write_text(json.dumps(earlier))
+    assert annex(tmp_path)["standard"] == {
+        "criteria": [],
+        "derived_from": ["sop"],
+        "revisions": [],
+        "calls": {"derive": 1},
     }
     audit = read["boundaries"]
     assert audit["total"] == 3 and [row["event"] for row in audit["rows"]] == ["enter", "violation", "enter"]
@@ -394,3 +456,122 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
     assert audit["counts"] == {"curator": {"enter": 1, "violation": 1}, "analyst": {"enter": 1}}
     (tmp_path / "standard.json").write_text("[")
     assert annex(tmp_path)["standard"]["error"].startswith("JSONDecodeError")
+
+
+def test_annex_reads_how_the_research_stage_ended_and_what_went_wrong(tmp_path):
+    folder = tmp_path / "information"
+    folder.mkdir()
+    (folder / "status.json").write_text(json.dumps({"status": "incomplete", "stop_reason": "error", "seconds": 276.0}))
+    section = {
+        "dimension": "role",
+        "text": "",
+        "coverage": "missing",
+        "reason": "Not assessed.",
+        "evidence": ["evidence-1", "evidence-3"],
+    }
+    evidence = [
+        {"id": "evidence-1", "channel": "tool", "origin": "brand-norms", "content": "Section 2.", "sources": []},
+        {"id": "evidence-2", "channel": "tool", "origin": "proposal-template", "content": "Chapters.", "sources": []},
+        {
+            "id": "evidence-3",
+            "channel": "research",
+            "origin": json.dumps({"attempt": "research-1", "finding": "researched-1", "question": "Which law?"}),
+            "content": json.dumps({"id": "researched-1", "text": "Article 9 bans superlatives."}),
+            "sources": ["https://example.org/law"],
+            "dimensions": ["knowledge"],
+        },
+        {"id": "evidence-4", "channel": "user", "origin": json.dumps({"question": "Budget?"}), "content": "50k."},
+        {"id": "evidence-5", "channel": "user", "origin": json.dumps({"question": "Launch date?"}), "content": "null"},
+        {
+            "id": "evidence-6",
+            "channel": "research",
+            "origin": json.dumps({"attempt": "research-2", "synthesis": True}),
+            "content": json.dumps({"synthesis": "Nothing public answers it."}),
+        },
+    ]
+    (folder / "evidence.json").write_text(json.dumps(evidence))
+    wave = [
+        {"group": 1, "status": "failed", "dimensions": ["knowledge"], "questions": ["Which law?"], "error": "no key"}
+    ]
+    (folder / "wave-1.json").write_text(json.dumps(wave))
+    result = {
+        "snapshot": {"description": {"title": "Unfinished", "sections": [section], "resources": [], "unresolved": []}},
+        "review": {"accepted": False, "reason": "assess: submission budget exhausted", "issues": ["Complete it."]},
+        "stop_reason": "error",
+    }
+    (folder / "result.json").write_text(json.dumps(result))
+    trace = [
+        {"label": "assess", "event": "model.call", "call": 1},
+        {"label": "assess", "event": "query", "tool": "read_file"},
+        {"label": "assess", "event": "output.rejected", "error": "last call", "tools": ["read_file"], "charged": False},
+        {"label": "research", "event": "group.failed", "group": 2, "error_type": "ValueError"},
+        {"label": "compose", "event": "model.call", "call": 1},
+        {"label": "compose", "event": "submit_information"},
+        "odd",
+    ]
+    (folder / "trace.json").write_text(json.dumps(trace))
+    for name, models in (("acquisition", ["claude-sonnet-5-5", "claude-haiku-5-5"]), ("review", ["claude-sonnet-5-5"])):
+        (folder / "research-1" / name).mkdir(parents=True)
+        run = {"researcher": "claude", "model": "sonnet", "effort": "medium", "actual_models": models}
+        (folder / "research-1" / name / "run.json").write_text(json.dumps(run))
+    (folder / "research-1" / "notes.json").write_text(json.dumps({"model": "not a run"}))
+    research = annex(tmp_path)["research"]
+    assert research["status"] == "incomplete" and research["stop_reason"] == "error" and research["seconds"] == 276.0
+    assert research["researchers"] == [
+        {
+            "agent": "claude",
+            "asked": "sonnet",
+            "effort": "medium",
+            "models": ["claude-sonnet-5-5", "claude-haiku-5-5"],
+            "calls": 2,
+        }
+    ]
+    assert research["review"] == {
+        "accepted": False,
+        "reason": "assess: submission budget exhausted",
+        "issues": ["Complete it."],
+    }
+    assert research["sections"] == [
+        {
+            "dimension": "role",
+            "coverage": "missing",
+            "text": "",
+            "reason": "Not assessed.",
+            "evidence": 2,
+            "channels": ["research", "tool"],
+        }
+    ]
+    assert research["channels"] == {"tool": 2, "research": 2, "user": 2}
+    assert [(row["kind"], row["question"], row["text"], row["sources"]) for row in research["evidence"]] == [
+        ("finding", "Which law?", "Article 9 bans superlatives.", ["https://example.org/law"]),
+        ("answer", "Budget?", "50k.", []),
+        ("", "Launch date?", "", []),
+        ("synthesis", "", "Nothing public answers it.", []),
+    ]
+    assert research["groups"] == [
+        {
+            "wave": "1",
+            "group": 1,
+            "status": "failed",
+            "dimensions": ["knowledge"],
+            "questions": ["Which law?"],
+            "error": "no key",
+            "admitted": 0,
+            "refused": 0,
+            "withheld": 0,
+            "unanswered": 0,
+            "seconds": None,
+        }
+    ]
+    assert research["stages"] == [
+        {"stage": "assess", "calls": 1, "queries": 1, "submitted": False},
+        {"stage": "research", "calls": 0, "queries": 0, "submitted": False},
+        {"stage": "compose", "calls": 1, "queries": 0, "submitted": True},
+    ]
+    assert research["trouble"] == [
+        {"stage": "assess", "event": "output.rejected", "error": "last call", "tools": ["read_file"], "charged": False},
+        {"stage": "research", "event": "group.failed", "error": "group 2: ValueError", "tools": [], "charged": True},
+    ]
+    assert research["errors"] == []
+    (folder / "result.json").write_text("{")
+    assert annex(tmp_path)["research"]["errors"][0].startswith("result.json: JSONDecodeError")

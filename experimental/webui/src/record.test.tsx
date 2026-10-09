@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, test, vi } from 'vitest'
 
 import {
-  chainLabel, changesOf, columns, costLabel, evidenceCount, groupCurations, handedAfter, landed, ledgerMatrix, mechanismOf, modelLine,
+  chainLabel, changesOf, columns, costLabel, evidenceCount, groupCurations, handedAfter, landed, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, differingRoles,
   normalizeRecord, quotesOf, requirementsOf, roundSummaries, settle, statusOf, versionLabel,
 } from './record'
 import { RecordView } from './views/Record'
@@ -20,7 +20,7 @@ const raw = {
     status: 'error',
     error: 'stopped by the suite: spend passed the $40 budget',
     chain: 'staged',
-    settings: { chain: 'staged', models: { employee: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', analyst: 'deepseek/deepseek-flash', subagents: 'z-ai/glm-5.3' }, rounds: 3 },
+    settings: { chain: 'staged', models: { partner: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', analyst: 'deepseek/deepseek-flash', 'sub-harness': 'z-ai/glm-5.3' }, efforts: { partner: 'low', curator: 'high', analyst: 'high' }, rounds: 3 },
     revisions: ['198e3eca4c09a1a8be51', A1, A2],
     suite: { status: 'error', stopped: 'spend passed the $40 budget', notes: [] },
     warnings: [],
@@ -159,7 +159,7 @@ const raw = {
       status: 'not_exercised',
     },
   ],
-  cost: { total: 38.456, by_part: { simulation: 4.1, employee: 2.2, subagents: 32.156 }, source: 'suite-summary.json' },
+  cost: { total: 38.456, by_part: { simulation: 4.1, employee: 2.2, subagents: 32.156 }, source: 'suite-summary.json', quota: { research: 2.8 } },
 }
 
 const record = normalizeRecord(raw)
@@ -192,9 +192,18 @@ describe('the record as read', () => {
     expect(chainLabel(['documents', 'by-stage'])).toBe('documents / by-stage')
     expect(chainLabel({ label: 'examples' })).toBe('examples')
     expect(chainLabel(null)).toBe('')
-    expect(modelLine(record.run.settings.models)).toBe('employee & curator deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')
-    expect(modelLine({ employee: 'z-ai/glm-5.3-flashx', curator: 'z-ai/glm-5.3' }, true)).toBe('employee glm-5.3-flashx · curator glm-5.3 · sub-harness default')
+    expect(modelLine(record.run.settings.models)).toBe('partner, curator, analyst deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')
+    expect(modelLine({ partner: 'z-ai/glm-5.3-flashx', curator: 'z-ai/glm-5.3', judge: 'z-ai/glm-5.3' }, true)).toBe('glm-5.3-flashx · curator, judge glm-5.3')
+    expect(modelLine({ employee: 'e/one', subagents: null })).toBe('employee e/one')
     expect(modelLine({})).toBe('')
+    expect(researchLine({ channel: 'claude', model: 'sonnet', effort: 'medium', budget: 1 })).toBe('claude · sonnet · medium · at most $1.00 a call')
+    expect(researchLine({ channel: 'exchange', replayed: true })).toBe('exchange · replayed from an earlier run')
+    expect(researchLine(undefined)).toBe('')
+    const choices = roleChoices(record.run.settings.models, record.run.settings.efforts)
+    expect(choices.map((c) => [c.role, c.effort])).toEqual([['partner', 'low'], ['curator', 'high'], ['analyst', 'high'], ['sub-harness', '']])
+    const stronger = choices.map((c) => (c.role === 'curator' ? { ...c, model: 'openai/gpt-6.1-sol' } : c))
+    expect(differingRoles(choices, stronger)).toEqual([{ role: 'curator', left: 'deepseek-flash high', right: 'gpt-6.1-sol high' }])
+    expect(differingRoles(choices, choices.slice(0, 1))[0]).toEqual({ role: 'curator', left: 'deepseek-flash high', right: 'not recorded' })
     expect(handedAfter(record, 2)).toEqual(['brand-design-guide'])
     expect(handedAfter(record, 1)).toEqual([])
     expect(costLabel(38.456)).toBe('$38.46')
@@ -366,8 +375,18 @@ test('the record view shows the header, the ledger and a cell\'s chain of eviden
   render(<RecordView runId="staged-01/r" live={false} onTrial={trial} onRemark={() => undefined} />)
   expect(await screen.findByText('Knowledge-sedimentation ledger')).toBeTruthy()
   expect(screen.getByText('staged', { selector: 'code.chainv' })).toBeTruthy()
-  expect(screen.getByText('employee & curator deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')).toBeTruthy()
+  expect(screen.getByText('partner, curator, analyst deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')).toBeTruthy()
+  const roles = screen.getByText("Each model role's model and effort (4)").closest('details') as HTMLDetailsElement
+  roles.open = true
+  fireEvent(roles, new Event('toggle'))
+  expect(within(document.querySelector('.rroles') as HTMLElement).getAllByRole('row').map((row) => row.textContent)).toEqual([
+    'partnerdeepseek/deepseek-flashlow',
+    'curatordeepseek/deepseek-flashhigh',
+    'analystdeepseek/deepseek-flashhigh',
+    'sub-harnessz-ai/glm-5.3its own configuration',
+  ])
   expect(screen.getByText('$38.46')).toBeTruthy()
+  expect(screen.getByText(/^research \$2\.80 at API prices, run under a subscription login/)).toBeTruthy()
   expect(screen.getByText('spend passed the $40 budget')).toBeTruthy()
   expect(screen.getByText('/runs/staged-01/record/bundle-1')).toBeTruthy()
   expect(screen.getByText('+1 handed over', { selector: 'th .announced' })).toBeTruthy()
