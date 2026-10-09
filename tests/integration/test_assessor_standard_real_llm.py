@@ -5,7 +5,8 @@ from pathlib import Path
 
 import pytest
 
-from experimental.assessor.standard import Standard, StandardAssessor
+from experimental.assessor.builder import RubricBuilder
+from experimental.assessor.standard import Assessor, Standard
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.protocols import Exchange
 from raven.core.config_stack import load_runtime_config
@@ -47,7 +48,14 @@ async def test_the_automatic_assessor_derives_from_a_norm_and_judges_a_breach(tm
             ],
         }
     ]
-    assessor = StandardAssessor(provider, standard, norms={"consultation-rules": NORM}, model=model, timeout=300)
+    assessor = Assessor(
+        provider,
+        standard,
+        norms={"consultation-rules": NORM},
+        model=model,
+        timeout=300,
+        builder=RubricBuilder(model=model, timeout=300),
+    )
     assessor.sediment(history)
     sessions = {
         "careful": [
@@ -63,8 +71,10 @@ async def test_the_automatic_assessor_derives_from_a_norm_and_judges_a_breach(tm
     }
     signal = await assessor.evaluate(sessions)
     by_id = {item.id: item for item in signal.items}
-    derived = [criterion for criterion in assessor.standard.criteria if criterion.source == "derived"]
-    assert derived and all(criterion.provenance.startswith("material:consultation-rules") for criterion in derived)
+    derived = [criterion for criterion in assessor.standard.criteria if criterion.origin == "derived"]
+    assert derived and all(
+        criterion.basis.references[0].source.startswith("material:consultation-rules") for criterion in derived
+    )
     assert all(criterion.strength == "should" for criterion in derived)
     assert by_id["no-booking"].result == "fail" and by_id["no-booking"].session == "hasty"
     assert by_id["R1"].result == "fail" and by_id["R1"].session == "hasty"

@@ -19,7 +19,7 @@ from pydantic import TypeAdapter
 
 from raven.spine.message import ChatType, Source
 from raven.spine.scheduler import conversation_id
-from raven.spine.turn import TurnRequest
+from raven.spine.turn import AnswerlessTurnError, TurnRequest
 
 from ...audience import HEARD
 from ..harness import Artifact, Candidate, Validation
@@ -61,6 +61,18 @@ async def follow_up(busy, announcements, run_turn, *, poll=0.5):
             return
         request = announcements.get_nowait()
         await run_turn(request if request.turn_id else replace(request, turn_id=uuid4().hex))
+
+
+async def trial_turn(run_turn, turn, follow) -> dict:
+    """The outcome of one trial turn, then `follow` for the work the turn started. Raven ends a turn the model never
+    answered with `AnswerlessTurnError`; that is the worker's outcome for the turn, kept for the assessors like a
+    timed-out one (`Exchange.stopped`), not a fault of the worker, so nothing follows it."""
+    try:
+        outcome = await run_turn(turn)
+    except AnswerlessTurnError as exc:
+        return {"answerless": True, "error": str(exc), "explicit_reply": False}
+    await follow()
+    return plain(outcome)
 
 
 def _serve(
@@ -244,14 +256,13 @@ def _serve(
 
                         child_before = await snapshots(children)
                         try:
-                            outcome = await run_turn(turn)
-                            await follow_up(busy, announcements, run_turn)
+                            outcome = await trial_turn(run_turn, turn, lambda: follow_up(busy, announcements, run_turn))
                             await record_children(
                                 children, child_before, recorder, conversation_id(turn), recorder.rows[offset:]
                             )
                         finally:
                             recorder.turn_id = None
-                        data = {"events": events, "records": recorder.rows[offset:], "outcome": plain(outcome)}
+                        data = {"events": events, "records": recorder.rows[offset:], "outcome": outcome}
                     else:
                         raise ValueError(f"unknown worker operation: {operation}")
                     _send(connection, {"ok": True, "data": data})
@@ -285,7 +296,7 @@ def _serve(
 class Execution:
     """One turn's evidence; `deliverables` are copies of the files the turn handed over through deliver_files."""
 
-    # Who may receive each field (experimental.audience): a turn's evidence is heard by the party that
+    # Who may receive each field (experimental.audience): a turn's evidence is heard by the counterpart that
     # judges it, the Analyst and the Curator.
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
         name: HEARD for name in ("turn_id", "events", "records", "outcome", "artifact_id", "deliverables")

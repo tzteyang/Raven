@@ -66,7 +66,7 @@ export function RequirementBadges({ requirement }: { requirement: Requirement })
 }
 
 const BASIS: Record<string, [string, string]> = {
-  check: ['check', "A party's own check"],
+  check: ['check', "A counterpart's own check"],
   case: ['case', 'A dataset case'],
   requirement: ['regression', 'An earlier requirement held as a regression check; its wording restates what the Curator already holds'],
   material: ['from material', 'Drawn from a handed-over material; its wording restates what the Curator already holds'],

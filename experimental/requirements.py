@@ -1,8 +1,30 @@
 """Behavior requirements shared by the Analyst's feedback, simulation reviews and planning node requirements."""
 
+import hashlib
 from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field
+
+Authority = Literal["external", "model"]
+CriterionKind = Literal["gate", "guardrail", "quality"]
+
+
+class ExternalRequirement(BaseModel):
+    """An explicit reusable condition quoted from an external signal, including one already satisfied."""
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        name: frozenset({"analyst"}) for name in ("source", "quote", "kind", "situation")
+    }
+
+    source: str = Field(min_length=1)
+    quote: str = Field(min_length=1)
+    kind: CriterionKind
+    situation: str = ""
+
+    @property
+    def id(self) -> str:
+        return "external-" + hashlib.sha256(f"{self.source}\0{self.quote}".encode()).hexdigest()[:16]
 
 
 class Requirement(BaseModel):
@@ -15,7 +37,7 @@ class Requirement(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     # Who may receive each field (experimental.audience): a requirement is written for the Curator, its
-    # grounds for the party and the Analyst only.
+    # grounds for the counterpart and the Analyst only.
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
         **{
             name: frozenset({"analyst", "curator"})
@@ -34,7 +56,8 @@ class Requirement(BaseModel):
                 "materials",
             )
         },
-        "grounds": frozenset({"party", "analyst"}),
+        "grounds": frozenset({"counterpart", "analyst"}),
+        "authority": frozenset({"counterpart", "analyst"}),
     }
 
     id: str = ""
@@ -63,3 +86,4 @@ class Requirement(BaseModel):
         description="The judgements this rests on: assessor:<name>, check:<item id> or case:<id>.",
     )
     materials: tuple[str, ...] = Field(default=(), description="The handed-over materials this draws on, by name.")
+    authority: Authority = Field(default="model", description="Original requirement authority, assigned by the host.")

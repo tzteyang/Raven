@@ -10,6 +10,7 @@ from pathlib import Path
 
 from raven.agent.tools.registry import admit_tool
 from raven.config.raven import LocalDirConfig
+from raven.contracts.tool import Tool
 from raven.memory_engine.skill_forge.catalog import render_skill_body
 
 from ...harness.artifact import relative_path
@@ -22,6 +23,20 @@ from ...harness.resources import (
     ToolContribution,
 )
 from ..materialize import load_factory
+
+
+def admitted_name(tool) -> str:
+    """The name a contributed tool registers under, once it is a native `Tool`.
+
+    Native admission accepts any object with the four authored members, but dispatch then calls the behaviour the
+    `Tool` base supplies (`blocking_for`, `cast_params`, ...), so an object that only looks like a tool registers and
+    fails on its first call. Requiring the base turns that runtime failure into a registration refusal."""
+    if not isinstance(tool, Tool):
+        raise TypeError(
+            f"a contributed tool must be an instance of a class that explicitly inherits raven.contracts.tool.Tool; "
+            f"got {type(tool).__name__}"
+        )
+    return admit_tool(tool).name
 
 
 def package_files(root: Path) -> dict[str, tuple[bytes | None, int]]:
@@ -179,7 +194,7 @@ class CapabilityCatalog:
                     if self.resolve_interaction is None:
                         raise ValueError("this host has no interaction resolver")
                     tool = self.resolve_interaction(value.interaction)
-                if tool is not None and admit_tool(tool).name != value.name:
+                if tool is not None and admitted_name(tool) != value.name:
                     raise ValueError("declared tool name differs from its actual implementation")
             else:
                 files = self._skill_files(value)
@@ -257,7 +272,7 @@ class CapabilityCatalog:
                 raise ValueError("deferred tool factories require host-supplied PluginContext")
             constructed = {name: factory(context) for name, factory in self.deferred_tools.items()}
             for name, tool in constructed.items():
-                if admit_tool(tool).name != name:
+                if admitted_name(tool) != name:
                     raise ValueError(f"deferred tool name differs from its contribution: {name}")
             self.tools.update(constructed)
         for name, tool in self.tools.items():
@@ -265,7 +280,7 @@ class CapabilityCatalog:
                 raise ValueError(f"capability tool is disabled by the host: {name}")
             if runtime.loop.tools.get(name) is not None:
                 raise ValueError(f"capability tool would replace an existing tool: {name}")
-            if admit_tool(tool).name != name:
+            if admitted_name(tool) != name:
                 raise ValueError(f"registered capability tool identity changed: {name}")
         if self.skill_root is not None:
             metas = runtime.loop.context.skills.registry.list_all()

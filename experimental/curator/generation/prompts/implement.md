@@ -6,7 +6,7 @@ Produce the checked plan's executable strategy behavior and necessary resources,
 
 ## Inputs
 
-Read plan, selected_contracts and their knowledge in full. Use current_authored for all active values and file contents, not just the selected bindings; history retains earlier decisions, queries and checks, including failures and obsolete proposals. Use worker facts and registered queries for missing runtime conditions or baseline code.
+Read plan, selected_contracts and their knowledge in full. Use current_authored for all active values and file contents, not just the selected bindings; history retains earlier decisions and checks, including failures and obsolete proposals, and indexes earlier reads: repeat a read when the implementation depends on its text. Use worker facts and registered queries for missing runtime conditions or baseline code.
 
 The selected strategy contract determines its factory input, callable signature, result shape and lifetime. Host services can construct owned native components with different contracts. Do not transfer a strategy owner's construction or lifetime assumptions to a Participant, plugin, service or context engine.
 

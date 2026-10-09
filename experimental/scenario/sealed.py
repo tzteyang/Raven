@@ -18,11 +18,17 @@ import hashlib
 import re
 import unicodedata
 from collections.abc import Iterable
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 
 from .contract import ROLES, Role, Scenario, contents
 
 WINDOW = 20
+# A copied passage: this many consecutive sealed windows, about thirty characters of Chinese or twenty words of
+# English in a row (see `Sealed.passages`).
+PASSAGE_SPAN = 10
+# What a window may carry beside words someone was entitled to say and still be their restatement (see
+# `Sealed.without`): a few characters of Chinese or two words of English, such as who said them.
+BESIDE = 5
 _CJK = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af\U00020000-\U0002ffff"
 _UNITS = re.compile(rf"[{_CJK}]|[^\W_{_CJK}]+")
 _CHARACTER = re.compile(rf"[{_CJK}]")
@@ -64,11 +70,10 @@ def _digest(piece: str) -> int:
     return int.from_bytes(hashlib.blake2b(piece.encode(), digest_size=8).digest(), "big")
 
 
-def windows(text: str, size: int = WINDOW) -> frozenset[int]:
-    """Hashes of every shortest run of units weighing at least `size`; a lighter text has none (see `phrases`)."""
-    found = units(text)
+def _spans(found: list[str], size: int) -> list[tuple[int, int, int]]:
+    """(start, end, hash) of every shortest run of `found` weighing at least `size`, in order."""
     weights = [_weight(unit) for unit in found]
-    hashes: set[int] = set()
+    spans: list[tuple[int, int, int]] = []
     end = total = 0
     for start in range(len(found)):
         while end < len(found) and total < size:
@@ -76,9 +81,19 @@ def windows(text: str, size: int = WINDOW) -> frozenset[int]:
             end += 1
         if total < size:
             break
-        hashes.add(_digest(_SEPARATOR.join(found[start:end])))
+        spans.append((start, end, _digest(_SEPARATOR.join(found[start:end]))))
         total -= weights[start]
-    return frozenset(hashes)
+    return spans
+
+
+def window_sequence(text: str, size: int = WINDOW) -> list[int]:
+    """Hashes of every shortest run of units weighing at least `size`, in the text's order; a lighter text has none
+    (see `phrases`)."""
+    return [digest for _, _, digest in _spans(units(text), size)]
+
+
+def windows(text: str, size: int = WINDOW) -> frozenset[int]:
+    return frozenset(window_sequence(text, size))
 
 
 def sealable(token: str) -> bool:
@@ -88,12 +103,17 @@ def sealable(token: str) -> bool:
 @dataclass(frozen=True)
 class Sealed:
     """`tokens` are identifiers matched whole; `windows` are hashed windows of long texts; `phrases` are texts
-    lighter than a window, normalised, matched as whole runs of units."""
+    lighter than a window, normalised, matched as whole runs of units; `passages` are windows of texts sealed only
+    against copying (`copying`): a text holds one when it shares `span` of them in a row, so a clause it restates in
+    the same order from something the role holds is not taken for the long text it happens to match."""
 
     tokens: frozenset[str] = frozenset()
     windows: frozenset[int] = frozenset()
     phrases: frozenset[str] = frozenset()
     size: int = WINDOW
+    passages: frozenset[int] = frozenset()
+    span: int = PASSAGE_SPAN
+    sources: tuple[tuple[str, ...], ...] = ()
 
     @classmethod
     def of(
@@ -106,6 +126,7 @@ class Sealed:
             shown_texts.append(normalize(text))
         sealed: set[int] = set()
         phrases: set[str] = set()
+        sources: list[tuple[str, ...]] = []
         for text in hidden:
             normal = normalize(text)
             if not normal:
@@ -115,21 +136,52 @@ class Sealed:
                     phrases.add(normal)
             else:
                 sealed |= windows(text, size)
+                sources.append(tuple(units(text)))
         return cls(
             frozenset(fold(token) for token in tokens if sealable(token)),
             frozenset(sealed - shown_windows),
             frozenset(phrases),
             size,
+            sources=tuple(sources),
         )
+
+    def copying(self, texts: Iterable[str], *, visible: Iterable[str] = ()) -> "Sealed":
+        """This sealing with `texts` added against copying: a text of at least `span` windows seals only a run of
+        `span` of them (`passages`), a shorter one seals as `of` would, whole; what occurs in `visible` stays free."""
+        shown: set[int] = set()
+        seen: list[str] = []
+        for text in visible:
+            shown |= windows(text, self.size)
+            seen.append(normalize(text))
+        passages, strict, phrases = set(self.passages), set(self.windows), set(self.phrases)
+        for text in texts:
+            sequence = window_sequence(text, self.size)
+            if len(sequence) >= self.span:
+                passages |= set(sequence) - shown
+            elif sequence:
+                strict |= set(sequence) - shown
+            elif (normal := normalize(text)) and not any(normal in other for other in seen):
+                phrases.add(normal)
+        return replace(self, windows=frozenset(strict), phrases=frozenset(phrases), passages=frozenset(passages))
+
+    def _copies(self, text: str) -> bool:
+        run = 0
+        for digest in window_sequence(text, self.size) if self.passages else ():
+            run = run + 1 if digest in self.passages else 0
+            if run >= self.span:
+                return True
+        return False
 
     def hits(self, text: str) -> list[str]:
         """The sealed tokens found in `text`, however it writes their case, width or hyphens, and `<sealed text>`
-        once when a sealed window or phrase occurs in it."""
+        once when a sealed window or phrase, or a run of `span` passage windows, occurs in it."""
         folded = fold(text)
         found = [token for token in sorted(self.tokens) if re.search(rf"(?<![\w-]){re.escape(token)}(?![\w-])", folded)]
         normal = normalize(text)
-        if (self.windows and self.windows & windows(text, self.size)) or any(
-            phrase in normal for phrase in self.phrases
+        if (
+            (self.windows and self.windows & windows(text, self.size))
+            or any(phrase in normal for phrase in self.phrases)
+            or self._copies(text)
         ):
             found.append("<sealed text>")
         return found
@@ -140,29 +192,55 @@ class Sealed:
         in such words, such as a conversant describing its own situation, is not sealed against it; the identifiers
         stay sealed. A stream also counts joined, because whoever answers one question per message is restated in
         one sentence across the message boundaries; two speakers are never joined, so halves of a hidden text said
-        by two conversants stay sealed."""
+        by two conversants stay sealed. A hidden window that is mostly such words, with at most `BESIDE` of its weight
+        outside them (a quoted line with the few words that introduce it in the hidden text), is spared too: quoting
+        what was said is not a leak of the words around it."""
         shown: set[int] = set()
         normals: list[str] = []
         for stream in streams:
             said = [stream] if isinstance(stream, str) else list(stream)
             for text in (*said, "\n".join(said)):
                 shown |= windows(text, self.size)
+                shown |= self._beside(units(text))
                 normals.append(normalize(text))
-        return Sealed(
-            self.tokens,
-            frozenset(self.windows - shown),
-            frozenset(phrase for phrase in self.phrases if not any(phrase in normal for normal in normals)),
-            self.size,
+        return replace(
+            self,
+            windows=frozenset(self.windows - shown),
+            phrases=frozenset(phrase for phrase in self.phrases if not any(phrase in normal for normal in normals)),
+            passages=frozenset(self.passages - shown),
         )
 
+    def _beside(self, said: list[str]) -> set[int]:
+        """The hidden windows that overlap an occurrence of `said` in a hidden text with at most `BESIDE` of their
+        weight outside it."""
+        found: set[int] = set()
+        if not said:
+            return found
+        length, said, first = len(said), tuple(said), said[0]
+        for source in self.sources:
+            spans = None
+            for at in range(len(source) - length + 1):
+                if source[at] != first or source[at : at + length] != said:
+                    continue
+                spans = spans if spans is not None else _spans(list(source), self.size)
+                for start, end, digest in spans:
+                    if end <= at or start >= at + length:
+                        continue
+                    outside = sum(_weight(unit) for unit in source[start:at]) + sum(
+                        _weight(unit) for unit in source[at + length : end]
+                    )
+                    if outside <= BESIDE:
+                        found.add(digest)
+        return found
+
     def __bool__(self) -> bool:
-        return bool(self.tokens or self.windows or self.phrases)
+        return bool(self.tokens or self.windows or self.phrases or self.passages)
 
 
 def sealed_for(scenario: Scenario, role: Role) -> Sealed:
     """What `role` must not receive of this scenario, minus what it may: checks, hidden cases and their expected
     answers, the evaluation aids and the scenario's own name. The onboarding and handover wording is never sealed:
-    it is what the party says, heard by whoever it is said to and free to be relayed; the schedule it belongs to has
+    it is what the counterpart says, heard by whoever it is said to and free to be relayed; the schedule it belongs to has
     no text of its own. A prior record is not fingerprinted here: what of it a role receives is scanned with these
     fingerprints when a session opens with it (`experimental.iteration.session`)."""
     if role not in ROLES:

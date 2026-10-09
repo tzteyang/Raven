@@ -44,12 +44,8 @@ def test_one_simulated_round_crosses_no_boundary(tmp_path):
         "2",
         "--cards",
         "student",
-        "--curator-effort",
-        os.environ.get("SIMULATION_TEST_EFFORT", "low"),
-        "--simulation-effort",
-        "low",
-        "--traveller-effort",
-        "low",
+        "--effort",
+        f"curator={os.environ.get('SIMULATION_TEST_EFFORT', 'low')}",
         "--standard",
         "declared",
         "--curator-calls",
@@ -68,5 +64,7 @@ def test_one_simulated_round_crosses_no_boundary(tmp_path):
     assert run["status"] == "finished" and len(run["rounds"]) == 1, (run["status"], run.get("stop"), run.get("error"))
     entered = {(row["role"], row["event"]) for row in rows}
     assert {("curator", "enter"), ("curator", "leave"), ("analyst", "enter"), ("analyst", "leave")} <= entered
-    assert {("conversant", "enter"), ("party", "enter")} <= entered, "the customer and the owner call in their own"
+    assert {("conversant", "enter"), ("counterpart", "enter")} <= entered, (
+        "the customer and the owner call in their own"
+    )
     assert run["history"][0]["diagnoses"], "the onboarding entry keeps the Curator's diagnoses"

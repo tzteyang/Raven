@@ -6,7 +6,7 @@ Turn the selected behavior and bindings into a concrete mechanism that implement
 
 ## Inputs
 
-Use selection, the current code and bindings, selected_contracts, host facts and history. Read the expanded contracts and query missing mechanisms before designing; initial selection is not proof that a path works. Reuse existing components whose behavior and state are compatible with the proposal.
+Use selection, the current code and bindings, selected_contracts with the shared_knowledge they name, host facts and history. Each contract also lists references: documents and types read on demand with `read_source` by the `name` given, each with what it answers and when it matters. Design from what is supplied; open a reference or query a mechanism only when the plan depends on what it settles, and read the part that settles it. Initial selection is not proof that a path works. Reuse existing components whose behavior and state are compatible with the proposal.
 
 ## Work
 

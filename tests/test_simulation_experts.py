@@ -267,4 +267,6 @@ def test_cli_accepts_a_task_with_no_product_interaction_input(tmp_path, monkeypa
     expert, options = calls[0]
     assert expert is None and options["task"].text == "Review project evidence."
     assert options["materials"] == (material,) and options["research_references"] == (guide,)
+    assert options["limits"].stage_queries == 12 and options["limits"].max_queries == 24
+    assert options["limits"].call_timeout == 600
     assert json.loads(capsys.readouterr().out)["status"] == "completed"

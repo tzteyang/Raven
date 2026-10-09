@@ -91,10 +91,10 @@ def native_sources() -> dict[str, dict]:
     }
     sources = {name: entry for name, symbol in symbols.items() if (entry := source_entry(symbol)) is not None}
     for target in catalogue():
-        for index, item in enumerate(target.knowledge):
+        for name, item in target.sources().items():
             entry = file_source(item) if isinstance(item, Path) else source_entry(item)
             if entry:
-                sources[f"{target.name}.knowledge.{index}"] = entry
+                sources[name] = entry
     for path in (Path(__file__).parents[1] / "reference").glob("*.md"):
         sources[f"reference.{path.stem}"] = file_source(path)
     return sources

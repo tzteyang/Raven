@@ -1,11 +1,11 @@
-"""The Assessor protocol; `experimental.iteration.run` calls every assessor once per round."""
+"""The AssessorProtocol interface; `experimental.iteration.run` calls every assessor once per round."""
 
 from typing import Protocol
 
 from ..iteration.protocols import Sessions, Signal
 
 
-class Assessor(Protocol):
+class AssessorProtocol(Protocol):
     """Whoever holds a standard the worker never sees and measures a round's sessions against it.
 
     The standard (criteria, materials, references, held-out cases) is the assessor's own state; the loop sees only the

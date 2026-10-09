@@ -52,10 +52,15 @@ def test_catalogue_exposes_only_four_strategy_implementations_and_preparation_kn
         assert referenced is host.target(row["target"]).contract
         validator(row["schema"])
         assert "factory" in row["schema"]["properties"]
-        assert any("PreparationRequest" in item["content"] for item in row["knowledge"])
-        assert any("class StrategyInference" in item["content"] for item in row["knowledge"])
-        assert any("# Single-step strategy inference" in item["content"] for item in row["knowledge"])
-        assert any("candidate preparation" in item["content"].lower() for item in row["knowledge"])
+        assert any(item["source"].endswith("pitfalls/artifact.md") for item in row["knowledge"])
+        listed = {item["source"]: item for item in row["references"]}
+        for source in ("preparation:PreparationRequest", "inference:StrategyInference"):
+            item = next(item for name, item in listed.items() if name.endswith(source))
+            assert item["purpose"] and item["chars"] > 0 and item["name"].startswith(f"{row['target']}.knowledge.")
+        assert any(name.endswith("reference/inference.md") for name in listed)
+        assert any(name.endswith("reference/preparation.md") for name in listed)
+        target = host.target(row["target"])
+        assert {item["name"] for item in row["references"]} <= set(target.sources())
 
 
 @pytest.mark.parametrize(
@@ -243,3 +248,26 @@ def test_generic_result_validation_remains_typed_and_phase_limited():
         target.parse_result({"accepted": True}, phase="sent")
     with pytest.raises(ValueError):
         target.parse_result({"accepted": "yes"}, phase="proposal")
+
+
+def test_listed_references_need_a_purpose_and_read_by_the_names_the_target_gives_them(host, tmp_path):
+    from experimental.curator.harness.declaration import Reference
+
+    page = tmp_path / "page.md"
+    page.write_text("# Page\n\nbody\n")
+    with pytest.raises(ValueError, match="needs a purpose"):
+        Reference(page)
+    with pytest.raises(ValueError, match="needs a purpose"):
+        Reference(lambda: None)
+    listed = Reference(page, "What the page answers; read when it matters.").describe()
+    assert listed == {"source": str(page), "purpose": "What the page answers; read when it matters.", "chars": 13}
+    for target in host.targets:
+        names = list(target.sources())
+        inlined, listed = names[: len(target.knowledge)], names[len(target.knowledge) :]
+        described = target.describe()
+        assert [row["name"] for row in described["references"]] == listed
+        assert len(inlined) == len(described["knowledge"]) and len(set(names)) == len(names)
+        assert all(name.startswith(f"{target.name}.knowledge.") for name in names)
+        assert not {row["source"] for row in described["knowledge"]} & {
+            row["source"] for row in described["references"]
+        }

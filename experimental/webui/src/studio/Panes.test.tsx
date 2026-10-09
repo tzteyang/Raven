@@ -1,6 +1,6 @@
 /* The ledger pane shows the loop's own join: a composite curation's child
    changes and diagnoses sit beside the root's, each marked with its harness.
-   A material the party did not simply give carries its origin. */
+   A material the counterpart did not simply give carries its origin. */
 
 import { cleanup, render, screen, within } from '@testing-library/react'
 import { afterEach, expect, test } from 'vitest'
@@ -52,7 +52,7 @@ test('a composite curation lists every scope of a requirement, the child ones ma
   expect(within(history).getAllByText('planning.strategy')).toHaveLength(2)
 })
 
-test('a material induced before the cultivation says so and whether the party confirmed it', () => {
+test('a material induced before the cultivation says so and whether the counterpart confirmed it', () => {
   const material = { name: 'induced-candidates', kind: 'norm', files: ['uploads/induced-candidates/SKILL.md'] }
   const { container } = render(<HandoverChip material={material} origin={{ origin: 'induced', confirmed: false, items: ['induced-2'] }} />)
   const mark = container.querySelector('.st-origin') as HTMLElement

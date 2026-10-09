@@ -7,6 +7,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from experimental.curator.generation.context.collect import collect
+from experimental.curator.generation.context.render import REREAD
 from experimental.curator.generation.run import GenerationError, Limits
 from experimental.curator.generation.run import generate as generate_from
 from experimental.curator.harness import Attributed, Attribution, Declaration, Diagnosis, Validation
@@ -360,7 +361,8 @@ async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(
     assert "# Implement the selected plan" in repair_text and "# Repair from host validation" in repair_text
     for request in provider.requests[2:]:
         data = packet(request)
-        assert next(row for row in data["history"] if row["event"] == "query")["result"]["text"] == "native protocol"
+        read = next(row for row in data["history"] if row["event"] == "query")
+        assert read["result"] == {"indexed": True, "chars": len("native protocol"), "reread": REREAD}
         assert [item["target"] for item in data["selected_contracts"]] == ["planning.strategy"]
     assert packet(provider.requests[4])["validation_errors"]
 
@@ -430,6 +432,64 @@ def test_artifact_wire_normalization_preserves_file_text_and_authority(context):
         parse(context.declaration, selected, {"values": "[]"})
 
 
+def test_design_sends_knowledge_shared_by_several_selected_contracts_once(context):
+    from experimental.curator.generation.stages.design import materials
+
+    chosen = context.declaration.parse_selection(
+        selection("action.strategy", "capability.strategy"), ATTRIBUTED.attribution
+    )
+    data = materials(context, chosen)
+    shared = [item["source"] for item in data["shared_knowledge"]]
+    assert shared and len(shared) == len(set(shared))
+    for contract in data["selected_contracts"]:
+        assert contract["shared_knowledge"] and set(contract["shared_knowledge"]) <= set(shared)
+        assert not {item["source"] for item in contract["knowledge"]} & set(shared)
+    own = [item["source"] for contract in data["selected_contracts"] for item in contract["knowledge"]]
+    assert len(own) == len(set(own))
+    shared_references = [item["source"] for item in data["shared_references"]]
+    assert shared_references and len(shared_references) == len(set(shared_references))
+    for contract in data["selected_contracts"]:
+        assert not {item["source"] for item in contract["references"]} & set(shared_references)
+        assert all(item["name"] and item["purpose"] for item in contract["references"])
+    assert all(item["name"] and item["purpose"] for item in data["shared_references"])
+    inlined = {item["source"] for contract in data["selected_contracts"] for item in contract["knowledge"]}
+    inlined |= {item["source"] for item in data["shared_knowledge"]}
+    listed = {item["source"] for contract in data["selected_contracts"] for item in contract["references"]}
+    listed |= {item["source"] for item in data["shared_references"]}
+    assert inlined.isdisjoint(listed) and any(source.endswith("state:Task") for source in inlined)
+    alone = materials(
+        context, context.declaration.parse_selection(selection("action.strategy"), ATTRIBUTED.attribution)
+    )
+    assert alone["shared_knowledge"] == [] and alone["shared_references"] == []
+    assert alone["selected_contracts"][0]["knowledge"] and alone["selected_contracts"][0]["references"]
+
+
+def test_a_handed_over_expert_description_travels_as_a_material_of_every_stage(context, tmp_path):
+    from dataclasses import replace
+
+    from experimental.curator.generation.stages.shared import materials
+
+    page = tmp_path / "expert.md"
+    page.write_text("# Expert\n\nWhat the expert does.\n")
+    source = {"path": str(page), "start": 1, "end": 3, "digest": "d"}
+
+    def read_source(name, offset=0, length=12000, find=None):
+        text = page.read_text()
+        return {"source": name, "text": text[offset : offset + length], "next_offset": None}
+
+    handed = replace(
+        context,
+        sources={**context.sources, "upload.information/expert.md": source},
+        read_source=read_source,
+        feedback={"text": "build", "information": {"file": "uploads/information/expert.md", "version": "sha256:v"}},
+    )
+    information = materials(handed)["information"]
+    assert information["text"] == page.read_text() and information["version"] == "sha256:v"
+    assert information["source"] == "upload.information/expert.md" and information["digest"] == "d"
+    assert materials(context)["information"] is None
+    assert materials(replace(handed, feedback={"information": {"file": "elsewhere/expert.md"}}))["information"] is None
+
+
 def test_implementation_sees_only_the_selected_contracts_while_selection_lists_every_target(context):
     from experimental.curator.generation.stages.implement import materials
 
@@ -491,7 +551,8 @@ async def test_three_stages_preserve_diagnosis_queries_failures_and_concrete_des
     data = packet(implementation)
     assert data["plan"]["design"] == designed["design"]
     assert any(row.get("content") == note for row in data["history"])
-    assert any(row.get("result", {}).get("text") == "native protocol" for row in data["history"])
+    assert any(row.get("result", {}).get("indexed") for row in data["history"])
+    assert not any(row.get("result", {}).get("text") == "native protocol" for row in data["history"])
 
 
 @pytest.mark.asyncio
@@ -631,8 +692,9 @@ async def test_remaining_budget_tracks_queries_checks_and_repairs_across_stages(
         async def chat_with_retry(self, **kwargs):
             sent = kwargs["messages"]
             assert "# Remaining generation budget" not in sent[0]["content"]
-            assert sum("# Remaining generation budget" in str(row.get("content")) for row in sent) == 1
-            assert sent[-1]["role"] == "user"
+            notes = sum("# Remaining generation budget" in str(row.get("content")) for row in sent)
+            assert notes == 1 + sum(1 for earlier in self.sent if earlier[2] == sent[2])
+            assert sent[-1]["role"] == "user" and sent[-1]["content"].startswith("# Remaining generation budget")
             self.budgets.append(sent[-1]["content"].split("# Remaining generation budget", 1)[1])
             self.sent.append(sent)
             return await super().chat_with_retry(**kwargs)
@@ -659,12 +721,147 @@ async def test_remaining_budget_tracks_queries_checks_and_repairs_across_stages(
     for earlier, later in zip(provider.sent, provider.sent[1:]):
         assert later[:2] == earlier[:2]
         if earlier[2] == later[2]:
-            assert later[: len(earlier) - 1] == earlier[:-1]
+            assert later[: len(earlier)] == earlier
     for index, budget in enumerate(provider.budgets):
         assert f"including this response: {8 - index}" in budget
         assert f"Exploration tool calls: {4 if index < 2 else 3}" in budget
         assert f"Draft preflight checks: {2 if index < 4 else 1}" in budget
         assert f"failed final validation: {2 if index < 5 else 1}" in budget
+
+
+@pytest.mark.asyncio
+async def test_a_stage_that_spends_its_allowance_is_told_to_submit_and_the_next_stage_starts_afresh(context):
+    class BudgetProvider(Provider):
+        def __init__(self, *responses):
+            super().__init__(*responses)
+            self.budgets = []
+
+        async def chat_with_retry(self, **kwargs):
+            self.budgets.append(kwargs["messages"][-1]["content"])
+            return await super().chat_with_retry(**kwargs)
+
+    artifact = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
+    provider = BudgetProvider(
+        response("read_source", {"name": "loop"}),
+        response("read_source", {"name": "loop"}),
+        response("read_source", {"name": "loop"}),
+        response("submit_selection", selection("action.strategy")),
+        response("read_source", {"name": "loop"}),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", artifact),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    result = await generate(
+        context, provider, validate=validate, limits=Limits(max_calls=10, max_queries=6, stage_queries=2)
+    )
+    refused = [row for row in result.trace if row["event"] == "query.rejected"]
+    assert len(refused) == 1 and "stage's exploration allowance of 2" in refused[0]["result"]["error"]
+    assert [row["stage"] for row in result.trace if row["event"] == "query"] == ["select", "select", "design"]
+    assert "left in this stage: 2 of 2" in provider.budgets[0] and "More than half" not in provider.budgets[0]
+    assert "left in this stage: 1 of 2" in provider.budgets[1] and "More than half" in provider.budgets[1]
+    assert "left in this stage: 0 of 2" in provider.budgets[2]
+    assert "left in this stage: 2 of 2" in provider.budgets[4] and "Exploration tool calls: 4" in provider.budgets[4]
+
+
+@pytest.mark.asyncio
+async def test_the_stage_line_never_promises_more_queries_than_the_pool_holds(context):
+    class BudgetProvider(Provider):
+        def __init__(self, *responses):
+            super().__init__(*responses)
+            self.budgets = []
+
+        async def chat_with_retry(self, **kwargs):
+            self.budgets.append(kwargs["messages"][-1]["content"])
+            return await super().chat_with_retry(**kwargs)
+
+    provider = BudgetProvider(
+        response("read_source", {"name": "loop"}),
+        response("read_source", {"name": "loop"}),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    await generate(context, provider, validate=validate, limits=Limits(max_calls=8, max_queries=3, stage_queries=5))
+    assert "left in this stage: 3 of 5" in provider.budgets[0]
+    assert "left in this stage: 1 of 5" in provider.budgets[2]
+    assert "left in this stage: 1 of 5" in provider.budgets[3] and "Exploration tool calls: 1" in provider.budgets[3]
+
+
+def test_an_unset_stage_allowance_leaves_the_pool_as_the_only_cap():
+    assert Limits(max_queries=5).stage_allowance == 5 and Limits(max_queries=5, stage_queries=2).stage_allowance == 2
+    with pytest.raises(ValueError):
+        Limits(stage_queries=-1)
+
+
+def test_history_indexes_repeatable_reads_and_keeps_everything_else():
+    from experimental.curator.generation.context.render import history
+
+    trace = [
+        {"stage": "diagnose", "event": "model.call", "call": 1},
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "read_source",
+            "arguments": {"name": "loop"},
+            "result": {"text": "abc"},
+        },
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "grep",
+            "arguments": {"pattern": "x"},
+            "result": {"text": "m", "failed": False},
+        },
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "read_file",
+            "arguments": {"path": "p"},
+            "result": {"text": "missing", "failed": True},
+        },
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "read_source",
+            "arguments": {"name": "zz"},
+            "result": {"error": "unknown source"},
+        },
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "exec",
+            "arguments": {"command": "ls"},
+            "result": {"text": "a.py", "failed": False},
+        },
+        {
+            "stage": "diagnose",
+            "event": "query",
+            "tool": "read_source",
+            "arguments": {"name": "f"},
+            "result": {"source": "f", "matches": [{"text": "hit"}]},
+        },
+        {"stage": "validate", "event": "validation", "errors": ["e"], "observations": []},
+        {"stage": "implement", "event": "preflight", "arguments": {"values": {}}, "result": {"passed": False}},
+        {"stage": "select", "event": "submit_selection", "output": {"targets": []}},
+    ]
+    rows = history(trace)
+    assert [row["event"] for row in rows] == [e["event"] for e in trace if e["event"] != "model.call"]
+    assert rows[0]["result"] == {"indexed": True, "chars": 3, "reread": REREAD} and rows[0]["arguments"] == {
+        "name": "loop"
+    }
+    assert rows[1]["result"]["indexed"] and rows[1]["result"]["chars"] == 1
+    assert rows[2]["result"] == {"text": "missing", "failed": True}
+    assert rows[3]["result"] == {"error": "unknown source"}
+    assert rows[4]["result"] == {"text": "a.py", "failed": False}
+    assert rows[5]["result"]["indexed"] and rows[5]["result"]["chars"] > 0
+    assert rows[6:] == trace[7:]
 
 
 @pytest.mark.asyncio
@@ -719,6 +916,16 @@ def test_provider_reasoning_and_tool_metadata_survive_native_message_building():
     assert message["reasoning_content"] == "synthetic reasoning"
     assert message["thinking_blocks"] == response.thinking_blocks
     assert message["tool_calls"][0]["provider_specific_fields"] == {"tag": "opaque"}
+
+
+def test_a_degenerate_reply_text_goes_back_into_the_conversation_capped():
+    from experimental.curator.generation.context.render import ECHOED_CHARS, assistant_message
+
+    markup = "<invoke name=submit>" * 50_000
+    message = assistant_message(LLMResponse(content=markup, tool_calls=[ToolCallRequest("id", "query", {})]))
+    assert message["content"].startswith(markup[:ECHOED_CHARS]) and len(message["content"]) < ECHOED_CHARS + 100
+    assert message["tool_calls"][0]["function"]["name"] == "query"
+    assert assistant_message(LLMResponse(content="short", tool_calls=[]))["content"] == "short"
 
 
 @pytest.mark.asyncio
@@ -1064,7 +1271,8 @@ async def test_a_call_that_spent_its_output_thinking_is_followed_by_a_short_thin
 @pytest.mark.asyncio
 async def test_a_curator_call_on_a_model_that_needs_breakpoints_marks_the_tail_so_the_next_call_reads_it(context):
     """Without breakpoints each call is written to the cache again and never read; with marks only on the tail, each
-    new stage writes the curation's materials again."""
+    new stage writes the curation's materials again. The tail mark sits on the budget note, which stays in the
+    conversation, so the next call reads everything this one sent."""
     provider = Provider(
         response("submit_selection", selection("action.strategy")),
         response("submit_plan", plan("action.strategy")),
@@ -1085,7 +1293,8 @@ async def test_a_curator_call_on_a_model_that_needs_breakpoints_marks_the_tail_s
     for request in provider.requests:
         messages = request["messages"]
         marked = [index for index, message in enumerate(messages) if "cache_control" in json.dumps(message)]
-        assert marked == [0, 1, len(messages) - 2] and messages[0].get("cache_marks_placed")
+        assert marked == [0, 1, len(messages) - 1] and messages[0].get("cache_marks_placed")
+        assert messages[-1]["content"][0]["text"].startswith("# Remaining generation budget")
         assert "cache_control" in json.dumps(request["tools"][-1])
     plain = Provider(response("submit_selection", selection("action.strategy")))
     with pytest.raises(GenerationError):

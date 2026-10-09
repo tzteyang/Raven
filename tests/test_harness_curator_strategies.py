@@ -232,6 +232,28 @@ async def test_capability_selection_uses_active_resources_and_invalid_names_pres
 
 
 @pytest.mark.asyncio
+async def test_the_validation_probe_runs_the_capability_selection_on_the_installed_catalogue(tmp_path):
+    from experimental.curator.raven_adapter.probe import PROBE, exercise_translations
+
+    def bound_for(owner):
+        owner.runtime.loop.subagents = SimpleNamespace(list_agents=lambda: [])
+        return SimpleNamespace(planning=None, strategies={}, capability=owner, recorder=owner.recorder, baseline=None)
+
+    owner = make(tmp_path / "listed", "capability")
+    await exercise_translations(bound_for(owner))
+    (row,) = [row for row in owner.recorder.rows if row["kind"] == PROBE and row["strategy"] == "capability"]
+    assert row["status"] == "passed"
+    contents = files()
+    contents["task_capability.py"] = contents["task_capability.py"].replace(
+        'SkillSelection(name="evidence")', 'SkillSelection(name="evidence", source="upload.evidence/SKILL.md")'
+    )
+    assert "upload.evidence" in contents["task_capability.py"]
+    mislabelled = make(tmp_path / "mislabelled", "capability", contents)
+    with pytest.raises(ValueError, match="selected skill is unknown, ambiguous or unavailable: evidence"):
+        await exercise_translations(bound_for(mislabelled))
+
+
+@pytest.mark.asyncio
 async def test_action_reply_and_terminal_failure_have_distinct_control_allowances(tmp_path):
     owner = make(tmp_path, "action")
     await owner.prepare()

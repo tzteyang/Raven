@@ -33,11 +33,8 @@ def arguments(tmp_path, **overrides):
         "turns": 14,
         "repeats": 1,
         "timeout": 3600,
-        "curator_model": "z-ai/glm-5.3",
-        "analyst_model": None,
-        "simulation_model": "z-ai/glm-5.3",
-        "traveller_model": "deepseek/deepseek-flash",
-        "subagent_model": "z-ai/glm-5.3-flash",
+        "model": ["curator=z-ai/glm-5.3", "counterpart=z-ai/glm-5.3", "sub-harness=z-ai/glm-5.3-flash"],
+        "effort": [],
         "cards": ["family", "student"],
         "scenario": BUNDLED / "travel_agency",
         "chains": [],
@@ -52,7 +49,7 @@ def test_spend_splits_recorded_calls_by_who_made_them(tmp_path):
     state = state_with(tmp_path, "run", [span(1.5), span(0.25, "curator:user"), span(2, "acp:20260924_1"), span(0.25)])
     assert suite.spend(state) == {"simulation": 1.75, "employee": 0.25, "subagents": 2.0, "total": 4.0}
     assert suite.spend(tmp_path / "missing")["total"] == 0
-    child = tmp_path / "records" / "children" / "701d" / "native" / "traces" / "logs"
+    child = tmp_path / "records" / "employee" / "children" / "701d" / "native" / "traces" / "logs"
     child.mkdir(parents=True)
     (child / "audit-spans.log").write_text(span(0.5) + "\n" + span(0.25, "acp:x") + "\n")
     assert suite.spend(state, tmp_path / "records") == {
@@ -61,10 +58,24 @@ def test_spend_splits_recorded_calls_by_who_made_them(tmp_path):
         "subagents": 2.75,
         "total": 4.75,
     }
-    replica = tmp_path / "records" / "replicas" / "1-student" / "children" / "701d" / "native" / "traces" / "logs"
+    replica = tmp_path / "records" / "replicas" / "1-student" / "employee" / "children" / "701d" / "native" / "traces"
+    replica = replica / "logs"
     replica.mkdir(parents=True)
     (replica / "audit-spans.log").write_text(span(1) + "\n")
     assert suite.spend(state, tmp_path / "records")["subagents"] == 3.75
+
+
+def test_spend_counts_the_calls_a_day_boundary_rotated_into_the_archive(tmp_path):
+    state = state_with(tmp_path, "run", [span(0.5)])
+    rotated = state / "traces" / "logs" / "archive" / "2026-10-07"
+    rotated.mkdir(parents=True)
+    (rotated / "audit-spans-2026-10-07-000006.log").write_text(span(2) + "\n" + span(1, "curator:user") + "\n")
+    assert suite.spend(state) == {"simulation": 2.5, "employee": 1.0, "subagents": 0.0, "total": 3.5}
+    copied = tmp_path / "records" / "traces"
+    (copied / "archive" / "2026-10-07").mkdir(parents=True)
+    (copied / "archive" / "2026-10-07" / "audit-spans-2026-10-07-000006.log").write_text(span(2) + "\n")
+    (copied / "audit-spans.log").write_text(span(0.5) + "\n")
+    assert suite.spend(tmp_path / "gone", tmp_path / "records")["total"] == 2.5
 
 
 def test_a_call_its_provider_did_not_price_is_priced_from_its_tokens():
@@ -146,8 +157,8 @@ def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     flat = " ".join(argv[3:])
     assert "--chain documents" in flat and "--rounds 4" in flat and "--cards family student" in flat
     assert "--curator " not in flat and "--targets" not in flat
-    assert "--subagent-model z-ai/glm-5.3-flash" in flat and "--analyst-model" not in flat
-    assert "--traveller-model deepseek/deepseek-flash" in flat
+    assert "--model sub-harness=z-ai/glm-5.3-flash" in flat and "analyst=" not in flat
+    assert "--model curator=z-ai/glm-5.3 --model counterpart=z-ai/glm-5.3" in flat
     budgets = " ".join(
         suite.command(
             [],
@@ -162,13 +173,13 @@ def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     efforts = " ".join(
         suite.command(
             ["--chain", "staged"],
-            arguments(tmp_path, curator_effort="high", traveller_effort="low"),
+            arguments(tmp_path, effort=["curator=high", "conversant=low"]),
             config=tmp_path / "c.json",
             workdir=tmp_path / "w",
             records=tmp_path / "r",
         )[3:]
     )
-    assert "--curator-effort high" in efforts and "--traveller-effort low" in efforts
+    assert "--effort curator=high --effort conversant=low" in efforts
     assert "--concurrent-drills" not in efforts
     together = suite.command(
         [],

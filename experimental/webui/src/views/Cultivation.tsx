@@ -1,4 +1,4 @@
-/* The main view: the travel agency and the Curator side in conversation, round
+/* The main view: the owner and the Curator side in conversation, round
    by round. The owner's messages sit on the reader's side, with the materials
    they hand over and, for the automatic standard assessor, its scorecard; each
    Curator reply starts from its diagnosis of every input and is a Harness
@@ -11,21 +11,24 @@ import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 
 import { fileUrl, thumbsUrl } from '../api'
 import { identityLine } from '../attribution'
-import { splitRemark, timeline, unwrap } from '../cultivation'
-import { fileName, roundVersions, tone } from '../derive'
+import { splitRemark, unwrap } from '../cultivation'
+import { fileName, tone } from '../derive'
 import { OWNS, STRATEGIES } from '../mechanism'
 import { opened, trialSummary } from '../trial'
 import { AttachmentChips, AttachmentView } from './Attachments'
 import { BasisBadge, Clamp, Fold, HeldBadge, RedLine, RequirementBadges, StateChip, StrategyBadge, TreatmentBadge } from './Badges'
+import { LoopMap, stationKey } from './LoopMap'
 import { Markdown } from './Markdown'
+import { StandardBlock, PromotionStatus } from './Evaluation'
 import { TrialTally } from './TrialPanel'
 import { useThumbs } from './Trials'
 
 import type { AttributionView } from '../attribution'
 import type { ChangeView, Entry, Reply } from '../cultivation'
-import type { Revision } from '../derive'
-import type { Feedback, Run, Scenario, Signal } from '../model'
+import type { Lap } from '../loop'
+import type { Feedback, ResearchRecord, Run, Scenario, Signal } from '../model'
 import type { TrialSummary } from '../trial'
+import type { Picked } from './LoopMap'
 import type { JSX, RefObject } from 'react'
 
 const pretty = (value: unknown): string => (typeof value === 'string' ? value : JSON.stringify(value, null, 2))
@@ -50,7 +53,7 @@ function Onboarding({ runId, task: raw, opening, materials, origins }: { runId: 
   return (
     <>
       <div className="say owner">
-        <span className="who">travel agency · onboarding</span>
+        <span className="who">owner · onboarding</span>
         <div className="me">
           {opening.length ? (
             <>
@@ -118,7 +121,7 @@ function Remark({
   return (
     <>
     <div className="say owner" id={`remark-${round}`}>
-      <span className="who">travel agency · on the round {round} trial of {version}</span>
+      <span className="who">owner · on the round {round} trial of {version}</span>
       <div className="me">
         {spoken.length === 0 ? <p className="dim">The owner left no remark this round.</p> : null}
         {spoken.map((signal, i) => {
@@ -155,6 +158,167 @@ function Remark({
     </div>
     <AttachmentView run={runId} path={open} onClose={() => setOpen(null)} />
     </>
+  )
+}
+
+const CHANNELS: Record<string, string> = { tool: 'materials', research: 'research', user: "owner's answers", request: 'task' }
+const channelName = (channel: string): string => CHANNELS[channel] ?? channel
+
+const minutes = (seconds?: number | null): string => (typeof seconds === 'number' ? `${Math.max(1, Math.round(seconds / 60))} min` : '')
+
+/* The research stage that prepares the Curator's information before onboarding (experimental/research/): how it
+   ended, the review's verdict, each dimension's coverage, every stage's calls with what went wrong, and the research
+   agents with the models they reported answering with. A collection
+   that is not ready stops the run before its first curation, so its reason is the run's reason. */
+function ResearchBlock({ research }: { research: ResearchRecord }): JSX.Element {
+  const ready = research.status === 'ready'
+  const stopped = research.stop_reason && research.stop_reason !== 'completed'
+  return (
+    <div className="say curator research-block">
+      <span className="who">
+        <span className="cd" />Curator side · research stage
+        <span className={ready ? 'dim' : 'k'}>{research.status || 'unknown'}</span>
+        {stopped ? <span className="k">stopped: {research.stop_reason}</span> : null}
+        {research.seconds ? <span className="dim">{minutes(research.seconds)}</span> : null}
+      </span>
+      <div className="ai reply">
+        {research.errors.map((error) => <p key={error} className="runerr"><span className="k">record</span>{error}</p>)}
+        {!research.review.accepted ? (
+          <div className="failed">
+            <p>{stopped ? `The collection stopped (${research.stop_reason}) before a review accepted it.` : 'The review did not accept the information.'}</p>
+            {research.review.reason ? <Markdown text={research.review.reason} /> : null}
+            {research.review.issues.length ? <ul className="sc-fails">{research.review.issues.map((issue, i) => <li key={i}>{issue}</li>)}</ul> : null}
+          </div>
+        ) : null}
+        <p className="sc-hd">
+          {research.stages.map((stage) => {
+            const problems = research.trouble.filter((row) => row.stage === stage.stage).length
+            const parts = [
+              stage.calls ? `${stage.calls} call${stage.calls === 1 ? '' : 's'}` : '',
+              stage.queries ? `${stage.queries} queries` : '',
+              stage.calls && !stage.submitted ? 'no submission' : '',
+              problems ? `${problems} problem${problems === 1 ? '' : 's'}` : '',
+            ].filter(Boolean)
+            return <span key={stage.stage}><code>{stage.stage}</code> {parts.join(' · ')}</span>
+          })}
+        </p>
+        {research.researchers?.length ? (
+          <p className="sc-hd">
+            <span className="src">researched by</span>
+            {research.researchers.map((agent) => (
+              <span key={`${agent.agent}-${agent.asked}-${agent.effort}`}>
+                <code>{agent.agent}</code> {[agent.asked && `asked for ${agent.asked}`, agent.effort, agent.models.length ? `answered with ${agent.models.join(', ')}` : '', `${agent.calls} call${agent.calls === 1 ? '' : 's'}`].filter(Boolean).join(' · ')}
+              </span>
+            ))}
+          </p>
+        ) : null}
+        {research.channels && Object.keys(research.channels).length ? (
+          <p className="sc-hd">
+            <span className="src">information from</span>
+            {Object.keys(CHANNELS).filter((channel) => research.channels![channel]).map((channel) => (
+              <span key={channel}>{channelName(channel)} {research.channels![channel]}</span>
+            ))}
+          </p>
+        ) : null}
+        {research.trouble.length ? (
+          <Fold className="fold" summary={`Missing, rejected or failed replies (${research.trouble.length})`}>
+            {() => (
+              <ul className="sc-fails">
+                {research.trouble.map((row, i) => (
+                  <li key={i}>
+                    <code>{row.stage}</code> <span className="k">{row.event}</span>
+                    {row.tools.length ? <span className="dim"> · called {row.tools.join(', ')}</span> : null}
+                    {row.charged ? null : <span className="dim"> · not charged</span>} {row.error}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Fold>
+        ) : null}
+        {research.review.accepted && research.review.reason ? (
+          <Fold className="why" summary="The review's verdict">{() => <Markdown text={research.review.reason} />}</Fold>
+        ) : null}
+        {research.sections.some((section) => section.text) ? (
+          <Fold className="fold" summary={`The expert information${research.title ? `: ${research.title}` : ''}`}>
+            {() => (
+              <div>
+                {research.sections.map((section) => (
+                  <div key={section.dimension} className="research-section">
+                    <p className="sc-hd">
+                      <code>{section.dimension}</code><span>{section.coverage}</span><span className="dim">{section.evidence} evidence</span>
+                      {(section.channels ?? []).map((channel) => <span key={channel} className="chip">{channelName(channel)}</span>)}
+                    </p>
+                    {section.text ? <Markdown text={section.text} /> : null}
+                    {section.reason ? <p className="dim small">{section.reason}</p> : null}
+                  </div>
+                ))}
+              </div>
+            )}
+          </Fold>
+        ) : (
+          <p className="dim">{research.sections.map((section) => `${section.dimension} ${section.coverage}`).join(' · ')}</p>
+        )}
+        {research.groups?.length ? (
+          <Fold className="fold" summary={`Research groups (${research.groups.length})`}>
+            {() => (
+              <ul className="sc-fails">
+                {research.groups!.map((group, i) => (
+                  <li key={i}>
+                    <span className="k">wave {group.wave} · group {group.group ?? i + 1} · {group.status}</span>
+                    <span className="dim"> · {group.dimensions.join(', ')} · admitted {group.admitted}, withheld {group.withheld}, refused {group.refused}</span>
+                    {group.questions.map((question, j) => <div key={j}>{question}</div>)}
+                    {group.error ? <div className="dim">{group.error}</div> : null}
+                  </li>
+                ))}
+              </ul>
+            )}
+          </Fold>
+        ) : null}
+        {(['research', 'user'] as const).map((channel) => {
+          const rows = (research.evidence ?? []).filter((row) => row.channel === channel)
+          return rows.length ? (
+            <Fold key={channel} className="fold" summary={`${channel === 'research' ? 'Research findings' : "The owner's answers"} (${rows.length})`}>
+              {() => (
+                <ul className="sc-fails">
+                  {rows.map((row) => (
+                    <li key={row.id}>
+                      {row.question ? <div><b>{row.question}</b></div> : null}
+                      <span className="dim">
+                        {[row.kind === 'synthesis' ? 'synthesis' : '', row.attempt, row.dimensions.join(', ')].filter(Boolean).join(' · ')}
+                      </span>
+                      <div>{row.text || (channel === 'user' ? 'Not answered.' : '')}</div>
+                      {row.sources.map((source) => (
+                        <div key={source}><a href={source} target="_blank" rel="noreferrer">{source}</a></div>
+                      ))}
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </Fold>
+          ) : null
+        })}
+        {research.resources.length ? (
+          <Fold className="fold" summary={`Resources (${research.resources.length})`}>
+            {() => (
+              <ul className="sc-fails">
+                {research.resources.map((item, i) => <li key={i}><b>{item.name}</b> <span className="dim">· {item.availability}</span> {item.purpose}</li>)}
+              </ul>
+            )}
+          </Fold>
+        ) : null}
+        {research.unresolved.length ? (
+          <Fold className="fold" summary={`Open questions (${research.unresolved.length})`}>
+            {() => (
+              <ul className="sc-fails">
+                {research.unresolved.map((item, i) => (
+                  <li key={i}><code>{item.dimension}</code>{item.blocking ? <span className="k"> blocking</span> : null} {item.question} <span className="dim">· {item.reason}</span></li>
+                ))}
+              </ul>
+            )}
+          </Fold>
+        ) : null}
+      </div>
+    </div>
   )
 }
 
@@ -354,13 +518,16 @@ function rawOutput(reply: Reply): { source: string; text: string } {
   }
 }
 
+/* A Curator reply; its parts carry the loop station they tell (`data-station`), so the loop line above the
+   conversation can be sent to them and can mark the one being read. */
 function ReplyView({ reply, onTrial }: { reply: Reply; onTrial: (round: number) => void }): JSX.Element {
   const { revision } = reply
+  const round = revision.round ?? 0
   const [raw, setRaw] = useState(false)
   const strategies = STRATEGIES.filter((name) => reply.changes.some((change) => change.strategy === name))
   return (
-    <div className="say curator" id={`reply-${revision.key}`}>
-      <span className="who">
+    <div className="say curator" id={`reply-${revision.key}`} data-reply={round}>
+      <span className="who" data-station={revision.deployed && reply.trial ? stationKey(reply.trial, 'version') : undefined}>
         <span className="cd" />Curator
         <code className={revision.deployed ? 'ver' : 'ver kept'}>{revision.label}</code>
         {revision.deployed ? <span>{reply.from} → {revision.label}</span> : <span>stays on {revision.label}</span>}
@@ -376,24 +543,28 @@ function ReplyView({ reply, onTrial }: { reply: Reply; onTrial: (round: number) 
       ) : (
       <div className="ai reply">
         {reply.failure ? (
-          <div className="failed">
+          <div className="failed" data-station={stationKey(round, 'implement')}>
             <p>This revision failed, so the employee stays on {revision.label}.</p>
             <Markdown text={reply.failure} />
           </div>
         ) : null}
-        {reply.attribution ? <Diagnoses attribution={reply.attribution} /> : null}
-        {reply.understanding ? <Clamp long={reply.understanding.length > 1600}><Markdown className="under" text={reply.understanding} /></Clamp> : null}
-        {reply.selection?.understanding ? (
-          <Fold className="why" summary="Why these targets (the selection)">{() => <Markdown text={reply.selection!.understanding} />}</Fold>
-        ) : null}
-        {reply.handover.length || reply.pasted.length ? <Intake reply={reply} /> : null}
-        {reply.changes.length ? (
-          <div className="changes">{reply.changes.map((change, i) => <Change key={i} change={change} />)}</div>
-        ) : !reply.failure ? <p className="dim">No change: the Harness stays as it was.</p> : null}
+        {reply.attribution ? <div data-station={stationKey(round, 'diagnose')}><Diagnoses attribution={reply.attribution} /></div> : null}
+        <div data-station={stationKey(round, 'design')}>
+          {reply.understanding ? <Clamp long={reply.understanding.length > 1600}><Markdown className="under" text={reply.understanding} /></Clamp> : null}
+          {reply.selection?.understanding ? (
+            <Fold className="why" summary="Why these targets (the selection)">{() => <Markdown text={reply.selection!.understanding} />}</Fold>
+          ) : null}
+          {reply.handover.length || reply.pasted.length ? <Intake reply={reply} /> : null}
+          {reply.changes.length ? (
+            <div className="changes">{reply.changes.map((change, i) => <Change key={i} change={change} />)}</div>
+          ) : !reply.failure ? <p className="dim">No change: the Harness stays as it was.</p> : null}
+        </div>
         {reply.changes.length || Object.keys(reply.files).length || reply.design ? (
-          <Fold className="code" summary={<>Generated code and bindings{Object.keys(reply.files).length ? ` · ${Object.keys(reply.files).length} files` : ''}</>}>
-            {() => <CodeLayer reply={reply} />}
-          </Fold>
+          <div data-station={stationKey(round, 'implement')}>
+            <Fold className="code" summary={<>Generated code and bindings{Object.keys(reply.files).length ? ` · ${Object.keys(reply.files).length} files` : ''}</>}>
+              {() => <CodeLayer reply={reply} />}
+            </Fold>
+          </div>
         ) : null}
       </div>
       )}
@@ -470,51 +641,128 @@ function TrialCard({ summary, open, onOpen }: { summary: TrialSummary; open: boo
   )
 }
 
+const CURATOR = new Set(['diagnose', 'design', 'implement'])
+const FLASH = 1400
+
+/* The loop station the reader is at: the first block carrying one that shows below the canvas, as the page scrolls. */
+function useReading(convo: RefObject<HTMLDivElement | null>, entries: Entry[]): string | null {
+  const [active, setActive] = useState<string | null>(null)
+  useEffect(() => {
+    const root = convo.current
+    if (!root || typeof IntersectionObserver === 'undefined') return
+    const blocks = [...root.querySelectorAll<HTMLElement>('[data-station]')]
+    const seen = new Set<Element>()
+    const watch = new IntersectionObserver(
+      (rows) => {
+        for (const row of rows) {
+          if (row.isIntersecting) seen.add(row.target)
+          else seen.delete(row.target)
+        }
+        const first = blocks.find((block) => seen.has(block))
+        if (first) setActive(first.dataset.station ?? null)
+      },
+      { root: root.closest('.page'), rootMargin: '-190px 0px -50% 0px' },
+    )
+    blocks.forEach((block) => watch.observe(block))
+    return () => watch.disconnect()
+  }, [convo, entries])
+  return active
+}
+
 export function Cultivation({
-  run, runId, name, revisions, scenario, trial, onTrial,
-}: { run: Run; runId: string; name: string; revisions: Revision[]; scenario: Scenario; trial: number | null; onTrial: (round: number, drill?: string) => void }): JSX.Element {
-  const entries = useMemo(() => timeline(run, revisions), [run, revisions])
-  const versions = useMemo(() => roundVersions(run, revisions), [run, revisions])
-  const red = new Set(scenario.criteria.filter((row) => row.severity === 'red_line').map((row) => row.id))
+  run, runId, name, scenario, trial, versions, entries, laps, onTrial,
+}: {
+  run: Run
+  runId: string
+  name: string
+  scenario: Scenario
+  trial: number | null
+  versions: string[]
+  entries: Entry[]
+  laps: Lap[]
+  onTrial: (round: number, drill?: string) => void
+}): JSX.Element {
+  const red = useMemo(() => new Set(scenario.criteria.filter((row) => row.severity === 'red_line').map((row) => row.id)), [scenario])
   const summary = (round: number): TrialSummary | null => trialSummary(run, round - 1, versions[round - 1] ?? 'v0', red)
   const fresh = (round: number): string[] => {
     const seen = new Set(run.rounds.slice(0, round).flatMap((item) => opened(item, scenario.materials)))
     return opened(run.rounds[round], scenario.materials).filter((material) => !seen.has(material))
   }
+  const convo = useRef<HTMLDivElement>(null)
+  const reading = useReading(convo, entries)
+  const [hot, setHot] = useState<string | null>(null)
+  const [sent, setSent] = useState<string | null>(null)
+  /* The canvas sends the conversation to a station: its last block (a round's final reply when a revision failed and
+     another followed), or the round's reply for a Curator step it did not record; the block flashes on arrival. */
+  const go = ({ round, station }: Picked): void => {
+    const root = convo.current
+    if (!root) return
+    const key = stationKey(round, station)
+    const blocks = root.querySelectorAll<HTMLElement>(`[data-station="${key}"]`)
+    const fallback = CURATOR.has(station) ? root.querySelectorAll<HTMLElement>(`[data-reply="${round}"]`) : null
+    const target = blocks[blocks.length - 1] ?? (fallback ? fallback[fallback.length - 1] : undefined)
+    setSent(key)
+    if (!target) return
+    target.scrollIntoView?.({ block: 'start', behavior: 'smooth' })
+    target.classList.remove('flash')
+    void target.offsetWidth
+    target.classList.add('flash')
+    window.setTimeout(() => target.classList.remove('flash'), FLASH)
+  }
+  const pointing = (target: EventTarget | null): void => {
+    const block = target instanceof Element ? target.closest<HTMLElement>('[data-station]') : null
+    setHot(block?.dataset.station ?? null)
+  }
   const view = (entry: Entry, i: number): JSX.Element => {
     switch (entry.kind) {
       case 'onboarding':
-        return <Onboarding key={i} runId={runId} task={entry.task} opening={entry.opening} materials={scenario.initial} origins={run.origins} />
+        return (
+          <div key={i} className="lm-block" data-station={stationKey(0, 'handover')}>
+            <Onboarding runId={runId} task={entry.task} opening={entry.opening} materials={scenario.initial} origins={run.origins} />
+            {run.research ? <ResearchBlock research={run.research} /> : null}
+          </div>
+        )
       case 'remark': {
         const card = summary(entry.round)
         return (
           <div key={i} className="round-block">
-            {card ? <TrialCard summary={card} open={trial === entry.round} onOpen={(drill) => onTrial(entry.round, drill)} /> : null}
-            <Remark runId={runId} round={entry.round} version={entry.version} signals={entry.signals} holdout={entry.holdout} heldOut={entry.heldOut} red={red} fresh={fresh(entry.round)} origins={run.origins} />
+            {card ? <div data-station={stationKey(entry.round, 'trial')}><TrialCard summary={card} open={trial === entry.round} onOpen={(drill) => onTrial(entry.round, drill)} /></div> : null}
+            <div data-station={stationKey(entry.round, 'assess')}>
+              <Remark runId={runId} round={entry.round} version={entry.version} signals={entry.signals} holdout={entry.holdout} heldOut={entry.heldOut} red={red} fresh={fresh(entry.round)} origins={run.origins} />
+            </div>
           </div>
         )
       }
       case 'requirements':
-        return <Requirements key={i} feedback={entry.feedback} held={entry.held} />
+        return <div key={i} data-station={stationKey(entry.round, 'analyse')}><Requirements feedback={entry.feedback} held={entry.held} /></div>
       case 'reply':
         return <ReplyView key={i} reply={entry.reply} onTrial={onTrial} />
       case 'silence':
-        return <p key={i} className="silence">{entry.text}</p>
+        return <p key={i} className="silence" data-station={stationKey(entry.round ?? 0, 'diagnose')}>{entry.text}</p>
     }
   }
   return (
-    <div className="convo">
-      <div className="task">
-        <span className="eyebrow">Cultivation</span>
-        <h2>{name}</h2>
-        <p className="quiet">
-          The owner speaks to the Curator side after each trial; every Curator reply is a revision of the employee's Harness.
-          {red.size ? <> Criteria marked <RedLine /> are ones the owner never tolerates missing.</> : null}
-        </p>
-        <Legend />
-        {run.error ? <p className="runerr"><span className="k">ended with an error</span>{run.error}</p> : null}
+    <>
+      <div className="convo">
+        <div className="task">
+          <span className="eyebrow">Cultivation</span>
+          <h2>{name}</h2>
+          <p className="quiet">
+            The owner speaks to the Curator side after each trial; every Curator reply is a revision of the employee's Harness.
+            {red.size ? <> Criteria marked <RedLine /> are ones the owner never tolerates missing.</> : null}
+          </p>
+          <Legend />
+          {run.error ? <p className="runerr"><span className="k">ended with an error</span>{run.error}</p> : null}
+        </div>
       </div>
-      {entries.map(view)}
-    </div>
+      <div className="ll-bar">
+        <LoopMap laps={laps} active={hot ?? reading ?? sent} hot={hot} onPick={go} />
+      </div>
+      <div className="convo" ref={convo} onMouseOver={(event) => pointing(event.target)} onMouseLeave={() => setHot(null)}>
+        {entries.map(view)}
+        <PromotionStatus promotion={run.promotion} stable={run.stable_revision} />
+        {run.standard && (run.standard.criteria.length || run.standard.revisions?.length || run.standard.error) ? <StandardBlock standard={run.standard} /> : null}
+      </div>
+    </>
   )
 }

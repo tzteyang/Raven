@@ -26,6 +26,7 @@ class GenerationState(BaseModel):
     trace: list[dict] = Field(default_factory=list)
     calls: int = Field(default=0, ge=0)
     queries: int = Field(default=0, ge=0)
+    stage_queries: int = Field(default=0, ge=0)
     checks: int = Field(default=0, ge=0)
     repairs: int = Field(default=0, ge=0)
 
@@ -42,6 +43,7 @@ class GenerationState(BaseModel):
                 "observations": context.observations,
                 "previous_plan": context.previous_plan.model_dump(mode="json") if context.previous_plan else None,
                 "exploration": context.exploration,
+                **({"experience": context.experience} if context.experience is not None else {}),
             }
         )
 
@@ -57,3 +59,4 @@ class GenerationState(BaseModel):
     def advance(self, stage):
         self.stage = stage
         self.messages = []
+        self.stage_queries = 0

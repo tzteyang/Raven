@@ -41,7 +41,7 @@ class Concerns(BaseModel):
     requirements: list[Concern]
 
 
-async def read_requirements(record: dict, provider, *, model=None, timeout=180) -> dict[str, list[str]]:
+async def read_requirements(record: dict, provider, *, model=None, effort=None, timeout=180) -> dict[str, list[str]]:
     """The rules each requirement restates, by requirement id, for the requirements whose grounds name no rule; a
     repeated requirement is read in its latest wording."""
     rules = [{"id": entry["criterion"], "rule": entry.get("rule", "")} for entry in record.get("ledger", [])]
@@ -71,6 +71,7 @@ async def read_requirements(record: dict, provider, *, model=None, timeout=180) 
         [tool(CONCERNS, "Submit, for every requirement id, the rules it restates.", schema_for(Concerns))],
         submit={CONCERNS: accept},
         model=model,
+        effort=effort,
         max_calls=4,
         timeout=timeout,
         label="requirements",
@@ -91,7 +92,7 @@ class Links(BaseModel):
     links: list[Link]
 
 
-async def attribute(record: dict, provider, *, model=None, timeout=180) -> dict:
+async def attribute(record: dict, provider, *, model=None, effort=None, timeout=180) -> dict:
     """`links` maps each intervention reason (by `value.reason_key`) to the rules it enforces."""
     found = candidates(record)
     if not found:
@@ -133,6 +134,7 @@ async def attribute(record: dict, provider, *, model=None, timeout=180) -> dict:
         [tool(NAME, "Submit, for every intervention id, the rules it enforces.", schema_for(Links))],
         submit={NAME: accept},
         model=model,
+        effort=effort,
         max_calls=4,
         timeout=timeout,
         label="attribution",
@@ -140,16 +142,21 @@ async def attribute(record: dict, provider, *, model=None, timeout=180) -> dict:
     return {"links": {ids[link.id]: sorted(link.rules) for link in parsed.links}, "interventions": len(ids)}
 
 
-async def write(root: Path, provider, *, scenario_dir=None, model=None, timeout=180) -> dict:
+async def write(root: Path, provider, *, scenario_dir=None, model=None, effort=None, timeout=180) -> dict:
     """Read a finished run's requirements, then its interventions, against the rules of the scenario it ran and keep
     both beside its records; the interventions are read on the record the requirement reading already links, since
     only a mechanism sedimented for a rule is asked about it."""
     from .record import build_record
 
     root = Path(root)
-    concerns = await read_requirements(build_record(root, scenario_dir), provider, model=model, timeout=timeout)
+    concerns = await read_requirements(
+        build_record(root, scenario_dir), provider, model=model, effort=effort, timeout=timeout
+    )
     (root / RESULT).write_text(json.dumps({"requirements": concerns}, ensure_ascii=False, indent=2))
     record = build_record(root, scenario_dir)
-    result = {"requirements": concerns, **await attribute(record, provider, model=model, timeout=timeout)}
+    result = {
+        "requirements": concerns,
+        **await attribute(record, provider, model=model, effort=effort, timeout=timeout),
+    }
     (root / RESULT).write_text(json.dumps(result, ensure_ascii=False, indent=2))
     return result

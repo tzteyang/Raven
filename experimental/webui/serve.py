@@ -23,7 +23,18 @@ from ..automation.employee import AREA, HOME, REPLICAS
 from ..iteration.records import runs
 from .live import Live, LiveConfig
 from .process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
-from .rundir import RecordError, annex, curator_progress, joined, labels, pending_stage, progress_path, verdicts
+from .rundir import (
+    RecordError,
+    annex,
+    curator_progress,
+    joined,
+    labels,
+    pending_stage,
+    progress_path,
+    research_progress,
+    standard,
+    verdicts,
+)
 from .studio import event_summary, raw_record, studio_index, studio_run
 
 DIST = Path(__file__).resolve().parent / "dist"
@@ -71,6 +82,54 @@ def _analysis_record(path: str, mtime_ns: int, size: int) -> dict:
     return _small_json(Path(path))
 
 
+def _glance(path: Path) -> dict:
+    """What the run list and the live view read of an iteration record, read once per version of the file: a record
+    grows to hundreds of megabytes with its sessions, and the page polls both every few seconds. Sessions are kept by
+    name only."""
+    try:
+        stat = path.stat()
+    except OSError as exc:
+        return {"status": "error", "error": f"the run record could not be read: {type(exc).__name__}: {exc}"}
+    return _glanced(str(path), stat.st_mtime_ns, stat.st_size)
+
+
+@lru_cache(maxsize=512)
+def _glanced(path: str, mtime_ns: int, size: int) -> dict:
+    try:
+        run = json.loads(Path(path).read_text())
+    except (OSError, ValueError) as exc:
+        return {"status": "error", "error": f"the run record could not be read: {type(exc).__name__}: {exc}"}
+    pending = run.get("pending") if isinstance(run.get("pending"), dict) else {}
+    return {
+        **{key: run[key] for key in ("task", "curator", "status", "error", "stop", "chain") if key in run},
+        **({"initial_curation": True} if "initial_curation" in run else {}),
+        **({"pending": {part: _names(pending.get(part)) for part in ("sessions", "holdout")}} if pending else {}),
+        "rounds": [
+            {
+                "analysis": round_.get("analysis"),
+                "curated": round_.get("curated"),
+                "curation": bool(round_.get("curation")),
+                "sessions": _names(round_.get("sessions")),
+                "holdout": _names(round_.get("holdout")),
+                "signals": [
+                    {
+                        "source": signal.get("source"),
+                        "items": [{"result": item.get("result")} for item in signal["items"] if isinstance(item, dict)],
+                    }
+                    for signal in round_.get("signals") or ()
+                    if isinstance(signal, dict) and isinstance(signal.get("items"), list) and signal["items"]
+                ],
+            }
+            for round_ in run.get("rounds") or ()
+            if isinstance(round_, dict)
+        ],
+    }
+
+
+def _names(sessions) -> dict | None:
+    return dict.fromkeys(map(str, sessions)) if isinstance(sessions, dict) else None
+
+
 def passes(worker_root: Path, run: dict) -> list[list[int]]:
     """Per round, how many checks passed and how many failed among its verdicts (`rundir.verdicts`, which reads the
     scorecard a speaking assessor kept in the analysis records); unknown verdicts count in neither."""
@@ -94,10 +153,7 @@ def index(root: Path, now: float | None = None) -> list[dict]:
     entries = []
     for worker_root in sorted(path for path in Path(root).iterdir() if path.is_dir()):
         for path in runs(worker_root):
-            try:
-                run = json.loads(path.read_text())
-            except (OSError, ValueError) as exc:
-                run = {"status": "error", "error": f"the run record could not be read: {type(exc).__name__}: {exc}"}
+            run = _glance(path)
             status = run.get("status", "finished")
             if status == "running" and now - activity(worker_root, path) >= STALLED:
                 status = "stalled"
@@ -129,13 +185,15 @@ def _small_json(path: Path) -> dict:
 
 
 def setup(worker_root: Path, record_path: Path, run: dict) -> dict:
-    """How the run was set up and how it ended, for the run list: its chain and models from `settings.json`, and the
-    suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields are read out of either
-    file; a cultivation record already built here fills a chain neither file names."""
+    """How the run was set up and how it ended, for the run list: its chain, models and efforts from `settings.json`,
+    and the suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields are read out of
+    either file; a cultivation record already built here fills a chain neither file names."""
     settings = _small_json(worker_root / "settings.json")
     summary = _small_json(worker_root / "suite-summary.json")
-    models = settings.get("models")
-    models = {key: value for key, value in models.items() if isinstance(value, str)} if isinstance(models, dict) else {}
+    models, efforts = (
+        {key: value for key, value in named.items() if isinstance(value, str)} if isinstance(named, dict) else {}
+        for named in (settings.get("models"), settings.get("efforts"))
+    )
     chain = settings.get("chain") or run.get("chain")
     if not chain:
         cached = _records.get(record_path.resolve())
@@ -147,6 +205,7 @@ def setup(worker_root: Path, record_path: Path, run: dict) -> dict:
         {
             "chain": chain if isinstance(chain, str) else None,
             "models": models,
+            "efforts": efforts,
             "stopped": stopped if isinstance(stopped, str) else None,
             "spend": total if isinstance(total, (int, float)) else None,
             "verdict": value.get("verdict") if isinstance(value.get("verdict"), str) else None,
@@ -188,12 +247,18 @@ def detail(root: Path, run_id: str) -> dict | None:
     return {**run, "labels": labels(run), **annex(paths[0])}
 
 
+def _worker_roots(root: Path) -> set[Path]:
+    """Where each worker folder of `root` really is: a folder may be a symlink to a run's state folder elsewhere,
+    which `index` lists like any other, so what sits under the link's target is served as under `root`."""
+    return {folder.resolve() for folder in Path(root).iterdir() if folder.is_dir()}
+
+
 def deliverable(root: Path, path: str) -> Path | None:
-    """A kept copy of a delivered file under `root`; anything else is refused."""
+    """A kept copy of a delivered file under one of `root`'s worker folders; anything else is refused."""
     file = Path(path).resolve()
-    if not file.is_file() or not file.is_relative_to(Path(root).resolve()) or "deliverables" not in file.parts:
+    if not file.is_file() or "deliverables" not in file.parts:
         return None
-    return file
+    return file if any(file.is_relative_to(base) for base in _worker_roots(root)) else None
 
 
 def scenario(path: Path | None) -> dict:
@@ -215,6 +280,18 @@ def scenario(path: Path | None) -> dict:
         "initial": [str(name) for name in spec.get("initial", [])],
         "materials": sorted(entry.parent.name for entry in materials.glob("*/SKILL.md")) if materials.is_dir() else [],
     }
+
+
+def run_scenario(root: Path, run_id: str, fallback: Path | None) -> Path | None:
+    """The scenario.json a run was cultivated in: the copy its records keep (`experimental.simulation.record.
+    keep_scenario`), else the scenario directory its `settings.json` names while that still holds one, else
+    `fallback` (the server's own); a run id naming no run also falls back."""
+    paths = _run_paths(root, run_id) if run_id else None
+    if paths and (paths[0] / "scenario" / "scenario.json").is_file():
+        return paths[0] / "scenario" / "scenario.json"
+    named = _small_json(paths[0] / "settings.json").get("scenario_dir") if paths else None
+    file = Path(named) / "scenario.json" if isinstance(named, str) else None
+    return file if file is not None and file.is_file() else fallback
 
 
 def _render(file: Path, out: Path, width: int) -> None:
@@ -294,7 +371,7 @@ def upload(root: Path, run_id: str, path: str) -> Path | None:
         return None
     uploads = (paths[0] / AREA / HOME / "uploads").resolve()
     file = (paths[0] / AREA / HOME / path).resolve()
-    if not uploads.is_relative_to(Path(root).resolve()) or not file.is_relative_to(uploads) or not file.is_file():
+    if not file.is_relative_to(uploads) or not file.is_file():
         return None
     return file
 
@@ -319,13 +396,21 @@ def cached_page(cache: Path, path: str) -> Path | None:
     return file
 
 
+def _plain(name: str) -> bool:
+    return bool(name) and name not in (".", "..") and "/" not in name and "\\" not in name
+
+
 def _run_paths(root: Path, run_id: str) -> tuple[Path, Path] | None:
-    """The worker root and iteration record a run id names, only when both sit where `index` found them."""
+    """The worker root and iteration record a run id names, only when both sit where `index` found them: the id is
+    a worker folder of `root` and a record stem, each a plain name, so nothing outside `root` can be named; the
+    worker folder may be a symlink to a run's state folder elsewhere (see `_worker_roots`)."""
     worker, _, stem = run_id.partition("/")
-    path = Path(root) / worker / "iteration" / f"{stem}.json"
-    if not worker or not stem or not path.is_file() or path.resolve().parent.parent.parent != Path(root).resolve():
+    if not _plain(worker) or not _plain(stem):
         return None
-    return path.resolve().parent.parent, path
+    path = Path(root) / worker / "iteration" / f"{stem}.json"
+    if not path.is_file():
+        return None
+    return path.parent.parent, path
 
 
 def node(root: Path, run_id: str, state_roots, dag: str, node_id: str, **options) -> dict | None:
@@ -355,7 +440,12 @@ def _builder():
 
 def _record_files(worker_root: Path, record_path: Path) -> tuple:
     """The record files a cultivation record is built from, by name, size and modification time."""
-    files = [record_path, *sorted(worker_root.glob("analysis/*.json")), *sorted(worker_root.glob("curation/*.json"))]
+    files = [
+        record_path,
+        worker_root / "standard.json",
+        *sorted(worker_root.glob("analysis/*.json")),
+        *sorted(worker_root.glob("curation/*.json")),
+    ]
     stamps = []
     for file in files:
         try:
@@ -395,6 +485,11 @@ def record(root: Path, run_id: str, state_roots=(), scenario_dir: Path | None = 
         built = redact(
             builder(worker_root, scenario_dir or SCENARIO.parent, state_root=state.parent if state else None)
         )
+        evaluation = standard(worker_root)
+        if evaluation is not None:
+            built["standard"] = evaluation
+        original = json.loads(record_path.read_text())
+        built.update({key: redact(original[key]) for key in ("promotion", "stable_revision") if key in original})
         _records[key] = (stamps, built)
     return built
 
@@ -457,8 +552,12 @@ def _observations(worker_root: Path) -> list[Path]:
 
 
 def activity(worker_root: Path, record_path: Path) -> float:
-    """When anything of the run was last written: its record, its latest worker log or the Curator's progress."""
+    """When anything of the run was last written: its record, its latest worker log, the Curator's progress or the
+    research stage's records."""
     times = [record_path.stat().st_mtime]
+    research = research_progress(worker_root)
+    if research:
+        times.append(research["updated"])
     logs = _observations(worker_root)
     if logs:
         times.append(logs[-1].stat().st_mtime)
@@ -660,6 +759,13 @@ def phase(worker_root: Path, record: dict, record_path: Path, now: float | None 
             "stage": stage,
             "basis": record.get("stop") or ended or "the Curator's call budget ran out",
         }
+    if status == "stopped":
+        return {
+            "name": "stopped",
+            "round": len(rounds),
+            "stage": stage,
+            "basis": record.get("stop") or "the run was interrupted before it ended",
+        }
     if status != "running":
         return {
             "name": "finished",
@@ -691,6 +797,16 @@ def phase(worker_root: Path, record: dict, record_path: Path, now: float | None 
             "round": curated_round,
             "stage": progress.get("stage"),
             "basis": f"the Curator's revision failed: {ended}",
+        }
+    research = research_progress(worker_root) if onboarding else None
+    if research:
+        running = sum(call["status"] in ("researching", "reviewing") for call in research["calls"])
+        return {
+            "name": "researching",
+            "round": 0,
+            "stage": research["step"],
+            "basis": f"the research stage is writing its records ({len(research['calls'])} research calls, "
+            f"{running} running)",
         }
     if onboarding:
         return {"name": "curating", "round": 0, "stage": stage, "basis": "the onboarding revision is not recorded yet"}
@@ -789,6 +905,16 @@ def cursors(text: str) -> dict[str, int]:
     return out
 
 
+def run_phase(root: Path, run_id: str, now: float | None = None) -> dict | None:
+    """The phase the run is in and its recorded status, without the logs `live` reads; None refuses the run."""
+    paths = _run_paths(root, run_id)
+    if paths is None:
+        return None
+    worker_root, record_path = paths
+    record = _glance(record_path)
+    return {"phase": phase(worker_root, record, record_path, now), "status": record.get("status", "finished")}
+
+
 def live(root: Path, run_id: str, offsets: dict[str, int] | None = None, now: float | None = None) -> dict | None:
     """New rows of the run's current worker logs since each one's offset in `offsets`, with the phase the run is in;
     None refuses the run.
@@ -802,7 +928,7 @@ def live(root: Path, run_id: str, offsets: dict[str, int] | None = None, now: fl
     if paths is None:
         return None
     worker_root, record_path = paths
-    record = json.loads(record_path.read_text())
+    record = _glance(record_path)
     offsets = offsets or {}
     followed = _following(_observations(worker_root))
     budget = LIVE_CHUNK // max(len(followed), 1)
@@ -832,10 +958,21 @@ def live(root: Path, run_id: str, offsets: dict[str, int] | None = None, now: fl
         "phase": phase(worker_root, record, record_path, now),
         "status": record.get("status", "finished"),
         "curator": curator_progress(worker_root),
+        "research": research_progress(worker_root),
         "deliveries": deliveries(worker_root),
         "labels": labels(record),
         "now": time.time() if now is None else now,
     }
+
+
+def page(path: str) -> str:
+    """The built page a browser path opens: the run viewer at the root, which is where a browser or an IDE's port
+    forwarding lands, and at every other extension-less path (/viewer); the Studio at /studio; a file path as it is."""
+    if urlsplit(path).path.rstrip("/") == "/studio":
+        return "/studio.html"
+    if "." not in urlsplit(path).path.rsplit("/", 1)[-1]:
+        return "/index.html"
+    return path
 
 
 class Handler(SimpleHTTPRequestHandler):
@@ -877,9 +1014,12 @@ class Handler(SimpleHTTPRequestHandler):
                 return self._json({"error": "not an uploaded file of this run"}, 404)
             return self._file(file, "text/plain; charset=utf-8" if file.suffix.lower() in TEXTS else None)
         if url.path == "/api/scenario":
-            return self._json(scenario(self.scenario))
+            return self._json(scenario(run_scenario(self.root, query.get("run", [""])[0], self.scenario)))
         if url.path == "/api/live":
             body = live(self.root, query.get("run", [""])[0], cursors(query.get("logs", [""])[0]))
+            return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
+        if url.path == "/api/phase":
+            body = run_phase(self.root, query.get("run", [""])[0])
             return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
         if url.path == "/api/node":
             raw = query.get("attempt", [""])[0]
@@ -895,9 +1035,11 @@ class Handler(SimpleHTTPRequestHandler):
             )
             return self._json(body if body is not None else {"error": "no such node"}, 200 if body is not None else 404)
         if url.path == "/api/record":
-            scenario_dir = Path(self.scenario).parent if self.scenario else None
+            run_id = query.get("run", [""])[0]
+            file = run_scenario(self.root, run_id, self.scenario)
+            scenario_dir = Path(file).parent if file else None
             try:
-                body = record(self.root, query.get("run", [""])[0], self.state_roots, scenario_dir, self.builder)
+                body = record(self.root, run_id, self.state_roots, scenario_dir, self.builder)
             except Exception as exc:  # noqa: BLE001 -- a builder failure is this request's answer, not the server's
                 return self._json({"error": redact(f"the record builder failed: {type(exc).__name__}: {exc}")}, 500)
             if body is None:
@@ -957,12 +1099,7 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(run if run is not None else {"error": "no such run"}, 200 if run is not None else 404)
         if url.path.startswith("/api/"):
             return self._json({"error": "unknown endpoint"}, 404)
-        # The Studio opens at the root, which is where an IDE's port forwarding lands; the run viewer answers every
-        # other extension-less path, such as /viewer.
-        if url.path.rstrip("/") in ("", "/studio"):
-            self.path = "/studio.html"
-        elif "." not in self.path.rsplit("/", 1)[-1]:
-            self.path = "/index.html"
+        self.path = page(self.path)
         return super().do_GET()
 
     def _live(self, session: str, query: dict):
@@ -1031,6 +1168,13 @@ class Handler(SimpleHTTPRequestHandler):
         self.end_headers()
         self.wfile.write(body)
 
+    def end_headers(self):
+        # A page names the hashed bundles of its build; revalidated on every load, it never points at a bundle a later
+        # build replaced, which a browser's heuristic caching of an unmarked page otherwise does for hours.
+        if urlsplit(self.path).path.endswith(".html"):
+            self.send_header("Cache-Control", "no-cache")
+        super().end_headers()
+
     def log_message(self, format, *args):
         pass
 
@@ -1043,7 +1187,10 @@ def main():
         "--host", default="127.0.0.1", help="Bind address; 0.0.0.0 to reach the page from another machine"
     )
     parser.add_argument(
-        "--scenario", type=Path, default=SCENARIO, help="scenario.json whose criteria mark red lines on the page"
+        "--scenario",
+        type=Path,
+        default=SCENARIO,
+        help="scenario.json whose criteria mark red lines on the page for a run whose settings name no scenario",
     )
     parser.add_argument(
         "--thumbs-cache", type=Path, default=THUMB_CACHE, help="Where page images of uploaded decks are cached"

@@ -21,6 +21,7 @@ import type { Entry, Footer, HarnessState, Observed, ObservedLists, ProcessEntry
 export function speaker(source: string): { name: string; you: boolean } {
   if (source === 'human' || source === 'user') return { name: T.speakerYou, you: true }
   if (source === 'agency') return { name: T.speakerOwner, you: false }
+  if (source === 'self') return { name: T.speakerSelf, you: false }
   return { name: T.speakerAssessor(source), you: false }
 }
 

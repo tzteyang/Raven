@@ -64,7 +64,7 @@ async def test_claude_collection_closed_loop_with_retained_research(monkeypatch)
     from experimental.automation.employee import hire_task
     from experimental.curator.harness import Task
     from experimental.research import curator
-    from experimental.research.calls import ClaudeCalls
+    from experimental.research.calls import AgentCalls
     from experimental.research.collection import CollectionLimits
     from experimental.research.information import DIMENSIONS, Description, Request, Section, Snapshot, render
     from experimental.research.inquiry import PROMPT as RESEARCH_PROMPT
@@ -111,6 +111,9 @@ async def test_claude_collection_closed_loop_with_retained_research(monkeypatch)
             )
             return candidate, {"researcher": "recorded evidence replay", "fixture": str(fixture)}
 
+        async def revise(self, packet, check, *, records=None, **kwargs):
+            return await self.research(packet, None, check, records=records)
+
     monkeypatch.setattr(curator, "Exchange", RetainedResearch)
     monkeypatch.setattr(curator.Web, "of", lambda *args, **kwargs: Pages(pages))
     objective = (
@@ -136,7 +139,7 @@ async def test_claude_collection_closed_loop_with_retained_research(monkeypatch)
         workdir=root / "workdir",
         root=root,
     )
-    provider = ClaudeCalls(Agent("claude", model="claude-opus-5-5", effort="xhigh", timeout=300), root / "model-calls")
+    provider = AgentCalls(Agent("claude", model="claude-opus-5-5", effort="xhigh", timeout=300), root / "model-calls")
     (root / "protocol.json").write_text(
         json.dumps(
             {
@@ -161,11 +164,12 @@ async def test_claude_collection_closed_loop_with_retained_research(monkeypatch)
             effort="xhigh",
             researcher="exchange",
             limits=CollectionLimits(
-                calls=6,
-                queries=4,
                 reviews=1,
                 research_tasks=1,
                 research_revisions=revisions,
+                research_window=200,
+                wave_minimum=60,
+                reserve=60,
                 total_timeout=300,
                 timeout=300,
             ),

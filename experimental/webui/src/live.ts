@@ -40,6 +40,8 @@ export interface LiveReply {
   status: RunStatus
   /** The Curator's progress file, or null when the run has none. */
   curator: CuratorProgress | null
+  /** The research stage while it collects the Curator's information before onboarding; null otherwise. */
+  research?: ResearchProgress | null
   /** Copies the worker kept of delivered files, newest first; absent from an older server. */
   deliveries?: KeptFile[]
   /** Each session the record already holds, by name, with the opaque label its session key and replica folder
@@ -139,6 +141,26 @@ export interface CuratorEvent {
   arguments?: string
   targets?: string[]
   understanding?: string
+}
+
+/** One research agent call of the research stage as it runs (experimental/webui/rundir.py research_progress): its
+    questions, whether it ended, its searches and page reads so far and the latest of them. */
+export interface ResearchCall {
+  call: number
+  status: string
+  questions: string[]
+  searches: number
+  reads: number
+  recent: { tool: string; text: string }[]
+  updated: number
+}
+
+export interface ResearchProgress {
+  started: number
+  updated: number
+  /** What follows the stage's newest record: assessing, planning, researching, composing or reviewing. */
+  step: string
+  calls: ResearchCall[]
 }
 
 export interface CuratorProgress {
@@ -386,7 +408,7 @@ export function panelItems(events: CuratorEvent[]): PanelItem[] {
 }
 
 /** Phases in which nothing of the run is moving any more. */
-const STOPPED = new Set(['error', 'finished', 'paused', 'stalled or stopped'])
+const STOPPED = new Set(['error', 'finished', 'paused', 'stopped', 'stalled or stopped'])
 
 /** Whether the run has stopped, by its record's status or the phase the server reads from its files. */
 export const stopped = (running: boolean, phase: Phase | null): boolean => !running || (phase !== null && STOPPED.has(phase.name))

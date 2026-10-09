@@ -4,7 +4,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..requirements import Requirement
+from ..requirements import ExternalRequirement, Requirement
 
 
 class Feedback(BaseModel):
@@ -12,8 +12,11 @@ class Feedback(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
-        name: frozenset({"analyst", "curator"})
-        for name in ("decision", "reason", "requirements", "filtered", "task_updates")
+        **{
+            name: frozenset({"analyst", "curator"})
+            for name in ("decision", "reason", "requirements", "filtered", "task_updates")
+        },
+        "external_requirements": frozenset({"analyst"}),
     }
 
     decision: Literal["curate", "continue", "supplement", "clarify", "stop"]
@@ -21,6 +24,7 @@ class Feedback(BaseModel):
     requirements: tuple[Requirement, ...] = ()
     filtered: tuple[str, ...] = ()
     task_updates: tuple[str, ...] = ()
+    external_requirements: tuple[ExternalRequirement, ...] = Field(default=(), max_length=16)
 
     @model_validator(mode="after")
     def requirements_match_decision(self) -> "Feedback":

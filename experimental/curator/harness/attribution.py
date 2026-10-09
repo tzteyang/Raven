@@ -36,7 +36,8 @@ class Diagnosis(BaseModel):
     state: State = Field(
         description="absent: no mechanism covers it. not_exposed: one exists but the model never sees it. "
         "not_triggered: it exists but its trigger did not fire. not_consumed: it fired but its result was not used. "
-        "wrong_logic: it ran and decided wrongly. blocked: the host or a permission stopped it. model_ignored: the "
+        "wrong_logic: it ran and decided wrongly, including stopping or rewriting an action the requirement wants. "
+        "blocked: the host or a permission stopped it. model_ignored: the "
         "information was present and the model did not follow it. uncovered: the mechanism exists but does not "
         "reach this situation."
     )

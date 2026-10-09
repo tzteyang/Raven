@@ -45,7 +45,7 @@ async def derive_guidance(
         async def run(arguments):
             nonlocal used
             calls.check(arguments)
-            if used >= limits.queries:
+            if used >= limits.guidance_queries:
                 raise ValueError("guidance read budget exhausted; submit only useful supported directions")
             used += 1
             output = await exploration.registry.execute(name, arguments, run_meta=calls.metadata(arguments))

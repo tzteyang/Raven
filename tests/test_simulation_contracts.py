@@ -13,6 +13,7 @@ from experimental.analyst.activity import activity
 from experimental.analyst.role import Analyst
 from experimental.analyst.run import NAME as FEEDBACK
 from experimental.automation.channel import seen
+from experimental.counterpart.owner import handles
 from experimental.curator.harness import Task
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.conversation import Conversation
@@ -263,9 +264,10 @@ def test_the_owner_reads_what_the_employee_filed_and_not_the_hosts_bookkeeping(t
 async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_neither_analyst_nor_curator(tmp_path):
     scenario = Scenario.load(TRAVEL)
     rule = next(criterion for criterion in scenario.criteria if criterion.id == "no-internal-chatter")
+    named = handles(scenario.criteria)
     verdicts = [
         {
-            "id": c.id,
+            "id": named[c.id],
             "result": "fail" if c.id == rule.id else "pass",
             "session": "family",
             "actual": "[internal material request]",

@@ -12,6 +12,19 @@ from ..context.collect import Context, read_reference
 from ..context.render import tool
 
 
+def _information(context: Context) -> dict | None:
+    """The reviewed expert description handed over with the feedback, read in full once for every stage.
+
+    The handoff names the file under the worker's uploads; it is registered as the `upload.` source of that path.
+    Every stage of a construction reads it, so it travels as a material instead of being queried stage by stage."""
+    handoff = context.feedback.get("information") if isinstance(context.feedback, dict) else None
+    file = handoff.get("file") if isinstance(handoff, dict) else None
+    if not isinstance(file, str) or not file.startswith("uploads/"):
+        return None
+    reference = read_reference(context, "upload." + file.removeprefix("uploads/"))
+    return {**reference, "version": handoff.get("version")} if reference else None
+
+
 def materials(context: Context) -> dict:
     facts = context.facts
     worker = {
@@ -74,6 +87,7 @@ def materials(context: Context) -> dict:
     # requests of later rounds keep the longest possible prefix for the provider's cache.
     return {
         "task": context.task,
+        "information": _information(context),
         "orientation": read_reference(context, "reference.index"),
         "fact_sections": list(facts),
         "worker": worker,
@@ -92,6 +106,7 @@ def materials(context: Context) -> dict:
             for name, entry in context.sources.items()
         },
         "exploration": context.exploration,
+        **({"experience": context.experience} if context.experience is not None else {}),
     }
 
 

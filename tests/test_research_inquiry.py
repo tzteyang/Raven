@@ -437,3 +437,18 @@ async def test_narrative_conflicts_are_not_material_ids_and_retained_ids_do_not_
     result = await verify(Inquiry(findings=[bad, good]), Pages({PAGE: TEXT}))
     assert result.findings[0].id == "researched-2"
     assert result.findings[0].conflicts == tuple(good["conflicts"])
+
+
+@pytest.mark.asyncio
+async def test_an_admitted_finding_keeps_only_the_sources_that_hold_its_passage(tmp_path):
+    scenario = load(make_scenario(tmp_path / "shop"))
+    other = "https://tea.example/hours"
+    web = Pages({PAGE: TEXT, other: "Opening Hours\n\nThe shop opens at nine and closes at six."})
+    found = await verify(
+        Inquiry.model_validate({"findings": [{**FOUND, "sources": [other, PAGE]}], "unanswered": []}),
+        web,
+        sealed=seals(scenario),
+    )
+    (finding,) = found.findings
+    assert finding.sources == (PAGE,) and finding.unmatched_sources == (other,)
+    assert tuple(finding.record()["unmatched_sources"]) == (other,)

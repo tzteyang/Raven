@@ -94,7 +94,9 @@ def curations(monkeypatch):
 
 
 def write_config(tmp_path, **values):
-    (tmp_path / "raven.json").write_text("{}")
+    (tmp_path / "raven.json").write_text(
+        json.dumps({"agents": {"defaults": {"model": "deepseek/deepseek-flash", "reasoningEffort": "low"}}})
+    )
     path = tmp_path / "live.json"
     path.write_text(
         json.dumps({"config": "raven.json", "root": "live", "rounds": 3, "turns": 4, "timeout": 30, **values})
@@ -138,7 +140,7 @@ async def play(host, *messages):
 def test_a_live_configuration_reads_its_paths_from_its_own_folder_and_refuses_what_it_does_not_know(tmp_path):
     config = LiveConfig.load(write_config(tmp_path))
     assert config.config == (tmp_path / "raven.json").resolve() and config.root == (tmp_path / "live").resolve()
-    assert config.scenario == TRAVEL.resolve() and config.curator_effort == "high"
+    assert config.scenario == TRAVEL.resolve() and config.models == config.efforts == {}
     started = config.spec(tmp_path / "run", tmp_path / "work", "the job")
     assert (started["run_dir"], started["workdir"], started["task"]) == (
         str(tmp_path / "run"),
@@ -151,6 +153,10 @@ def test_a_live_configuration_reads_its_paths_from_its_own_folder_and_refuses_wh
         ({"rounds": 0}, "rounds must be a positive integer"),
         ({"config": "missing.json"}, "is not a file"),
         ({"timeout": True}, "timeout must be"),
+        ({"models": {"counterpart": "x"}}, "not a model role of this run"),
+        ({"efforts": {"curator": 2}}, "must map model roles"),
+        ({"experience_scope": " "}, "experience_scope"),
+        ({"experience_migrate": "yes"}, "experience_migrate"),
     ):
         with pytest.raises(ValueError, match=message):
             LiveConfig.load(write_config(tmp_path, **values))
@@ -160,11 +166,22 @@ def test_a_live_configuration_reads_its_paths_from_its_own_folder_and_refuses_wh
         LiveConfig.load(bare)
 
 
+def test_live_experience_configuration_reaches_the_host_without_changing_default_runs(tmp_path):
+    default = LiveConfig.load(write_config(tmp_path))
+    assert default.experience_memory is None
+    configured = LiveConfig.load(
+        write_config(tmp_path, experience_memory="memory", experience_scope="project", experience_migrate=True)
+    )
+    supplied = configured.spec(tmp_path / "run", tmp_path / "work", "task")
+    assert supplied["experience_memory"] == str((tmp_path / "memory").resolve())
+    assert supplied["experience_scope"] == "project" and supplied["experience_migrate"] is True
+
+
 def test_the_materials_offered_are_those_the_curator_may_receive_with_where_each_came_from(tmp_path):
     scenario = tmp_path / "agency"
     shutil.copytree(TRAVEL, scenario)
     contract = json.loads((scenario / "contract.json").read_text())
-    contract["materials"]["price-list"]["visibility"] = ["party", "analyst"]
+    contract["materials"]["price-list"]["visibility"] = ["counterpart", "analyst"]
     (scenario / "contract.json").write_text(json.dumps(contract))
     spec = json.loads((scenario / "scenario.json").read_text())
     spec["initial"] = [name for name in spec["initial"] if name != "price-list"]
@@ -197,8 +214,9 @@ async def test_a_live_session_takes_the_loops_steps_as_the_page_asks_and_refuses
         assert state["failed"] is None and state["status"] == "running" and not state["onboarded"]
         assert host.session.boundaries.policy == "warn" and hired[0].guard is not None and hired[0].employee.started
         settings = json.loads((host.root / "settings.json").read_text())
-        assert settings["chain"] == "live" and settings["models"]["employee"] == "deepseek/deepseek-flash"
-        assert "raven.json" not in json.dumps(settings) and settings["efforts"]["curator"] == "high"
+        assert settings["chain"] == "live" and settings["models"]["partner"] == "deepseek/deepseek-flash"
+        assert settings["models"]["curator"] == "deepseek/deepseek-flash" and "counterpart" not in settings["models"]
+        assert "raven.json" not in json.dumps(settings) and settings["efforts"]["curator"] == "low"
 
         reply = await host.handle({"op": "onboard", "text": "Here is our SOP.", "materials": ["service-sop"]})
         assert reply["ok"]

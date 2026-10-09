@@ -156,6 +156,28 @@ class BoundCapability(BoundStrategy):
         if self.config is not None:
             await super().prepare()
 
+    def selection_request(self, offered, transcript) -> SelectionRequest:
+        """What the strategy is asked at a step: the conversation so far, the tools the runtime offers, every skill of
+        the installed catalogue as the host lists it, the subagents and the plan."""
+        return SelectionRequest(
+            scope=self.scope(),
+            messages=plain(transcript),
+            tools=plain(offered),
+            skills=self.catalog.skill_views(self.runtime),
+            subagents=tuple(
+                {
+                    "name": agent.name,
+                    "description": agent.description,
+                    "owns": agent.owns,
+                    "stateful": agent.stateful,
+                    "reads_local_files": agent.reads_local_files,
+                    "live_progress": agent.live_progress,
+                }
+                for agent in self.runtime.loop.subagents.list_agents()
+            ),
+            plan=self.plan() if self.plan else None,
+        )
+
     async def select(self, request):
         if not self.catalog.installed:
             raise RuntimeError("capability selection requires an installed catalogue")
@@ -226,25 +248,7 @@ class BoundCapability(BoundStrategy):
         class CapabilityParticipant(AgentParticipant):
             async def select_tools(self, offered, step):
                 try:
-                    request = SelectionRequest(
-                        scope=owner.scope(),
-                        messages=plain(step.transcript),
-                        tools=plain(offered),
-                        skills=owner.catalog.skill_views(owner.runtime),
-                        subagents=tuple(
-                            {
-                                "name": agent.name,
-                                "description": agent.description,
-                                "owns": agent.owns,
-                                "stateful": agent.stateful,
-                                "reads_local_files": agent.reads_local_files,
-                                "live_progress": agent.live_progress,
-                            }
-                            for agent in owner.runtime.loop.subagents.list_agents()
-                        ),
-                        plan=owner.plan() if owner.plan else None,
-                    )
-                    result = await owner.select(request)
+                    result = await owner.select(owner.selection_request(offered, step.transcript))
                     if result.tools is None:
                         return None
                     available = {row["function"]["name"]: row for row in offered}

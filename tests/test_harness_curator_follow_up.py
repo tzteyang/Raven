@@ -1,9 +1,11 @@
-"""A worker turn waits for the sub-agents it started and runs their announcements as follow-up turns."""
+"""A worker turn keeps its outcome, an unanswered one included, then waits for the sub-agents it started and runs
+their announcements as follow-up turns."""
 
 import asyncio
 from dataclasses import dataclass
 
-from experimental.curator.raven_adapter.worker import follow_up
+from experimental.curator.raven_adapter.worker import follow_up, trial_turn
+from raven.spine.turn import AnswerlessTurnError
 
 
 @dataclass(frozen=True)
@@ -43,3 +45,25 @@ async def test_a_turn_that_started_nothing_returns_at_once():
     ran = []
     await follow_up(Background(asyncio.Queue(), []), asyncio.Queue(), ran.append, poll=0)
     assert ran == []
+
+
+async def test_a_turn_the_model_never_answered_is_its_outcome_and_nothing_follows_it():
+    followed = []
+
+    async def follow():
+        followed.append(True)
+
+    async def silent(turn):
+        raise AnswerlessTurnError("The model returned no content on 2 attempt(s).")
+
+    async def answered(turn):
+        return {"explicit_reply": True}
+
+    outcome = await trial_turn(silent, "turn", follow)
+    assert outcome == {
+        "answerless": True,
+        "error": "The model returned no content on 2 attempt(s).",
+        "explicit_reply": False,
+    }
+    assert followed == []
+    assert await trial_turn(answered, "turn", follow) == {"explicit_reply": True} and followed == [True]

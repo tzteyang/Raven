@@ -17,5 +17,5 @@ export default defineConfig({
     proxy: { '/api': 'http://127.0.0.1:8765', '/files': 'http://127.0.0.1:8765' },
     fs: { allow: ['.', '../../ui-web/src'] },
   },
-  test: { environment: 'jsdom', include: ['src/**/*.test.{ts,tsx}'] },
+  test: { environment: 'jsdom', include: ['src/**/*.test.{ts,tsx}'], setupFiles: ['src/test.setup.ts'] },
 })

@@ -1,5 +1,6 @@
 """Rounds alternate trial, evaluation, analysis and curation, and stop for the declared reasons."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -108,6 +109,7 @@ def analyses(monkeypatch):
         previous_feedback,
         history,
         model,
+        effort=None,
         limits,
         sealed=None,
         spoken=None,
@@ -119,6 +121,7 @@ def analyses(monkeypatch):
                 "previous": previous_feedback,
                 "history": history,
                 "model": model,
+                "effort": effort,
                 "sessions": sessions,
                 "spoken": spoken,
             }
@@ -146,7 +149,8 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
         provider=object(),
         trials=[student],
         assessors=[Verifier(failing("Never asked the budget."), passing())],
-        model="analyst",
+        analyst_model="analyst",
+        analyst_effort="medium",
         curator_model="curator",
         limits=limits,
     )
@@ -165,7 +169,7 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     assert rounds[0].sessions["student"][1].assistant == "Reply to Cheap please"
     assert analyses.calls[0]["previous"] is None and analyses.calls[1]["previous"] is CURATE
     assert analyses.calls[0]["previous_signals"] == () and analyses.calls[1]["previous_signals"] == rounds[0].signals
-    assert analyses.calls[0]["model"] == "analyst"
+    assert analyses.calls[0]["model"] == "analyst" and analyses.calls[0]["effort"] == "medium"
     assert analyses.calls[0]["history"] == () and curations[1]["feedback"]["history"] == []
     earlier = analyses.calls[1]["history"][0]
     assert earlier.round == 1 and "fail" in earlier.results["verifier"].values()
@@ -214,6 +218,25 @@ async def test_a_turn_past_the_time_limit_ends_its_conversation_and_is_kept(tmp_
     (exchanges,) = (await student.run(Slow(tmp_path))).values()
     assert [exchange.user for exchange in exchanges] == ["Plan a trip", "Cheaper?"]
     assert exchanges[-1].execution.outcome["timed_out"] and exchanges[-1].assistant == ""
+    assert exchanges[-1].stopped == "no reply within 600 seconds; the turn was stopped"
+
+
+@pytest.mark.asyncio
+async def test_a_turn_ended_without_an_answer_ends_its_conversation_and_is_kept(tmp_path):
+    class Silent(FakeWorker):
+        async def run(self, text, *, session_key):
+            if self.runs:
+                self.runs.append((session_key, text))
+                return Execution(
+                    "turn-silent", [], [], {"answerless": True, "error": "no content", "explicit_reply": False}
+                )
+            return await super().run(text, session_key=session_key)
+
+    student = Conversation(Scripted("student", "Plan a trip", "Cheaper?", "Thanks"), max_turns=3)
+    (exchanges,) = (await student.run(Silent(tmp_path))).values()
+    assert [exchange.user for exchange in exchanges] == ["Plan a trip", "Cheaper?"]
+    assert exchanges[-1].stopped == "no reply: the assistant ended the turn without answering"
+    assert exchanges[0].stopped is None
 
 
 @pytest.mark.asyncio
@@ -282,6 +305,24 @@ async def test_round_budget_caps_an_unsatisfied_loop_and_errors_are_recorded(tmp
 
 
 @pytest.mark.asyncio
+async def test_an_interrupted_run_is_recorded_as_stopped(tmp_path, curations, analyses):
+    class Hanging:
+        name = "s"
+
+        async def speak(self, exchanges):
+            await asyncio.Event().wait()
+
+    worker = FakeWorker(tmp_path)
+    task = asyncio.ensure_future(run(worker, object(), [Conversation(Hanging())], [Verifier()]))
+    await asyncio.sleep(0.05)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    record = json.loads(next((worker.root / "iteration").glob("*.json")).read_text())
+    assert (record["status"], record["stop"]) == ("stopped", "interrupted before the run ended")
+
+
+@pytest.mark.asyncio
 async def test_trials_conversations_and_limits_hold_their_bounds(tmp_path):
     worker = FakeWorker(tmp_path)
     assert len((await Conversation(Scripted("s", "a", "b", "c"), max_turns=2).run(worker))["s"]) == 2
@@ -313,7 +354,7 @@ async def test_human_shows_the_reply_and_maps_terminal_input_to_the_protocols():
     assert await human.speak([Exchange("hey", execution)]) == "  Hello  "
     assert shown == ["Hi!", "Execution issue: boom"]
     assert await human.speak([]) is None
-    assert await human.evaluate({}) == Signal("human", "Ask budget first.")
+    assert await human.evaluate({}) == Signal("human", "Ask budget first.", authority="external")
     assert await human.evaluate({}) is None
 
     def eof(label):

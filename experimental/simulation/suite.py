@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..automation.employee import FORWARDED
+from ..automation.employee import AREA, FORWARDED
 from .__main__ import CHAINS
 from .record import REDACTED, SUMMARY, build_record, export_record, redact
 from .scenario import Scenario
@@ -36,7 +36,11 @@ VALUE = "value.json"
 
 
 # USD per million tokens (fresh input, output, cache-read input) for models whose provider reports no cost.
-PRICES = {"deepseek/deepseek-flash": (0.30, 1.20, 0.006)}
+PRICES = {
+    "deepseek/deepseek-flash": (0.30, 1.20, 0.006),
+    # On OpenRouter, pinned to the StreamLake upstream.
+    "deepseek/deepseek-v4-flash": (0.042, 0.084, 0.0084),
+}
 
 
 def call_cost(attributes: dict, prices=PRICES) -> float:
@@ -53,22 +57,30 @@ def call_cost(attributes: dict, prices=PRICES) -> float:
     return sum(float(count) * rate for count, rate in zip(tokens, price, strict=True)) / 1_000_000
 
 
+def span_logs(folder: Path) -> list[Path]:
+    """The call logs of one Raven span-log folder in write order: the logs rotated into `archive/<date>/` at each day
+    boundary, then the active ones, laid out as `raven.trajectory.store.span_log_paths` lists them for a home. A run
+    that crosses midnight keeps most of its calls in the archive."""
+    return [*sorted(folder.glob("archive/*/audit-spans-*.log")), *sorted(folder.glob("audit-spans*.log*"))]
+
+
 def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, float]:
     """Model spend of one run from the calls its Raven home recorded, split by who made them.
 
     A child harness hosted beside the employee or one of its replicas keeps its own log under the run's records
-    (`children/<id>/native/traces/logs`, or under `replicas/<label>/`); every call there counts as a subagent's.
+    (`employee/children/<id>/native/traces/logs`, or the same under `replicas/<label>/`); every call there counts as a
+    subagent's.
     Replicas' own calls land in the run's Raven home with the employee's; once the home is gone, its logs are read
     from the copy the records keep under `traces/`.
     """
     parts = {"simulation": 0.0, "employee": 0.0, "subagents": 0.0}
-    logs = [(log, None) for log in (Path(state) / "traces" / "logs").glob("audit-spans*.log*")]
+    logs = [(log, None) for log in span_logs(Path(state) / "traces" / "logs")]
     if not logs and records is not None:
-        logs = [(log, None) for log in (Path(records) / "traces").glob("audit-spans*.log*")]
+        logs = [(log, None) for log in span_logs(Path(records) / "traces")]
     if records is not None:
         for owner in ("", "replicas/*/"):
-            found = Path(records).glob(f"{owner}children/*/native/traces/logs/audit-spans*.log*")
-            logs += [(log, "subagents") for log in found]
+            for folder in sorted(Path(records).glob(f"{owner}{AREA}/children/*/native/traces/logs")):
+                logs += [(log, "subagents") for log in span_logs(folder)]
     for log, fixed in logs:
         for line in log.open(errors="replace"):
             if '"llm.call"' not in line:
@@ -174,18 +186,12 @@ def command(plan: list[str], args, *, config: Path, workdir: Path, records: Path
     argv += ["--rounds", str(args.rounds), "--turns", str(args.turns), "--repeats", str(args.repeats)]
     argv += ["--timeout", str(args.timeout)]
     for flag, value in (
-        ("--curator-model", args.curator_model),
-        ("--analyst-model", args.analyst_model),
-        ("--simulation-model", args.simulation_model),
-        ("--traveller-model", args.traveller_model),
         ("--curator-calls", getattr(args, "curator_calls", None)),
         ("--curator-queries", getattr(args, "curator_queries", None)),
-        ("--subagent-model", args.subagent_model),
-        ("--curator-effort", getattr(args, "curator_effort", None)),
-        ("--traveller-effort", getattr(args, "traveller_effort", None)),
     ):
         if value:
             argv += [flag, str(value)]
+    argv += [item for flag in ("model", "effort") for pair in getattr(args, flag, ()) for item in (f"--{flag}", pair)]
     if args.cards:
         argv += ["--cards", *args.cards]
     if getattr(args, "concurrent_drills", 1) > 1:
@@ -428,15 +434,10 @@ def cli():
     parser.add_argument("--cards", nargs="+")
     parser.add_argument("--concurrent-drills", type=int, default=1, help="Drills each run plays at once in a round")
     parser.add_argument("--timeout", type=float, default=3600)
-    parser.add_argument("--curator-model")
-    parser.add_argument("--analyst-model")
-    parser.add_argument("--simulation-model")
-    parser.add_argument("--traveller-model")
+    parser.add_argument("--model", action="append", default=[], metavar="ROLE=MODEL", help="Passed to every run")
+    parser.add_argument("--effort", action="append", default=[], metavar="ROLE=LEVEL", help="Passed to every run")
     parser.add_argument("--curator-calls", type=int)
     parser.add_argument("--curator-queries", type=int)
-    parser.add_argument("--subagent-model")
-    parser.add_argument("--curator-effort", choices=("low", "medium", "high"))
-    parser.add_argument("--traveller-effort", choices=("low", "medium", "high"))
     parser.add_argument(
         "--budget", type=float, help="Stop every running run once the suite has spent this many dollars"
     )

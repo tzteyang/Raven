@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import re
 import shutil
 from dataclasses import replace
 from pathlib import Path
@@ -19,16 +20,17 @@ from ..curator.workflow import information_scope, unfinished
 from ..iteration.exchange import exchange, messages
 from .collection import CollectionLimits, _Calls, collect_information
 from .guidance import derive_guidance
-from .information import Manifest, Request, Result, Review, render
-from .researchers import Agent, Exchange
-from .review import PROMPT as RESEARCH_REVIEW_PROMPT
+from .information import Manifest, Request, ResearchReview, Result, Review, render
+from .researchers import Agent, Exchange, ResearchError
 from .review import review_research
+from .voice import prompt
 from .web import Web
 
 INFORMATION_FILE = "uploads/information/expert.md"
 MATERIAL_PREFIX = "information.material."
 GUIDANCE_PREFIX = "research.example."
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
+CHILD_DEFINITION = re.compile(r"(/[^\s\"]+/versions/)([0-9a-f]{64})(/deployment\.json)")
 
 
 def _paths(paths):
@@ -104,16 +106,25 @@ def _environment(worker, inspection, home):
             )
         },
     }
-    text = json.dumps(payload, sort_keys=True, default=str)
     locations = [
         (home, "<home>"),
         (getattr(worker.baseline, "workdir", None), "<workdir>"),
         (getattr(worker, "root", None), "<run>"),
     ]
-    for path, label in sorted(locations, key=lambda item: len(str(item[0])), reverse=True):
-        if path is not None:
-            text = text.replace(str(Path(path).resolve()), label)
-    text = text.replace(worker.baseline.task.id, "<task-id>")
+
+    def relocated(text):
+        for path, label in sorted(locations, key=lambda item: len(str(item[0])), reverse=True):
+            if path is not None:
+                text = text.replace(str(Path(path).resolve()), label)
+        return text.replace(worker.baseline.task.id, "<task-id>")
+
+    # A child's definition is versioned by a digest of content that holds this run's paths and task id, so the same
+    # child prepared for another run gets another version; bind its relocated content instead of that version.
+    def definition(match):
+        content = relocated(Path(match.group(0)).read_text(encoding="utf-8"))
+        return f"{match.group(1)}{hashlib.sha256(content.encode()).hexdigest()}{match.group(3)}"
+
+    text = relocated(CHILD_DEFINITION.sub(definition, json.dumps(payload, sort_keys=True, default=str)))
     return hashlib.sha256(text.encode()).hexdigest()
 
 
@@ -134,6 +145,7 @@ async def collect_for_curator(
     research_effort=None,
     research_budget=None,
     limits=CollectionLimits(),
+    wait_for_input=False,
     replay: Result | None = None,
     admit=None,
 ) -> Result:
@@ -250,27 +262,36 @@ async def collect_for_curator(
             )
             return result
 
-    async def review_packet(packet, destination, prompt, name, agent=None):
+    async def review_packet(packet, destination, prompt, name, agent=None, output=Review):
+        def complete(review):
+            delivered = {finding["id"] for finding in packet.get("delivery", {}).get("findings", [])}
+            if isinstance(review, ResearchReview) and {verdict.id for verdict in review.findings} != delivered:
+                raise ValueError(f"give one verdict for each delivered finding, by id: {sorted(delivered)}")
+            return review
+
         if researcher == "claude":
             actor = agent or Agent(
                 "claude", model=research_model, effort=research_effort, budget=research_budget, timeout=limits.timeout
             )
             review, _ = await actor.stage(
-                prompt + "\n\n" + json.dumps(packet, ensure_ascii=False), Review, records=destination
+                prompt + "\n\n" + json.dumps(packet, ensure_ascii=False), output, records=destination
             )
-            return review
+            try:
+                return complete(review)
+            except ValueError as exc:
+                raise ResearchError(str(exc)) from exc
         destination.mkdir(parents=True, exist_ok=False)
         calls, trace = _Calls(provider), []
 
         def accept(arguments):
             calls.check(arguments)
-            return Review.model_validate(arguments)
+            return complete(output.model_validate(arguments))
 
         try:
             _, review = await exchange(
                 calls,
                 messages(prompt, packet),
-                [tool(name, "Review the supplied content and its actual inputs.", schema_for(Review))],
+                [tool(name, "Review the supplied content and its actual inputs.", schema_for(output))],
                 submit={name: accept},
                 model=review_model or model,
                 effort="high",
@@ -285,7 +306,7 @@ async def collect_for_curator(
 
     async def research(task):
         nonlocal web
-        timeout = min(limits.research_timeout, task.remaining_seconds)
+        timeout = min(limits.research_window, task.remaining_seconds)
         acquisition = limits.acquisition_window(timeout)
         if web is None:
             web = Web.of(
@@ -305,7 +326,7 @@ async def collect_for_curator(
 
         async def review_delivery(packet, destination):
             return await review_packet(
-                packet, destination, RESEARCH_REVIEW_PROMPT.read_text(), "review_research", agent
+                packet, destination, prompt("review_research.md"), "review_research", agent, ResearchReview
             )
 
         return await review_research(
@@ -354,6 +375,7 @@ async def collect_for_curator(
                 research=research if researcher is not None else None,
                 guidance=guidance if research_references else None,
                 ask=ask,
+                wait_for_input=wait_for_input,
                 model=model,
                 review_model=review_model,
                 limits=limits,

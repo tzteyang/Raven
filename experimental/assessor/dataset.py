@@ -6,7 +6,7 @@ the Analyst; the Curator never receives them (see `experimental.iteration.hearin
 """
 
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import asdict, dataclass
 from uuid import uuid4
 
 from ..iteration.protocols import Exchange, Item, Sessions, Signal
@@ -40,6 +40,15 @@ class Dataset:
             raise ValueError("threshold is a pass rate between 0 and 1")
         self.score, self.threshold, self.name = score, threshold, name
 
+    def verification_policy(self) -> dict:
+        """The host-supplied cases, scorer and threshold; used only with isolated held-out trials for promotion."""
+        return {
+            "kind": "dataset",
+            "cases": [asdict(case) for case in self.cases],
+            "threshold": self.threshold,
+            "scorer": f"{self.score.__module__}.{getattr(self.score, '__qualname__', type(self.score).__qualname__)}",
+        }
+
     async def run(self, worker) -> Sessions:
         """Each run starts fresh worker sessions, so a round measures the current Harness alone."""
         sessions, run_id = {}, uuid4().hex
@@ -66,4 +75,10 @@ class Dataset:
             for item in items
         ]
         rate = sum(scores) / len(scores)
-        return Signal(self.name, items=tuple(items), metrics={"pass_rate": rate}, satisfied=rate >= self.threshold)
+        return Signal(
+            self.name,
+            items=tuple(items),
+            metrics={"pass_rate": rate},
+            satisfied=None if any(item.result == "unknown" for item in items) else rate >= self.threshold,
+            authority="external",
+        )

@@ -2,6 +2,7 @@ import { normalizeRecord } from './record'
 
 import type { HousedHome } from './harness'
 import type { LiveReply } from './live'
+import type { Phase } from './loop'
 import type { Run, RunEntry, Scenario } from './model'
 import type { NodeProcess, ProcessSource } from './process'
 import type { CultivationRecord } from './record'
@@ -22,11 +23,13 @@ export const listRuns = (): Promise<RunEntry[]> => read('/api/runs')
 export const loadRun = (id: string): Promise<Run> => read(`/api/runs/${id}`)
 export const fileUrl = (path: string): string => `/files?path=${encodeURIComponent(path)}`
 
-/* The page works without a scenario: an older server answers this path with the
-   page itself, and a run from another scenario simply has no red lines marked. */
-export async function loadScenario(): Promise<Scenario> {
+/* The scenario of the run named, as its settings record it; the server's own
+   without a run. The page works without a scenario: an older server answers
+   this path with the page itself, and a run from another scenario simply has
+   no red lines marked. */
+export async function loadScenario(run?: string): Promise<Scenario> {
   try {
-    const value = await read<Partial<Scenario>>('/api/scenario')
+    const value = await read<Partial<Scenario>>(run ? `/api/scenario?run=${encodeURIComponent(run)}` : '/api/scenario')
     return {
       criteria: Array.isArray(value.criteria) ? value.criteria : [],
       initial: Array.isArray(value.initial) ? value.initial : [],
@@ -62,6 +65,9 @@ export async function loadText(url: string): Promise<string> {
     from a fresh tail. */
 export const loadLive = (run: string, logs: string): Promise<LiveReply> =>
   read(`/api/live?run=${encodeURIComponent(run)}${logs ? `&logs=${encodeURIComponent(logs)}` : ''}`)
+
+/** The phase a run is in and its recorded status, without the logs `loadLive` reads (serve.py run_phase). */
+export const loadPhase = (run: string): Promise<{ phase: Phase; status: string }> => read(`/api/phase?run=${encodeURIComponent(run)}`)
 
 export interface NodeQuery {
   /** Counts and the last step only, for a node card's running tally. */

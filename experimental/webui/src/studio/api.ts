@@ -33,7 +33,7 @@ export function loadRaw(run: string, ref: RawRef): Promise<unknown> {
   return read(`/api/studio/raw?${params.toString()}`)
 }
 
-/** A material the person may hand over, as the handover it becomes, with where it came from when the party did not
+/** A material the person may hand over, as the handover it becomes, with where it came from when the counterpart did not
     simply give it. */
 export interface LiveMaterial extends Handover {
   origin?: MaterialOrigin

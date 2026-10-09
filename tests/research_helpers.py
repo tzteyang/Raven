@@ -37,12 +37,13 @@ def research_brief(question="How should evidence and uncertainty be handled?", *
 
 
 def rejections(request) -> list[str]:
-    return [json.loads(row["content"])["error"] for row in request["messages"] if row["role"] == "tool"]
+    rows = [json.loads(row["content"]) for row in request["messages"] if row["role"] == "tool"]
+    return [row["error"] for row in rows if isinstance(row, dict) and "error" in row]
 
 
 def make_scenario(root: Path, *, facts=True, instances=True, checks=True, norms=True) -> Path:
-    """A shop scenario: a norm, a norm only the party holds, a fact, an exemplar with a binary file beside its
-    document, a counterexample, one check and a two-step plan of what the party hands over."""
+    """A shop scenario: a norm, a norm only the counterpart holds, a fact, an exemplar with a binary file beside its
+    document, a counterexample, one check and a two-step plan of what the counterpart hands over."""
     (root / "personas").mkdir(parents=True)
     (root / "profile.md").write_text("You answer the tea shop's customers.\n")
     (root / "personas" / "walk-in.md").write_text("A customer asks what an afternoon tea for two would cost.\n")
@@ -60,7 +61,7 @@ def make_scenario(root: Path, *, facts=True, instances=True, checks=True, norms=
         kinds["sop"] = {"kind": material("sop", "Greet the customer and quote from the price list only.", "norm")}
         kinds["owner-policy"] = {
             "kind": material("owner-policy", "Discounts above ten percent need the owner's approval.", "norm"),
-            "visibility": ["party"],
+            "visibility": ["counterpart"],
         }
     if facts:
         kinds["prices"] = {"kind": material("prices", "Tea costs three. Cake costs five.", "fact")}

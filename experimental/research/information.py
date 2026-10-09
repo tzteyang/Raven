@@ -56,13 +56,23 @@ class Resource(_Model):
 
 
 class Question(_Model):
+    """An open point in the description. `assumption` is the premise the description applies while the point stays
+    open; only a user question can block, and only when the host is configured to wait for input."""
+
     id: str = Field(min_length=1)
     dimension: Dimension
     question: str = Field(min_length=1)
     reason: str = Field(min_length=1)
-    blocking: bool = True
+    blocking: bool = False
     channel: Literal["user", "research", "native"] = "user"
     proposal: str | None = None
+    assumption: str = ""
+
+    @model_validator(mode="after")
+    def only_user_questions_block(self):
+        if self.blocking and self.channel != "user":
+            raise ValueError("only a user question can block; other channels record a gap and an assumption")
+        return self
 
 
 class Description(_Model):
@@ -84,6 +94,72 @@ class Description(_Model):
     @property
     def references(self) -> frozenset[str]:
         return frozenset(ref for row in (*self.sections, *self.resources) for ref in row.evidence)
+
+
+class UserQuestion(_Model):
+    dimension: Dimension
+    question: str = Field(min_length=1)
+    reason: str = Field(min_length=1)
+    proposal: str | None = None
+
+
+class Coverage(_Model):
+    """One dimension's assessment from the supplied material before any acquisition."""
+
+    dimension: Dimension
+    coverage: Literal["sufficient", "partial", "missing", "not_applicable"]
+    reason: str = Field(min_length=1)
+    evidence: tuple[str, ...] = ()
+
+
+class ResearchNeed(_Model):
+    question: str = Field(min_length=1)
+    dimensions: tuple[Dimension, ...] = Field(min_length=1)
+    why: str = Field(min_length=1)
+
+
+class Assessment(_Model):
+    """The assessment stage's deliverable: what the material establishes, what only the user can settle and what
+    public research could add. Questions and research needs are admissible only on configured channels."""
+
+    reading: str = Field(min_length=1, description="What the supplied material establishes and leaves open.")
+    coverage: tuple[Coverage, ...] = Field(min_length=1)
+    questions: tuple[UserQuestion, ...] = ()
+    research_needs: tuple[ResearchNeed, ...] = ()
+
+    @model_validator(mode="after")
+    def one_assessment_per_dimension(self):
+        dimensions = [row.dimension for row in self.coverage]
+        if len(dimensions) != len(set(dimensions)):
+            raise ValueError("assess each dimension once")
+        return self
+
+
+class ResearchGroup(_Model):
+    """One coherent work problem for a researcher: the dimensions it serves, the assessed research needs (or open
+    points of the previous wave) it answers, and the evidence it may reuse."""
+
+    dimensions: tuple[Dimension, ...] = Field(min_length=1)
+    serves: tuple[str, ...] = Field(
+        min_length=1, description="The refs of the listed research needs or open points this group answers."
+    )
+    brief: "ResearchBrief"
+    known_evidence: tuple[str, ...] = ()
+    use_guidance: bool = True
+
+    @model_validator(mode="after")
+    def distinct_dimensions(self):
+        if len(self.dimensions) != len(set(self.dimensions)):
+            raise ValueError("a research group names each dimension once")
+        return self
+
+
+class ResearchPlan(_Model):
+    """The planning stage's deliverable: the groups to run concurrently, in priority order, and what is deferred."""
+
+    rationale: str = Field(min_length=1)
+    groups: tuple[ResearchGroup, ...] = ()
+    deferred: tuple[str, ...] = ()
 
 
 class Evidence(_Model):
@@ -154,6 +230,57 @@ class Review(_Model):
         if not self.accepted and not self.issues:
             raise ValueError("a rejected review must explain what needs revision")
         return self
+
+
+class FindingVerdict(_Model):
+    id: str = Field(min_length=1)
+    admit: bool
+    reason: str = ""
+
+    @model_validator(mode="after")
+    def withheld_with_reason(self):
+        if not self.admit and not self.reason.strip():
+            raise ValueError("a withheld finding needs a reason")
+        return self
+
+
+class ResearchReview(_Model):
+    """One verdict per delivered finding; the synthesis is admitted on its own. Blocking issues describe what is
+    withheld, and `needs_new_sources` says whether repairing it takes new reading or only rewriting."""
+
+    reason: str = Field(min_length=1)
+    findings: tuple[FindingVerdict, ...] = ()
+    synthesis_admitted: bool = True
+    issues: tuple[str, ...] = ()
+    needs_new_sources: bool = False
+
+    @property
+    def withheld(self) -> tuple[str, ...]:
+        return tuple(verdict.id for verdict in self.findings if not verdict.admit)
+
+    @property
+    def accepted(self) -> bool:
+        return not self.withheld and self.synthesis_admitted and not self.issues
+
+    @model_validator(mode="after")
+    def consistent_verdicts(self):
+        ids = [verdict.id for verdict in self.findings]
+        if len(ids) != len(set(ids)):
+            raise ValueError("one verdict per finding")
+        held = bool(self.withheld) or not self.synthesis_admitted
+        if held and not self.issues:
+            raise ValueError("a withheld finding or synthesis needs a blocking issue")
+        if not held and (self.issues or self.needs_new_sources):
+            raise ValueError("an admitted delivery carries no blocking issues and needs no new sources")
+        return self
+
+    def record(self) -> dict:
+        return {**self.model_dump(mode="json"), "accepted": self.accepted, "withheld": list(self.withheld)}
+
+    @classmethod
+    def from_record(cls, data: dict) -> "ResearchReview":
+        """Read a review back from a record, which carries the derived `accepted` and `withheld` beside the fields."""
+        return cls.model_validate({key: value for key, value in data.items() if key not in ("accepted", "withheld")})
 
 
 class Snapshot(_Model):
@@ -241,8 +368,6 @@ class Result(_Model):
     def status(self) -> str:
         if self.stop_reason != "completed" or not self.review.accepted:
             return "incomplete"
-        if any(q.blocking and q.channel != "user" for q in self.snapshot.description.unresolved):
-            return "incomplete"
         return "ready" if self.ready else "needs_input"
 
 
@@ -272,9 +397,12 @@ def render(snapshot: Snapshot) -> str:
                 ]
             )
     if description.unresolved:
-        lines.extend(["## Remaining questions", ""])
+        lines.extend(["## Open points and working assumptions", ""])
         for question in description.unresolved:
-            lines.extend([f"- [{question.channel}] {question.question} {question.reason}"])
+            line = f"- [{question.channel}] {question.question} {question.reason}"
+            if question.assumption:
+                line += f" Until settled: {question.assumption}"
+            lines.append(line)
     lines.extend(["", "## Evidence references", ""])
     for source in snapshot.evidence:
         if source.id in description.references:

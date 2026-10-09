@@ -3,17 +3,24 @@
 from pathlib import Path
 
 from raven.contracts.harness import MemoryModule
-from raven.contracts.participant import StepView
 
 from ...harness.context import CompactionRequest, ContextRequest, ContextSource, ContextView, InitialContext
 from ...harness.declaration import Target
 from ...harness.interaction import InteractionRequest, InteractionScope, InteractionTool
-from ...harness.prompts import Prompt
-from ...harness.state import StateUse, Task
+from ...harness.state import StateUse
 from ...harness.strategies import MemoryStrategy
 from ..memory.contracts import TARGET, MemoryBinding
-from ..planning.contracts import PlanReader
-from ..strategy import TaskBinding
+from .knowledge import (
+    PEERS,
+    PLAN_READER,
+    PROMPT,
+    PROMPT_RESOURCES,
+    RESOURCES,
+    STEP_VIEW,
+    STRATEGY_PROMPTS,
+    TASK,
+    TASK_BINDING,
+)
 
 CONTRACT = MemoryModule
 
@@ -38,12 +45,8 @@ TARGETS = (
             ),
         ),
         knowledge=(
-            Prompt,
-            Path(__file__).resolve().parents[2] / "harness/reference/prompt-resources.md",
             MemoryStrategy,
             Path(__file__).resolve().parents[2] / "harness/context.py",
-            Path(__file__).resolve().parents[2] / "harness/resources.py",
-            Path(__file__).resolve().parents[2] / "harness/peers.py",
             InitialContext,
             ContextSource,
             CompactionRequest,
@@ -54,13 +57,19 @@ TARGETS = (
             ContextView,
             MemoryBinding,
             Path(__file__).resolve().parents[1] / "memory/contracts.py",
-            TaskBinding,
-            PlanReader,
-            Task,
-            StepView,
             Path(__file__).resolve().parents[2] / "harness/reference/memory.md",
-            Path(__file__).resolve().parents[2] / "harness/reference/strategy-prompts.md",
             Path(__file__).resolve().parents[1] / "reference/memory.md",
+        ),
+        references=(
+            PROMPT,
+            PROMPT_RESOURCES,
+            RESOURCES,
+            PEERS,
+            TASK_BINDING,
+            PLAN_READER,
+            TASK,
+            STEP_VIEW,
+            STRATEGY_PROMPTS,
         ),
     ),
 )

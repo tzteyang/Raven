@@ -116,9 +116,13 @@ async def test_the_attribution_is_an_exchange_of_its_own_on_the_curators_model(c
     errors = [row.get("error") or row.get("result", {}).get("error", "") for row in state.trace]
     assert any("unknown read-only query: submit_selection" in str(error) for error in errors)
     assert any("no diagnosis for ['task']" in str(error) for error in errors)
+    assert "reasoning_effort" not in first and state.identity["effort"] is None
     alone = Provider(response(NAME, diagnosis()))
-    other = await ModelAttributor(model="diagnoser", catalogue=True).attribute(context, alone, model="curator")
+    other = await ModelAttributor(model="diagnoser", effort="medium", catalogue=True).attribute(
+        context, alone, model="curator"
+    )
     assert alone.requests[0]["model"] == "diagnoser" and "available_targets" in packet(alone.requests[0])
+    assert alone.requests[0]["reasoning_effort"] == "medium" and other.identity["effort"] == "medium"
     assert other.identity["model"] == "diagnoser" and other.identity["catalogue"] is True
     assert other.identity["prompts"] == state.identity["prompts"]
 
@@ -219,7 +223,11 @@ async def test_a_generation_starts_from_its_attribution_and_its_reads_and_keeps_
     result = await generate(context, provider, attribution=attributed, investigation=investigation, validate=validate)
     assert result.candidate.attribution == attributed and result.trace[0] == investigation[0]
     assert packet(provider.requests[0])["diagnosis"]["diagnoses"][0]["about"] == "task"
-    assert packet(provider.requests[0])["history"][0]["result"]["text"] == "read"
+    assert packet(provider.requests[0])["history"][0]["result"] == {
+        "indexed": True,
+        "chars": len("read"),
+        "reread": "repeat this call with the same arguments",
+    }
     assert "Select the necessary" in instructions(provider.requests[0])
     paused = Provider(response("read_source", {"name": "loop"}))
     from experimental.curator.generation.run import GenerationPausedError, Limits

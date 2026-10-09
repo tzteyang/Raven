@@ -19,6 +19,7 @@ class Context:
     observations: tuple[dict, ...] = ()
     previous_plan: Plan | None = None
     exploration: dict | None = None
+    experience: dict | None = None
 
 
 def collect(
@@ -32,6 +33,7 @@ def collect(
     observations: Sequence[dict] = (),
     previous_plan: Plan | None = None,
     exploration: dict | None = None,
+    experience: dict | None = None,
 ) -> Context:
     if not task.strip():
         raise ValueError("generation requires the current task")
@@ -45,6 +47,7 @@ def collect(
         tuple(deepcopy(observations)),
         previous_plan,
         deepcopy(exploration),
+        deepcopy(experience),
     )
 
 

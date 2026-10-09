@@ -4,11 +4,11 @@ every message at once with its state, so the page can poll while a curation or a
 
 Each step is the Session's own (`onboard`, `trial`, `signal`, `assess`, `analyse`, `curate`, `skip`, `finish`), one
 at a time, and a step the Session refuses is answered with its reason; calling a paused step again resumes it, as the
-Session documents. The person on the page is the party: what it writes and the materials it hands over become a
+Session documents. The person on the page is the counterpart: what it writes and the materials it hands over become a
 `Signal` from `human`, and in a trial it is the conversant, the terminal's `experimental.assessor.human.Human` reading
 the page's messages instead (`PagePerson`). The run is assembled as the automated one (`experimental.simulation`)
 assembles its own, from the scenario's contract, except that its boundaries warn instead of aborting: the person is
-the party, so what it says is its own to say, and a crossing is logged rather than refused.
+the counterpart, so what it says is its own to say, and a crossing is logged rather than refused.
 """
 
 import asyncio
@@ -20,15 +20,21 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
+from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
-from raven.providers.factory import make_lazy_provider, make_resolving_provider
 
+from .. import model_roles
 from ..analyst.run import Limits as AnalystLimits
+from ..assessor.builder import RubricBuilder
+from ..assessor.guidance import GuidanceStore
 from ..assessor.human import Human
-from ..assessor.standard import Standard, StandardAssessor
+from ..assessor.reviewer import MetaReviewer
+from ..assessor.standard import Assessor, Standard
+from ..assessor.validation import ReplayCorpus, fingerprint
 from ..curator.attribution import AttributionLimits, ModelAttributor
 from ..curator.generation.run import Limits as CuratorLimits
 from ..curator.raven_adapter.observe import plain
+from ..experience.curator import CuratorExperience
 from ..iteration.compartment import Boundaries
 from ..iteration.conversation import Conversation
 from ..iteration.protocols import Signal
@@ -37,6 +43,7 @@ from ..iteration.session import Limits, Session, StepError
 from ..scenario import ROLES, load
 from ..scenario.sealed import sealed_for
 from . import employ
+from .live import MODEL_ROLES
 from .process import redact
 from .studio import slim_exchange
 
@@ -110,6 +117,7 @@ class Host:
         self.root, self.workdir = Path(spec["run_dir"]), Path(spec["workdir"])
         self.session: Session | None = None
         self.employee = self.contract = self.standard = None
+        self.experience = None
         self.step: str | None = "starting"
         self.since = time.time()
         self.error: str | None = None
@@ -135,6 +143,12 @@ class Host:
         boundaries = Boundaries(
             {role: sealed_for(contract, role) for role in ROLES}, policy="warn", log=self.root / "boundaries.jsonl"
         )
+        roles = model_roles.resolve(
+            spec["models"],
+            spec["efforts"],
+            model_roles.partner_of(load_config(Path(spec["config"]))),
+            roles=MODEL_ROLES,
+        )
         hiring = self.employ.rehire if spec.get("record") else self.employ.hire
         self.employee = hiring(
             contract,
@@ -142,35 +156,69 @@ class Host:
             task=spec["task"],
             workdir=self.workdir,
             root=self.root,
-            subagent_model=spec.get("subagent_model"),
+            subagent_model=roles["sub-harness"].model,
             timeout=spec["timeout"],
             guard=boundaries.compartment("partner").guard,
         )
-        defaults = self.employee.baseline.config.agents.defaults
-        if not defaults.reasoning_effort:
-            raise ValueError("set agents.defaults.reasoningEffort explicitly; a provider default is not a run setting")
         if not spec.get("record"):
-            self._settings(defaults.model, defaults.reasoning_effort)
+            self._settings(roles)
         await self.employee.start()
-        provider = self._provider()
+        provider = model_roles.provider(self.employee.baseline.config, roles)
+        assessor_role, builder_role = roles["assessor"], roles["rubric_builder"]
         if spec.get("standard"):
-            self.standard = StandardAssessor(
+            memory = (
+                Path(spec["evaluation_memory"]) if spec.get("evaluation_memory") else self.root / "evaluation-memory"
+            )
+            derived = "derived" in spec["standard"]
+            self.standard = Assessor(
                 provider,
                 Standard.declared(
                     (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
                 ),
                 sources=spec["standard"],
                 norms=lambda: self.employ.standing_norms(contract, self.handed()),
-                effort=spec.get("standard_effort"),
+                task=self.employee.baseline.task.text,
+                model=assessor_role.model,
+                effort=assessor_role.effort,
                 timeout=spec["timeout"],
                 boundaries=boundaries,
+                builder=(
+                    RubricBuilder(model=builder_role.model, effort=builder_role.effort, timeout=spec["timeout"])
+                    if "derived" in spec["standard"]
+                    else None
+                ),
+                keep=self.root / "standard.json",
+                reviewer=MetaReviewer(
+                    model=roles["meta_reviewer"].model, effort=roles["meta_reviewer"].effort, timeout=spec["timeout"]
+                )
+                if derived
+                else None,
+                guidance_store=GuidanceStore(memory / "guidance.json") if derived else None,
+                replay_corpus=ReplayCorpus(memory / "replays.json") if derived else None,
+                scope=fingerprint({"task": self.employee.baseline.task.text}),
+            )
+            if spec.get("record"):
+                self.standard.restore()
+        if spec.get("experience_memory"):
+            self.experience = CuratorExperience.from_provider(
+                Path(spec["experience_memory"]),
+                provider,
+                access_scope=spec.get("experience_scope", "local"),
+                model=roles["curator"].model,
+                effort=roles["curator"].effort,
+                migrate=spec.get("experience_migrate", False),
+                writable_roots=(self.employee.root, self.employee.baseline.config.workspace_path),
             )
         options = {
-            "analyst_model": spec.get("analyst_model") or spec.get("curator_model"),
-            "curator_model": spec.get("curator_model"),
+            **({"experience": self.experience} if self.experience is not None else {}),
+            "assessors": (self.standard,) if self.standard is not None else (),
+            "analyst_model": roles["analyst"].model,
+            "analyst_effort": roles["analyst"].effort,
+            "curator_model": roles["curator"].model,
             "boundaries": boundaries,
             "attributor": ModelAttributor(
-                model=spec.get("attribution_model"),
+                model=roles["attribution"].model,
+                effort=roles["attribution"].effort,
                 limits=AttributionLimits(
                     call_timeout=spec["timeout"],
                     max_calls=spec["attribution_calls"],
@@ -191,26 +239,10 @@ class Host:
             prior = [cultivation(path) for path in contract.prior.records]
             self.session = Session.open(self.employee, provider, prior=prior, **options)
 
-    def _provider(self):
-        """The provider of the model roles, as an automated run makes it: the employee's configuration, on the
-        Curator's model and effort when the configuration names them, each call's vendor following its model id once
-        any role runs on a model of its own."""
-        spec = self.spec
-        config = self.employee.baseline.config.model_copy(deep=True)
-        overridden = spec.get("curator_model") or spec.get("analyst_model") or spec.get("attribution_model")
-        if overridden:
-            config.agents.defaults.provider = "auto"
-        if spec.get("curator_model"):
-            config.agents.defaults.model = spec["curator_model"]
-        if spec.get("curator_effort"):
-            config.agents.defaults.reasoning_effort = spec["curator_effort"]
-        return make_resolving_provider(config) if overridden else make_lazy_provider(config)
-
-    def _settings(self, employee: str, effort: str) -> None:
+    def _settings(self, roles: dict) -> None:
         """How the live run was set up, for readers of its directory; never a credential or the configuration's
         path."""
         spec = self.spec
-        curator = spec.get("curator_model") or employee
         settings = {
             "chain": "live",
             "scenario": self.contract.root.name,
@@ -219,19 +251,8 @@ class Host:
             "curator_budget": {"calls": spec["curator_calls"], "queries": spec["curator_queries"]},
             "attribution_budget": {"calls": spec["attribution_calls"], "queries": spec["attribution_queries"]},
             "standard": list(spec.get("standard") or ()) or None,
-            "models": {
-                "employee": employee,
-                "curator": curator,
-                "analyst": spec.get("analyst_model") or curator,
-                "attribution": spec.get("attribution_model") or curator,
-                "subagents": spec.get("subagent_model"),
-            },
-            "efforts": {
-                "employee": effort,
-                "employee_tier": build_mode_catalogue(self.employee.baseline.config).default,
-                "curator": spec.get("curator_effort"),
-                "standard": spec.get("standard_effort"),
-            },
+            **model_roles.recorded(roles),
+            "partner_tier": build_mode_catalogue(self.employee.baseline.config).default,
             "starting_harness": self.employ.starting(),
             "provenance": self.contract.provenance.record or None,
             "started": time.time(),
@@ -342,7 +363,9 @@ class Host:
     async def _onboard(self, command: dict) -> None:
         if not self.session.onboarded:
             text, handovers = _text(command.get("text")), self._handovers(command)
-            self.opening = (Signal(SOURCE, text, attachments=handovers),) if text or handovers else ()
+            self.opening = (
+                (Signal(SOURCE, text, attachments=handovers, authority="external"),) if text or handovers else ()
+            )
         await self.session.onboard(self.opening)
 
     async def _trial(self, command: dict) -> None:
@@ -369,15 +392,12 @@ class Host:
         text, handovers = _text(command.get("text")), self._handovers(command)
         if not text and not handovers:
             raise StepError("the message is empty")
-        self.session.signal(Signal(SOURCE, text, attachments=handovers))
+        self.session.signal(Signal(SOURCE, text, attachments=handovers, authority="external"))
 
     async def _assess(self, command: dict) -> None:
         if self.standard is None:
             raise StepError("no automatic assessor is configured for live sessions")
-        try:
-            await self.session.assess(self.standard)
-        finally:
-            (self.root / "standard.json").write_text(_written(self.standard.record()))
+        await self.session.assess(self.standard)
 
     async def _analyse(self, command: dict) -> None:
         await self.session.analyse()
@@ -402,8 +422,12 @@ class Host:
         if self.task is not None and not self.task.done():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
-        if self.employee is not None:
-            await self.employee.close()
+        try:
+            if self.employee is not None:
+                await self.employee.close()
+        finally:
+            if self.experience is not None:
+                self.experience.close()
 
 
 async def serve(connection, spec: dict, employ=employ) -> None:

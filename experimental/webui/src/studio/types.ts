@@ -264,6 +264,6 @@ export interface Thread {
   standard?: StandardRecord | null
   boundaries?: Boundaries | null
   recorded?: Record<string, Recorded>
-  /** Materials the party did not simply give (induced or researched), by name. */
+  /** Materials the counterpart did not simply give (induced or researched), by name. */
   origins?: Record<string, MaterialOrigin>
 }

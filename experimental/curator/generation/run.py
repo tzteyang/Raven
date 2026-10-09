@@ -31,7 +31,10 @@ from .state import GenerationState
 @dataclass(frozen=True)
 class Limits:
     """`max_output` caps one model call's output tokens (thinking included); None leaves the host's per-call cap,
-    which also bounds any larger value."""
+    which also bounds any larger value.
+
+    `stage_queries` is how many exploration calls one stage may spend out of `max_queries`: a stage that spends them
+    is told to submit, and the stages after it keep the rest of the pool. None leaves the pool as the only cap."""
 
     max_calls: int = 12
     max_queries: int = 8
@@ -39,6 +42,11 @@ class Limits:
     call_timeout: float = 180
     max_checks: int = 3
     max_output: int | None = None
+    stage_queries: int | None = None
+
+    @property
+    def stage_allowance(self) -> int:
+        return self.max_queries if self.stage_queries is None else self.stage_queries
 
     def __post_init__(self):
         if (
@@ -50,6 +58,7 @@ class Limits:
             or self.max_queries < 0
             or self.max_repairs < 0
             or self.max_checks < 0
+            or (self.stage_queries is not None and (not isinstance(self.stage_queries, int) or self.stage_queries < 0))
             or not isfinite(self.call_timeout)
             or self.call_timeout <= 0
             or (self.max_output is not None and (not isinstance(self.max_output, int) or self.max_output < 1))
@@ -111,14 +120,14 @@ def cached(messages: list[dict], tools: list[dict] | None, model: str) -> tuple[
     """Copies of a stage request with cache breakpoints, for a model that reads them only when marked.
 
     The tools, the shared rules and the curation's materials (the first two messages) stay the same across the
-    stages and scopes of one curation, and a stage's messages only grow while the trailing budget changes every
-    call. So the marks go on the tools, those two messages and the last message before the budget: each call reads
-    what the previous call or stage already sent and pays fresh only for what is new.
+    stages and scopes of one curation, and a stage's messages only grow. So the marks go on the tools, those two
+    messages and the last message: each call reads what the previous call or stage already sent and pays fresh
+    only for what is new.
     """
     if not accepts_cache_control(model):
         return messages, tools
     marked = list(messages)
-    tail = next((index for index in range(len(marked) - 2, 1, -1) if _marked(marked[index])), None)
+    tail = next((index for index in range(len(marked) - 1, 1, -1) if _marked(marked[index])), None)
     for index in dict.fromkeys(index for index in (0, 1, tail) if index is not None and index < len(marked)):
         marked[index] = _marked(marked[index]) or marked[index]
     if tools:
@@ -168,6 +177,8 @@ def _budget(state, limits) -> str:
         queries=limits.max_queries - state.queries,
         checks=limits.max_checks - state.checks,
         repairs=limits.max_repairs - state.repairs,
+        stage_queries=min(limits.stage_allowance - state.stage_queries, limits.max_queries - state.queries),
+        stage_allowance=limits.stage_allowance,
     )
 
 
@@ -193,12 +204,14 @@ async def ask(
     tools=None,
     staged=None,
     budget=None,
+    effort=None,
 ):
     """One stage's tool loop. `schemas` gives the narrowed argument schema of each submission this stage accepts.
 
     `tools` is the request's tool list (the curation's shared list by default), `staged` the submission and preflight
-    actions in it that a stage offers only when its parsers name them, and `budget(state, limits)` the trailing
-    budget note; an exchange with its own tools and budget, such as the attribution's, supplies all three."""
+    actions in it that a stage offers only when its parsers name them, and `budget(state, limits)` the budget note
+    appended before each call; an exchange with its own tools and budget, such as the attribution's, supplies all three.
+    `effort` is the reasoning effort the stage's calls start from, the provider's own when None."""
     trace = state.trace
     tools = _shared_tools(context, tool_registry) if tools is None else tools
     staged = STAGED_ACTIONS if staged is None else staged
@@ -217,7 +230,7 @@ async def ask(
             {
                 **stage_materials,
                 "submission_schemas": schemas,
-                "history": [event for event in trace if event.get("event") != "model.call"],
+                "history": render.history(trace),
             },
             tools=tools,
             available=available,
@@ -235,7 +248,10 @@ async def ask(
         if progress:
             progress(state)
         shown = replace(limits, max_calls=limits.max_calls + grace) if grace else limits
-        request_messages = render.trailing(messages, budget(state, shown))
+        # The note stays in the conversation: the provider's prompt cache serves a request only up to the end of an
+        # earlier request it has seen whole, so each request must begin with the previous one, note included.
+        messages.append({"role": "user", "content": budget(state, shown)})
+        request_messages = list(messages)
         state.calls += 1
         trace.append({"stage": stage, "event": "model.call", "call": state.calls})
         default = getattr(provider, "get_default_model", None)
@@ -248,7 +264,7 @@ async def ask(
                     model=model,
                     tool_choice="auto",
                     **({"max_tokens": limits.max_output} if limits.max_output else {}),
-                    **({"reasoning_effort": THINKING[thinking]} if thinking else {}),
+                    **({"reasoning_effort": THINKING[thinking] or effort} if thinking or effort else {}),
                 )
         except asyncio.CancelledError:
             raise
@@ -260,7 +276,10 @@ async def ask(
         if response.finish_reason == "error":
             raise GenerationInterruptedError(f"{stage}: provider error: {response.content}", state)
         if response.content:
-            trace.append({"stage": stage, "event": "model.note", "content": response.content})
+            note = {"stage": stage, "event": "model.note", "content": render.echoed_text(response.content)}
+            if len(response.content) > render.ECHOED_CHARS:
+                note["content_chars"] = len(response.content)
+            trace.append(note)
         assistant = render.assistant_message(response)
         messages.append(assistant)
         invalid_calls = argument_errors(response)
@@ -382,9 +401,12 @@ async def ask(
                     {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}
                 )
                 continue
-            if state.queries >= limits.max_queries:
+            if state.queries >= limits.max_queries or state.stage_queries >= limits.stage_allowance:
                 result = {
                     "error": "exploration query budget exhausted; use retained evidence to submit or report a gap"
+                    if state.queries >= limits.max_queries
+                    else f"this stage's exploration allowance of {limits.stage_allowance} calls is spent; submit "
+                    "from what you have read, revise the selection, or report a gap"
                 }
                 trace.append(
                     {
@@ -398,6 +420,7 @@ async def ask(
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
                 continue
             state.queries += 1
+            state.stage_queries += 1
             if tool_registry is not None and tool_registry.get(call.name) is not None:
                 set_current_tool_call_id(call.id)
                 output = await tool_registry.execute(call.name, call.arguments, run_meta=call.run_meta)

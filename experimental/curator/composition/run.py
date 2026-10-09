@@ -1,5 +1,6 @@
 """Generate local strategy candidates for a root and its assigned children before one activation."""
 
+import asyncio
 import json
 import shutil
 from collections import Counter
@@ -130,7 +131,9 @@ def _root_scope(worker, inspection, actual_children, directory):
     return root, inspection, current_nodes
 
 
-async def attribute(worker, provider, *, feedback=None, model=None, observations=None, attributor=None):
+async def attribute(
+    worker, provider, *, feedback=None, model=None, observations=None, attributor=None, experience=None
+):
     """Attribute the root scope's inputs as a composite curation sees them, record it beside the worker's own
     attribution records and return it; nothing is generated. Its scope lives under the worker's curation folder, so
     a paused attribution is continued by the next call and never touches a composite curation in progress."""
@@ -138,14 +141,31 @@ async def attribute(worker, provider, *, feedback=None, model=None, observations
     root, _, _ = _root_scope(worker, await worker.inspect(), actual_children, worker.root / "curation" / SCOPE)
     try:
         return await attribute_local(
-            root, provider, feedback=feedback, model=model, observations=observations, attributor=attributor
+            root,
+            provider,
+            feedback=feedback,
+            model=model,
+            observations=observations,
+            attributor=attributor,
+            **({"experience": experience} if experience is not None else {}),
         )
     finally:
         _surface_attributions(root.root, worker.root)
 
 
 async def improve(
-    worker, provider, *, feedback, model, limits, probe, resume, observations=None, attributor=None, attribution=None
+    worker,
+    provider,
+    *,
+    feedback,
+    model,
+    limits,
+    probe,
+    resume,
+    observations=None,
+    attributor=None,
+    attribution=None,
+    experience=None,
 ):
     """Propose the root, then every child a root node assigns work to, then activate them once.
 
@@ -189,6 +209,7 @@ async def improve(
             "feedback": feedback,
             "observations": observations,
             "model": model,
+            **({"experience": experience.identity} if experience is not None else {}),
         }
     )
     if state is not None and state.input_id != identity:
@@ -213,6 +234,7 @@ async def improve(
         "task_id": worker.baseline.task.id,
         "feedback": feedback,
         "turn_id": worker.last_execution.turn_id if worker.last_execution else None,
+        **({"revision_before": worker.revision_id} if experience is not None else {}),
     }
     generating = "root"
     try:
@@ -223,6 +245,7 @@ async def improve(
                     result = await propose(
                         root,
                         provider,
+                        **({"experience": experience} if experience is not None else {}),
                         feedback=feedback,
                         model=model,
                         limits=state.limits_for("root", limits),
@@ -334,6 +357,7 @@ async def improve(
                         result = await propose(
                             subject,
                             provider,
+                            **({"experience": experience} if experience is not None else {}),
                             feedback=relevant,
                             model=model,
                             limits=state.limits_for(scope, limits),
@@ -367,6 +391,13 @@ async def improve(
                 if not checked.passed:
                     raise GenerationError("composite validation failed: " + "; ".join(checked.errors))
                 before = worker.revision_id
+                if experience is not None:
+                    record["experience_scopes"] = []
+                    for checkpoint in directory.glob("**/curation/candidate.json"):
+                        saved = json.loads(checkpoint.read_text()).get("experience")
+                        if saved is not None:
+                            experience.validate(saved, inputs=saved["inputs"])
+                            record["experience_scopes"].append(saved)
                 await worker.install(state.root.candidate, children=selected)
                 record.update(
                     generated=plain(state.root),
@@ -462,4 +493,32 @@ async def improve(
             record["attribution"], record["attributor"] = attributed.record, attributed.identity
         record["budget"] = {"generation": state.totals(), "attribution": state.attribution_totals()}
         record["active_artifact_id"] = worker.revision_id
-        _write(worker.root / "curation" / f"{uuid4().hex}.json", json.dumps(record, ensure_ascii=False).encode())
+        record_path = worker.root / "curation" / f"{uuid4().hex}.json"
+        _write(record_path, json.dumps(record, ensure_ascii=False).encode())
+        await _learn_composition(experience, record, record_path, worker, inspection)
+
+
+async def _learn_composition(experience, record, path, worker, inspection):
+    if experience is None or not record.get("changed") or record.get("error") or record.get("paused"):
+        return
+    from ...experience.contracts import RecordOrigin
+
+    try:
+        origin = RecordOrigin(
+            access_scope=experience.access.access_scope,
+            run_id=fingerprint(str(worker.root.resolve())),
+            lineage_id=fingerprint(worker.baseline.task.text),
+            record_id=path.name,
+            scope="root",
+            revision_before=record["revision_before"],
+        )
+        record["experience_learning"] = await experience.learn(
+            record, origin=origin, contract_ids=(inspection.declaration.contract_id,)
+        )
+    except asyncio.CancelledError:
+        record["experience_learning"] = {"status": "interrupted", "reason": "Post-install learning was cancelled."}
+        raise
+    except Exception as exc:
+        record["experience_error"] = str(exc)
+    finally:
+        _write(path, json.dumps(record, ensure_ascii=False).encode())
