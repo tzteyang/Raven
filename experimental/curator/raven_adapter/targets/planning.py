@@ -7,10 +7,10 @@ from raven.contracts.harness import PlanningModule
 from ...harness.declaration import Target
 from ...harness.interaction import InteractionRequest, InteractionTool
 from ...harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
-from ...harness.prompts import Prompt
 from ...harness.state import StateUse
 from ...harness.strategies import PlanningStrategy
 from ..planning.contracts import TARGET, PlanningBinding, PlanningObservation
+from .knowledge import PROMPT, PROMPT_RESOURCES, STRATEGY_PROMPTS
 
 CONTRACT = PlanningModule
 
@@ -39,8 +39,6 @@ TARGETS = (
             ),
         ),
         knowledge=(
-            Prompt,
-            Path(__file__).resolve().parents[2] / "harness/reference/prompt-resources.md",
             PlanningStrategy,
             PlanningInitialization,
             PlanningProjection,
@@ -50,9 +48,9 @@ TARGETS = (
             PlanningBinding,
             PlanningObservation,
             Path(__file__).resolve().parents[2] / "harness/reference/planning.md",
-            Path(__file__).resolve().parents[2] / "harness/reference/strategy-prompts.md",
             Path(__file__).resolve().parents[1] / "reference/planning.md",
             Path(__file__).resolve().parents[1] / "reference/pitfalls/planning.md",
         ),
+        references=(PROMPT, PROMPT_RESOURCES, STRATEGY_PROMPTS),
     ),
 )

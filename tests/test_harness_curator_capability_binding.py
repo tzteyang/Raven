@@ -212,6 +212,42 @@ async def test_registration_is_staged_and_invocation_uses_the_active_owner(tmp_p
     assert resources.facts()["installed"]
 
 
+class LookalikeTool:
+    name = "store_read"
+    description = "Read the listings."
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        return "read"
+
+
+LOOKALIKE = """class LookalikeTool:
+    name = "store_read"
+    description = "Read the listings."
+    parameters = {"type": "object", "properties": {}}
+
+    async def execute(self, **kwargs):
+        return "read"
+"""
+
+
+def test_a_tool_that_only_looks_like_a_native_tool_is_refused_at_registration(tmp_path):
+    resources = catalog(tmp_path, resolver=lambda _: LookalikeTool())
+    resolved = resources.register(
+        ToolContribution(name="store_read", owner="action", interaction="action.handle_request")
+    )
+    assert resolved.status == "rejected" and "inherits raven.contracts.tool.Tool" in resolved.reason
+    package = write_package(tmp_path / "generated", Artifact(values={}, files={"lookalike.py": LOOKALIKE}))
+    generated = CapabilityCatalog(
+        "second", package, tmp_path / "assembly-2", material_base=tmp_path, material_roots=(tmp_path / "uploads",)
+    )
+    built = generated.register(
+        ToolContribution(name="store_read", owner="capability", factory="lookalike:LookalikeTool")
+    )
+    assert built.status == "rejected" and "got LookalikeTool" in built.reason
+    assert generated.tools == {} and resources.tools == {}
+
+
 def test_identity_conflict_does_not_replace_a_staged_handler(tmp_path):
     original = ProbeTool(lambda: {"value": "original"})
     resources = catalog(tmp_path, resolver=lambda _: original)

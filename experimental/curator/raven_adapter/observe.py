@@ -55,6 +55,22 @@ def observed_errors(records):
     return found
 
 
+def delivered_files(row) -> list[dict]:
+    """The files a recorded deliver_files call handed over, read from its completion's delivery manifest.
+
+    Raven attaches the manifest only to a call that delivered at least one file, and its channel outlet sends exactly
+    that; a call refused before it ran, or one whose every file failed, delivered nothing. A completion names no tool,
+    so the manifest is what marks it as a delivery.
+    """
+    event = row.get("event") or {}
+    if row.get("kind") != "runner.event" or event.get("phase") != "complete" or event.get("ok") is False:
+        return []
+    delivery = (event.get("metadata") or {}).get("raven_delivery")
+    if not isinstance(delivery, dict):
+        return []
+    return [item for item in delivery.get("files") or [] if isinstance(item, dict) and item.get("path")]
+
+
 class Recorder:
     def __init__(self, path: Path):
         self.path = path

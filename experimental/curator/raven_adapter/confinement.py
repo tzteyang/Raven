@@ -268,7 +268,12 @@ def _probe(request: dict) -> list[str]:
             said.append(f"can list {path}")
     for path in map(Path, request["closed"]):
         reached = []
-        if path.is_dir():
+        try:
+            folder = path.is_dir()
+        except PermissionError:
+            # A path the user cannot even look up lies behind a folder closed to it, so it is closed as well.
+            continue
+        if folder:
             if os.access(path, os.R_OK):
                 reached.append("list")
             if os.access(path, os.X_OK):

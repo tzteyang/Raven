@@ -1,7 +1,6 @@
 """Compose shared rules, task materials, stage instructions and stage data, stable parts first."""
 
 import json
-from copy import deepcopy
 from pathlib import Path
 from string import Template
 
@@ -56,10 +55,52 @@ def messages(
     ]
 
 
-def budget(*, calls: int, queries: int, checks: int, repairs: int) -> str:
+INDEXED_QUERIES = frozenset({"read_source", "read_fact", "read_observation", "read_file", "list_dir", "grep", "find"})
+REREAD = "repeat this call with the same arguments"
+
+
+def history(trace) -> list[dict]:
+    """Earlier events for a stage's data: every submission, note, check and validation as recorded, and each
+    successful read of a repeatable source as an index row instead of its body.
+
+    Host queries read digest-pinned sources and the native read tools read the curation's source snapshot, so the
+    same call returns the same text; carrying the body forward would send it again on every later call of every
+    later stage. A failed read, an error and a command's output stay as recorded: they cannot be reproduced."""
+    rows = []
+    for event in trace:
+        if event.get("event") == "model.call":
+            continue
+        result = event.get("result")
+        repeatable = (
+            event.get("event") == "query"
+            and event.get("tool") in INDEXED_QUERIES
+            and isinstance(result, dict)
+            and "error" not in result
+            and not result.get("failed")
+        )
+        if not repeatable:
+            rows.append(event)
+            continue
+        body = result["text"] if isinstance(result.get("text"), str) else json.dumps(result, ensure_ascii=False)
+        rows.append({**event, "result": {"indexed": True, "chars": len(body), "reread": REREAD}})
+    return rows
+
+
+def budget(*, calls: int, queries: int, checks: int, repairs: int, stage_queries: int, stage_allowance: int) -> str:
+    """The trailing budget note; once half of a stage's exploration allowance is spent it carries the pacing note
+    that asks for a submission unless a named unknown still blocks it."""
+    pacing = _prompt("pacing") if stage_queries <= stage_allowance // 2 else ""
     return (
         Template((_PROMPTS / "budget.md").read_text())
-        .substitute(calls=calls, queries=queries, checks=checks, repairs=repairs)
+        .substitute(
+            calls=calls,
+            queries=queries,
+            checks=checks,
+            repairs=repairs,
+            stage_queries=stage_queries,
+            stage_allowance=stage_allowance,
+            pacing=pacing,
+        )
         .strip()
     )
 
@@ -127,17 +168,20 @@ def observation_index(rows) -> list | dict:
     return {"rows": len(rows), "kinds": kinds, "read": "read_observation by index"}
 
 
-def trailing(messages: list[dict], note: str) -> list[dict]:
-    """A request copy ending with `note` as its own user message.
+# A reply's text as it goes back into a conversation. A degenerate reply can carry megabytes (one call's markup
+# repeated), and the conversation resends it with every later call until a request exceeds the provider's size limit.
+ECHOED_CHARS = 4_000
 
-    Per-call notes such as the remaining budget go last so every earlier token stays a stable prefix the provider
-    can serve from its prompt cache; a note inside the system message would invalidate everything after it. Keeping
-    it out of tool results also keeps host instructions apart from untrusted tool output.
-    """
-    return [*deepcopy(messages), {"role": "user", "content": note}]
+
+def echoed_text(text: str | None) -> str:
+    text = text or ""
+    if len(text) <= ECHOED_CHARS:
+        return text
+    return text[:ECHOED_CHARS] + f"\n[{len(text) - ECHOED_CHARS} more characters not repeated]"
 
 
 def assistant_message(response) -> dict:
+    """The reply as the next call sees it: its tool calls whole, its text capped (`echoed_text`)."""
     calls = []
     for call in response.tool_calls:
         payload = openai_tool_call(call)
@@ -146,7 +190,7 @@ def assistant_message(response) -> dict:
             payload["function"]["arguments"] = raw if isinstance(raw, str) else json.dumps(raw, ensure_ascii=False)
         calls.append(payload)
     return build_assistant_message(
-        response.content or "",
+        echoed_text(response.content),
         tool_calls=calls,
         reasoning_content=response.reasoning_content,
         thinking_blocks=response.thinking_blocks,

@@ -28,6 +28,9 @@ from ..interaction_tools import interaction_tool
 from ..observe import plain
 from ..strategy import SESSION, BoundStrategy, concrete
 
+# How a refused call is answered to the model; Raven records that answer as the call's result, with ok still true.
+REFUSED = "Action refused this call"
+
 
 @dataclass
 class PendingControl:
@@ -402,7 +405,7 @@ class BoundAction(BoundStrategy):
                     await owner.handle_event(ControlEvent(**owner._base(("continue",)), receipt=receipt))
                 except Exception as exc:
                     owner.recorder.add("action.error", operation="control_observation", error=str(exc))
-                return f"Action refused this call [{receipt.control_id}]: {result.feedback}"
+                return f"{REFUSED} [{receipt.control_id}]: {result.feedback}"
 
         return ActionGate()
 

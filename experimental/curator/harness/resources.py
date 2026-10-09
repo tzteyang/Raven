@@ -138,7 +138,11 @@ class SkillView(BaseModel):
 
 
 class SkillSelection(BaseModel):
-    """Choose an available skill and how its information reaches the model."""
+    """Choose an available skill and how its information reaches the model.
+
+    `source` disambiguates two listed skills of one name and must equal the `SkillView.source` the request lists for
+    the chosen one; leave it None when the name is unique. A contribution's `source` is its provenance, not this.
+    """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
 

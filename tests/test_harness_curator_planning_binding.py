@@ -373,3 +373,96 @@ async def test_planning_factory_reader_is_session_scoped_and_only_reads_committe
     finally:
         SESSION.reset(token)
     assert planning.read()["items"] == {"Verify": True}
+
+
+@pytest.mark.asyncio
+async def test_the_validation_probe_refuses_an_observation_translation_that_keeps_state(tmp_path):
+    from types import SimpleNamespace
+
+    from experimental.curator.raven_adapter.probe import PROBE, exercise_translations
+
+    def bound_for(planning):
+        return SimpleNamespace(
+            planning=planning, recorder=planning.recorder, baseline=SimpleNamespace(task=planning.task)
+        )
+
+    clean = make(tmp_path / "clean")
+    await exercise_translations(bound_for(clean))
+    passed = [row for row in clean.recorder.rows if row["kind"] == PROBE and row["strategy"] == "planning"]
+    assert [row["phase"] for row in passed] == ["before_model", "after_iteration"]
+    assert all(row["status"] == "passed" for row in passed)
+    others = [row for row in clean.recorder.rows if row["kind"] == PROBE and row["strategy"] != "planning"]
+    assert [(row["strategy"], row["status"]) for row in others] == [
+        ("memory", "not_bound"),
+        ("action", "not_bound"),
+        ("capability", "not_bound"),
+    ]
+
+    contents = files()
+    contents["task_planning.py"] = contents["task_planning.py"].replace(
+        "        from .planning_bindings import observe\n\n        return observe(view, observation)",
+        "        seen = self.state.setdefault('seen_events', [])\n        seen.append(observation.event_id)\n"
+        "        return None",
+    )
+    assert "seen_events" in contents["task_planning.py"]
+    keeping = make(tmp_path / "keeping", contents=contents)
+    with pytest.raises(ValueError, match="must not mutate state"):
+        await exercise_translations(bound_for(keeping))
+    errors = [row for row in keeping.recorder.rows if row["kind"] == "planning.error"]
+    assert errors and errors[0]["operation"] == "observe"
+    assert not any(row["kind"] == PROBE for row in keeping.recorder.rows)
+    assert "seen_events" not in keeping.state
+
+    unbound = SimpleNamespace(planning=None, strategies={}, recorder=clean.recorder, baseline=None)
+    await exercise_translations(unbound)
+    assert [row["status"] for row in clean.recorder.rows[-4:]] == ["not_bound"] * 4
+
+    seen = []
+
+    class Memory:
+        observe = staticmethod(lambda observation: None)
+        command_type = dict
+
+        async def prepare(self):
+            return None
+
+        def scope(self):
+            return clean.scope()
+
+        def translate(self, operation, function, observation, *, output=None):
+            seen.append((operation, observation.event_id, observation.iteration))
+            return function(observation)
+
+    with_memory = SimpleNamespace(
+        planning=None, strategies={"memory": Memory()}, recorder=clean.recorder, baseline=None
+    )
+    await exercise_translations(with_memory)
+    assert seen == [("observe", "validation-probe-after_iteration", 0)]
+    memory_rows = [row for row in clean.recorder.rows if row.get("strategy") == "memory"]
+    assert memory_rows[-1]["status"] == "passed"
+
+    handled = []
+
+    class Action:
+        config = SimpleNamespace(events=("input", "progress", "proposal", "outcome", "failure", "control"))
+
+        async def prepare(self):
+            return None
+
+        def scope(self):
+            return clean.scope()
+
+        async def handle_event(self, event):
+            handled.append((event.kind, event.allowed_controls, event.can_guide))
+            if event.kind == "failure":
+                raise RuntimeError("handler broke on a failure event")
+
+    with_action = SimpleNamespace(
+        planning=None, strategies={"action": Action()}, recorder=clean.recorder, baseline=None
+    )
+    with pytest.raises(RuntimeError, match="handler broke"):
+        await exercise_translations(with_action)
+    assert [kind for kind, _, _ in handled] == ["input", "progress", "proposal", "outcome", "failure"]
+    assert all(controls == ("continue", "reject", "revise", "finish") and guide for _, controls, guide in handled)
+    action_rows = [row for row in clean.recorder.rows if row.get("strategy") == "action"]
+    assert [row["status"] for row in action_rows[-4:]] == ["passed"] * 4
