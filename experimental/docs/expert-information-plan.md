@@ -50,10 +50,10 @@ Only initial construction is wired now. The collection API accepts an existing i
 - Shared initial preparation is connected to the expert entry, offline CLI and Scenario onboarding. Later iterations keep their existing scheduling.
 - `prepare_research` makes optional guidance available to the collector before it groups work; irrelevant guidance can be declined and sufficient inputs require no acquisition.
 - Independent review receives all acquired tool/research/user evidence, including uncited user answers. Request context is available separately; source IDs remain checked.
-- `Manifest` binds task, objective, scope, released inputs, context and observed environment. `Result.reviewed_version` binds review to the snapshot. Matching reviewed results replay without model calls; mismatches fail before acquisition.
+- `Manifest` binds task, objective, scope, released inputs, context and observed environment. `Result.reviewed_version` binds review to the snapshot. Matching reviewed results replay without model calls; mismatches fail before acquisition. The environment is observed with the run's locations and task id replaced, and a housed child is bound by its definition's relocated content, not by its version directory (that version digests this run's paths, so binding it made every replay of a case with housed products fail).
 - Local and composite checkpoint protection is owned by Curator. Journaled publication recovers interrupted content/version writes and detects unrelated edits.
 - Section, resource and question changes are recorded. A question has a unique ID and an optional exact adoption proposal; its recorded answer is not reused for a different proposal.
-- Scenario adapters preserve actual disclosure and evaluation isolation. Optional simulated-party answers use private sources internally and refuse outgoing sealed content. No automatic promotion to evaluation norms occurs.
+- Scenario adapters preserve actual disclosure and evaluation isolation. Optional simulated-counterpart answers use private sources internally and refuse outgoing sealed content. No automatic promotion to evaluation norms occurs.
 - Legacy slot routing, fixed induction/settlement and Scenario package generation are removed; directory identity belongs to `scenario.digest`, while web execution and verification are retained.
 - Controlled tests cover the flow and native file/shell behavior. Paid LLM research, live external services and end-to-end expert quality have not been measured.
 
@@ -65,10 +65,10 @@ The earlier cultivation design already assigned `research/` the job of completin
 
 | Existing code | Actual behavior | Replacement decision |
 |---|---|---|
-| `research/slots.py`, `research/__main__.py` | Material presence selects `inducible`, `researchable`, or `party`; the CLI branches on those values. | Remove the gap classifier and its orchestration. The LLM assesses content against the task and dimensions. Existing material metadata suffices for inventory; do not preserve `Slot` without a caller. |
+| `research/slots.py`, `research/__main__.py` | Material presence selects `inducible`, `researchable`, or `counterpart`; the CLI branches on those values. | Remove the gap classifier and its orchestration. The LLM assesses content against the task and dimensions. Existing material metadata suffices for inventory; do not preserve `Slot` without a caller. |
 | `research/induction.py` | A separate exchange turns examples into unstated norms, checking sources and visibility. | Absorb understanding examples into collector reasoning, retaining conditions, alternatives, outcomes and limits. Retire the dedicated rule exchange after migrating consumers; preserve source/visibility validation in the appropriate adapters. |
 | `research/inquiry.py`, `researchers.py`, `web.py` | Delegate web investigation, read pages, validate quotes, retain findings and failures. | Reuse acquisition. Separate generic findings/verification from Scenario brief construction and supplied-material precedence. Eight dimensions do not require eight finding types. |
-| `research/confirm.py` | A party confirms, amends, rejects or leaves proposals undecided; `ModelParty` sees its own private materials. | Preserve party decisions. Integrate necessary adoption/clarification through user answers; keep simulated-party access on the simulation side. Remove mandatory settlement of every researched fact. Review is never a party decision. |
+| `research/confirm.py` | A counterpart confirms, amends, rejects or leaves proposals undecided; the simulated counterpart sees its own private materials. | Preserve counterpart decisions. Integrate necessary adoption/clarification through user answers; keep simulated-counterpart access on the simulation side. Remove mandatory settlement of every researched fact. Review is never a counterpart decision. |
 | `research/package.py` | Copies a Scenario, generates norm/fact packages, changes disclosure schedules and records provenance. | Default output becomes reviewed snapshots and records. Do not rewrite Scenario materials or disclosure merely because research ran. Remove obsolete package generation after callers migrate. |
 | `scenario/contract.py`, `disclosure.py`, `sealed.py` | Define fixtures, material roles, audiences and release plans. | Retain these responsibilities. Permit supplied references without automatic endorsement; keep expert dimensions separate from material kinds. |
 | `curator/attribution`, generation inspection/query tools | Diagnose how the actual Harness handles requirements and investigate its implementation. | Retain. Information sufficiency does not establish implementation correctness; technical investigation remains inside Curator. |
@@ -119,7 +119,7 @@ Frozen experiments remain possible: record Scenario digest, released-material ma
 | `python -m experimental.research` | Offline entry to the same collector, using a task or Scenario-derived allowed input view. Output a versioned collection result and records, not a rewritten Scenario. Update help/callers together; do not silently retain former `--out` semantics. |
 | Scenario first onboarding | Once opening handovers are determined and staged, prepare the actual released materials and Curator-visible task/context. Replay a reviewed offline result only when its task/source manifest matches; otherwise reassess. |
 | Later rounds | Keep current behavior. Preserve need origin and scope for a future request; no automatic supplement/clarification/gap dispatch. Missing authority or capability is not automatically a web-research question. |
-| User answers | Use the common answer channel. A simulation adapter may use party-private knowledge internally, but must enforce outgoing release/sealing rules. No private source text or evaluation result becomes collector context. |
+| User answers | Use the common answer channel. A simulation adapter may use counterpart-private knowledge internally, but must enforce outgoing release/sealing rules. No private source text or evaluation result becomes collector context. |
 
 `Scenario.handed` is eligibility, not actual release. Use opening handovers / `agency.released`, filtered for the receiving role. Never import the whole fixture or future disclosure steps. Apply audience projection and compartment checks to collection, review and delegated requests/results. Professional practice cases are not trial `Case`; professional experience is not prior cultivation records.
 
@@ -332,3 +332,160 @@ folded passage under 20 characters as "a few words", and a Chinese clause such a
 a few characters still does not; replaying the saved candidate accepts all seven readable findings. Alongside,
 `problems` searches every page the research read and names the page that holds a passage listed under the wrong
 source, so a misattribution is corrected by changing the citation rather than researching again.
+
+### Finding-level admission and editorial revision (2026-10-05, implemented)
+
+Goal: keep the admission standard and stop losing what already passed it. In the 2026-10-05 runs every first
+research group had 7 of 8 findings verified and was still withheld whole for one or two synthesis defects; the
+revision re-ran acquisition for 350 to 650 seconds to recover the same findings, and second groups were lost
+outright. Non-goals: lowering quote verification, cross-group consistency, parallel research, an attested evidence
+grade for pages the host cannot read (recorded as leads instead; a grade is a later decision).
+
+| Decision | Alternatives | Chosen |
+|---|---|---|
+| Admission unit | (a) parse the whole-delivery review for named findings; (b) a `ResearchReview` with one verdict per delivered finding plus `synthesis_admitted`; (c) two review calls | (b): explicit, testable, the revision scope is exact |
+| Who repairs an editorial defect | (a) the researcher in a new session without search, on the supplied source views; (b) the collector's model; (c) drop the synthesis | (a): the researcher stays the author of its delivery; the review states `needs_new_sources` so the host picks the path |
+| Pages the host cannot read | keep refusing; record the finding as a lead with its address and the researcher's quote | refusal stands; `leads.json` and the collector feedback carry them so a person can check |
+
+Also: a finding's unmatched source addresses are pruned from the admitted finding and reported; the review packet
+states each view's size and truncation; the last submitted description already survives a deadline (verified by the
+existing deadline tests), so nothing changes there.
+
+Acceptance: verified findings the review does not name enter evidence at once, the withheld ones and a withheld
+synthesis stay out with their reasons; a revision whose review said no new sources runs the researcher without
+search on the supplied views and is verified and reviewed again; verdicts must cover exactly the delivered findings;
+unreadable-source findings appear in the attempt's leads and in the collector's feedback; replaying the saved
+2026-10-05 deliveries admits the verified findings the reviews did not name.
+
+Result: the contract tests cover each acceptance point (`tests/test_research_review.py`, `tests/test_research_collection.py`,
+`tests/test_research_inquiry.py`, the expert-information smoke tests). The review-only replay of the seven round-8
+groups that the old contract withheld whole (`replay-admission.py` in the run records, OpenRouter gpt-6.1-sol at
+high, $1.52 for seven review calls of 45 to 80 seconds) admitted 37 of 46 verified findings at once; every review
+withheld only the findings its reasons named, judged all seven repairs editorial, and admitted one synthesis. Under
+the old contract those 37 findings waited for a 350 to 650 second re-acquisition each. The live rerun of the
+recruitment case is recorded in the run notes.
+
+### Staged collection loop within a one-hour budget (2026-10-05, implemented)
+
+Owner direction: dispatch and delegation must not be left to one model acting agentically; the collection must run
+as a closed loop of fixed stages with bounded iterations, and the whole collection fits one hour because the
+cultivation loop above it needs the rest of the time. Earlier agreed improvements (parallel groups, fewer
+rejections through finding-level admission) are folded in.
+
+What the current loop leaves to the model: when to read, when to ask, how many groups to open and in what order,
+whether to repair a group, when to submit. Each decision costs a collector call on a growing conversation, groups run
+one after another, and the budget outcome depends on the model's sequencing. Eight live rounds show the same shape
+every time: read, ask, one or two sequential groups, submit; the ordering never needed judgement, only the content did.
+
+| Alternative | Shape | Assessment |
+|---|---|---|
+| (a) Keep the agentic collector, run same-response delegations concurrently, lower the call cap | Smallest diff | The model still owns sequencing and repair; wall-clock stays unpredictable; conflicts with the owner direction |
+| (b) Host-owned stages, each one bounded structured exchange whose output schema is the stage's deliverable; the host owns dispatch, parallel execution, repair and the clock | Rewrite of `collection.py` into stages, prompts split per stage, test rewrite | Predictable time per stage, every model call has one job, transports (`AgentCalls`, provider) unchanged, Curator handoff unchanged |
+| (c) Fully rule-driven pipeline: one assessment call per dimension, groups formed by a fixed clustering rule | Most predictable | Eight assessment calls, loses cross-dimension grouping judgement, fixed rules fit neither a full package nor a one-line prompt |
+
+Recommended: (b). Key assumption: grouping and composition need model judgement, sequencing does not. If a case
+appears where the order itself must adapt (for example research that must precede the user questions), the loop
+gains a stage, not a free tool surface.
+
+Stages (the loop body; the host runs them in this order, every stage with its own call cap and timeout):
+
+| # | Stage | Who | Output | Default cap |
+|---|---|---|---|---|
+| 0 | Read listed interaction sources, stage materials, derive guidance when references exist | host | source texts, guidance | I/O only (guidance exchange as today) |
+| 1 | Assess coverage and raise user questions; native inspection tools offered as bounded queries | one exchange | `Assessment`: per-dimension coverage with evidence refs, all user questions, candidate research needs | 4 calls, 6 native queries, 300 s |
+| 2 | Ask every question at once | host | answers or pending questions | clock pauses while a person answers |
+| 3 | Plan research groups with the answers in hand | one exchange | `ResearchPlan`: at most `research_tasks` groups, each at most `research_questions` questions and naming the listed needs it serves, in priority order | 2 calls, 300 s |
+| 4 | Run all groups concurrently; per group acquisition, verification, review, then at most one host-decided repair (editorial or re-acquisition) when parts were withheld and the group window allows | host + researcher | admitted findings, withheld parts, leads | one window per group, 1800 s; `research_waves` 1 |
+| 5 | Replan once when gaps remain and `remaining - reserve >= CollectionLimits.wave_minimum` (default 600 s); otherwise skip | one exchange + stage 4 again | second wave | only from slack; never by default budget |
+| 6 | Compose the description from the evidence inventory | one exchange | `Description` submission | 3 calls, 600 s (a full package composes in one call of 300 s or more) |
+| 7 | Review, then at most one repair exchange and a second review | two exchanges | `Review`, final `Result` | 900 s reserve, covering compose, review and one repair |
+
+One-hour allocation: stages 1 and 3 up to 600 s, stage 4 up to 1800 s, reserve 900 s, slack 300 s for a replan wave
+or late groups. Typical run (measured stage times): 120 + 60 + longest group 900 + 400 = about 1500 s. Worst case
+stays inside 3600 s because every stage is capped and the wave's wall-clock is the longest group, not the sum.
+
+What the model no longer decides: tool order, how many groups to open, whether to retry, when to stop. What it still
+decides: coverage judgement, which questions only the user can answer, group boundaries and briefs, the description.
+Repair policy becomes host logic: a group with withheld parts is revised once if its window still holds the editorial
+or acquisition minimum; `needs_new_sources` chooses the path; nothing else retries.
+
+Entry contracts kept: `collect_information(provider, request, registry=, research=, guidance=, ask=, ...)`,
+`Result`, `Snapshot`, `Manifest`, replay and the Curator handoff. Removed from the model surface: `read_sources`,
+`ask_user`, `prepare_research`, `delegate_research`, `previous_attempt`; `_ResearchAttempts` becomes the host wave
+runner. `CollectionLimits` gains per-stage caps (`assessment_calls`, `plan_calls`, `compose_calls`, `research_waves`,
+`research_minimum_wave`) and drops `calls`/`queries` as a single pool. Prompts: `collect.md` splits into `assess.md`,
+`plan.md` and `compose.md`; `review_information.md` and the research prompts stay. Records: `assessment.json`,
+`questions.json`, `plan-<wave>.json`, `research-<n>/` as today, `proposal-<n>.json`, `review-<n>.json`.
+
+Acceptance: a replayed controlled run shows the fixed stage order in the trace with no collector call between
+groups; two groups in one plan run concurrently and the wave ends with the longest; a group with withheld parts is
+repaired once by host decision and never twice; a run with no answers still plans and submits with pending questions;
+the total stays under `total_timeout` when every stage hits its cap; one OpenRouter live run of the recruitment case
+closes inside 1800 s with at least two groups admitted.
+
+Status: approved by the owner on 2026-10-05 with the decisions below; implemented the same day. `collection.py` is
+the stage runner (`_Collection`), `waves.py` the concurrent wave runner with the repair rule, `voice.py` reads a stage
+prompt with `prompts/voice.md`; `collect.md` is replaced by `assess.md`, `plan.md` and `compose.md`. Contract tests:
+`tests/test_research_collection.py` (stage order, channel rules, concurrency, single repair by rule, wave gating,
+review limit, stage and group timeouts, host-read sources, focus preservation) and the expert-information smoke tests.
+Live validation: the DeepSeek flow check of the recruitment case closed `ready` in 1619 s with one wave of three
+concurrent groups (one acquisition timeout, 16 findings retained one by one), one compose and one review call; the
+OpenRouter runs of the three cases (gpt-6.1-sol high collector, Codex high research): recruitment `ready` in 1404 s
+and travel `ready` in 1545 s, each with one call per stage, three concurrent groups plus editorial repairs, 24 and 20
+findings retained, reviews accepted first time, text in Chinese in a practitioner's voice; growth hit the compose
+stage's 300 s cap on a 757k-character packet (78 source files, 240k read) and ended without a description, which
+moved the compose cap to 600 s per call, the reserve to 900 s and the source listings out of the compose and review
+packets. After the change the growth case closed `ready` on DeepSeek in 1607 s with three accepted concurrent groups and a compose call of about 224k prompt tokens inside its cap. The full-package size question (how much material one compose call should carry) stays open. The first live description read as a practitioner
+briefing but in English against a Chinese task, so the expression standard now names the task's language.
+
+Owner decisions after the proposal (2026-10-05):
+
+- A channel that is not configured is not a stage. Without a user channel the assessment raises no user questions;
+  what only the user could decide is written into the description as stated prerequisites and boundaries, and the
+  result is `ready`. With a channel, the host asks once; unanswered questions become prerequisites and the run
+  continues. Only interactive use with an explicit wait setting stops for input. The same holds for the research
+  channel: absent means no research stage and "not checked against public evidence" in the description; a failed or
+  timed-out group is a recorded gap. `needs_input` and research-channel blocking disappear as default outcomes, so a
+  collection reaches Curator with its gaps listed.
+- Expression standard: the description and the research deliveries must read as a practitioner briefing a colleague
+  in a real work setting: concrete situations, what to look at, what to do and why, what goes wrong, trade-offs, with
+  evidence cited unobtrusively; no schema-speak, no checklist enumeration, no hedging boilerplate. The assess, compose,
+  research and review prompts state it, the review names violations as defects, and the acceptance is a human reading
+  one description from a live run.
+
+### Research needs, counterpart answers and review scope (2026-10-07, implemented)
+
+End-to-end cultivation runs that start from collection, in a brand-strategist case and the travel case, exposed the
+defects below. Each rule states the failure it removes and, where one exists, the premise it rests on.
+
+- Research groups name the needs they serve. The planning packet numbers each research need of the assessment
+  `need-N` and each open point of an earlier wave that is not the user's `gap-N`; every `ResearchGroup` lists in
+  `serves` the refs it answers, and a ref that was not offered is refused with the reminder that what only the
+  business can settle is the user's to answer (`collection.planned`). Without it the planner opened groups of its
+  own, sent every group to look up the business's internal files and deferred the external needs the assessment had
+  listed, and the researchers honestly delivered nothing. Compared: link groups to numbered needs; prompt advice only;
+  keep coverage out of the planning packet. Premise: planning researches only what the assessment judged
+  researchable; if planning is to find new research directions itself, this check has to be relaxed.
+- The host asks the question of every need a group serves. A correct ref alone was not enough: a plan tagged its
+  groups with the right needs and still asked about internal files. `_asking` appends to the group's brief the
+  assessment's original question of each need it serves, unless the planner already wrote it verbatim. A strict check
+  refusing any plan that does not restate each question verbatim was rejected: it refuses good plans that sharpen a
+  question and spends planning calls on rewording. Replayed on two real plans, the misdirected groups now ask the
+  listed questions and the sound plan only gains the original beside its sharper version; a live collection under
+  this rule has not run yet.
+- Planning has 300 s per call (`plan_timeout`, formerly 120 s): two planning calls ran past 120 s and the whole
+  research stage was skipped.
+- The simulation entry sets compose-and-review attempts with `--information-reviews` (default 2), as the experts
+  entry already did: a run stopped before Curator when its second review rejected the prose for one internal code.
+  The research channel is chosen with `--information-research` and configured with `--information-research-model`,
+  `--information-research-effort` and `--information-research-budget` (a dollar cap per Claude Code call).
+- The expression standard (`prompts/voice.md`, appended to every stage prompt) governs prose only: sources are named
+  by what they are, evidence and question ids stay in the evidence lists. The review judges each section's text,
+  resource purposes and open questions; the dimension, coverage and evidence list the schema requires are never a
+  defect. Before this the review asked three times for required schema fields to be removed, which the composer
+  cannot do, and the collection ran out of reviews.
+- A simulated counterpart answers as the person who handed the work over, speaking to a colleague who prepares the
+  new employee, not to a customer, and only from its supplied material (`simulation/information.py`). When the
+  material does not answer, it returns null text with the reason; text that only says it cannot answer is not an
+  answer. `Answer.text` reads an empty string or the string `null`, in any case, as no answer, because a model
+  leaving the field null sometimes writes the word, and those strings had entered the evidence as counterpart answers.

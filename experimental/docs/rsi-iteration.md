@@ -106,7 +106,7 @@ sequenceDiagram
 | 先验 prior | 往期培养记录 | 记录本身只给交互方与 Analyst；它的类型化历史按 Curator 受众投影后进入每次改造，打开会话时先按本运行的封印扫描 |
 | 辅助 aids | 尺子的声明（`reference.md`）与记录标签（`record.md`） | 只有交互方 |
 
-角色是伙伴 partner、工作对象 conversant（伙伴干活时面对的人）、交互方 party（持有资料与标准、对 Curator 说话的人）、Analyst、Curator。可见性按"谁产生"定：交互方主动说的可以到 Curator；评价机制推导的（检查项、逐项判定、期望答案、尺子）不到；伙伴内部的到 Curator 与 Analyst，不到工作对象；工作对象内部的只到交互方。`contract.json` 可按项收紧或放宽。声明由三处执行：装配（放进伙伴 home 的项）、听取（`hearing.py`，评价侧到 Curator 的唯一通道）、探索（`Withheld`）。
+角色是伙伴 partner、工作对象 conversant（伙伴干活时面对的人）、交互方 counterpart（持有资料与标准、对 Curator 说话的人）、Analyst、Curator。可见性按"谁产生"定：交互方主动说的可以到 Curator；评价机制推导的（检查项、逐项判定、期望答案、尺子）不到；伙伴内部的到 Curator 与 Analyst，不到工作对象；工作对象内部的只到交互方。`contract.json` 可按项收紧或放宽。声明由三处执行：装配（放进伙伴 home 的项）、听取（`hearing.py`，评价侧到 Curator 的唯一通道）、探索（`Withheld`）。
 
 `iteration/session.py` 把 `run` 的一轮拆成可单步调用的 `Session`：`onboard`、`trial`、`signal`、`assess`、`analyse`、`curate`、`skip`、`finish`。每步之后记录写盘，与 `run` 的记录同布局，`Session.resume` 从记录继续。`analyse` 返回 `Outcome`，说明闭环自己会怎么走；调用方可以照做，也可以另作决定。自动运行与人工会话共用这套步骤。
 

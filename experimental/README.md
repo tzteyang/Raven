@@ -5,7 +5,7 @@
 - **按资料定制**：交互方交出的资料（流程、规范、模板）被 Curator 落到 Harness 的四个策略面上，员工从第一轮起就按这些规矩工作。
 - **按反馈改进**：员工工作后，交互方说出哪里不对，Curator 修订 Harness，下一轮再检验。
 
-通用机制（Assessor、Analyst、Curator、Iteration）不认识任何具体场景；`simulation/` 用一个模拟旅行社把这套机制跑起来，并留下一个展示案例。
+通用机制（Assessor、Analyst、Curator、Iteration、Counterpart）不认识任何具体场景；`simulation/` 用两个场景把这套机制跑起来：模拟旅行社（展示案例）与品牌策略师加守望（文件交付、合规事实、交给值班同事 Raven-Oncall 的持续读数），每个场景只注入自己的事实计算器。
 
 依赖方向为 `experimental/ → raven/`，`raven/` 不引用实验层。Curator 生成的内容通过 home 文件、配置、钩子、插件贡献、ContextEngine 与 ACP 子代理接入，由真实的 Raven AgentLoop 执行。Memory 的多段消息组装也推动了一项通用 provider 修复：Responses 转换保留所有 system 文本和 developer 消息，避免上下文贡献被覆盖。连接方式和依赖的内部成员见 [design.md 第 5 节](docs/design.md#5-与-raven-的连接)。
 
@@ -69,6 +69,7 @@ experimental/
 │   ├── human.py                 #   真人：既对话又评价
 │   ├── dataset.py               #   数据集：既供样例又打分
 │   ├── standard.py              #   评价侧 Standard（声明、派生、沉淀）与按它判定的自动 Assessor
+│   ├── introspect.py            #   自评：在雇员副本上让它自己复查每单，来源为 self 的信号
 │   └── prompts/                 #   自动 Assessor 的判定与派生提示词
 │
 ├── analyst/                     # 【通用】把 Assessor 的话整理成 Curator 的行为要求
@@ -98,11 +99,18 @@ experimental/
 │   ├── isolation.py             #   越界检查：运行结束后扫描每次工具调用的路径
 │   └── caching.py               #   网关模型的提示词缓存断点
 │
-└── simulation/                  # 【实例】旅行社场景（真实专家包也用这个入口）
+├── counterpart/                       # 【通用】交互方（老板）的通用实现：评审骨架、题卡装配、成案谓词
+│   ├── owner.py, prompts/       #   通用老板：按案例注入的事实与画面评审，按披露日程交材料
+│   ├── drills.py                #   enlist / grouped：题卡 → 模拟对话人 → 副本上的并行分组演练
+│   └── case.py                  #   成案判定里的交付谓词（按场景名选）
+│
+└── simulation/                  # 【实例】旅行社与品牌策略师场景（真实专家包也用这个入口）
     ├── __main__.py, suite.py    #   单次运行与批量挖掘入口
     ├── scenarios/travel_agency/ #   场景数据：岗位说明、资料、评审标准、客人画像
+    ├── scenarios/brand_strategist/ # 品牌策略师 + 守望：规范、提案结构、守望说明与读数脚本、三张请求卡
     ├── scenario.py, cards.py    #   交互方视角的场景，题卡数值的抽取规则（含行程字段）
-    ├── agency.py, prompts/      #   模拟老板：演练后评审，决定交出哪些资料
+    ├── agency.py                #   旅行社老板：`counterpart.Owner` 加价目计算器的事实与 PPT 页图
+    ├── brand.py                 #   品牌老板：极限词、口号一致、数字来源、守望证据的事实
     ├── reference.py             #   价目计算器与方案 PPT 的结构事实（老板评审时的尺子）
     ├── record.py                #   把一次运行导出成培养记录 transcript
     ├── value.py, attribution.py #   价值判定、要求与干预对应的规则
@@ -111,13 +119,13 @@ experimental/
 
 ## 通用机制与场景的关系
 
-依赖方向固定：`simulation/` 引用通用层，通用层不引用 `simulation/`。
+依赖方向固定：`simulation/` 引用通用层，通用层不引用 `simulation/`。`counterpart/` 属通用层：它不认识任何场景，只提供老板的评审骨架、题卡装配与钩子；每个案例在 `simulation/` 里注入自己的事实计算器。
 
 | 通用接口 | 旅行社场景的实现 |
 |---|---|
 | `iteration.run.run(worker, provider, trials, assessors, analyst=…, opening=…, boundaries=…, prior=…)` | `simulation/__main__.py` 从场景契约组装参数与隔间，默认最多 4 轮 |
-| `Trial.run(worker) -> Sessions` | 通用的 `iteration.conversation.Conversation` 配模拟客人 `Traveller`；`Together` 让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
-| `assessor.role.Assessor.evaluate(sessions) -> Signal` | `agency.Agency`：老板持有标准，说出评审意见并按披露日程交材料；可选并列的 `assessor.standard.StandardAssessor`；通用 Analyst 把原话整理成要求 |
+| `Trial.run(worker) -> Sessions` | `counterpart.drills.enlist` 把题卡装成模拟对话人 `Traveller`，`grouped` 配成 `Together`，让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
+| `assessor.role.Assessor.evaluate(sessions) -> Signal` | `counterpart.Owner` 的案例子类（旅行社 `agency.Agency`、品牌 `brand.BrandOwner`，按场景名从 `OWNERS` 选）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.StandardAssessor`；通用 Analyst 把这些整理成要求 |
 | `curator.raven_adapter.worker.Worker` | `automation.employee.hire` 雇来的员工，带上 Curator 不能读的评测侧文件（`withheld`）；`automation.employee.Replica` 是每张题卡的隔离副本 |
 | `curator.workflow.improve(worker, provider, feedback=…)` | 不改，直接调用 |
 | 入职资料 `opening` | 老板的入职对话与交出的资料 |
@@ -147,6 +155,11 @@ uv run python -m experimental.simulation --scenario <场景目录> --config <con
 uv run python -m experimental.simulation --config <config.json> --state-dir <新的空目录> \
   --scenario travel_agency --holdout <题卡名>
 
+# 老板只评不说：评审照常记进每轮记录作度量，但不进 Analyst、停止判断、历史和 Curator，
+# 改进只靠雇员自评与 --standard；材料须在入职时交齐
+uv run python -m experimental.simulation --config <config.json> --state-dir <新的空目录> \
+  --scenario brand_strategist --chain documents --owner-feedback silent --standard derived sedimented
+
 # 真人 CLI：真人既是对话方也是评价者
 uv run python -m experimental.iteration --help
 
@@ -175,8 +188,10 @@ uv run pytest tests/test_harness_curator_*.py tests/test_analyst_*.py tests/test
 `--material` 和 `--expert` 的材料保留在员工上传目录，按交互输入评估与采用；`--research-reference` 的材料
 只供单独的调研引导读取，不进入员工上传目录。只有实际委派调研且选择使用引导时，才执行一次有界提炼，
 结果在多个研究组间复用。一个组可以关联多个信息字段，材料已充分时不启动调研。
-`--interactive` 允许在终端回答信息问题；
-未启用或未回答时保留问题；仅有用户渠道的阻断问题时为 `needs_input`。仍需公共调研、本地检查，或审核修正预算耗尽时为 `incomplete`，不会继续改造。
+`--interactive` 允许在终端回答信息问题，`--answers-file` 提供事先写好的答案。没有配置用户渠道时，评估环节不提出
+用户问题，只有用户能定的事写成描述里的前提（`assumption`），结果仍为 `ready`；配置了渠道时宿主只问一轮，
+没答到的问题同样带着前提继续，只有加上 `--wait-for-input` 才会停在 `needs_input` 等待输入。
+审核未通过且修订额度用尽、或某个环节超时时为 `incomplete`，不会继续改造。
 `--research exchange` 使用配置中的网页工具和独立研究对话，也可选 `claude`、`codex` 或 `none`。
 主流程模型由配置文件决定，调研模型单独指定。例如，配置主流程为 DeepSeek 后，可用
 `--research claude --research-model claude-sonnet-5-5 --research-effort xhigh`
@@ -185,24 +200,26 @@ uv run pytest tests/test_harness_curator_*.py tests/test_analyst_*.py tests/test
 Claude Code 的预算是客户端控制值，最后一次调用可能使报告金额超过上限；运行记录保留
 客户端报告的模型、耗时、金额与终止原因。这些金额不是账号账单，引用核验通过也不等于结论充分。
 默认不设置美元上限；确需客户端金额控制时才传 `--research-budget`。
-`--research-timeout` 默认 3600 秒，是单次研究与审核的上限；`--collection-timeout` 默认 3600 秒，
-限制一次信息收集的整个闭环，包括引导、调研、审核和修订，先到的时限生效。
-每次委派只获得整轮剩余时间减去 `--submission-reserve`（默认 600 秒）后的部分，这段保留时间留给
-提交描述和最终审核；剩余可研究时间不足 300 秒时宿主拒绝再开调研，收集器只能带着缺口提交。
-每组调研的时间窗里再留 150 秒给引文核验和审核，研究代理只能用其余部分。
-研究组上限由 `--research-tasks` 指定，每组最多 `--research-questions`（默认 2）个问题，
-`--research-revisions` 默认每组最多修订一次。收集器被要求先一次读完列出的材料（`read_sources`），
-再把只有用户能答的问题提出来，最后才委派公开证据的调研。
+`--collection-timeout` 默认 3600 秒，限制一次信息收集的整个闭环。闭环由宿主按固定顺序执行：读材料、评估
+（最多 4 次调用、6 次本机查询、300 秒）、提问、规划调研组（2 次调用、120 秒）、并行执行调研波、汇编描述
+（3 次调用、600 秒，完整专家包的汇编一次调用可能超过 300 秒）、审核并最多修订一次
+（`--submission-reserve` 默认 900 秒保留给汇编、审核和一次修订）。
+每个调研组最多 `--research-window`（默认 1800 秒），且不超过保留额度之前剩下的时间；剩余窗口不足 600 秒
+时跳过调研。`--research-tasks`（默认 3）限制一波里并行的组数，每组最多 `--research-questions`（默认 2）个问题，
+`--research-waves`（默认 1）限制调研波数，第二波只在仍有缺口且时间允许时发生。
+每组窗口里再留 150 秒给引文核验和审核，研究代理只能用其余部分。
 
-收集 agent 负责判断缺口、分组、任务书、修订和结束。每次委派只执行一次调研、来源核验和受限模型审核；
-被退回时，返回审核问题、尝试编号和剩余额度，由收集 agent 决定是否用 `previous_attempt` 修订，
-或换渠道、保留缺口结束。尝试编号只用于程序衔接，不写进语义任务书。
-不再为任务书设置独立审稿循环，可选案例引导也只做有界提炼。
-审核无查询工具，不独立规划或调研。旧审核意见随修订传递，最终汇总仍要检查未解决的意见。
+模型只决定内容，不决定顺序：评估环节交回覆盖判断、用户问题和调研需求，规划环节交回调研组，汇编环节交回描述。
+每个组执行一次调研、来源核验和逐条审核；被采纳的发现逐条进入证据并返回证据 id，被扣留的发现和综述带着理由
+留在尝试记录里。是否修订由宿主规则决定：有被扣留部分、审核判为编辑式且窗口还剩 300 秒以上就不搜索改写一次，
+判为需要新来源且还剩 600 秒以上就重新取证一次，否则记为缺口；不存在第二次。
+宿主读不到被引页面的发现记为线索（`leads.json`），只是带地址的调研问题，不是证据。
+所有提示词共用 `prompts/voice.md` 的表达标准：描述和调研交付要像资深从业者给同事的交接说明，
+两个审核都把不符合这一标准列为可退回的缺陷。
 
 未通过审核的正文保留在尝试记录中，不进入知识证据。网页截断、JSON 转义和 PDF 断词的核验处理保持；
-失败原因与原始记录保持可追溯。超时或调用耗尽会保存 `result.json`、`snapshot.json`、`conversation.json`
-和 `research-attempts.json`，返回 `incomplete` 及 `stop_reason`，不会继续构建 Harness。
+失败原因与原始记录保持可追溯。超时或审核额度耗尽会保存 `result.json`、`snapshot.json`、`trace.json`
+和各环节记录（`assessment.json`、`questions.json`、`plan-<波>.json`、`wave-<波>.json`、`proposal-<n>.json`、`review-<n>.json`），返回 `incomplete` 及 `stop_reason`，不会继续构建 Harness。
 下一次可以用已有快照和聚焦字段重新评估；不自动恢复全部失败任务或重跑整套调研。
 
 离线入口支持 `--collector claude` 或 `--collector codex`，配合 `--model <模型> --collection-effort <强度>`，
@@ -214,8 +231,8 @@ Claude Code 的预算是客户端控制值，最后一次调用可能使报告�
 整次上限 300 秒、一个研究组、无自动修订，不重复启动；输入是旧销售教练试验中已保存的
 `candidate-2.json` 与 `sources-2.json`，只取其中一条职业标准发现。
 默认 `RESEARCH_COLLECTION_MODE=replay` 使用固定交付；设为 `source_review` 时，研究模型只根据该发现
-对应的已保存来源页面实时生成交付，并允许收集 agent 自行决定一次修订。两种模式均使用生产收集流程，
-整轮上限仍为 300 秒，不新增网页搜索；是否实际修订取决于收集 agent 的判断，测试脚本不指定分支。
+对应的已保存来源页面实时生成交付，修订由宿主规则决定。两种模式均使用生产收集流程，
+整轮上限仍为 300 秒，不新增网页搜索。
 
 ```bash
 RESEARCH_CLAUDE_CONFIG_DIR=/path/to/.claude \
@@ -238,10 +255,16 @@ Scenario 默认在入职前准备信息；`--information-research none` 关闭�
 
 `experimental/webui/` 是本地的网页界面：只读地展示记录下的运行（每轮的演练、老板的评审、Analyst 的要求、Curator 的归因与改动、交付物），给了 `--live-config` 时还能在页面上驱动一次真人参与的培养会话（`webui/live.py`，每一步调用闭环的 `Session`）。页面由 Vite 构建，入口 HTML 在构建时由 `scripts/entry.mjs` 生成，不入库。
 
+运行查看页的 Cultivation 视图是上下布局：上方是一块闭环画布（`webui/src/loop.ts` 从对话所用的同一条时间线推出，`views/LoopMap.tsx` 用 React Flow 绘制），入职和每一轮各占一块独立的画板。入职是一条开口的线（交接 → 诊断 → 设计 → 实施）；每轮是一圈闭合轨道，上沿是演练一侧（版本 → 演练 → 评估 → 分析），下沿折回是 Curator 一侧（诊断 → 设计 → 实施）。画板标题右侧写这一轮的结果，环中间写评分，画板之间的虚线标出交给下一轮的版本。画布可以拖动、缩放（左上角按钮）；画板都放得下时整体显示，放不下时出现小地图，并跟随阅读位置平移到对应的画板。下方是完整的多轮对话。两者互相跳转：点站点让对话滚到这一步（`data-station` 标出每段对话所讲的站点）并闪一下，读到哪一站、鼠标停在哪一段，画布上对应的站点就亮起，所在画板描边。鼠标在画板上移动时，近处站点放大并朝鼠标偏移，一束光跟着鼠标；指着的站点的事实显示在画布下方。正在跑的运行由 `/api/phase`（`serve.run_phase`）标出当前站点，流向它的轨道和进入这一轮的交接线是流动的。
+
+对话里每个渲染出来的模块都能切到它自己的原始内容：模块的标题行（或右上角）有一个“rendered / { } raw”分段开关（`views/Raw.tsx`），切到 raw 时原位显示这个模块取自记录的那几段，每段标出它在记录里的路径（`sources.ts`）。Curator 回复里，诊断取 `generated.candidate.attribution`（或归因记录），理解与设计取 `plan.understanding` / `plan.design` 的 Markdown 原文，选择理由取 `selection`，交接材料取信号附件及点到这些材料的诊断与 grounds，每项改动取 `plan.changes[i]`、`artifact.values[target]`、绑定工厂所在的生成模块源码、该模块导入的其他生成模块（折叠）和 `selection.grounds[target]`，代码层的每个绑定同上，宿主检查取 `generated.validation`，失败说明取记录的 error / missing / paused 与 `validation.errors`；owner 的交接与评语取信号（正文按 Markdown 原文），Analyst 取它的 feedback，调研阶段取调研记录。开关放在 `<summary>` 里也不会顺带展开或收起所在模块。代码块由 `views/Code.tsx` 统一绘制（highlight.js 按扩展名高亮、复制；代码不折行、带行号栏，JSON 逐行编号并自动折行），“Generated code and bindings”里的文件和绑定值也用它。
+
+页面拿到的 run（`/api/runs/<id>`，`serve.detail`）是瘦身过的（`serve.slim`）：组合 curation 里交给 Curator 的会话副本（`composition.observations`）不下发；页面只计数的记录（各策略的调用与结果、模型输入等）只留顶层的简单字段，`action.call` 另留它回应的事件头，被裁过的回合标 `records_cut`。员工回复与工具事件、子 harness 步骤、Action 的结果与控制、回滚、playbook 进度和各类错误整条保留。回合下的 records 折叠框打开时再从 `/api/turn` 取这一回合的完整记录，逐条列出、点开看高亮 JSON。服务端按迭代记录的修改时间缓存瘦身结果，超过 64 KB 的 JSON 回答按浏览器的 `Accept-Encoding` 用 gzip 压缩。磁盘上的记录不受影响。三轮的品牌 run 由此从几百 MB 降到 20 MB 以内（gzip 后约 3–4 MB）。
+
 ```bash
 cd experimental/webui && npm ci && npm run build && cd -
 uv run python -m experimental.webui.serve --runs <放运行目录的目录> [--live-config <config.json>]
-# 浏览器打开 http://127.0.0.1:8765 ：根路径是 Studio，/viewer 是运行查看页；默认只绑定本机
+# 浏览器打开 http://127.0.0.1:8765 ：根路径（以及 /viewer）是运行查看页，/studio 是 Studio；默认只绑定本机
 ```
 
 ## 隔离运行

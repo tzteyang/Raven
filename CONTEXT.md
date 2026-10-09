@@ -116,9 +116,19 @@ Experimental generation of a worker's Harness from its task, the materials hande
 feedback. The `harness/` contracts supply one host-owned `Declaration` for model schemas, grants
 and artifact checks; a `Candidate` carries both baseline and contract identity. `generation/`
 runs bounded understand, select, design, implement and repair stages with read-only source
-queries. `raven_adapter/` inspects actual assembly, binds generated code through native sockets
-and records execution in a persistent worker process; its `targets/` owns native authoring
-entries. `harness/strategies/` defines the four host-independent strategy protocols
+queries; `Limits.stage_queries`, when set, caps what one stage may spend of the query pool, and the
+budget note, kept in the conversation so each request begins with the previous one, asks for a
+submission once half of it is spent. Validation of a candidate runs `raven_adapter/probe.py`'s
+`exercise_translations` inside the validation copy: every declared planning observation phase is driven
+once with a synthetic observation, so a translation that keeps state fails validation and reaches repair
+instead of the worker. `raven_adapter/` inspects actual
+assembly, binds generated code through native sockets and records execution in a persistent
+worker process; its `targets/` owns native authoring entries. A `Target` carries `knowledge`
+(protocol, binding, host class, its reference pages and known pitfalls, sent in full with the
+selected contract) and `references` (`Reference` items listed with a purpose and read on demand
+by the names `Target.sources()` gives them); design sends material shared by several selected
+contracts once. A stage's `history` carries every earlier submission, note, check and validation, but
+indexes each successful repeatable read (its arguments and size) instead of its text. `harness/strategies/` defines the four host-independent strategy protocols
 (`MemoryStrategy`, `PlanningStrategy`, `CapabilityStrategy`, `ActionStrategy`), each bound by its
 `<facet>.strategy` target. `workflow.improve` delivers contracts, current code and execution
 evidence to generation, validates and installs a revision, and records its feedback association;
@@ -163,12 +173,14 @@ field. Native content ownership is persisted separately for withdrawal, outside-
 preservation and failed-activation recovery.
 
 **Strategy inference** (`experimental/curator/harness/inference.py`):
-An optional typed, single-step worker-model call inside an active strategy operation.
-Curator authors its instruction, input selection, result model and consumer. The
-host owns operation identity and shares one attempt across its sequential peer
-chain, with additional turn, input, output and timeout bounds. It returns validated
-domain data without tools or a model repair loop; Action maps it to permitted
-controls whose application is recorded separately. It is not Curator execution
+An optional typed, single-step worker-model judgment inside an active strategy operation;
+`each` makes several judgments of one operation at once, on host-owned tasks. Curator
+authors the instruction, input selection, result model and consumer. The host owns
+operation identity; an operation and its sequential peer chain share an allowance of
+calls and time, and the turn has its own allowance of calls and input bytes. The
+strategy's output allowance and reasoning effort may not exceed the worker's own. It
+returns validated domain data without tools or a model repair loop; Action maps it to
+permitted controls whose application is recorded separately. It is not Curator execution
 or a delegated Agent workflow.
 
 **Context source** (`experimental/curator/harness/context.py`):
@@ -202,22 +214,40 @@ _Avoid_: conflating this experiment with the Context Engine's Curator; calling t
 assessor, which names the source of a `Signal`; the earlier name "evaluator" for that role; writing an
 assessor's standard into a `Signal`.
 
+**Measuring source** (`Session.measuring`, `experimental/iteration/session.py`):
+An assessor whose signals measure each round in its record and reach neither the Analyst, the decision to stop, the
+history, the curation nor `previous_signals` (`Session._acted`). The simulation's `--owner-feedback silent` makes the
+owner one, so a run improves from its other assessors alone while the owner still scores every round.
+_Avoid_: calling it a holdout, which plays held-out trials; a measuring source judges the same trials as the loop.
+
 **Cultivation scenario** (`experimental/scenario/`):
 The closed set of inputs one cultivation may consist of: the profile, cases, norms, facts,
 exemplars, counterexamples, checks, the exchange's schedule and wording, the prior and the
-evaluation aids, each item with the roles that may receive it (partner, conversant, party,
+evaluation aids, each item with the roles that may receive it (partner, conversant, counterpart,
 analyst, curator). `load` reads a scenario directory and refuses a file outside every category;
-`sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the party's
+`sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the counterpart's
 schedule of handing materials over, which the loop never reads. `provenance.json` says where each
-material came from and whether the party stands behind it (`Scenario.confirmed`).
-_Avoid_: calling a check a norm: a norm is handed over, a check is the party's own standard and stays
-on the evaluation side.
+material came from and whether the counterpart stands behind it (`Scenario.confirmed`).
+_Avoid_: calling a check a norm: a norm is handed over, a check is the counterpart's own standard and stays
+on the evaluation side; writing a check as a translation of a norm sentence: the sealing is differential only
+against verbatim text, so the Curator's own English rendering of a Chinese norm can coincide with a sealed
+window of such a check (seen 2026-10-07) -- a check is the evaluator's instruction in its own words.
 
 **Compartment** (`experimental/iteration/compartment.py`):
 One model role's context: every value admitted into it and every provider request made inside it
 is scanned for that role's sealed fingerprints, and each admission and violation is appended to the
 run's `boundaries.jsonl`. Words a speaker is entitled to say, such as each conversant's messages, are
 spared per speaker; identifiers stay sealed.
+
+**Model role** (`experimental/model_roles.py`):
+A role of a cultivation that calls a model, beside the partner: `curator`, `attribution`, `analyst`, `collector` (the
+research stage's own calls), `counterpart` (the owner's review and its answers to the collector), `conversant`,
+`judge` (the `StandardAssessor`, the holdout judge and the post-run reading of interventions against the owner's
+rules), `critic` and `sub-harness`. The partner runs on its Raven configuration's model and effort; a run names any
+other role's model or effort as `role=value` (`--model`, `--effort`), and a role it does not name runs on the
+partner's, never on another role's. The resolved map is the `models` and `efforts` of the run's `settings.json`. The
+sub-harness runs in the partner's processes and takes only a model; its effort stays its own configuration's.
+_Avoid_: simulation model or traveller model, the former per-role flags that fell back along a chain of roles.
 
 **Confinement** (`experimental/curator/raven_adapter/confinement.py`):
 The partner's process tree (the employee, its shell, its child harnesses and the strategy code the Curator installs)
@@ -227,6 +257,19 @@ loop's records, which the process never reads. The *code image* is the code the 
 whitelist, with its own environment and interpreter, built once per content. Before a confined run starts, a probe
 run as that user must find the records, the runs beside, the repository and the scenario out of its reach.
 _Avoid_: sandbox, which in Raven (`tools.sandbox`) confines one tool command, not the process.
+
+**Harness commitment** (`experimental/curator/harness/commitments.py`):
+One entry of the Curator's standing statement of what a Harness does: what one strategy
+surface (or `native` host behavior) does, in which situation, from what input and with
+what effect, and the curation inputs it serves (requirement ids, materials, the reviewed
+information, routed node requirements, the task). The list sits between those inputs and
+the strategy code; a plan changes it through add, modify and retire operations, omitted
+entries stay, ids (`H<n>`) are never reused, and the host checks the operations against
+the selected targets and the submitted artifact. The worker and each child Harness hold
+their own list.
+_Avoid_: requirement, which names an Analyst behavior requirement or a routed node
+requirement; commitment alone, which in a scenario's conversations can mean a promise
+to a customer.
 
 **Mechanism attribution** (`experimental/curator/attribution/`):
 The Curator's diagnosis, before it changes anything, of where each input stands in the current
@@ -242,17 +285,54 @@ revision. `ledger.held` is the one rule for holding; the ledger joins the entrie
 groups them by attributor identity, so versions of attribution can be compared.
 
 **Standard** (`experimental/assessor/standard.py`):
-The criteria a round is held to on the evaluation side: declared (the party's checks), derived (drawn
-from the norms the party stands behind, of strength should until the party confirms them) and
+The criteria a round is held to on the evaluation side: declared (the counterpart's checks), derived (written
+by the standard critic from the norms the counterpart stands behind, of strength should until the counterpart
+confirms them) and
 sedimented (every requirement raised so far, kept as a regression check). The `StandardAssessor`
 judges each round against it and returns a `Signal`.
 
+**Standard critic** (`experimental/assessor/critic.py`):
+The role that writes and revises the derived criteria of a `Standard` before every assessment, so a round can be
+judged where no counterpart says what good work is. It reads every norm handed over so far and, per criterion it
+wrote, only whether the last round's judge could decide it (`Decidability`), never whether it passed; each change
+(`add`, `rewrite`, `retire`) names a reason from a closed set that the evidence must bear out, and every criterion
+quotes the norm passage it rests on verbatim, refused otherwise. Its numbered revisions are kept in the run's
+`standard.json`. It is the critic of the actor (Curator), critic and judge triad; reviewing the critic itself is
+not built.
+_Avoid_: calling it the experience critic (`experimental/experience/`, another branch), which reviews experience
+candidates across curations; showing it pass or fail results.
+
+**Counterpart layer** (`experimental/counterpart/`):
+The counterpart is the role on the other side of the partner's work: it holds the materials and the standard,
+judges each round by the partner's deliverables and final replies, hands materials over on its schedule and speaks
+to the Curator (the travel agency's owner, the brand case's marketing lead). This layer is its generic side in
+automated cultivation: `Owner`, the simulated owner that reviews a round's
+sessions against the facts and pictures a case injects (`facts(name, exchanges, card)`, `pictures(sessions)`)
+and hands materials over on its disclosure schedule; `drills.enlist` / `grouped`, which turn a scenario's cards
+into conversants and group them into trials played on replicas; and `case.delivered_for`, the delivery predicate
+the value judge uses for a scenario. A case (`simulation/agency.py`, `simulation/brand.py`) subclasses `Owner`
+with its own facts and nothing else.
+_Avoid_: party, the role's former name, which reads as a gathering out of a contract's context; putting a scenario's rule into `counterpart/`; calling the owner an agency outside the travel case.
+
+**Self signal** (`experimental/assessor/introspect.py`):
+The worker's own review of each session of a round, taken on a replica after the trials, as a `Signal` whose
+`source` is `self`: a verdict, the defects it sees and a note per session, with no standard, check or counterpart
+remark shown to it. Its items reach the Analyst only, its text reaches the Curator through hearing, and
+`satisfied` is always None, so it never ends a run. The Analyst reads it against the external verdicts for
+blind spots.
+_Avoid_: treating a self verdict as a pass or fail of a criterion; feeding the standard into the self review.
+
 **Research stage** (`experimental/research/`):
-Information collection before a Curator invocation. The expert-construction path runs a task-driven
-collector with native Raven tools, delegated research and user questions, followed by a separate
-review. Its `Information snapshot` is handed to Curator only when review accepts it and no blocking
-question remains. `simulation.experts` invokes it before initial construction; automatic collection
-on later cultivation rounds is not implemented.
+Information collection before a Curator invocation, run as fixed stages the host sequences: read the listed
+material, assess it (one bounded exchange, with native inspection offered as capped queries), ask the user once when
+a user channel is configured, plan research groups when a research channel is configured, run the groups
+concurrently in bounded waves, compose the description, review it and repair it once. Each stage is one structured
+exchange with its own call cap and timeout; the model decides content, never the sequence. A channel that is not
+configured has no stage: without a user channel the assessment raises no questions and what only the user could
+decide becomes a stated assumption in the description; without a research channel the description says what was
+not checked. Its `Information snapshot` is handed to Curator when review accepts it and no user question is left
+blocking, which happens only under `wait_for_input`. `simulation.experts` invokes it before initial construction;
+automatic collection on later cultivation rounds is not implemented.
 
 Interaction materials enter information coverage assessment directly, including product packages
 provided as interaction inputs. Separately supplied research references can generate optional
@@ -266,7 +346,7 @@ unready result and records its version. Later curation receives that version wit
 collecting again. The legacy material-presence classifier, fixed induction/settlement pipeline and
 Scenario package writer have been removed. Web acquisition and quote verification remain reusable.
 `simulation.information.PartyAnswers` is an optional simulated user-answer adapter: its private inputs
-stay with the party, outgoing answers are checked against the release, and review never implies adoption.
+stay with the counterpart, outgoing answers are checked against the release, and review never implies adoption.
 
 **Information snapshot** (`experimental/research/information.py`):
 An expert description covering role, tasks, knowledge, abilities, methods, judgement, cases, and
@@ -278,14 +358,20 @@ that focus remain unchanged. The Result records section, resource and question c
 Publication checks content/version consistency and the Curator-owned local/composite unfinished state.
 A publication journal makes interrupted content/version writes recoverable.
 Information coverage does not assert that a Harness has implemented the described abilities.
-`CollectionLimits.total_timeout` defaults to 3600 seconds for the whole collector invocation, including delegated
-work and reviews. ResearchAssignment carries only the remaining allowance; acquisition and review see their
-remaining time, and no child receives a fresh overall deadline.
-Budget exhaustion preserves acquired evidence, the latest proposal or an explicitly unassessed description,
-conversation and attempt records. Result.stop_reason distinguishes completion, deadline, call/review exhaustion,
-errors and cancellation; only completed, accepted, unblocked results may reach Curator. The offline entry may
-use `research.calls.ClaudeCalls` as its model transport: restricted CLI calls select offered host tools; the host
-collector still owns execution. Review calls have only a structured submission function.
+`CollectionLimits` holds per-stage caps: `total_timeout` (3600 s) bounds the whole invocation, `reserve` (900 s) is
+kept for composing and review, each research group gets at most `research_window` (1800 s) and never more than the
+time left before the reserve, and a wave is skipped under `wave_minimum`. Budget exhaustion preserves acquired
+evidence, the latest proposal or an explicitly unassessed description, and the stage trace. Result.stop_reason
+distinguishes completion, deadline, review exhaustion, errors and cancellation; only completed, accepted, unblocked
+results may reach Curator. The offline entry may use `research.calls.AgentCalls` (Claude Code or Codex) as its model
+transport: restricted CLI calls select the stage's submission; the host collector still owns execution. Review calls
+have only a structured submission function.
+
+**Open point** (`research.information.Question`):
+An unresolved question in a description, with the channel that could settle it (user, research or native) and the
+assumption the description applies meanwhile. Only a user question can block, and the host sets it blocking only
+under `wait_for_input`; every other open point carries an assumption and never holds the result.
+_Avoid_: "blocking research question".
 
 **Information input manifest** (`research.information.Manifest`):
 The task, objective, invocation scope, released source digests, context digest and observed environment
@@ -293,14 +379,16 @@ bound to a Snapshot, including version-bound answers and source-exclusion policy
 and whose manifest matches the current invocation. A bare Snapshot is evidence for reassessment, not
 an accepted replay. A mismatched result is refused before model calls.
 
-**Research group** (`experimental/research/collection.py`, `ResearchTask`):
+**Research group** (`research.information.ResearchGroup`, run by `experimental/research/waves.py`):
 A coherent work problem associated with one or more information dimensions, known evidence ids and a semantic
-ResearchBrief. The collector can call `prepare_research` for an identified need before grouping; it receives any
-optional guidance first. The host then resolves known evidence into a `ResearchAssignment` and delegates it. Multiple groups can reuse the same evidence and guidance;
-dimensions are output categories, not a requirement to launch one research agent per category.
-The collector owns grouping and repair decisions. There is no independent pre-execution brief audit.
-A delegation returns an attempt handle and review feedback. The collector may explicitly use `previous_attempt`
-to revise its latest unaccepted attempt within the per-group revision allowance; the host never retries autonomously.
+ResearchBrief. The planning stage returns a `ResearchPlan` of at most `research_tasks` groups with at most
+`research_questions` questions each, in priority order; optional guidance is derived once before planning. The host
+resolves known evidence into a `ResearchAssignment`, runs the plan's groups concurrently inside one window each and
+repairs a group at most once by rule: when the review withheld part of it and the window still holds the editorial
+or acquisition minimum, on the path the review named. Admitted findings are retained as evidence one by one, the
+admitted synthesis as one more entry, so the description cites the finding it relies on. A second wave runs only
+when `research_waves` allows it, gaps remain and the window permits. Dimensions are output categories, not a
+requirement to launch one research agent per category.
 
 **Research brief** (`research.information.ResearchBrief`):
 The researcher's self-contained handoff: background, known information, questions, scope, deliverable and
@@ -310,11 +398,20 @@ and limitations. Dimension associations and collection identifiers remain outsid
 **Reviewed research** (`experimental/research/review.py`):
 One bounded acquisition, source check and tool-free semantic review per delegation. The delivery includes findings, synthesis,
 source disagreements and unresolved needs with their next acquisition channel. Review sees independently retrieved
-source views. Rejected candidates remain in execution records; only accepted retained content enters collection evidence.
-Previous reviews and source views accompany an explicitly requested repair. Review history is retained for final
-synthesis, but is not itself professional evidence. Quote matching, semantic acceptance, organisational adoption
-and demonstrated competence remain distinct.
+source views with their sizes and truncation. Admission is per finding (`ResearchReview`): the review returns one
+verdict for every delivered finding and states whether the synthesis stands. Admitted findings enter collection evidence
+at once; withheld findings and a withheld synthesis remain in the attempt records with their reasons, and the review says
+whether a repair needs new sources. A repair that needs none is editorial: the researcher revises its delivery from the
+supplied source views without searching, and the result is verified and reviewed again. Previous reviews, source views
+and admitted findings accompany the host-decided repair. Review history is retained for final synthesis, but is not
+itself professional evidence. Quote matching, semantic acceptance, organisational adoption and demonstrated competence
+remain distinct.
 An unresolved public-research or native-inspection blocker makes information incomplete; a user-only blocker requires input.
+
+**Research lead** (`research.review.leads`):
+A finding refused only because the host could not read a cited page. It is returned to the collector and saved with
+the attempt as an address and passage a person can check by hand; it is a research-channel question, not evidence.
+_Avoid_: calling it a weak or unverified finding.
 
 **Research guidance** (`experimental/research/information.py`, `ResearchGuide`):
 Optional questions, relationships and grouping hints for the research step, linked to dimensions.
@@ -326,8 +423,9 @@ Extraction is a bounded source-reading exchange, without a separate review-and-r
 are structurally validated; the collector treats directions as hypotheses, never as established professional knowledge.
 
 **Finding** (`experimental/research/inquiry.py`):
-One sourced fact or source-recommended practice returned by research: its wording, cited pages,
-a supporting passage, and narrative tensions with known inputs. Conflicts are not material identifiers.
+One sourced fact or source-recommended practice returned by research: its wording, the cited pages that hold
+its supporting passage, the passage, and narrative tensions with known inputs. Cited addresses where the host did not
+find the passage are pruned from the admitted finding and reported as unmatched sources. Conflicts are not material identifiers.
 It is kept only when its passage occurs in a source view the host can read. Known truncated views can
 expand within a verification ceiling; JSON string escapes and rendered markup are decoded without
 joining unrelated JSON fields. Retained finding identifiers preserve original submission positions.

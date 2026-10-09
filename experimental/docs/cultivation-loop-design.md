@@ -15,11 +15,13 @@
 |---|---|---|
 | 伙伴 partner | 被培养的 worker | 自己的 home 与执行 |
 | 工作对象 conversant | 伙伴干活时面对的人（客人） | 只见通道里的成品 |
-| 交互方 party | 持有资料与标准、评审并对 Curator 说话的人（老板） | 输出、交付物、声明的观察面、自己的资料与标准 |
+| 交互方 counterpart | 持有资料与标准、评审并对 Curator 说话的人（老板） | 输出、交付物、声明的观察面、自己的资料与标准 |
 | Analyst | 把外部判断翻译成内部可消费的要求 | 判断、会话、执行痕迹 |
 | Curator | 机制归因与修正 | 要求、被引用的回合、机制活动、当前 harness、自己的历史 |
 
 自动化分支只是把工作对象与交互方换成模型扮演；真人模式下由人充当这两个角色，管线不感知差别。
+
+交互方的通用实现在 `experimental/counterpart/`：`Owner` 是评审骨架（读会话与交付物、按案例注入的事实与画面评审、按披露日程交材料），`drills` 把题卡装成模拟对话人与并行分组的试炼，`case` 给成案判定提供交付谓词。一个案例（`simulation/agency.py` 的旅行社、`simulation/brand.py` 的品牌策略师）只注入自己的事实计算器，不复制装配。
 
 ## 3. 输入类别（封闭）
 
@@ -51,7 +53,7 @@
 
 边界不靠提示词，也不靠在一处逐字段删除，而是三件事：
 
-1. **字段受众声明。** 闭环上每个类型的每个字段声明它的受众（partner、conversant、party、analyst、curator 的子集），契约里每一项声明可见性。比较过三种表达：每个角色一个视图类型（矩阵散在多处）、评价侧的值包成封印类型（挡不了嵌套字段）、字段级声明加通用投影（矩阵就在类型定义里）。采用第三种，角色、受众常量与投影在 `experimental/audience.py`，闭环与 Curator 的类型共用。`project(value, role)` 递归保留受众含该角色的字段；未声明受众的字段是错误。`hearing.heard` 即 `project(signal, "curator")`，`Remark` 类型退掉；Analyst 的材料是 `project(..., "analyst")`；交互方模拟器拿 `project(scenario, "party")`。
+1. **字段受众声明。** 闭环上每个类型的每个字段声明它的受众（partner、conversant、counterpart、analyst、curator 的子集），契约里每一项声明可见性。比较过三种表达：每个角色一个视图类型（矩阵散在多处）、评价侧的值包成封印类型（挡不了嵌套字段）、字段级声明加通用投影（矩阵就在类型定义里）。采用第三种，角色、受众常量与投影在 `experimental/audience.py`，闭环与 Curator 的类型共用。`project(value, role)` 递归保留受众含该角色的字段；未声明受众的字段是错误。`hearing.heard` 即 `project(signal, "curator")`，`Remark` 类型退掉；Analyst 的材料是 `project(..., "analyst")`；交互方模拟器拿 `project(scenario, "counterpart")`。
 2. **隔间。** 闭环按角色划成隔间（准备、装配、试炼、评审、分析、改造、记录），每一步在其隔间里执行。隔间是上下文管理器：设定当前角色与策略，`admit` 做投影并核验，`guard` 返回守卫后的 provider，进入与违规写进 `records/boundaries.jsonl`。
 3. **守卫。** 信息进入一个模型角色只有三个咽喉：模型请求、文件访问、记录写入。守卫装在咽喉上，与内部代码路径无关。模型请求的守卫是 provider 代理，包住 `LLMProvider` 的全部抽象方法，请求发出前扫描消息与工具结果；文件访问的守卫是 `Withheld` 与 `confined`；记录写入带出处与受众。
 
@@ -59,12 +61,15 @@
 
 - 默认拒绝。进入隔间的值必须带"已为该角色投影"的标记，未标记的值拒绝。凡不能追溯到一个允许该角色的来源的信息，都不属于该隔间。
 - 差分封印。对契约说该角色不能见的项，取 id、路径与文本的归一化滑窗片段做哈希集合，再减去该角色可见项的片段：只封印"只存在于被禁项里"的文本，这是可见性判定标准的计算版本，也避免检查项与规范文本重合造成的误报。封印集合由声明推出，不手工维护。入职与交接话术不封印：它们是交互方说出的话，说给 Curator 就被 Curator 听到，Curator 也可以转述给伙伴。滑窗按单位计重：一个汉字重 1，其他文字的一个词重 2，窗口重 20，约合二十个汉字或十个英文词。按字符等长切窗会让英文窗口只有三个词，角色用自己的话说出的普通短语（如 the itinerary template）也会被当成泄露。
-- 按出处豁免。一个角色从有权说这些话的人那里听到的文本，不对它封印：工作对象描述自己的情况时会复述题卡，伙伴的回复又会复述工作对象的话，这些窗口都不是泄露。守卫在扫描前减去这部分（`Sealed.without`）：Analyst 与 Curator 的隔间减去截至本轮所有工作对象说过的话（Analyst 读整轮对话，交互方也可以引述其中任何一句）；伙伴的 provider 守卫减去请求里 user 消息的文本；模拟客人与模拟老板各在自己的隔间（conversant、party）里调模型，减去伙伴自己的产出（回复、交付的文件、研究、同事报告、归档与后台操作），因为那是伙伴有权说给他们的，其余部分（人设、老板自己的标准与资料）按各自封印检查。豁免既按单条消息算，也按同一说话人的消息顺序拼接后算：一条消息只答一件事的客人，会被伙伴在确认时复述成一句，跨消息边界的窗口也是他说过的话；不同会话的客人从不拼在一起，两位客人各说半句封印文本仍然封印。Analyst 提交时的检查（`vet`）豁免的是改造时 Curator 隔间将豁免的同一组话。隔间进入后，为同一角色预先绑定的 provider（如 Analyst 的）改用这个隔间的守卫检查。系统提示、工具结果与伙伴自己的话里出现的封印窗口仍然算泄露，标识符永远封印。
+- 尚未交出的材料只封照抄。分阶段交付时，信息收集（`research/scenario.py` 的 `release_guard`）还要封住后续才交的材料，但用 `Sealed.copying`：Curator 自己的封印（检查项、案例、它永远看不到的材料）仍按单窗口；尚未交出的材料要连续 `PASSAGE_SPAN`（10）个窗口都命中才算泄露，约合三十个汉字或二十个英文词，本身短于这个长度的材料仍按单窗口封。原因：从已交出的规范归纳出的一句话，可能碰巧与一份后续材料同序重合二十来个单位，单窗口会把它当泄露中止运行。前提是真正的泄露是成段照抄；后续材料里若有必须严防的短小事实（长材料中的一个数字、一个编号），这个做法不再适用。
+- 按出处豁免。一个角色从有权说这些话的人那里听到的文本，不对它封印：工作对象描述自己的情况时会复述题卡，伙伴的回复又会复述工作对象的话，这些窗口都不是泄露。守卫在扫描前减去这部分（`Sealed.without`）：Analyst 与 Curator 的隔间减去截至本轮所有工作对象说过的话（Analyst 读整轮对话，交互方也可以引述其中任何一句）；伙伴的 provider 守卫减去请求里 user 消息的文本；模拟客人与模拟老板各在自己的隔间（conversant、counterpart）里调模型，减去伙伴自己的产出（回复、交付的文件、研究、同事报告、归档与后台操作），因为那是伙伴有权说给他们的，其余部分（人设、老板自己的标准与资料）按各自封印检查。豁免既按单条消息算，也按同一说话人的消息顺序拼接后算：一条消息只答一件事的客人，会被伙伴在确认时复述成一句，跨消息边界的窗口也是他说过的话；不同会话的客人从不拼在一起，两位客人各说半句封印文本仍然封印。一个被封窗口如果主体是说过的话、只多出不超过 `BESIDE`（5 个单位：几个汉字或两个英文词）的旁字，也一并豁免（`Sealed.without` 的 `_beside`，`Sealed` 为此留存被封文本的单位序列）：交互方引述客人原话时，题卡里引出这句话的舞台提示（如"开口说："）会和原话落进同一个窗口，引述说过的话不是泄露它旁边的几个字；题卡里成句的私有内容仍封存。Analyst 提交时的检查（`vet`）豁免的是改造时 Curator 隔间将豁免的同一组话。隔间进入后，为同一角色预先绑定的 provider（如 Analyst 的）改用这个隔间的守卫检查。系统提示、工具结果与伙伴自己的话里出现的封印窗口仍然算泄露，标识符永远封印。
 - 转述抓不到，由留出集兜底；离线的模型审计只作证据，不进运行时。
 
 策略只有两种：自动运行与测试用 abort，违规即中断并写记录；Studio 人工会话用 warn，人是交互方，它说的都合法，只提示。守卫工厂是可 pickle 的纯数据（角色、策略、封印哈希、记录路径），因为 Worker 的进程经管道收到 pickle 后的 `provider_factory`（`raven_adapter/launch.py`）。
 
 新术语：受众 audience、投影 projection、隔间 compartment、封印 sealed。定义即本节，与 `iteration/compartment.py`、`scenario/` 的封印推导一一对应。
+
+检查项的措辞规则（2026-10-07 品牌案例 run-1 的教训）：封印窗口只对可见材料里逐字出现的文本做差分，认不出翻译。检查项若是规范原句的英译，Curator 自己把同一句中文规范译成英文写进 docstring 时就会撞上封印窗口（10 个英文词逐字相同），运行被隔间中止。所以检查项要写成评价者自己的指令——指向规范的章节与算出的事实，不复述、不翻译规范原句。
 
 ### 4.2 进程级隔离：伙伴进程以专用用户运行
 
@@ -116,7 +121,7 @@ A 成立的前提：机器上其他进程都以 root 运行，关掉 other 权�
 | 新交的资料 | 内容落在哪、伙伴怎么读到 | 诊断带 `placement` |
 | 路由给子 Harness 的节点要求 | 同上，由该作用域自己归因 | 诊断 |
 
-状态用一个闭集：absent、not_exposed、not_triggered、not_consumed、wrong_logic、blocked、model_ignored、uncovered。入职是所有输入都是 new 加资料的特例，没有任何输入时只诊断任务本身。选择的每个 target 必须以一条诊断为依据；`Plan.understanding` 只保留面向反馈者的解释；设计对每个改动写明是修改、替换还是新增诊断点名的机制。宿主校验的修复只处理代码，行为是否改善由下一轮回答。
+状态用一个闭集：absent、not_exposed、not_triggered、not_consumed、wrong_logic、blocked、model_ignored、uncovered。机制在被引用的回合里先介入（拒绝、改写或回滚模型的动作）、失败是模型随后的做法时，介入是原因之一：拦下要求本身要的动作，就是该机制的 wrong_logic，不论它在别处拦对了多少（`attribution/prompts/diagnose.md` 与 `Diagnosis.state` 的字段说明）。起因是归因只问"哪个机制负责"时，会把 Curator 自己装的检查拦出来的失败记成新要求，下一次改造反而把检查再扩大。没有另设"由机制引起"的状态：wrong_logic 已能表达，新状态要动闭集、选择阶段与本文。这条说明的效果尚未经多轮运行验证。入职是所有输入都是 new 加资料的特例，没有任何输入时只诊断任务本身。选择的每个 target 必须以一条诊断为依据；`Plan.understanding` 只保留面向反馈者的解释；设计对每个改动写明是修改、替换还是新增诊断点名的机制。宿主校验的修复只处理代码，行为是否改善由下一轮回答。
 
 ### 5.1.1 诊断落在哪一层（2.9）
 
@@ -161,7 +166,7 @@ Change
 | `id` | 闭环分配，本次运行内顺序编号 `R1`、`R2`；Analyst 不写 | 全体 |
 | `repeats` | Analyst 判断它重提了历史里哪条要求的 id；成立时沿用那个 id，`recurrence` 由此可算但先保留 | analyst、curator |
 | `situation` | 行为应当出现的情境类，从 `behavior` 里拆出来；`behavior` 只剩期望的动作 | analyst、curator |
-| `grounds` | 要求所依据的判定：`assessor:<名>`、`check:<id>`、`case:<id>` | party、analyst |
+| `grounds` | 要求所依据的判定：`assessor:<名>`、`check:<id>`、`case:<id>` | counterpart、analyst |
 | `materials` | 要求所依据的、已交出的资料名 | analyst、curator |
 
 原设计写的 `sources`"经 hearing 递归剥离"，改为按受众拆成 `grounds` 与 `materials` 两个字段：字段级受众就是边界的表达方式，不必在 hearing 里再做逐项过滤。
@@ -199,7 +204,7 @@ Change
 - 检查点：归因暂停时，`curation/pending.json` 存 `attribution_state`，下一次 `improve` 或 `attribute` 从这里续；生成暂停时存 `state`，其中带已接受的 `Attributed`，续跑不重做归因；若调用方给了另一份诊断或另一个归因器（身份不同），拒绝续跑生成，`resume=False` 才丢弃它。
 - 单独入口：`workflow.attribute(worker, provider, feedback=…, observations=…, attributor=…)` 只归因，只写归因记录；用于同一输入在不同版本上各跑一次，或让人先审诊断再交给 `improve(attribution=…)`。组合 worker 上它归因根作用域，看到的与组合改造时的根作用域相同，检查点放在 `curation/attribution-scope/`，不碰进行中的组合改造。
 - 生成：`generate(context, provider, attribution=…, investigation=…)` 从 select 开始；归因读过的证据作为 trace 的开头，进入后续阶段的历史。
-- 闭环：`improve`、`propose`、组合、`Session`、`run()` 都传 `attributor` 与 `attribution`；模拟入口的 `--attribution-model`、`--attribution-catalogue`、`--attribution-prompts`、`--attribution-calls`、`--attribution-queries` 写进运行设置。
+- 闭环：`improve`、`propose`、组合、`Session`、`run()` 都传 `attributor` 与 `attribution`；模拟入口的 `--model attribution=…`、`--effort attribution=…`、`--attribution-catalogue`、`--attribution-prompts`、`--attribution-calls`、`--attribution-queries` 写进运行设置。
 
 向前兼容指的是哪些用法要配合：将来的"归因迭代改进"会产生新版本的提示词或新的 `Attributor` 实现，它们要能在不改选择、历史、记录与台账的前提下接进闭环，并与旧版本的诊断放在一起比较。为此：新版本经 `--attribution-prompts` 或 `run(attributor=…)` 注入；每条诊断带身份，台账按身份分组；每次归因的输入与过程都在记录里，可以离线复评；`attribute()` 让同一输入在不同版本上各跑一次。旧版本的暂停状态不跨版本续跑，这是有意的。
 
@@ -226,11 +231,21 @@ Change
 
 实现在 `experimental/assessor/standard.py`：
 
-- `Criterion` 带 id、文本、来源、强度、出处，以及适用情境与验收；`Standard` 按来源组合，id 跨来源唯一。`Standard.declared` 取场景检查项；`sedimented(history)` 把历史里每条要求（按 Analyst 的投影读）变成回归检查，同一 id 取最新措辞；`derived` 只追加、不替换交互方的条目；`confirmed(ids)` 是交互方确认后把派生条目升为 must_hold。
-- 派生（`derive`）是一次有界的模型交换：输入是已交出的规范原文与交互方已有的条目，只要求补空缺，每条注明出自哪份规范、哪一节；出处不是规范的条目被拒。规范分批交出时，每次评价前只对新交出的规范派生。
+- `Criterion` 带 id、文本、来源、强度、出处，以及适用情境与验收；`Standard` 按来源组合，id 跨来源唯一。`Standard.declared` 取场景检查项；`sedimented(history)` 把历史里每条要求（按 Analyst 的投影读）变成回归检查，同一 id 取最新措辞；`confirmed(ids)` 是交互方确认后把派生条目升为 must_hold。派生条目另带 `quote`，即它所依据的规范原文。
+- 派生条目由标准评审者（critic，`experimental/assessor/critic.py`）编写并逐轮修订，取代原来只在规范首次交出时跑一次的派生。每次评价前它读到目前为止交出的全部规范、其他来源已有的条目，以及它此前写下的每条派生条目在上一轮"能否判定"（`Decidability`，判不了时附判定者的说明）；它从不知道条目是通过还是未通过，因而无从把伙伴做不到的条目改松。它提交一次修订，由三种改动组成：`add`（理由为 `new_norm` 新交出的规范，或 `uncovered` 早先规范里尚无条目检查的规则）、`rewrite`（`undecided`、`imprecise`、`beyond_norm`）、`retire`（`undecided`、`duplicate`、`beyond_norm`），空修订即保持不变。代码校验四件事：每条条目逐字引用所依据的规范段落，引文不在规范里即拒收；依赖证据的理由要有证据（`undecided` 只用于上一轮确实判不了的条目，`new_norm` 只用于新交出的规范）；改写必须真的改了内容；上次修订之后新交出的每份规范，要么至少有一条改动引自它，要么列进 `unchecked` 并写明不出条目的原因，这样一次被截断或根本没写的提交不会被当成“无需改动”收下。被拒的提交带原因退回重交。每次修订带版本号、实际生效的改动和"无法写成可判条目的段落"（`unchecked`）记进 `standard.json` 的 `critic`。对 critic 本身的元评审暂不实现。
+- 引文核对比的是字，不是写法（`critic.py` 的 `_flat`）：两边都先做 NFKC，把所有引号（单双、直弯、直角）当作同一个，并去掉 Markdown 标记（加粗与斜体的星号、行内代码、表格竖线，行首的列表、标题、引用标记与复选框）；漏抄的文字仍拒。模型抄规范时常换引号写法、丢掉加粗与复选框，逐字符比对会拒掉正确的引文并计次。给 critic 看的规范把每行的直双引号换成成对弯引号（`_shown`）：引文要抄进 JSON 字符串，直双引号得转义，模型漏了转义时每次提交都在引号处断开；弯引号不用转义，核对又把所有引号当作同一个，有据校验不变。前提是断开只因要抄进 JSON 的直双引号；模型若在别的字符上也这样断，这个做法不够。
 - `StandardAssessor` 按标准逐条判定一轮的会话（对话原文加交付的文本文件），结果作为 `Signal` 的条目交给 Analyst 翻译，自己不说话。满意只看被演练到的 must_hold 条目，没有就不下结论，所以派生条目的满意不会单独终止运行。
 - 闭环在每次评价前把历史交给带标准的 Assessor（`sediment`，`iteration.session.assess` 按有无这个方法调用），不改 Assessor 协议。它的模型调用在 Analyst 的隔间里跑，豁免本轮用户的话与它持有的沉淀、派生条目；声明条目是检查项，契约可能对 Analyst 封住它，所以模拟入口只取对 Analyst 可见的检查项，隔间也从不豁免声明条目。它与模拟老板同属评价侧，模型与推理强度取 `--simulation-model` 与 `--simulation-effort`：推理模型在高强度下可能把整个输出预算花在思考上、交不出评分卡，`exchange` 的 trace 在缺输出时记下结束原因与用量，以便看出这一点。
-- 模拟入口 `--standard declared derived sedimented` 按需选来源，与模拟老板并列；标准终态与调用 trace 写进运行目录的 `standard.json`。
+- 模拟入口 `--standard declared derived sedimented` 按需选来源，与模拟老板并列；标准与调用 trace 在每次评价后写进运行目录的 `standard.json`（`StandardAssessor` 的 `keep`），在两轮之间被停下的运行也保有至此的每版修订与判定。
+
+### 5.2.1 反馈的内部来源：伙伴自评（source = self）
+
+外部信号（交互方的话、Standard 的判定）看到的是交付物与最终回复；还有一个来源是伙伴自己对同一批产出的复查，它衡量的是 Harness 的自知：哪些缺陷它自己看得出、哪些看不出。实现在 `experimental/assessor/introspect.py`：
+
+- 每轮演练结束后，在伙伴的**副本**上（与留出集同法，不在本体留状态）为每单开一个新会话，给它看这单的对话原文与交付的文件，要它逐单给出判定（`VERDICT`）、缺陷清单（`DEFECTS`）与一句说明（`NOTE`）。它只看自己的产出，不看任何标准、检查项或交互方的话，所以没有标准泄露。
+- 结果是一个 `Signal`，`source` 为 `self`：`text` 是伙伴自己的话（按 `HEARD` 投影可达 Curator，会话以不透明标签指代），逐单 `Item`（`self-review:<标签>`，`actual` 为缺陷清单）按 `EVALUATION` 只到 Analyst；`satisfied` 恒为 None，自评永不终止运行。原始复查记进运行目录 `analysis/<id>.json`。
+- Analyst 把自评与外部判定对照：伙伴自己没发现、外部判了失败的缺陷是盲区，写成"自检"类要求；伙伴自己发现了却仍然交出去的，写成执行层的要求。Analyst 不把外部标准的措辞借给自评。
+- 成案判定里它只作参考（自评与外部判定的一致率跨轮变化），不否决。模拟入口默认开启，`--no-introspection` 关闭。
 
 ## 5.3 信息准备：替换旧场景补充编排
 
@@ -242,7 +257,7 @@ Change
 
 旧设计已经提出“补足 Curator 的输入”，并计划以后响应 Analyst 的 `supplement`/`clarify` 与 Curator 的 `report_gap`。与本次工作解决的是同一类任务。旧实现的具体链路是：
 
-`Scenario → slots 分类规则 → 按类别触发 induce / inquire → party 逐条决定 → package 写出新 Scenario → loop 加载`。
+`Scenario → slots 分类规则 → 按类别触发 induce / inquire → counterpart 逐条决定 → package 写出新 Scenario → loop 加载`。
 
 旧实现中，已删除的 `slots.py` 根据材料是否存在决定可归纳、可研究或只能问交互方；`induction.py` 将实例归纳为规范；`inquiry.py` 研究事实或行业做法并核验引文；`confirm.py` 记录交互方采纳、修正、驳回或未决；`package.py` 把产物写成规范/事实材料并调整交付计划。这解释了它为什么只覆盖了完整专家信息准备的一部分。
 
@@ -333,6 +348,18 @@ Raven 的 `Exploration` 继续管理原生文件工具、shell 供给、源码�
 | 后续改进 | 携带已发布版本进入 Curator；不会自动重新启动收集 |
 
 另外覆盖了离线结果复用、输入或回答变化后的拒绝、单层与复合暂停保护、历史废弃检查点不误拦、发布中断恢复、采纳与审核分离，以及运行记录展示。详细执行命令与迁移决策见 [实施记录](expert-information-plan.md#final-verification)。
+
+## 5.4 有界交换，回合与运行怎样结束
+
+评价侧、模拟侧与信息收集里的模型调用（交互方评审、critic、标准评判、Analyst、模拟工作对象、收集各阶段等）都经 `iteration/exchange.py` 的 `exchange`：可以查询，必须以一次结构化提交结束，调用次数有上限。Curator 的归因与生成另有自己的循环（5.1.3）。
+
+- 最后一次调用只开放提交工具；模型仍点名查询工具时拒绝且不执行。否则爱查询的模型会把最后一次也用在查询上，阶段以次数耗尽结束。
+- 宽限（`grace`，默认 2；Analyst 的 `Limits.grace` 同为 2）：没送达的回复重试且不计次。"没送达"只指模型想说的内容没有到达：没有工具调用、在只能提交的最后一次调用上查询、参数无法解析，或参数不符合工具声明的形状（缺字段、多字段、JSON 类型错，`SHAPE_ERRORS`）。形状合法、被长度、范围、枚举或校验器拒绝的值是模型说出的内容，照常计次，次数上限对它说过的一切仍然有效。起因是一次没送达的回复（如把字段名写错一个字母）就能结束整个阶段乃至整个运行。
+- 回复正文放回对话前截到 `ECHOED_CHARS`（4000 字），工具调用整条保留（`render.assistant_message`）。交换循环记 `output.capped`，Curator 生成循环的 `model.note` 同样截断并记原长，两处共用这一条规则。起因：模型偶尔在正文里重复几 MB 的工具调用标记，原样回传会让下一次请求超过网关的请求体上限。
+
+回合的结束：一个回合超过单回合时限，或模型没有给出回答（Raven 以 `AnswerlessTurnError` 结束回合，worker 的 `trial_turn` 把它记为回合结果 `answerless`，不当作 worker 的故障），对话保留这一回合并结束，评估方看到"没有回复"及原因（`Exchange.stopped`，超时与无回答共用这一处），由评价去判断。进程崩溃、越界等基础设施错误照旧中止运行。候选机制在回合内抛出的其他异常仍会结束整个运行，这是记录在案的折中，见 [实施规划](cultivation-loop-plan.md) 第 8 节。
+
+运行的结束（`iteration/run.py`）：记录的状态是 finished、paused（一次改造被中断、可续跑）、stopped 或 error。运行被外部取消（花费上限的看门狗、人手动停）时记 stopped 与原因再退出，不再一直写着 running；页面把 stopped 与 finished 分开显示。
 
 ## 6. 管线契约的改动
 

@@ -93,7 +93,7 @@ experimental/
 | 伙伴的 provider 守卫（`GuardedFactory` 已备好） | 已完成：`hire(guard=…)`，`__main__` 从契约装配 `Boundaries` |
 | `Withheld` 路径模式 | 已完成：`automation/employee.py` 的 `EVALUATION_PATHS` |
 | 模拟老板不读 Curator 计划、提示词改为用自己的话说规则、`previous_expectations` 移出 Analyst 材料、history 剥 `expected` | 已完成（2.7） |
-| 装配隔间与交互方、工作对象模拟器的守卫 | 已完成：模拟客人（`automation/traveller.py`）每次调用进 conversant 隔间，模拟老板（`simulation/agency.py`）每次评审进 party 隔间，都减去伙伴自己的产出；模拟入口把运行的 `Boundaries` 交给二者，进出与违规同样记进 `boundaries.jsonl`。至此每个角色的模型调用都在守卫之后 |
+| 装配隔间与交互方、工作对象模拟器的守卫 | 已完成：模拟客人（`automation/traveller.py`）每次调用进 conversant 隔间，模拟老板（`simulation/agency.py`）每次评审进 counterpart 隔间，都减去伙伴自己的产出；模拟入口把运行的 `Boundaries` 交给二者，进出与违规同样记进 `boundaries.jsonl`。至此每个角色的模型调用都在守卫之后 |
 | 对真实一轮运行断言无违规的集成测试 | 已完成（2.4）：`tests/integration/test_iteration_boundaries_e2e.py`，2026-09-29 在 DeepSeek 上通过 |
 
 ### 阶段二（另一分支提交后，从其分支尖 rebase）
@@ -107,7 +107,7 @@ experimental/
 - 伙伴守卫：`hire(guard=…)` 把 `GuardedFactory(make_lazy_provider, guard)` 作为 `provider_factory` 交给 Worker，随 spawn 进子进程；`simulation/__main__.py` 从契约推出各角色封印，装配 `Boundaries`，日志在运行目录的 `boundaries.jsonl`。
 - 2.4 的路径部分：`employee.EVALUATION_PATHS` 覆盖 `iteration`、`assessor`、`analyst`、`scenario`、`simulation` 五个包与它们的测试，内容标记同步加上 `experimental.scenario`、`experimental.assessor` 及斜杠写法。
 
-2.3 已完成（2026-09-29）：`Requirement` 加 `id`（闭环按历史顺序分配，`repeats` 时沿用）、`situation`、`grounds`（受众 party、analyst）、`materials`；`analyst.run.vet` 在提交时把反馈投影到 curator 受众后扫描（本轮条目 id、会话键、target 名、短的参考答案与备注，加运行的 Curator 封印），并要求每条要求点名本轮回合、写明情境；`Signal.attachments` 改为 `Handover(name, kind, files)`，模拟老板从契约读种类，记录按名字识别资料。长的参考文本只由运行封印负责：要求会合法复述检查项复述的规范，只有差分封印分得清。
+2.3 已完成（2026-09-29）：`Requirement` 加 `id`（闭环按历史顺序分配，`repeats` 时沿用）、`situation`、`grounds`（受众 counterpart、analyst）、`materials`；`analyst.run.vet` 在提交时把反馈投影到 curator 受众后扫描（本轮条目 id、会话键、target 名、短的参考答案与备注，加运行的 Curator 封印），并要求每条要求点名本轮回合、写明情境；`Signal.attachments` 改为 `Handover(name, kind, files)`，模拟老板从契约读种类，记录按名字识别资料。长的参考文本只由运行封印负责：要求会合法复述检查项复述的规范，只有差分封印分得清。
 
 2.9 已完成（2026-09-29）：归因是独立组件 `curator/attribution/`（设计 5.1.1、5.1.3）。`Attributor` 协议有两个实现：`ModelAttributor` 默认在 Curator 的 provider 与模型上开自己的一次对话，工具只有只读查询、原生探索、`submit_diagnosis` 与 `report_gap`，有自己的 `AttributionLimits`、可续跑的 `AttributionState`、提示词目录与身份；`SuppliedAttributor` 接收别处做出的诊断。`subjects(feedback)` 给出必须诊断的输入（要求 id、`material:<名>`、`node:<playbook>/<node>#<n>`，或 `task`），缺一即拒。每次归因写 `<worker>/attribution/<uuid>.json`；`workflow.attribute()` 只归因；生成从 select 开始，只接收 `Attributed`，`Selection.grounds` 与 `Declaration.parse_selection(value, attribution)` 让每个 target 引用诊断，`Change.treatment` 在设计提交里必填。C5 的记录侧随之完成：历史条目带 `diagnoses` 与 `treatment`，Analyst 不读 `diagnoses`；"是否守住"一位由 2.8 的台账算。测试 `tests/test_harness_curator_attribution.py`；生成、workflow、exploration、composition 的单测与 `tests/integration/test_harness_curator_*` 的脚本按"先归因、再从 select 生成"改过，单测与集成测试全部通过。
 
@@ -162,7 +162,7 @@ Studio 服务端接 Session：POST 路由、每个 run 目录一个会话进程�
 | 编号 | 交付 | 位置 |
 |---|---|---|
 | 4.1（已完成） | 评价侧 `Standard`（声明、派生、沉淀三种来源）与自动 Assessor；实现说明见设计文档 5.2 | `assessor/standard.py`、`assessor/prompts/`、`iteration/session.py` 的 `assess`、模拟入口 `--standard`；测试 `tests/test_assessor_standard.py`，真实模型检查 `tests/integration/test_assessor_standard_real_llm.py`（`ASSESSOR_TEST_CONFIG`） |
-| 4.2（归纳、确认与槽位驱动的研究已完成，播种题例待做） | 调研阶段：`slots.py` 槽位与缺口、`induction.py` 从范例与反例归纳规则、`inquiry.py` 用网页研究空槽并按引文核对、`researchers.py` 研究者（Claude Code、Codex 或本阶段模型）、`web.py` 经 Raven 的网页工具搜索与读页、`confirm.py` 交互方确认（往期记录的决定文件或模拟交互方）、`package.py` 写出新场景目录与 `provenance.json`，没交出的资料留作交互方持有；契约加载器认领它，评价侧只用交互方认可的资料；模型角色独立配置（`--model`、`--party-model`、`--research-model`）并记入 `--records`；实现说明见设计文档 5.3.1 与 5.3.2。播种题例是下一步，出处记为 researched | 新包 `research/`；`scenario/contract.py` 的 `Provenance` 与 `Scenario.handed`、`simulation/scenario.py` 的 `standing_norms`；测试 `tests/test_research_slots.py`、`tests/test_research_induction.py`、`tests/test_research_inquiry.py`、`tests/test_research_web.py`、`tests/test_research_package.py`，真实模型与网页检查 `tests/integration/test_research_real_llm.py`（`RESEARCH_TEST_CONFIG`、`RESEARCH_TEST_RESEARCHER`） |
+| 4.2（归纳、确认与槽位驱动的研究已完成，播种题例待做） | 调研阶段：`slots.py` 槽位与缺口、`induction.py` 从范例与反例归纳规则、`inquiry.py` 用网页研究空槽并按引文核对、`researchers.py` 研究者（Claude Code、Codex 或本阶段模型）、`web.py` 经 Raven 的网页工具搜索与读页、`confirm.py` 交互方确认（往期记录的决定文件或模拟交互方）、`package.py` 写出新场景目录与 `provenance.json`，没交出的资料留作交互方持有；契约加载器认领它，评价侧只用交互方认可的资料；模型角色独立配置（`--model`、`--counterpart-model`、`--research-model`）并记入 `--records`；实现说明见设计文档 5.3.1 与 5.3.2。播种题例是下一步，出处记为 researched | 新包 `research/`；`scenario/contract.py` 的 `Provenance` 与 `Scenario.handed`、`simulation/scenario.py` 的 `standing_norms`；测试 `tests/test_research_slots.py`、`tests/test_research_induction.py`、`tests/test_research_inquiry.py`、`tests/test_research_web.py`、`tests/test_research_package.py`，真实模型与网页检查 `tests/integration/test_research_real_llm.py`（`RESEARCH_TEST_CONFIG`、`RESEARCH_TEST_RESEARCHER`） |
 | 4.3（已完成，本机部署待所有者决定） | 伙伴进程的 OS 级隔离：worker 进程以专用用户从代码镜像运行，只写运行里的区域 `employee/`；闭环记录只有 root 能读，运行目录可穿越不可列举，启动前以该用户跑探针，碰得到不该碰的就拒绝启动；方案比较见设计文档 4.2。本机已建用户 `raven-worker` 与镜像目录，确认过 worker 以该用户从镜像跑完一个 DeepSeek 回合；个人区、旧盘个人区、共享回收站里的旧运行与 `/tmp` 的权限收紧需要所有者决定，未收紧前探针拒绝隔离运行 | 新 `curator/raven_adapter/launch.py`（子进程启动器，未隔离时同样用它）、`confinement.py`（镜像、身份、环境、路径换算、交接、探针）；`worker.py` 的 `area` 与 `confinement`；`automation/employee.py` 的 `AREA`、`seal`、`unsealed`、`unseal`；模拟入口 `--isolate-as`、`--closed`；读记录的代码按新布局读 | `tests/test_harness_curator_confinement.py`；真实用户检查 `tests/integration/test_harness_curator_confinement_real_user.py`（root 且有该用户时运行） |
 
 4.1 与 4.2 是模型参与的机制，按"用证据验证"的要求各配集成测试，用 DeepSeek 跑流程验证：4.1 的是 `tests/integration/test_assessor_standard_real_llm.py`，2026-09-29 在 DeepSeek flash 上通过；4.2 的是 `tests/integration/test_research_real_llm.py` 的两条，一条归纳与确认，一条联网研究旅行社扣下全部事实后的事实槽。
@@ -182,7 +182,7 @@ Studio 服务端接 Session：POST 路由、每个 run 目录一个会话进程�
 | C5（已完成） | Curator 历史按（要求、诊断、改动、是否守住）四元组表达，类型在 `iteration/history.py`，"是否守住"由 `iteration/ledger.py` 的规则写入；预期只进记录 | `iteration/history.py`、`ledger.py`、`session.py`、hearing | 2.7、2.8 |
 | C6（已完成） | `Change.expected`/`verification` 的受众声明写到类型上，`declarations.py` 里的外部声明退掉 | `curator/harness/artifact.py` | 2.2 |
 | C7（闭环一侧已完成） | Curator 的 `report_gap` 有应答者：闭环已把缺口记为 `questions` 并继续运行；自动运行里的应答者是调研阶段的半在线入口，与槽位驱动的研究同做（离线的归纳与确认已完成，见 4.2） | `iteration/session.py`；`research/` | 4.2 的研究一步 |
-| C8（已完成） | 非机制错误的经验回流：按 binding 的"已知坑"条目随契约给 Curator，作为事实。落在 `raven_adapter/reference/pitfalls/`：`artifact.md`（提交结构与模块交付，进四策略公共必读）与 `planning.md`（恢复时 initialize 只读、playbook-spec 合法性，进 planning.strategy 必读），经 `Target.knowledge` 从设计阶段起进入 `selected_contracts`；每条写明复发次数。能由宿主直接消除的改契约：playbook 未加载时报出 Raven 加载器或结构校验的原因（`bind._unloaded`）；`node_reasons` 的节点集合、键形式与 missing/extra 报错此前已由组合根的事实与提示词给出，不再重复成条目 | `raven_adapter/reference/pitfalls/`、`targets/`、`bind.py` | 分析任务之后 |
+| C8（已完成） | 非机制错误的经验回流：按 binding 的"已知坑"条目随契约给 Curator，作为事实。落在 `raven_adapter/reference/pitfalls/`：`artifact.md`（提交结构与模块交付，进四策略公共必读）与 `planning.md`（恢复时 initialize 只读、playbook-spec 合法性，进 planning.strategy 必读），经 `Target.knowledge` 从设计阶段起进入 `selected_contracts`（多个选中契约共有的文档只随 `shared_knowledge` 发一份）；每条写明复发次数。能由宿主直接消除的改契约：playbook 未加载时报出 Raven 加载器或结构校验的原因（`bind._unloaded`）；`node_reasons` 的节点集合、键形式与 missing/extra 报错此前已由组合根的事实与提示词给出，不再重复成条目 | `raven_adapter/reference/pitfalls/`、`targets/`、`bind.py` | 分析任务之后 |
 
 ### 独立的分析任务（已完成，2026-09-29）
 
@@ -197,7 +197,7 @@ Studio 服务端接 Session：POST 路由、每个 run 目录一个会话进程�
 
 ## 6. 领域术语
 
-新术语：伙伴 partner、工作对象 conversant、交互方 party、Session、Outcome、Standard、调研阶段 research（含案例归纳 induction；不用 preparation，该词已是 Curator 侧的候选准备）、受众 audience、投影 projection、隔间 compartment、封印 sealed。定义在设计文档第 2 节与第 5 节，与代码一一对应；`CONTEXT-MAP.md` 只路由 Runtime 与 TUI 的术语，`experimental/` 的术语以设计文档为准，若要登记进 `CONTEXT-MAP.md` 需先与用户确认。
+新术语：伙伴 partner、工作对象 conversant、交互方 counterpart、Session、Outcome、Standard、调研阶段 research（含案例归纳 induction；不用 preparation，该词已是 Curator 侧的候选准备）、受众 audience、投影 projection、隔间 compartment、封印 sealed。定义在设计文档第 2 节与第 5 节，与代码一一对应；`CONTEXT-MAP.md` 只路由 Runtime 与 TUI 的术语，`experimental/` 的术语以设计文档为准，若要登记进 `CONTEXT-MAP.md` 需先与用户确认。
 
 ## 7. 验收矩阵
 
@@ -220,7 +220,10 @@ Studio 服务端接 Session：POST 路由、每个 run 目录一个会话进程�
 - 契约加载器与 `simulation/scenario.py` 各读一遍目录：已由 2.5 消除。
 - 2.8 期间台账与启发式并存：已消除（2026-09-29），`record.py` 只按类型化历史的 id 连接，启发式已删，`test_simulation_record.py` 在无启发式下通过。
 - 守卫的策略只做 abort 与 warn，不做剔除后继续；出现确认过的误报来源再考虑。
-- 生成代码在宿主进程内的文件访问边界未解决：进程级权限方案需容器支持，静态 I/O 检查放在 Session 安装前，列为 2.4 的可选项，若做不到在设计文档第 4 节记为已知风险。
+- 生成代码在宿主进程内的文件访问边界：已由表中 4.3 的伙伴进程 OS 级隔离取代（专用用户从代码镜像运行，设计文档 4.2）；本机目录权限收紧仍待所有者决定，见本节末条。
+- 员工看到的是真实日期，不是场景日期。Raven 在每次调用的上下文里注入真实时间（`raven/agent/context/builder.py` 的 `Current Time`）；场景写定了"今天"（价目表的季节档按这一天写）时，员工会说出真实日期，交互方把它记成员工的错，Curator 可能为此写规则，这是模拟环境的噪声。影响所有写定日期的场景，目前是旅行社。Raven 已有假时钟入口（原生循环 policy 的 `now_fn`，原为长时模拟准备），做法是场景契约加结构化的"今天"，装配员工时把从这一天起走的时钟交给原生循环，另起进程的子 harness 也拿到同一个时钟；场景契约、`curator/raven_adapter` 的装配与子进程启动三处要一起改，需要先出设计。处置条件：用写定日期的场景做证据级运行之前；在此之前，因日期判的失败按环境问题归因，不算员工或机制的失败。
+- 候选机制在回合内抛出的异常结束整个运行。模型没回答已作为回合结果（设计文档 5.4），但候选代码自己在回合内抛错（能力选择被拒、生成的工具缺宿主要调用的方法）仍一路抛出，这一轮的证据也丢了。改法要同时动 worker 的错误协议（区分候选机制的错与基础设施的错，后者如进程崩溃、越界必须中止）与 iteration 的对话处理，需要方案比较与评审。眼下靠安装前的校验探测与工具登记检查挡住已知的这两类（`curator-workflow.md` 第 3.6、10 节）。处置条件：探测之外再有候选在回合内抛错结束运行。
+- 持有 shell 的子 harness（如 Oncall）只有工作区围栏，机器通道不受它约束。比较过的隔离做法里，用户选了先给子 harness 装上与员工相同的工作区围栏（`curator-workflow.md` 第 9 节）、不改共享盘权限；证据级隔离靠伙伴进程以专用用户运行（4.3，设计文档 4.2）。缺口是 Raven 的 exec 带机器名时不经这道围栏，Oncall 曾经它读到工作区外的运行笔记。用户决定不改 Raven；过渡期靠隔间守卫兜底，它只在读到的内容进入模型请求时拦下并中止运行；专用用户运行会把这条通道一并封住。本机容器不能建命名空间，挂载命名空间的做法不可行。处置条件：用强模型挖证据级案例之前，由所有者收紧 4.3 所列目录的权限并以 `--isolate-as` 运行；未收紧前探针拒绝隔离运行。
 
 ## 9. 待验证的假设
 
