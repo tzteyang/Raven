@@ -111,7 +111,11 @@ MIN_PROMPT_TOKENS = 16_384
 # The largest output that was not reasoning is 25273, so the margin here is
 # about 30 percent rather than the comfortable multiple the percentiles alone
 # suggest -- raise this to DEFAULT_MAX_OUTPUT_TOKENS if that tail grows.
-MAX_OUTPUT_TOKENS_PER_ITERATION = 32_768
+#
+# It grew: DeepSeek V4.1 Flash, reviewing a 25k-token packet, reasoned 53950
+# tokens before its one tool call, and at 32768 every attempt came back empty
+# at the ceiling -- whatever the effort asked, and on more than one upstream.
+MAX_OUTPUT_TOKENS_PER_ITERATION = DEFAULT_MAX_OUTPUT_TOKENS
 
 #: Rate pair: (prompt_cost_per_token, completion_cost_per_token) in USD.
 #: Keep this table small -- it is a fallback for brand-new models that LiteLLM
