@@ -570,6 +570,25 @@ async def test_an_exhausted_repair_budget_keeps_the_failure_until_an_explicit_re
 
 
 @pytest.mark.asyncio
+async def test_a_gap_the_root_reports_leaves_no_composite_progress_behind(tmp_path, monkeypatch):
+    from experimental.curator.generation.run import GapReportedError
+
+    worker = Composite(tmp_path)
+    root, child = await candidates(worker)
+    proposals = Proposals(monkeypatch, root, child)
+    proposals.failures.append(("root", GapReportedError("design", "the brand guide is missing")))
+    with pytest.raises(GapReportedError, match="design: the brand guide is missing"):
+        await curated(worker)
+    checkpoint = worker.root / "curation/composition.json"
+    assert not checkpoint.exists() and worker.installed == []
+    (record,) = records_of(worker)
+    assert record["gap"] == {"stage": "design", "reason": "the brand guide is missing"} and "error" not in record
+    await curated(Composite(tmp_path), feedback={"text": "Here is the brand guide"})
+    assert [call["scope"] for call in proposals.calls] == ["root", "root", "child"]
+    assert proposals.calls[1]["feedback"] == {"text": "Here is the brand guide"} and not checkpoint.exists()
+
+
+@pytest.mark.asyncio
 async def test_a_paused_composition_resumes_in_a_new_worker_object_without_proposing_the_root_again(
     tmp_path, monkeypatch
 ):

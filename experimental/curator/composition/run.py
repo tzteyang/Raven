@@ -8,7 +8,13 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from ..attribution import AttributionInterruptedError
-from ..generation.run import Generated, GenerationError, GenerationInterruptedError, GenerationPausedError
+from ..generation.run import (
+    GapReportedError,
+    Generated,
+    GenerationError,
+    GenerationInterruptedError,
+    GenerationPausedError,
+)
 from ..harness import Validation
 from ..raven_adapter.deployment import child_directory
 from ..raven_adapter.inspection import Inspection, file_source, fingerprint
@@ -456,6 +462,13 @@ async def improve(
         if isinstance(exc, GenerationPausedError):
             raise interrupted
         raise GenerationInterruptedError(str(exc), interrupted.state) from exc
+    except GapReportedError as exc:
+        # The root reported a gap it cannot close with what it was given: nothing was generated, the
+        # question waits for whoever can answer it, and the next curation starts from new inputs.
+        record["gap"] = {"stage": exc.stage, "reason": exc.reason}
+        _cleanup(state.directory)
+        path.unlink(missing_ok=True)
+        raise
     except Exception as exc:
         state.error = record["error"] = str(exc)
         _save(path, state)
