@@ -47,11 +47,19 @@ def messages(
     offered = [entry for entry in tools if entry["function"]["name"] in available]
     actions = "\n".join(f"- `{entry['function']['name']}`: {entry['function']['description']}" for entry in offered)
     request = Template(_prompt("request")).substitute(stages=" → ".join(map(_stage, stages)), actions=actions)
+    materials = dict(materials)
+    experience = materials.pop("experience", None)
+    guidance = (experience or {}).get("stages", {}).get(_stage(stages[-1]))
     return [
         {"role": "system", "content": "\n\n".join(_prompt(name) for name in (*_COMMON, *local))},
         {"role": "user", "content": json.dumps(materials, ensure_ascii=False, indent=2)},
         {"role": "user", "content": "\n\n".join((*(_prompt(name) for name in stages), request))},
         {"role": "user", "content": json.dumps(stage_materials, ensure_ascii=False, indent=2)},
+        *(
+            [{"role": "user", "content": f"Experience usage {guidance['usage']['id']}\n\n{guidance['usage']['text']}"}]
+            if guidance
+            else []
+        ),
     ]
 
 

@@ -45,6 +45,7 @@ class GenerationState(BaseModel):
                 "previous_plan": context.previous_plan.model_dump(mode="json") if context.previous_plan else None,
                 "commitments": [item.model_dump(mode="json") for item in context.commitments],
                 "exploration": context.exploration,
+                **({"experience": context.experience} if context.experience is not None else {}),
             }
         )
 

@@ -376,7 +376,11 @@ export interface Question {
 /** A criterion of the automatic standard assessor (experimental/assessor/standard.py). */
 export interface StandardCriterion {
   id: string
+  parent_id?: string | null
   text: string
+  subject?: string
+  derivation?: string
+  evidence_requirements?: { kind: string; reference: string }[]
   source: 'declared' | 'derived' | 'sedimented' | string
   strength: 'must_hold' | 'should' | string
   provenance: string
@@ -384,15 +388,19 @@ export interface StandardCriterion {
   acceptance?: string
   /** For a derived criterion, the norm passage it rests on, verbatim. */
   quote?: string
+  kind?: 'gate' | 'guardrail' | 'quality' | ''
+  authority?: 'external' | 'model' | ''
+  checks?: { method: string; spec: string; role?: 'decision' | 'required' }[]
 }
 
-/** One change of a standard critic revision (experimental/assessor/critic.py), with its reason. */
+/** One change of a rubric builder revision (experimental/assessor/builder.py), with its reason. */
 export interface StandardChange {
   id: string
-  op: 'add' | 'rewrite' | 'retire' | string
+  parent_id?: string | null
+  op: 'add' | 'rewrite' | 'remove' | string
   reason: string
   explanation: string
-  /** The criterion's text before a rewrite or a retirement. */
+  /** The criterion's text before a rewrite or removal. */
   before: string
   /** The criterion as added or rewritten, the norm it rests on and the passage it quotes. */
   text: string
@@ -404,19 +412,51 @@ export interface StandardChange {
     nothing checkable in. */
 export interface StandardRevision {
   version: number
+  base_version?: string
+  rubric_version?: string
+  note?: string
+  scope?: { allow: { op: string; id?: string | null; parent_id?: string | null; fields: string[] }[] }
   new_norms: string[]
   changes: StandardChange[]
   unchecked: { material: string; section: string; reason: string }[]
 }
 
-/** standard.json, written when the run ends; `calls` counts its model calls by label (critic, standard). */
+/** standard.json, written when the run ends; `calls` counts its model calls by label (rubric_builder, assessor). */
 export interface StandardRecord {
   criteria: StandardCriterion[]
-  /** The norms the standard critic read. */
+  /** The norms the rubric builder read. */
   derived_from: string[]
   revisions?: StandardRevision[]
   calls?: Record<string, number>
   error?: string
+  construction?: { status: string; calls?: number; added?: number; error?: string; reason?: string; rubric_version?: string; steps?: { target: string; status: string; note: string }[] }[]
+  pending?: { target: string; reason: string }[]
+  assessments?: {
+    id: string
+    version: number
+    rubric_version?: string
+    repair_status?: string
+    repair_validation?: Record<string, { accepted: boolean; error?: string; kind?: string }>
+    repair_rejected?: string
+    evidence_restored?: string[]
+    checks: { criterion: string; method: string; result: string; actual: string; note: string }[]
+    review?: { issues: { criterion: string; target: string; evidence: string; correction: string }[] }
+    unresolved?: Record<string, string>
+    review_error?: string
+    repair_error?: string
+    learning_error?: string
+  }[]
+  guidance?: {
+    entries: { id: string; state: string; kind: string; scope: string; text: string; episodes: string[] }[]
+    history: { candidate?: string; accepted?: boolean; error?: string; rollback?: string; comparisons?: { case: string; before: boolean | null; after: boolean | null; oracle: { result: string; actual: string } }[] }[]
+  }
+}
+
+export interface Promotion {
+  status: 'candidate' | 'accepted' | 'rejected'
+  reason: string
+  revision?: string
+  witnesses?: { satisfied: boolean | null; error?: string; policy: { kind: string } }[]
 }
 
 /** The research stage's records under information/ (experimental/research/, read by rundir.research): how the
@@ -518,6 +558,8 @@ export interface Run {
   /** Each material the counterpart did not simply give, by name, from the provenance the run's settings keep. */
   origins?: Record<string, MaterialOrigin>
   standard?: StandardRecord | null
+  promotion?: Promotion
+  stable_revision?: Promotion
   research?: ResearchRecord | null
   boundaries?: Boundaries | null
 }

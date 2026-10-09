@@ -31,7 +31,7 @@ from .studio import studio_run
 BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency"
 # The model roles of a live session: a person on the page is the counterpart and every conversant, and nothing is
 # collected before onboarding.
-MODEL_ROLES = ("curator", "attribution", "analyst", "judge", "critic", "sub-harness")
+MODEL_ROLES = ("curator", "attribution", "analyst", "assessor", "rubric_builder", "meta_reviewer", "sub-harness")
 META = "studio.json"
 STEPS = ("onboard", "trial", "say", "close", "signal", "assess", "analyse", "curate", "skip", "finish")
 SESSION_ID = re.compile(r"live-[0-9]{14}-[0-9a-f]{6}")
@@ -66,6 +66,10 @@ class LiveConfig:
     attribution_calls: int = 8
     attribution_queries: int = 24
     standard: tuple[str, ...] = ()
+    evaluation_memory: Path | None = None
+    experience_memory: Path | None = None
+    experience_scope: str = "local"
+    experience_migrate: bool = False
 
     @classmethod
     def load(cls, path: Path) -> "LiveConfig":
@@ -80,8 +84,8 @@ class LiveConfig:
         if missing:
             raise ValueError(f"the live configuration needs {missing}")
         values = dict(raw)
-        for key in ("config", "root", "scenario"):
-            if key in values:
+        for key in ("config", "root", "scenario", "evaluation_memory", "experience_memory"):
+            if values.get(key) is not None:
                 values[key] = (path.parent / Path(values[key]).expanduser()).resolve()
         if "standard" in values:
             values["standard"] = tuple(values["standard"] or ())
@@ -90,6 +94,10 @@ class LiveConfig:
         return config
 
     def check(self) -> None:
+        if not isinstance(self.experience_scope, str) or not self.experience_scope.strip():
+            raise ValueError("experience_scope must name an explicit access scope")
+        if not isinstance(self.experience_migrate, bool):
+            raise ValueError("experience_migrate must be a boolean")
         if not Path(self.config).is_file():
             raise ValueError("the Raven configuration the live configuration names is not a file")
         counts = ("rounds", "turns", "curator_calls", "curator_queries", "attribution_calls", "attribution_queries")

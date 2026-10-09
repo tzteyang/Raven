@@ -37,6 +37,56 @@ def student(*messages):
     return Conversation(Scripted("student", *messages), max_turns=2)
 
 
+@pytest.mark.asyncio
+async def test_only_frozen_normal_task_verification_updates_experience(tmp_path, analyses):
+    from unittest.mock import AsyncMock
+
+    class Fixed:
+        def verification_policy(self):
+            return {"kind": "test_environment", "version": 1}
+
+        async def evaluate(self, sessions):
+            return Signal("fixed", satisfied=True, authority="external")
+
+    experience = SimpleNamespace(
+        identity="experience-policy",
+        access=SimpleNamespace(access_scope="project"),
+        outcome=AsyncMock(return_value={"status": "recorded"}),
+    )
+
+    async def curate(worker, provider, **kwargs):
+        assert kwargs["experience"] is experience
+        worker.artifact_id = "revision-1"
+        path = worker.root / "curation" / "completed.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "active_artifact_id": worker.artifact_id,
+                    "experience_learning": {"event": "episode-1", "origin": {"scope": "root", "input_key": "curation"}},
+                }
+            )
+        )
+
+    fixed = Fixed()
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curate, experience=experience, assessors=(fixed,))
+    assert await session.onboard()
+    await session.trial(student("normal input"))
+    await session.holdout((Conversation(Scripted("held", "independent input"), max_turns=1),), (fixed,))
+    experience.outcome.assert_not_awaited()
+    await session.assess(fixed)
+    experience.outcome.assert_awaited_once()
+    args, kwargs = experience.outcome.call_args
+    assert args[0] == "episode-1" and args[1].comparability == "comparable" and kwargs["held_out"] is False
+    await session.assess(fixed)
+    experience.outcome.assert_awaited_once()
+    restored = Session.resume(worker, object(), session.path, curator=curate, experience=experience, assessors=(fixed,))
+    assert restored.record["experience_pending"][0]["observed"]
+    with pytest.raises(ValueError, match="original experience"):
+        Session.resume(worker, object(), session.path, curator=curate)
+
+
 OPENING = (
     Signal("agency", "Here are our materials.", attachments=(Handover("sop", "norm", ("uploads/sop/sop.md",)),)),
 )
@@ -66,6 +116,31 @@ def shape(record):
             for item in record["rounds"]
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_measurement_only_signals_stay_out_of_analysis_curation_history_and_stop(tmp_path, curations, analyses):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), measuring={"agency"})
+    assert await session.onboard()
+    await session.trial(student("Plan a trip", "Cheap please"))
+    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(failing("Ask the budget.")))
+    assert (await session.analyse()).next == "curate"
+    assert all(signal.source != "agency" for signal in analyses.calls[-1]["signals"])
+    assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(session.history)
+    assert any(signal.source == "agency" for signal in session.rounds[-1].signals)
+    assert await session.curate()
+    assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(curations[-1]["feedback"])
+    await session.trial(student("Plan again", "Cheap please"))
+    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(passing()))
+    assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    restored = Session.resume(worker, object(), session.path)
+    assert restored.measuring == frozenset({"agency"})
+    assert all(signal.source != "agency" for signal in restored.previous_signals)
+    assert not restored.external_requirements
 
 
 @pytest.mark.asyncio
@@ -551,3 +626,39 @@ async def test_a_conversant_who_comes_back_later_lets_the_worker_run_meanwhile()
     await Conversation(Paced(), max_turns=3).run(worker)
     await Conversation(Scripted("student", "Plan a trip"), max_turns=1).run(waiting)
     assert worker.calls == [{"away": 150.0}, {"away": 150.0}] and waiting.calls == [{}]
+
+
+@pytest.mark.asyncio
+async def test_a_met_external_condition_survives_resume_and_guards_the_next_round(tmp_path, curations, analyses):
+    from experimental.assessor.standard import Assessor
+    from experimental.requirements import ExternalRequirement
+    from tests.test_assessor_standard import Provider, response, verdict
+
+    condition = ExternalRequirement(source="human", quote="Future quotes must include tax.", kind="gate")
+    analyses.scripted.append(
+        Feedback(
+            decision="continue", reason="The current quote already includes tax.", external_requirements=(condition,)
+        )
+    )
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), limits=Limits(max_rounds=4))
+    await session.onboard()
+    await session.trial(student("Tax is included in this quote."))
+    session.signal(Signal("human", condition.quote, authority="external"))
+    assert (await session.analyse()).next == "continue"
+    assert len(curations) == 1
+    resumed = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    assert resumed.external_requirements == [condition]
+    await resumed.trial(student("Quote again."))
+    assessor = Assessor(
+        Provider(
+            response(
+                "submit_verdicts",
+                {"verdicts": [verdict(condition.id, "fail", "student", "Subtotal only.", "Include tax.")]},
+            )
+        ),
+        sources=(),
+    )
+    [signal] = await resumed.assess(assessor)
+    assert signal.satisfied is False and assessor.standard.criteria[0].authority == "external"
+    assert assessor.standard.criteria[0].basis.references[0].quote == condition.quote

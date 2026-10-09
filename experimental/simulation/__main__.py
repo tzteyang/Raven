@@ -42,9 +42,12 @@ from raven.config.mode_catalogue import build_mode_catalogue
 
 from .. import model_roles
 from ..analyst.run import Limits as AnalystLimits
-from ..assessor.critic import Critic
+from ..assessor.builder import RubricBuilder
+from ..assessor.guidance import GuidanceStore
 from ..assessor.introspect import Introspection
-from ..assessor.standard import SOURCES, Standard, StandardAssessor
+from ..assessor.reviewer import MetaReviewer
+from ..assessor.standard import SOURCES, Assessor, Standard
+from ..assessor.validation import ReplayCorpus, fingerprint
 from ..automation import caching
 from ..automation.employee import (
     REPLICAS,
@@ -66,6 +69,7 @@ from ..curator.generation.run import Limits as CuratorLimits
 from ..curator.raven_adapter.confinement import Confinement
 from ..curator.raven_adapter.probe import exercise_translations
 from ..curator.raven_adapter.worker import WorkerError
+from ..experience.curator import CuratorExperience
 from ..iteration.compartment import Boundaries
 from ..iteration.exchange import ExchangeError
 from ..iteration.records import cultivation
@@ -170,7 +174,7 @@ async def main(args):
         model_roles.pairs(args.effort),
         model_roles.partner_of(load_config(args.config)),
     )
-    counterpart, conversant, judge = roles["counterpart"], roles["conversant"], roles["judge"]
+    counterpart, conversant, assessor_role = roles["counterpart"], roles["conversant"], roles["assessor"]
     employee = hire(
         contract,
         args.config,
@@ -249,36 +253,51 @@ async def main(args):
         assessors.append(Introspection(employee, spawn, records=root, concurrency=args.concurrent_drills))
     standard = None
     if args.standard:
-        standard = StandardAssessor(
+        memory = getattr(args, "evaluation_memory", None) or root / "evaluation-memory"
+        derived = "derived" in args.standard
+        standard = Assessor(
             provider,
             Standard.declared(
                 (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
             ),
             sources=args.standard,
             norms=lambda: scenario.standing_norms(agency.released),
-            model=judge.model,
-            effort=judge.effort,
+            task=employee.baseline.task.text,
+            model=assessor_role.model,
+            effort=assessor_role.effort,
             timeout=args.timeout,
             boundaries=boundaries,
-            critic=(
-                Critic(model=roles["critic"].model, effort=roles["critic"].effort, timeout=args.timeout)
+            builder=(
+                RubricBuilder(
+                    model=roles["rubric_builder"].model, effort=roles["rubric_builder"].effort, timeout=args.timeout
+                )
                 if "derived" in args.standard
                 else None
             ),
             keep=root / "standard.json",
+            reviewer=MetaReviewer(
+                model=roles["meta_reviewer"].model, effort=roles["meta_reviewer"].effort, timeout=args.timeout
+            )
+            if derived
+            else None,
+            guidance_store=GuidanceStore(memory / "guidance.json") if derived else None,
+            replay_corpus=ReplayCorpus(memory / "replays.json") if derived else None,
+            scope=fingerprint({"task": employee.baseline.task.text}),
         )
         assessors.append(standard)
     trials = grouped(travellers, spawn, size=args.concurrent_drills, turns=args.turns, placed=placed)
     holdout = None
     if held:
-        judge = StandardAssessor(
+        holdout_assessor = Assessor(
             provider,
             Standard.declared(
                 (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
             ),
             sources=("declared",),
-            model=judge.model,
-            effort=judge.effort,
+            task=employee.baseline.task.text,
+            norms=lambda: scenario.standing_norms(agency.released),
+            model=assessor_role.model,
+            effort=assessor_role.effort,
             timeout=args.timeout,
             boundaries=boundaries,
             name="holdout",
@@ -294,13 +313,24 @@ async def main(args):
             seed=args.seed,
             boundaries=boundaries,
         )
-        holdout = (grouped(held_out, spawn, size=args.concurrent_drills, turns=args.turns), [judge])
+        holdout = (grouped(held_out, spawn, size=args.concurrent_drills, turns=args.turns), [holdout_assessor])
     if confinement is not None:
         problems = unsealed(employee, closed=[scenario.root, *args.closed])
         if problems:
             raise PermissionError("the isolated employee could reach what it must not: " + "; ".join(problems))
+    experience = None
     try:
         async with employee:
+            if getattr(args, "experience_memory", None):
+                experience = CuratorExperience.from_provider(
+                    args.experience_memory,
+                    provider,
+                    access_scope=getattr(args, "experience_scope", "local"),
+                    model=roles["curator"].model,
+                    effort=roles["curator"].effort,
+                    migrate=getattr(args, "experience_migrate", False),
+                    writable_roots=(employee.root, employee.baseline.config.workspace_path),
+                )
             print(f"Task records: {root}")
             print(
                 f"Scenario: {scenario.root.name}; chain: {args.chain}; disclosure: {args.disclose}; delivery: {args.deliver}; "
@@ -312,6 +342,8 @@ async def main(args):
                     provider,
                     trials,
                     assessors,
+                    experience=experience,
+                    measuring={OWNER} if getattr(args, "owner_feedback", "spoken") == "silent" else frozenset(),
                     probe=exercise_translations,
                     analyst_model=roles["analyst"].model,
                     analyst_effort=roles["analyst"].effort,
@@ -352,7 +384,6 @@ async def main(args):
                     boundaries=boundaries,
                     prior=prior,
                     holdout=holdout,
-                    measuring={OWNER} if args.owner_feedback == "silent" else frozenset(),
                     attributor=ModelAttributor(
                         model=roles["attribution"].model,
                         effort=roles["attribution"].effort,
@@ -384,8 +415,8 @@ async def main(args):
                     root,
                     provider,
                     scenario_dir=scenario.root,
-                    model=judge.model,
-                    effort=judge.effort,
+                    model=assessor_role.model,
+                    effort=assessor_role.effort,
                     timeout=args.timeout,
                 )
                 print(
@@ -397,6 +428,8 @@ async def main(args):
         if not keep_scenario(root, scenario.root):
             print(f"The scenario at {scenario.root} changed during the run; its copy was not kept")
     finally:
+        if experience is not None:
+            experience.close()
         if confinement is not None:
             unseal(root)
 
@@ -538,7 +571,21 @@ def cli():
         help="Records of earlier cultivations the owner brings, besides the scenario's own (an iteration record or a "
         "run's task directory); every curation hears their history",
     )
+    parser.add_argument(
+        "--evaluation-memory",
+        type=Path,
+        help="Reuse evaluation guidance and independent replays from this host-owned directory",
+    )
     parser.add_argument("--rounds", type=int, default=4, help="Maximum feedback rounds")
+    parser.add_argument(
+        "--experience-memory", type=Path, help="Host-owned Curator experience directory outside Worker writable areas"
+    )
+    parser.add_argument(
+        "--experience-scope", default="local", help="Explicit access scope within the experience collection"
+    )
+    parser.add_argument(
+        "--experience-migrate", action="store_true", help="Permit the documented legacy experience database migration"
+    )
     parser.add_argument("--turns", type=int, default=8, help="Maximum customer messages per drill")
     parser.add_argument("--repeats", type=int, default=1, help="Times each drill card is played per round")
     parser.add_argument(

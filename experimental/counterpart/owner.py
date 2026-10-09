@@ -14,7 +14,7 @@ materials for that card and from the delivered files; it still decides every ver
 files a model must look at rather than read (a deck's pages) gives them through `pictures`; they reach the owner only
 when its model is known to take images, and otherwise the packet says they were not shown.
 
-The owner is a case's assessor (`experimental.assessor.role.Assessor`): it holds the standard and only speaks, the way
+The owner is a case's assessor (`experimental.assessor.role.AssessorProtocol`): it holds the standard and only speaks, the way
 a real owner would: a remark in its own words and the materials it hands over. The base Analyst reads those words
 against the sessions and the execution records, with exactly the materials it reads for any assessor, and writes
 the requirements. The owner still keeps a scorecard, one verdict per criterion, but only the value judge reads it
@@ -460,7 +460,14 @@ class Owner:
             return ()
         files = "\n".join(f"- {path}" for path in self.uploaded)
         attachments = attached(self.uploaded, self.kinds)
-        return (Signal(SOURCE, self.scenario.onboarding.replace("{files}", files), attachments=attachments),)
+        return (
+            Signal(
+                SOURCE,
+                self.scenario.onboarding.replace("{files}", files),
+                attachments=attachments,
+                authority="external",
+            ),
+        )
 
     def _release(self, names) -> list[str]:
         new = [name for name in names if name not in self.released]
@@ -526,7 +533,13 @@ class Owner:
             self.record({"source": SOURCE, "error": str(exc)})
             raise
         self.record({"source": SOURCE, "scorecard": scorecard, "waiting_on_material": waiting(judged)})
-        return Signal(SOURCE, scorecard.text, satisfied=scorecard.satisfied, attachments=scorecard.attachments)
+        return Signal(
+            SOURCE,
+            scorecard.text,
+            satisfied=scorecard.satisfied,
+            attachments=scorecard.attachments,
+            authority="external",
+        )
 
     async def _judge(self, sessions) -> tuple[Signal, Spoken, list[str]]:
         """The owner's call: its scorecard as a signal, its submission and the materials it handed over with it."""
@@ -625,5 +638,6 @@ class Owner:
             items,
             satisfied=all(item.result == "pass" for item in items),
             attachments=attached(uploaded, self.kinds),
+            authority="external",
         )
         return signal, review, handed

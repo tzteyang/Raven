@@ -22,13 +22,14 @@ import { CodeBlock } from './Code'
 import { LoopMap, stationKey } from './LoopMap'
 import { Markdown } from './Markdown'
 import { RawPanel, useShowAs } from './Raw'
+import { StandardBlock, PromotionStatus } from './Evaluation'
 import { TrialTally } from './TrialPanel'
 import { useThumbs } from './Trials'
 
 import type { AttributionView } from '../attribution'
 import type { ChangeView, Entry, Reply } from '../cultivation'
 import type { Lap } from '../loop'
-import type { Feedback, ResearchRecord, Run, Scenario, Signal, StandardRecord, StandardRevision } from '../model'
+import type { Feedback, ResearchRecord, Run, Scenario, Signal } from '../model'
 import type { RawPart } from '../sources'
 import type { TrialSummary } from '../trial'
 import type { Picked } from './LoopMap'
@@ -331,75 +332,6 @@ function ResearchBlock({ research }: { research: ResearchRecord }): JSX.Element 
         ) : null}
       </div>
       )}
-    </div>
-  )
-}
-
-const OPS: Record<string, string> = { add: 'added', rewrite: 'rewritten', retire: 'retired' }
-
-function revisionSummary(revision: StandardRevision): string {
-  const counts = Object.entries(OPS)
-    .map(([op, word]) => [revision.changes.filter((change) => change.op === op).length, word] as const)
-    .filter(([count]) => count > 0)
-    .map(([count, word]) => `${count} ${word}`)
-  const fresh = revision.new_norms.length ? ` · new: ${revision.new_norms.join(', ')}` : ''
-  return `Revision ${revision.version}: ${counts.length ? counts.join(', ') : 'no change'}${fresh}`
-}
-
-/* The standard the automatic assessor held the rounds to, as written when the run ended, and how the standard critic
-   wrote its derived criteria: every numbered revision with its changes, their reasons and quoted passages, and the
-   passages it found nothing checkable in. A revision is not tied to a round here: the critic revises before each
-   assessment that has norms to read, which is not every round of every run. */
-function StandardBlock({ standard }: { standard: StandardRecord }): JSX.Element {
-  const derived = standard.criteria.filter((criterion) => criterion.source === 'derived')
-  const revisions = standard.revisions ?? []
-  return (
-    <div className="say assessor standard-block">
-      <span className="who">automatic standard · as written when the run ended</span>
-      <div className="ai reply">
-        <p className="sc-hd">
-          <span className="src">standard</span>
-          <span>{standard.criteria.length} criteria</span>
-          {derived.length ? <span className="dim">{derived.length} written by the critic from {standard.derived_from.join(', ')}</span> : null}
-          {revisions.length ? <span className="dim">{revisions.length} revision{revisions.length === 1 ? '' : 's'}</span> : null}
-        </p>
-        {standard.error ? <p className="runerr"><span className="k">standard.json</span>{standard.error}</p> : null}
-        {derived.length ? (
-          <Fold className="fold" summary={`Criteria the critic wrote (${derived.length})`}>
-            {() => (
-              <ul className="sc-fails">
-                {derived.map((criterion) => (
-                  <li key={criterion.id}>
-                    <code>{criterion.id}</code> {criterion.text}
-                    {criterion.situation ? <span className="dim"> · when {criterion.situation}</span> : null}
-                    <span className="dim"> · {criterion.strength} · {criterion.provenance}</span>
-                    {criterion.quote ? <blockquote className="quote">{criterion.quote}</blockquote> : null}
-                  </li>
-                ))}
-              </ul>
-            )}
-          </Fold>
-        ) : null}
-        {revisions.map((revision) => (
-          <Fold key={revision.version} className="fold" summary={revisionSummary(revision)}>
-            {() => (
-              <ul className="sc-fails">
-                {revision.changes.map((change, i) => (
-                  <li key={i}>
-                    <code>{change.id}</code> <span className="k">{OPS[change.op] ?? change.op}</span> <span className="dim">({change.reason})</span> {change.explanation}
-                    {change.before ? <div className="dim">before: {change.before}</div> : null}
-                    {change.text ? <div>now: {change.text}</div> : null}
-                    {change.quote ? <blockquote className="quote">{change.material}: {change.quote}</blockquote> : null}
-                  </li>
-                ))}
-                {revision.unchecked.map((item, i) => (
-                  <li key={`u${i}`} className="dim">not checkable: {item.material}{item.section ? ` ${item.section}` : ''}, {item.reason}</li>
-                ))}
-              </ul>
-            )}
-          </Fold>
-        ))}
-      </div>
     </div>
   )
 }
@@ -874,6 +806,7 @@ export function Cultivation({
       </div>
       <div className="convo" ref={convo} onMouseOver={(event) => pointing(event.target)} onMouseLeave={() => setHot(null)}>
         {entries.map(view)}
+        <PromotionStatus promotion={run.promotion} stable={run.stable_revision} />
         {run.standard && (run.standard.criteria.length || run.standard.revisions?.length || run.standard.error) ? <StandardBlock standard={run.standard} /> : null}
       </div>
     </>

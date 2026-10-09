@@ -6,7 +6,7 @@
    here) and derives the ledger matrix, the round summaries and the chain of
    evidence behind one ledger cell. */
 
-import type { Treatment } from './model'
+import type { Treatment, Promotion, StandardRecord } from './model'
 
 export type Verdict = 'pass' | 'fail' | 'mixed' | 'unknown'
 export type Tone = Verdict | 'none'
@@ -217,6 +217,9 @@ export interface LedgerRow {
 
 export interface CultivationRecord {
   schema: number
+  standard?: StandardRecord
+  promotion?: Promotion
+  stable_revision?: Promotion
   run: RecordRun
   inputs: RecordInputs
   curations: RecordCuration[]
@@ -294,6 +297,9 @@ export function normalizeRecord(raw: unknown): CultivationRecord {
   const cost = obj(value.cost)
   return {
     schema: num(value.schema) ?? 0,
+    standard: value.standard ? obj(value.standard) as unknown as StandardRecord : undefined,
+    promotion: value.promotion ? obj(value.promotion) as unknown as Promotion : undefined,
+    stable_revision: value.stable_revision ? obj(value.stable_revision) as unknown as Promotion : undefined,
     run: {
       ...(run as Partial<RecordRun>),
       name: text(run.name),

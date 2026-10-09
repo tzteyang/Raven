@@ -138,6 +138,9 @@ def test_projection_keeps_only_the_fields_a_role_may_receive():
         "actual": "",
         "note": "Reply to Plan",
         "basis": "",
+        "authority": "model",
+        "strength": None,
+        "parent_id": None,
     }
     assert for_analyst["metrics"] == {"pass_rate": 0.0}
     assert project(signal(), "partner") == {} and project((signal(),), "curator") == [for_curator]

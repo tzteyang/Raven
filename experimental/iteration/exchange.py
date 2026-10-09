@@ -106,6 +106,7 @@ async def exchange(
     trace=None,
     label="",
     grace=2,
+    strict_budget=False,
 ):
     """Drive the model until one call in `submit` parses; `query` tools run locally, awaited when they are coroutines,
     and feed results back.
@@ -122,7 +123,8 @@ async def exchange(
     query on the submission-only last call, or a submission whose arguments could not be parsed or do not fit the
     tool's schema, `undelivered`) are retried without charging `max_calls`; they are traced with `charged: False`. The
     budget stays final for everything the model did say. A reply's text goes back into the conversation capped
-    (`render.assistant_message`), traced as `output.capped`."""
+    (`render.assistant_message`), traced as `output.capped`. With `strict_budget`, every attempt including cut and
+    malformed-output retries counts against the same call limit."""
     query = query or {}
     trace = trace if trace is not None else []
     submissions = [entry for entry in tools if entry["function"]["name"] in submit]
@@ -135,10 +137,10 @@ async def exchange(
         if not cut(response) or cuts >= len(ladder):
             return False
         attempt, cuts = attempt - 1, cuts + 1
-        row.update(cut=True, charged=False, next_effort=ladder[cuts - 1])
+        row.update(cut=True, charged=strict_budget, next_effort=ladder[cuts - 1])
         return True
 
-    while attempt < max_calls:
+    while attempt < max_calls and (not strict_budget or number < max_calls):
         attempt, number = attempt + 1, number + 1
         offered = tools
         if attempt == max_calls and query:
@@ -181,7 +183,7 @@ async def exchange(
             if retried(row, response):
                 pass
             elif wasted < grace:
-                attempt, wasted, row["charged"] = attempt - 1, wasted + 1, False
+                attempt, wasted, row["charged"] = attempt - 1, wasted + 1, strict_budget
             trace.append(row)
             continue
         submitted = [call for call in response.tool_calls if call.name in submit]
@@ -196,7 +198,7 @@ async def exchange(
                 "tools": [call.name for call in response.tool_calls],
             }
             if wasted < grace:
-                attempt, wasted, row["charged"] = attempt - 1, wasted + 1, False
+                attempt, wasted, row["charged"] = attempt - 1, wasted + 1, strict_budget
             trace.append(row)
             continue
         if submitted:
@@ -218,7 +220,7 @@ async def exchange(
                 if retried(row, response):
                     pass
                 elif undelivered(exc) and wasted < grace:
-                    attempt, wasted, row["charged"] = attempt - 1, wasted + 1, False
+                    attempt, wasted, row["charged"] = attempt - 1, wasted + 1, strict_budget
                 trace.append(row)
                 continue
             trace.append({"label": label, "event": call.name, "effort": current})

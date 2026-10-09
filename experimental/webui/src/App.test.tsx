@@ -82,7 +82,7 @@ const run: Run = {
   standard: {
     criteria: [{ id: 'derived-1', text: 'Name the source of every price.', source: 'derived', strength: 'should', provenance: 'material:sop Step 4', quote: 'name the source of every price' }],
     derived_from: ['sop'],
-    calls: { critic: 1, standard: 2 },
+    calls: { rubric_builder: 1, assessor: 2 },
     revisions: [
       {
         version: 1,
@@ -181,7 +181,7 @@ test('the cultivation view is the owner and the Curator in conversation, round b
   fireEvent.click(within(reply.querySelector<HTMLElement>('.changes .change')!).getByRole('button', { name: 'rendered' }))
   expect(reply.querySelector('.changes details.change')).toBeTruthy()
   const standard = document.querySelector<HTMLElement>('.standard-block')!
-  expect(within(standard).getByText('1 written by the critic from sop')).toBeTruthy()
+  expect(within(standard).getByText('1 written by the rubric builder from sop')).toBeTruthy()
   fireEvent.click(within(standard).getByText('Revision 1: 1 added · new: sop'))
   expect(await within(standard).findByText('Step 4 states it.')).toBeTruthy()
   expect(within(standard).getByText('sop: name the source of every price')).toBeTruthy()

@@ -107,7 +107,6 @@ experimental/
 └── simulation/                  # 【实例】旅行社与品牌策略师场景（真实专家包也用这个入口）
     ├── __main__.py, suite.py    #   单次运行与批量挖掘入口
     ├── scenarios/travel_agency/ #   场景数据：岗位说明、资料、评审标准、客人画像
-    ├── scenarios/brand_strategist/ # 品牌策略师 + 守望：规范、提案结构、守望说明与读数脚本、三张请求卡
     ├── scenario.py, cards.py    #   交互方视角的场景，题卡数值的抽取规则（含行程字段）
     ├── agency.py                #   旅行社老板：`counterpart.Owner` 加价目计算器的事实与 PPT 页图
     ├── brand.py                 #   品牌老板：极限词、口号一致、数字来源、守望证据的事实
@@ -125,10 +124,88 @@ experimental/
 |---|---|
 | `iteration.run.run(worker, provider, trials, assessors, analyst=…, opening=…, boundaries=…, prior=…)` | `simulation/__main__.py` 从场景契约组装参数与隔间，默认最多 4 轮 |
 | `Trial.run(worker) -> Sessions` | `counterpart.drills.enlist` 把题卡装成模拟对话人 `Traveller`，`grouped` 配成 `Together`，让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
-| `assessor.role.Assessor.evaluate(sessions) -> Signal` | `counterpart.Owner` 的案例子类（旅行社 `agency.Agency`、品牌 `brand.BrandOwner`，按场景名从 `OWNERS` 选）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.StandardAssessor`；通用 Analyst 把这些整理成要求 |
+| `assessor.role.AssessorProtocol.evaluate(sessions) -> Signal` | `counterpart.Owner` 的案例子类（旅行社 `agency.Agency`、品牌 `brand.BrandOwner`，按场景名从 `OWNERS` 选）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.Assessor`；通用 Analyst 把这些整理成要求 |
 | `curator.raven_adapter.worker.Worker` | `automation.employee.hire` 雇来的员工，带上 Curator 不能读的评测侧文件（`withheld`）；`automation.employee.Replica` 是每张题卡的隔离副本 |
 | `curator.workflow.improve(worker, provider, feedback=…)` | 不改，直接调用 |
 | 入职资料 `opening` | 老板的入职对话与交出的资料 |
+
+### Evaluation role names
+
+`assessor.builder.RubricBuilder` constructs and revises rubric criteria;
+`assessor.standard.Assessor` evaluates outputs against them. `assessor.role.AssessorProtocol`
+is the shared interface for evaluation sources. `Standard` remains the rubric data type.
+`assessor.reviewer.MetaReviewer` audits rubric/check defects and proposes reusable construction guidance.
+
+Use `rubric_builder`, `assessor` and `meta_reviewer` in `--model role=value`, `--effort role=value`, and WebUI
+model settings. These replace the former `critic` and `judge` keys; callers must use the new names.
+New signals and assessment traces use `assessor`; builder traces and the revision section in
+`standard.json` use `rubric_builder`. The record reader still displays saved runs with the former
+keys, without rewriting those records. The `--standard` source selector and `standard.json` filename stay the same.
+
+With `--standard derived sedimented`, simulation and live sessions construct gates, guardrails and quality criteria,
+run the Assessor, and allow one meta-review and corrective reassessment. Explicit external conditions stay protected.
+Built-in program verifiers check completed replies and readable delivered text; they establish only those properties.
+Additional domain verifiers and independently calibrated restricted expressions can be supplied through the Assessor API.
+
+`assessor.rubric.Criterion` is the shared contract for construction, assessment and review. It carries `definition`
+(subject, applicability, one acceptance statement), `basis` (source references, host-bound versions and derivation),
+and `assessment` (required evidence, a whole-criterion decision and necessary local checks). `origin` records entry
+through declared/derived/sedimented; `kind` determines strength and `authority` protects external requirements.
+LLM instructions, named verifiers and program expressions have separate typed fields. Passing local checks alone
+cannot establish the full criterion; a program decision also needs independently labeled calibration bound to its
+exact contract. Required evidence that is missing, truncated or based on a stale source remains unknown.
+
+New `standard.json` records use schema 3. `parent_id` is the only stored tree relationship; each parent keeps its own
+whole-condition judgment. Schema 2 semantic records resume as flat forests. Earlier records lacking semantic contracts
+remain viewable but must be rebuilt from original inputs before execution.
+
+`RubricBuilder(max_calls=4, max_nodes=16)` bounds each construction transaction, including rejected/cut response retries.
+An evidenced `Change.refine` queues a local follow-up; roots and branches may have different depths. A host
+`RevisionScope` limits every operation and rewritten field, regardless of the reason supplied. No new input or issue
+means reuse, not another model call. Pending targets and stopping reasons are recorded and shown in the evaluation view.
+
+Meta Reviewer issues carry an explicit `allow` list. A checker issue can authorize only assessment edits; a bounded
+repair cannot request recursive expansion. Unresolved diagnoses remain pending until supported verification; changing
+their wording or returning an empty next review does not close them. `Assessor(repair_suites={id: RepairSuite(id, cases)})`
+accepts independently labeled `ReplayCase` tuples for a property's repair. For a relationship or removal, the suite can
+name its encompassing criterion, or `None` for an explicitly verified whole-rubric property. Whole-task labels are not
+accepted as substitutes for a checker-specific oracle. Missing verification leaves the repair a candidate. Exact
+duplicates can be removed with a host-checked equivalent condition retained; this proves preservation, not judging accuracy.
+
+Use `--owner-feedback silent --chain documents` for simulation comparisons where the owner's scores are measurements
+only. All materials must be available at onboarding. Measurement signals remain in the record and are excluded from
+Analyst input, curation, historical requirements and stopping decisions. Actual external feedback still takes precedence.
+
+Evaluation records live in `standard.json`. By default, `evaluation-memory/` under the run holds `guidance.json` and
+`replays.json`; `--evaluation-memory <directory>` (or `evaluation_memory` in live configuration) deliberately reuses
+them across runs. Keep this directory outside the worker's workspace and out of its reachable tool paths. Guidance
+retains cited episodes so its source survives the originating run. A shared store refuses stale writes from another
+run; reopen the store before attempting further learning.
+
+`Session.holdout` captures outcomes from fixed external rubric/dataset verifiers, with policy and execution identities.
+Simulation supplies these through `--holdout`; direct Session callers must run held-out trials on isolated replicas.
+The corpus keeps up to three passing and three failing outcomes. Only a comparison against independently labeled
+positive and negative cases, with improvement and no regression, activates proposed guidance. Missing evidence leaves
+guidance pending. Live sessions can reuse an existing corpus; they do not manufacture independent labels from human
+conversation or self-assessment. At most eight active principles/procedures enter subsequent Builder instructions.
+
+The run record distinguishes experimental installation from `promotion`: `candidate`, `rejected` or `accepted`.
+`stable_revision` records the last verified version; it does not deploy or automatically roll back the live worker.
+The Cultivation and Record views display the rubric, check evidence, review issues, guidance lifecycle and promotion.
+
+Curator experience is optional. Simulation and iteration accept `--experience-memory <directory>` and
+`--experience-scope <scope>`; `--experience-migrate` explicitly upgrades an older store. LiveConfig exposes the same
+settings. The host-owned directory must remain outside Git and Worker writable areas. No experience directory keeps
+the existing behavior. Each curation freezes stage-specific Markdown guidance and validates it again on resume and
+before installation. New records and normal-task observations teach later tasks; held-out comparisons cannot train
+the experience store.
+
+Both experience loops use the shared admission and revision protocol documented in
+[the governance design](docs/experience-governance-design.md), with separate [Rubric](docs/rubric-experience-plan.md)
+and [Curator](docs/curator-experience-plan.md) plans. Curator method corrections remain candidates until an independent
+host verifier or `CuratorExperience.verify_repair` supplies a targeted comparison; model review alone cannot adopt
+them. Frozen usage, diagnoses, source withdrawals and adoption receipts remain auditable in host-owned records.
+See [design](docs/evaluation-system-design.md) and [implementation evidence](docs/evaluation-system-plan.md).
 
 ## 运行
 

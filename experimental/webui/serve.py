@@ -33,6 +33,7 @@ from .rundir import (
     pending_stage,
     progress_path,
     research_progress,
+    standard,
     verdicts,
 )
 from .studio import event_summary, raw_record, studio_index, studio_run
@@ -579,7 +580,12 @@ def _builder():
 
 def _record_files(worker_root: Path, record_path: Path) -> tuple:
     """The record files a cultivation record is built from, by name, size and modification time."""
-    files = [record_path, *sorted(worker_root.glob("analysis/*.json")), *sorted(worker_root.glob("curation/*.json"))]
+    files = [
+        record_path,
+        worker_root / "standard.json",
+        *sorted(worker_root.glob("analysis/*.json")),
+        *sorted(worker_root.glob("curation/*.json")),
+    ]
     stamps = []
     for file in files:
         try:
@@ -619,6 +625,11 @@ def record(root: Path, run_id: str, state_roots=(), scenario_dir: Path | None = 
         built = redact(
             builder(worker_root, scenario_dir or SCENARIO.parent, state_root=state.parent if state else None)
         )
+        evaluation = standard(worker_root)
+        if evaluation is not None:
+            built["standard"] = evaluation
+        original = json.loads(record_path.read_text())
+        built.update({key: redact(original[key]) for key in ("promotion", "stable_revision") if key in original})
         _records[key] = (stamps, built)
     return built
 

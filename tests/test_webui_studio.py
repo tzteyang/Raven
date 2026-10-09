@@ -4,9 +4,19 @@ compartment log)."""
 
 import json
 import threading
+from dataclasses import asdict
 
 import pytest
 
+from experimental.assessor.rubric import (
+    AssessmentPlan,
+    Basis,
+    Criterion,
+    Definition,
+    EvidenceRequirement,
+    ProgramCheck,
+    Reference,
+)
 from experimental.iteration.hearing import opaque
 from experimental.webui import studio
 from experimental.webui.rundir import RecordError, annex, joined, labels, verdicts
@@ -386,7 +396,8 @@ def test_joined_rounds_carry_their_verdicts(tmp_path):
     assert joined(path)["rounds"][0]["verdicts"] == [card]
 
 
-def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_path):
+@pytest.mark.parametrize("builder_key", ["rubric_builder", "critic"])
+def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_path, builder_key):
     assert annex(tmp_path) == {"standard": None, "boundaries": None, "origins": {}, "research": None}
     induced = {"origin": "induced", "confirmed": False, "items": ["induced-1"]}
     settings = {"provenance": {"materials": {"induced-candidates": induced, "odd": "not a row"}, "items": []}}
@@ -395,7 +406,8 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
     (tmp_path / "settings.json").write_text(json.dumps({"provenance": None}))
     assert annex(tmp_path)["origins"] == {}
     criterion = {"id": "C1", "text": "Quote from the list", "source": "declared", "strength": "must_hold"}
-    trace = [{"event": "model.call", "label": "standard"}, {"event": "x"}]
+    label = "assessor" if builder_key == "rubric_builder" else "standard"
+    trace = [{"event": "model.call", "label": label}, {"event": "x"}]
     change = {
         "id": "derived-1",
         "op": "add",
@@ -403,12 +415,12 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
         "explanation": "The norm states it.",
         "criterion": {"text": "Name every source.", "quote": "name the source", "material": "sop", "section": "4"},
     }
-    critic = {
+    builder = {
         "read": ["sop"],
         "versions": [{"version": 1, "new_norms": ["sop"], "changes": [change, "odd"], "unchecked": []}],
-        "trace": [{"event": "model.call", "label": "critic"}],
+        "trace": [{"event": "model.call", "label": builder_key}],
     }
-    standard = {"criteria": [{**criterion, "provenance": "check:C1"}, {"text": "no id"}], "critic": critic}
+    standard = {"criteria": [{**criterion, "provenance": "check:C1"}, {"text": "no id"}], builder_key: builder}
     (tmp_path / "standard.json").write_text(json.dumps({**standard, "trace": trace}))
     rows = [
         {"time": 1.0, "role": "curator", "event": "enter", "where": "curator", "hits": []},
@@ -440,7 +452,7 @@ def test_annex_reads_the_standard_and_the_compartment_log_beside_the_record(tmp_
                 "unchecked": [],
             }
         ],
-        "calls": {"standard": 1, "critic": 1},
+        "calls": {"assessor": 1, "rubric_builder": 1},
     }
     earlier = {"criteria": [], "derived_from": ["sop"], "trace": [{"event": "model.call", "label": "derive"}]}
     (tmp_path / "standard.json").write_text(json.dumps(earlier))
@@ -575,3 +587,94 @@ def test_annex_reads_how_the_research_stage_ended_and_what_went_wrong(tmp_path):
     assert research["errors"] == []
     (folder / "result.json").write_text("{")
     assert annex(tmp_path)["research"]["errors"][0].startswith("result.json: JSONDecodeError")
+
+
+def test_evaluation_annex_keeps_authority_evidence_and_guidance_but_omits_raw_inputs(tmp_path):
+    stored = {
+        "criteria": [
+            {
+                "id": "cost",
+                "text": "Include tax.",
+                "kind": "gate",
+                "authority": "external",
+                "checks": [{"method": "program", "spec": "tax_check"}],
+            }
+        ],
+        "assessments": [
+            {
+                "id": "run:1",
+                "version": 1,
+                "evidence": {"private": "RAW_TASK_INPUT"},
+                "checks": [{"criterion": "cost", "method": "program", "result": "fail"}],
+                "review": {"issues": [{"criterion": "cost", "target": "evidence", "correction": "Read receipt."}]},
+            }
+        ],
+        "meta_reviewer": {"trace": [{"event": "model.call", "label": "meta_reviewer"}]},
+        "guidance": {
+            "entries": {
+                "lesson": {
+                    "state": "candidate",
+                    "proposal": {"kind": "principle", "text": "Check costs.", "scope": "*"},
+                    "episodes": {"run:1": {"private": "RAW_TASK_INPUT"}},
+                }
+            },
+            "history": [{"candidate": "lesson", "accepted": False}],
+        },
+    }
+    (tmp_path / "standard.json").write_text(json.dumps(stored))
+    read = annex(tmp_path)["standard"]
+    assert read["criteria"][0]["authority"] == "external"
+    assert read["assessments"][0]["checks"][0]["result"] == "fail"
+    assert read["guidance"]["entries"][0]["state"] == "candidate"
+    assert read["guidance"]["history"][0]["accepted"] is False
+    assert read["calls"]["meta_reviewer"] == 1
+    assert "RAW_TASK_INPUT" not in json.dumps(read)
+
+
+def test_evaluation_annex_displays_contract_and_legacy_without_inventing_semantics(tmp_path):
+    criterion = Criterion(
+        "tax",
+        Definition("Delivered quote", "Include tax.", "When a price is quoted."),
+        "derived",
+        "gate",
+        Basis((Reference("policy", "Include tax.", "a" * 64),), "The quoted total must include tax."),
+        assessment=AssessmentPlan(
+            required_checks=(ProgramCheck(verifier="tax_check"),),
+            evidence_requirements=(EvidenceRequirement("delivered_text", "quote.txt"),),
+        ),
+    )
+    stored = {
+        "schema": 2,
+        "criteria": [asdict(criterion), {"id": "legacy", "text": "Preserve this wording."}],
+        "rubric_builder": {
+            "read": {"policy": "a" * 64},
+            "versions": [
+                {
+                    "version": 1,
+                    "changes": [
+                        {"id": "tax", "op": "rewrite", "before": asdict(criterion), "criterion": asdict(criterion)}
+                    ],
+                }
+            ],
+        },
+    }
+    (tmp_path / "standard.json").write_text(json.dumps(stored))
+    read = annex(tmp_path)["standard"]
+    current, legacy = read["criteria"]
+    assert current["subject"] == "Delivered quote"
+    assert current["text"] == "Include tax."
+    assert current["situation"] == "When a price is quoted."
+    assert current["source"] == "derived"
+    assert current["strength"] == "must_hold"
+    assert current["provenance"] == "policy@aaaaaaaaaaaa"
+    assert current["derivation"] == "The quoted total must include tax."
+    assert current["evidence_requirements"] == [{"kind": "delivered_text", "reference": "quote.txt"}]
+    assert current["checks"] == [
+        {"role": "decision", "method": "llm", "spec": ""},
+        {"role": "required", "method": "program", "spec": "tax_check"},
+    ]
+    assert read["derived_from"] == ["policy"]
+    assert read["revisions"][0]["changes"][0]["before"] == "Include tax."
+    assert read["revisions"][0]["changes"][0]["material"] == "policy"
+    assert legacy["text"] == "Preserve this wording."
+    assert "subject" not in legacy and "checks" not in legacy

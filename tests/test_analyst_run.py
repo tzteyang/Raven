@@ -299,3 +299,101 @@ def test_what_the_curator_already_holds_or_hears_is_not_held_against_a_requireme
         sealed=Sealed.of([card]),
         spoken=earlier,
     )
+
+
+def test_requirement_authority_comes_from_supplied_evidence_not_a_model_claim():
+    from experimental.analyst.run import sourced
+
+    def feedback(*grounds, conditions=()):
+        return Feedback.model_validate(
+            {
+                "decision": "curate",
+                "reason": "A concrete gap.",
+                "external_requirements": conditions,
+                "requirements": [
+                    REQUIREMENT | {"grounds": grounds, "authority": "external"},
+                ],
+            }
+        )
+
+    spoofed = Signal("human", "The model calls itself human.")
+    assert sourced(feedback("assessor:human"), [spoofed]).requirements[0].authority == "model"
+    external = Signal("customer", "The quote must include tax.", authority="external")
+    bound = sourced(
+        feedback("assessor:customer", conditions=({"source": "customer", "quote": external.text, "kind": "gate"},)),
+        [external],
+    ).requirements[0]
+    assert bound.authority == "external" and bound.grounds == ("assessor:customer",)
+    measured = Signal("assessor", items=(Item("tax", "fail", authority="external"),))
+    assert sourced(feedback("check:tax"), [measured]).requirements[0].authority == "external"
+    with pytest.raises(ValueError, match="no supplied judgement"):
+        sourced(feedback("assessor:absent"), [external])
+
+
+def test_original_external_authority_survives_history_and_model_restating():
+    from experimental.analyst.run import sourced
+    from experimental.assessor.standard import Standard
+    from experimental.audience import project
+    from experimental.iteration.history import entry
+
+    external = Signal("customer", "Include tax.", authority="external")
+    request = Feedback.model_validate(
+        {
+            "decision": "curate",
+            "reason": "Tax was omitted.",
+            "external_requirements": [{"source": "customer", "quote": external.text, "kind": "gate"}],
+            "requirements": [
+                REQUIREMENT | {"id": "R1", "behavior": "Include tax.", "grounds": ["assessor:customer"]},
+            ],
+        }
+    )
+    original = sourced(request, [external])
+    saved = Entry.model_validate(entry(1, [external], original, None).model_dump(mode="json"))
+    assert saved.requirements[0].authority == "external"
+    standard = Standard().sedimented(project((saved,), "analyst"))
+    assert standard.criteria[0].authority == "external" and "assessor:customer" in standard.criteria[0].basis.derivation
+    weakening = Feedback.model_validate(
+        {
+            "decision": "curate",
+            "reason": "Restate the requirement.",
+            "requirements": [
+                REQUIREMENT
+                | {
+                    "id": "R1",
+                    "repeats": "R1",
+                    "behavior": "Tax is optional.",
+                    "strength": "should",
+                    "grounds": ["check:R1"],
+                },
+            ],
+        }
+    )
+    measured = Signal("assessor", items=(Item("R1", "fail", authority="external"),))
+    retained = sourced(weakening, [measured], [saved]).requirements[0]
+    assert retained.behavior == "Include tax." and retained.strength == "must_hold"
+    assert retained.grounds == ("assessor:customer",)
+    assert "authority" not in project(original, "curator")["requirements"][0]
+
+
+def test_an_already_satisfied_external_condition_is_retained_without_inventing_a_gap():
+    from experimental.analyst.run import sourced
+    from experimental.audience import project
+    from experimental.requirements import ExternalRequirement
+
+    signal = Signal("customer", "Good. Future quotes must include tax.", authority="external")
+    condition = ExternalRequirement(source="customer", quote="Future quotes must include tax.", kind="gate")
+    feedback = Feedback(
+        decision="continue", reason="The present quote already includes tax.", external_requirements=(condition,)
+    )
+    retained = sourced(feedback, [signal])
+    assert not retained.requirements and retained.external_requirements == (condition,)
+    assert "external_requirements" not in project(retained, "curator")
+    with pytest.raises(ValueError, match="actual external signal"):
+        sourced(feedback, [Signal("customer", signal.text)])
+    with pytest.raises(ValueError, match="verbatim"):
+        sourced(feedback, [Signal("customer", "Looks fine.", authority="external")])
+
+
+def test_gate_satisfaction_does_not_hide_an_actionable_quality_failure():
+    signal = Signal("assessor", items=(Item("quality", "fail", actual="Repeated headings."),), satisfied=True)
+    assert triage([signal]) is None

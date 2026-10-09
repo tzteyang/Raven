@@ -120,10 +120,53 @@ def labels(run: dict) -> dict[str, str]:
     return {name: opaque(name) for name in sorted(names)}
 
 
+def _criterion_view(row: dict) -> dict:
+    """Project the current contract or an unchanged legacy record into the read-only view."""
+    fields = ("id", "text", "source", "strength", "provenance", "situation", "acceptance", "quote")
+    if "definition" not in row:
+        return {
+            **{key: row.get(key, "") for key in fields},
+            **{key: row[key] for key in ("kind", "authority", "checks") if key in row},
+        }
+    definition, basis, assessment = row["definition"], row.get("basis", {}), row.get("assessment", {})
+    references = basis.get("references", ())
+    decision = assessment.get("decision")
+    checks = [("decision", decision), *(("required", check) for check in assessment.get("required_checks", ()))]
+    return {
+        "id": row.get("id", ""),
+        "parent_id": row.get("parent_id"),
+        "text": definition.get("acceptance", ""),
+        "subject": definition.get("subject", ""),
+        "situation": definition.get("applies_when", ""),
+        "acceptance": definition.get("acceptance", ""),
+        "source": row.get("origin", ""),
+        "kind": row.get("kind", ""),
+        "authority": row.get("authority", ""),
+        "strength": "should" if row.get("kind") == "quality" else "must_hold",
+        "provenance": ", ".join(
+            f"{ref['source']}@{ref['version'][:12]}" if ref.get("version") else ref.get("source", "")
+            for ref in references
+        ),
+        "quote": "\n".join(ref["quote"] for ref in references if ref.get("quote")),
+        "derivation": basis.get("derivation", ""),
+        "evidence_requirements": assessment.get("evidence_requirements", []),
+        "checks": [
+            {
+                "role": role,
+                "method": check.get("method", "") if check else "missing",
+                "spec": (check.get("instruction") or check.get("verifier") or check.get("expression") or "")
+                if check
+                else "No whole-criterion decision",
+            }
+            for role, check in checks
+        ],
+    }
+
+
 def standard(worker_root: Path) -> dict | None:
     """The standard the automatic assessor held the rounds to, as the simulation wrote it when the run ended: each
     criterion with its source, strength, provenance and, for a derived one, the norm passage it quotes; the norms the
-    standard critic read; the critic's numbered revisions (`experimental.assessor.critic`), each with the changes it
+    rubric builder read; the builder's numbered revisions (`experimental.assessor.builder`), each with the changes it
     applied and the passages it found nothing checkable in; and the model calls by label. None when the run kept no
     standard (yet)."""
     path = Path(worker_root) / "standard.json"
@@ -142,24 +185,44 @@ def standard(worker_root: Path) -> dict | None:
         return {"error": _reason(exc), "criteria": [], "derived_from": [], "revisions": []}
     if not isinstance(value, dict):
         return {"error": "standard.json holds no object", "criteria": [], "derived_from": [], "revisions": []}
-    critic = value.get("critic") if isinstance(value.get("critic"), dict) else {}
+    builder = value.get("rubric_builder", value.get("critic"))
+    builder = builder if isinstance(builder, dict) else {}
+    reviewer = value.get("meta_reviewer")
+    reviewer = reviewer if isinstance(reviewer, dict) else {}
     calls: dict[str, int] = {}
-    for row in (*(value.get("trace") or ()), *(critic.get("trace") or ())):
+    for row in (*(value.get("trace") or ()), *(builder.get("trace") or ()), *(reviewer.get("trace") or ())):
         if isinstance(row, dict) and row.get("event") == "model.call":
             label = str(row.get("label") or "")
+            label = {"critic": "rubric_builder", "standard": "assessor"}.get(label, label)
             calls[label] = calls.get(label, 0) + 1
-    fields = ("id", "text", "source", "strength", "provenance", "situation", "acceptance", "quote")
-    change_fields = ("id", "op", "reason", "explanation", "before")
+    change_fields = ("id", "op", "reason", "explanation")
     revisions = [
         {
             "version": row.get("version"),
+            **{key: row[key] for key in ("base_version", "rubric_version", "scope", "note") if key in row},
             "new_norms": [str(name) for name in row.get("new_norms") or ()],
             "changes": [
                 {
                     **{key: str(change.get(key) or "") for key in change_fields},
-                    "text": str((change.get("criterion") or {}).get("text") or ""),
-                    "quote": str((change.get("criterion") or {}).get("quote") or ""),
-                    "material": str((change.get("criterion") or {}).get("material") or ""),
+                    "text": str(_criterion_view(change.get("criterion") or {}).get("text") or ""),
+                    "quote": str(_criterion_view(change.get("criterion") or {}).get("quote") or ""),
+                    "material": str(
+                        (change.get("criterion") or {}).get("material")
+                        or ", ".join(
+                            ref.get("source", "")
+                            for ref in (change.get("criterion") or {}).get("basis", {}).get("references", ())
+                        )
+                    ),
+                    "before": (
+                        _criterion_view(change["before"])["text"]
+                        if isinstance(change.get("before"), dict)
+                        else str(change.get("before") or "")
+                    ),
+                    **(
+                        {"parent_id": change["criterion"]["parent_id"]}
+                        if "parent_id" in (change.get("criterion") or {})
+                        else {}
+                    ),
                 }
                 for change in row.get("changes") or ()
                 if isinstance(change, dict)
@@ -170,21 +233,64 @@ def standard(worker_root: Path) -> dict | None:
                 if isinstance(item, dict)
             ],
         }
-        for row in critic.get("versions") or ()
+        for row in builder.get("versions") or ()
         if isinstance(row, dict)
     ]
-    return redact(
-        {
-            "criteria": [
-                {key: row.get(key, "") for key in fields}
-                for row in value.get("criteria") or ()
-                if isinstance(row, dict) and row.get("id")
+    record = {
+        "criteria": [
+            _criterion_view(row) for row in value.get("criteria") or () if isinstance(row, dict) and row.get("id")
+        ],
+        "derived_from": [str(name) for name in builder.get("read") or value.get("derived_from") or ()],
+        "revisions": revisions,
+        "calls": calls,
+        "assessments": [
+            {
+                key: row[key]
+                for key in (
+                    "id",
+                    "version",
+                    "checks",
+                    "review",
+                    "unresolved",
+                    "review_error",
+                    "repair_error",
+                    "learning_error",
+                    "retained_program_failures",
+                    "rubric_version",
+                    "repair_status",
+                    "repair_validation",
+                    "repair_rejected",
+                    "evidence_restored",
+                )
+                if key in row
+            }
+            for row in value.get("assessments", ())
+            if isinstance(row, dict)
+        ],
+        "guidance": {
+            "entries": [
+                {"id": id, "state": row.get("state"), **row.get("proposal", {})}
+                for id, row in (value.get("guidance") or {}).get("entries", {}).items()
             ],
-            "derived_from": [str(name) for name in critic.get("read") or value.get("derived_from") or ()],
-            "revisions": revisions,
-            "calls": calls,
-        }
-    )
+            "history": (value.get("guidance") or {}).get("history", []),
+        },
+    }
+    for key in ("assessments", "guidance"):
+        if key not in value:
+            record.pop(key)
+    if "runs" in builder:
+        record["construction"] = [
+            {
+                key: run[key]
+                for key in ("status", "calls", "added", "steps", "error", "reason", "rubric_version")
+                if key in run
+            }
+            for run in builder["runs"]
+        ]
+        record["pending"] = [
+            {"target": work["target"], "reason": work["reason"]} for work in builder.get("pending", ())
+        ]
+    return redact(record)
 
 
 def boundaries(worker_root: Path) -> dict | None:

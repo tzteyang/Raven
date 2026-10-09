@@ -11,12 +11,15 @@ PARTNER = Choice("deepseek/deepseek-v4-flash", "low")
 
 def test_a_role_not_named_runs_on_the_partners_model_and_effort_never_on_another_roles():
     roles = model_roles.resolve(
-        model_roles.pairs(["curator=openai/gpt-6.1-sol"]), {"curator": "high", "judge": "medium"}, PARTNER
+        model_roles.pairs(["curator=openai/gpt-6.1-sol", "rubric_builder=builder/model"]),
+        {"curator": "high", "assessor": "medium"},
+        PARTNER,
     )
     assert roles["partner"] == PARTNER
     assert roles["curator"] == Choice("openai/gpt-6.1-sol", "high")
     assert roles["attribution"] == roles["analyst"] == roles["collector"] == PARTNER
-    assert roles["judge"] == Choice(PARTNER.model, "medium")
+    assert roles["assessor"] == Choice(PARTNER.model, "medium")
+    assert roles["rubric_builder"] == Choice("builder/model", PARTNER.effort)
     assert roles["sub-harness"] == Choice(PARTNER.model, None)
     assert list(roles) == ["partner", *model_roles.ROLES]
 
@@ -26,6 +29,8 @@ def test_a_role_not_named_runs_on_the_partners_model_and_effort_never_on_another
     [
         (["partner=x"], [], "configuration"),
         (["traveller=x"], [], "not a model role"),
+        (["critic=x"], [], "not a model role"),
+        ([], ["judge=low"], "not a model role"),
         (["curator=x", "curator=y"], [], "twice"),
         (["curator"], [], "role=value"),
         (["curator="], [], "role=value"),
@@ -46,7 +51,7 @@ def test_a_run_without_some_roles_refuses_to_name_them():
 def test_the_record_keeps_every_roles_model_and_leaves_out_an_effort_the_run_does_not_set():
     kept = model_roles.recorded(model_roles.resolve({"sub-harness": "z"}, {}, PARTNER))
     assert kept["models"]["sub-harness"] == "z" and kept["models"]["partner"] == PARTNER.model
-    assert "sub-harness" not in kept["efforts"] and kept["efforts"]["critic"] == "low"
+    assert "sub-harness" not in kept["efforts"] and kept["efforts"]["rubric_builder"] == "low"
 
 
 def config() -> Config:

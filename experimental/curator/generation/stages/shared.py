@@ -108,6 +108,7 @@ def materials(context: Context) -> dict:
             for name, entry in context.sources.items()
         },
         "exploration": context.exploration,
+        **({"experience": context.experience} if context.experience is not None else {}),
     }
 
 

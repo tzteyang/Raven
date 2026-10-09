@@ -60,7 +60,70 @@ def identified(feedback: Feedback, known) -> Feedback:
             continue
         known.append(f"R{len(known) + 1}")
         requirements.append(requirement.model_copy(update={"id": known[-1]}))
-    return feedback.model_copy(update={"requirements": tuple(requirements)})
+    return (
+        feedback
+        if tuple(requirements) == feedback.requirements
+        else feedback.model_copy(update={"requirements": tuple(requirements)})
+    )
+
+
+def sourced(feedback: Feedback, signals, history=()) -> Feedback:
+    """Bind authority to actual input origins, never to the model's claim or a source's display name."""
+    for requirement in feedback.external_requirements:
+        if not any(
+            signal.authority == "external" and signal.source == requirement.source and requirement.quote in signal.text
+            for signal in signals
+        ):
+            raise ValueError("an external requirement must quote an actual external signal verbatim")
+    origins: dict[str, set[str]] = {}
+    for signal in signals:
+        origins.setdefault(f"assessor:{signal.source}", set()).add(signal.authority)
+        for item in signal.items:
+            authority = "external" if "external" in (signal.authority, item.authority) else "model"
+            for prefix in ("check", "case"):
+                origins.setdefault(f"{prefix}:{item.id}", set()).add(authority)
+    requirements = []
+    protected = {
+        requirement.id: requirement
+        for entry in history
+        for requirement in entry.requirements
+        if requirement.authority == "external"
+    }
+    for requirement in feedback.requirements:
+        previous = protected.get(requirement.id)
+        inherited = set(previous.grounds) if previous is not None else set()
+        missing = set(requirement.grounds) - origins.keys() - inherited
+        if missing:
+            raise ValueError(f"requirement grounds name no supplied judgement: {sorted(missing)}")
+        criteria = tuple(ref for ref in requirement.grounds if ref.startswith(("check:", "case:")))
+        basis = criteria or requirement.grounds
+        external = bool(basis) and all(
+            origins.get(ref, {"external"} if ref in inherited else set()) == {"external"} for ref in basis
+        )
+        if not criteria and previous is None:
+            external = external and any(
+                f"assessor:{condition.source}" in basis for condition in feedback.external_requirements
+            )
+        update = {"authority": "external" if external else "model"}
+        fresh_external = any(
+            ref == f"assessor:{signal.source}" and signal.authority == "external"
+            for ref in requirement.grounds
+            for signal in signals
+            if any(condition.source == signal.source for condition in feedback.external_requirements)
+        )
+        if previous is not None and not fresh_external:
+            update.update(
+                {
+                    name: getattr(previous, name)
+                    for name in ("situation", "behavior", "strength", "acceptance", "grounds", "authority")
+                }
+            )
+        requirements.append(requirement.model_copy(update=update))
+    return (
+        feedback
+        if tuple(requirements) == feedback.requirements
+        else feedback.model_copy(update={"requirements": tuple(requirements)})
+    )
 
 
 # Criteria whose wording restates what the Curator already holds: an earlier requirement, or a handed-over norm.
@@ -115,7 +178,10 @@ def triage(signals) -> Feedback | None:
     """Decide without the model when the signals plainly say nothing needs analysis."""
     if not signals:
         return Feedback(decision="continue", reason="No assessor produced a signal this round.")
-    if all(signal.satisfied is True and not signal.text.strip() for signal in signals):
+    if all(
+        signal.satisfied is True and not signal.text.strip() and not any(item.result == "fail" for item in signal.items)
+        for signal in signals
+    ):
         return Feedback(decision="continue", reason="Every assessor is satisfied and none added a remark.")
     return None
 
@@ -165,9 +231,15 @@ async def analyse(
             locations = ["root", *(f"child/{name}" for name in getattr(worker, "children", {}))]
             packet["locations"] = locations
             schema = schema_for(Feedback)
+            external = sorted({signal.source for signal in signals if signal.authority == "external"})
+            if external:
+                schema["$defs"]["ExternalRequirement"]["properties"]["source"]["enum"] = external
+            else:
+                del schema["properties"]["external_requirements"]
             requirement = schema["$defs"]["Requirement"]
             requirement["properties"]["locations"]["items"]["enum"] = locations
             del requirement["properties"]["id"]
+            del requirement["properties"]["authority"]
             requirement["required"] = sorted({*requirement.get("required", ()), "situation"})
             known = known_ids(history)
             targets = [target.name for target in catalogue()]
@@ -176,7 +248,7 @@ async def analyse(
                 parsed = Feedback.model_validate(arguments)
                 if any(set(item.locations) - set(locations) for item in parsed.requirements):
                     raise ValueError("feedback names a location outside the supplied deployment")
-                parsed = identified(parsed, known)
+                parsed = sourced(identified(parsed, known), signals, history)
                 vet(parsed, signals, sessions, sealed=sealed, targets=targets, spoken=spoken)
                 return parsed
 

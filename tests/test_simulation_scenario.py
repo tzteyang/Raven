@@ -426,7 +426,19 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     assert written["efforts"] == {
         "partner": "low",
         "curator": "high",
-        **dict.fromkeys(("attribution", "analyst", "collector", "counterpart", "conversant", "judge", "critic"), "low"),
+        **dict.fromkeys(
+            (
+                "attribution",
+                "analyst",
+                "collector",
+                "counterpart",
+                "conversant",
+                "assessor",
+                "rubric_builder",
+                "meta_reviewer",
+            ),
+            "low",
+        ),
     }
     assert written["partner_tier"] == "medium"
     assert written["research"] == {
@@ -442,6 +454,11 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     start = written["starting_harness"]
     assert {"raven-research", "raven-ppt"} <= set(start["products"]) and start["raven_commit"]
     assert written["chain"] == "staged" and written["scenario"] == "travel_agency"
+    assert written["owner_feedback"] == "spoken"
+    assert (
+        settings(SimpleNamespace(**{**vars(args), "owner_feedback": "silent"}), roles, "medium")["owner_feedback"]
+        == "silent"
+    )
     assert written["argv"] == [
         f"--config={PLACEHOLDERS['--config']}",
         "--chain",

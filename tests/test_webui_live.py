@@ -155,6 +155,8 @@ def test_a_live_configuration_reads_its_paths_from_its_own_folder_and_refuses_wh
         ({"timeout": True}, "timeout must be"),
         ({"models": {"counterpart": "x"}}, "not a model role of this run"),
         ({"efforts": {"curator": 2}}, "must map model roles"),
+        ({"experience_scope": " "}, "experience_scope"),
+        ({"experience_migrate": "yes"}, "experience_migrate"),
     ):
         with pytest.raises(ValueError, match=message):
             LiveConfig.load(write_config(tmp_path, **values))
@@ -162,6 +164,17 @@ def test_a_live_configuration_reads_its_paths_from_its_own_folder_and_refuses_wh
     bare.write_text(json.dumps({"config": "raven.json"}))
     with pytest.raises(ValueError, match=r"needs \['root'\]"):
         LiveConfig.load(bare)
+
+
+def test_live_experience_configuration_reaches_the_host_without_changing_default_runs(tmp_path):
+    default = LiveConfig.load(write_config(tmp_path))
+    assert default.experience_memory is None
+    configured = LiveConfig.load(
+        write_config(tmp_path, experience_memory="memory", experience_scope="project", experience_migrate=True)
+    )
+    supplied = configured.spec(tmp_path / "run", tmp_path / "work", "task")
+    assert supplied["experience_memory"] == str((tmp_path / "memory").resolve())
+    assert supplied["experience_scope"] == "project" and supplied["experience_migrate"] is True
 
 
 def test_the_materials_offered_are_those_the_curator_may_receive_with_where_each_came_from(tmp_path):

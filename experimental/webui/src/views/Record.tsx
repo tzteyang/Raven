@@ -17,6 +17,7 @@ import {
 } from '../record'
 import { Clamp, Fold, HeldBadge, RedLine, TreatmentBadge } from './Badges'
 import { Markdown } from './Markdown'
+import { StandardBlock, PromotionStatus } from './Evaluation'
 
 import type { Bundle, MiningSession, RecordReply } from '../api'
 import type { RunEntry } from '../model'
@@ -770,6 +771,8 @@ export function RecordView({
   return (
     <div className="record">
       <Header record={data} entry={entry} bundle={bundle} />
+      <PromotionStatus promotion={data.promotion} stable={data.stable_revision} />
+      {data.standard ? <StandardBlock standard={data.standard} /> : null}
       {data.value ? (
         <section className="sec">
           <h3>Value verdict</h3>

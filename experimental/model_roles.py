@@ -18,8 +18,9 @@ ROLES = (
     "collector",
     "counterpart",
     "conversant",
-    "judge",
-    "critic",
+    "assessor",
+    "rubric_builder",
+    "meta_reviewer",
     "sub-harness",
 )
 EFFORTS = ("low", "medium", "high")

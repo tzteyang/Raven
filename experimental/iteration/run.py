@@ -30,6 +30,7 @@ async def run(
     prior=(),
     prepare=None,
     measuring=frozenset(),
+    experience=None,
 ):
     """Curate once from the task, then iterate until every assessor is satisfied, the analyst stops, or rounds run out.
 
@@ -49,6 +50,7 @@ async def run(
     record says how the run ended: finished, paused (a curation was interrupted and can be resumed), stopped (the run
     was interrupted from outside, such as by a spend cap) or error.
     """
+    assessors = tuple(assessors)
     session = Session.open(
         worker,
         provider,
@@ -63,7 +65,9 @@ async def run(
         attributor=attributor,
         prior=prior,
         prepare=prepare,
+        assessors=assessors,
         measuring=measuring,
+        experience=experience,
     )
     try:
         if not await session.onboard(opening):

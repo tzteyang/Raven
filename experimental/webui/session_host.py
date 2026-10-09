@@ -25,12 +25,16 @@ from raven.config.mode_catalogue import build_mode_catalogue
 
 from .. import model_roles
 from ..analyst.run import Limits as AnalystLimits
-from ..assessor.critic import Critic
+from ..assessor.builder import RubricBuilder
+from ..assessor.guidance import GuidanceStore
 from ..assessor.human import Human
-from ..assessor.standard import Standard, StandardAssessor
+from ..assessor.reviewer import MetaReviewer
+from ..assessor.standard import Assessor, Standard
+from ..assessor.validation import ReplayCorpus, fingerprint
 from ..curator.attribution import AttributionLimits, ModelAttributor
 from ..curator.generation.run import Limits as CuratorLimits
 from ..curator.raven_adapter.observe import plain
+from ..experience.curator import CuratorExperience
 from ..iteration.compartment import Boundaries
 from ..iteration.conversation import Conversation
 from ..iteration.protocols import Signal
@@ -113,6 +117,7 @@ class Host:
         self.root, self.workdir = Path(spec["run_dir"]), Path(spec["workdir"])
         self.session: Session | None = None
         self.employee = self.contract = self.standard = None
+        self.experience = None
         self.step: str | None = "starting"
         self.since = time.time()
         self.error: str | None = None
@@ -159,27 +164,54 @@ class Host:
             self._settings(roles)
         await self.employee.start()
         provider = model_roles.provider(self.employee.baseline.config, roles)
-        judge, critic = roles["judge"], roles["critic"]
+        assessor_role, builder_role = roles["assessor"], roles["rubric_builder"]
         if spec.get("standard"):
-            self.standard = StandardAssessor(
+            memory = (
+                Path(spec["evaluation_memory"]) if spec.get("evaluation_memory") else self.root / "evaluation-memory"
+            )
+            derived = "derived" in spec["standard"]
+            self.standard = Assessor(
                 provider,
                 Standard.declared(
                     (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
                 ),
                 sources=spec["standard"],
                 norms=lambda: self.employ.standing_norms(contract, self.handed()),
-                model=judge.model,
-                effort=judge.effort,
+                task=self.employee.baseline.task.text,
+                model=assessor_role.model,
+                effort=assessor_role.effort,
                 timeout=spec["timeout"],
                 boundaries=boundaries,
-                critic=(
-                    Critic(model=critic.model, effort=critic.effort, timeout=spec["timeout"])
+                builder=(
+                    RubricBuilder(model=builder_role.model, effort=builder_role.effort, timeout=spec["timeout"])
                     if "derived" in spec["standard"]
                     else None
                 ),
                 keep=self.root / "standard.json",
+                reviewer=MetaReviewer(
+                    model=roles["meta_reviewer"].model, effort=roles["meta_reviewer"].effort, timeout=spec["timeout"]
+                )
+                if derived
+                else None,
+                guidance_store=GuidanceStore(memory / "guidance.json") if derived else None,
+                replay_corpus=ReplayCorpus(memory / "replays.json") if derived else None,
+                scope=fingerprint({"task": self.employee.baseline.task.text}),
+            )
+            if spec.get("record"):
+                self.standard.restore()
+        if spec.get("experience_memory"):
+            self.experience = CuratorExperience.from_provider(
+                Path(spec["experience_memory"]),
+                provider,
+                access_scope=spec.get("experience_scope", "local"),
+                model=roles["curator"].model,
+                effort=roles["curator"].effort,
+                migrate=spec.get("experience_migrate", False),
+                writable_roots=(self.employee.root, self.employee.baseline.config.workspace_path),
             )
         options = {
+            **({"experience": self.experience} if self.experience is not None else {}),
+            "assessors": (self.standard,) if self.standard is not None else (),
             "analyst_model": roles["analyst"].model,
             "analyst_effort": roles["analyst"].effort,
             "curator_model": roles["curator"].model,
@@ -331,7 +363,9 @@ class Host:
     async def _onboard(self, command: dict) -> None:
         if not self.session.onboarded:
             text, handovers = _text(command.get("text")), self._handovers(command)
-            self.opening = (Signal(SOURCE, text, attachments=handovers),) if text or handovers else ()
+            self.opening = (
+                (Signal(SOURCE, text, attachments=handovers, authority="external"),) if text or handovers else ()
+            )
         await self.session.onboard(self.opening)
 
     async def _trial(self, command: dict) -> None:
@@ -358,7 +392,7 @@ class Host:
         text, handovers = _text(command.get("text")), self._handovers(command)
         if not text and not handovers:
             raise StepError("the message is empty")
-        self.session.signal(Signal(SOURCE, text, attachments=handovers))
+        self.session.signal(Signal(SOURCE, text, attachments=handovers, authority="external"))
 
     async def _assess(self, command: dict) -> None:
         if self.standard is None:
@@ -388,8 +422,12 @@ class Host:
         if self.task is not None and not self.task.done():
             self.task.cancel()
             await asyncio.gather(self.task, return_exceptions=True)
-        if self.employee is not None:
-            await self.employee.close()
+        try:
+            if self.employee is not None:
+                await self.employee.close()
+        finally:
+            if self.experience is not None:
+                self.experience.close()
 
 
 async def serve(connection, spec: dict, employ=employ) -> None:

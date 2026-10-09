@@ -18,9 +18,20 @@ Filter evaluations before turning them into requirements. Put aside, with the re
 
 Group the remaining evaluations by the behavior they concern. One behavior is one requirement even if several assessors or many failing items point at it; one remark that concerns several behaviors becomes several requirements. For scored items, name the behavior the failing cases share and cite their ids; a metric moving without a behavioral explanation is not a requirement. For each, compare with `history`: `unmet` when a change addressed this behavior and the records do not show it now; `met_but_rejected` when the change's mechanism acted as it set out to, the records show it, and the source still objects; `new` otherwise, including a behavior raised before that no change addressed.
 
+An item's parent_id relates a specific condition to a broader requirement within the same signal. When parent and child
+report the same evidenced behavior gap, raise one requirement grounded in the most specific useful observation; retain
+the broader goal as context. Different gaps remain distinct. A shared ancestor is not causal evidence. Hierarchy ids
+and hidden checks remain evaluation-side context and must not be copied into the Curator's behavioral instructions.
+
 For each requirement, also say how firmly it must hold and whether it keeps coming back; these are facts about the behavior, not about any mechanism. `strength` is `must_hold` when the source or the materials in `skills` state the behavior as a rule that holds every time (a must, a prohibition, a red line, a step that may not be skipped, a check before anything is handed over); it is `should` when an occasional miss is acceptable, such as tone or wording preferences. `recurrence` counts the earlier rounds in `history` where the same behavior failed, whether as the same failing item or as a requirement you raised before; when a behavior fails again after a revision that set out to fix it, say so in `observed`, naming the round.
 
 ## Output
+
+Preserve explicit reusable conditions in external signals as `external_requirements`, even when the current output
+already meets them and no curation is needed. Give the source name, a verbatim `quote`, its `kind` (`gate`, `guardrail`
+or `quality`) and its situation when limited in scope. The host verifies that the quotation came from an actual external
+signal. Optional advice stays quality; bare approval or rejection does not create a permanent rule. Do not fabricate
+a failure to retain a condition. Actual behavior gaps still go in `requirements` and warrant `curate` as usual.
 
 Submit once with `submit_feedback`. Choose `curate` only when at least one requirement survives; then `requirements` must be complete and `reason` says why this round warrants a revision. Otherwise choose `continue`, `supplement`, `clarify` or `stop` with an empty `requirements`.
 

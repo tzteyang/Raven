@@ -193,7 +193,7 @@ describe('the record as read', () => {
     expect(chainLabel({ label: 'examples' })).toBe('examples')
     expect(chainLabel(null)).toBe('')
     expect(modelLine(record.run.settings.models)).toBe('partner, curator, analyst deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')
-    expect(modelLine({ partner: 'z-ai/glm-5.3-flashx', curator: 'z-ai/glm-5.3', judge: 'z-ai/glm-5.3' }, true)).toBe('glm-5.3-flashx · curator, judge glm-5.3')
+    expect(modelLine({ partner: 'z-ai/glm-5.3-flashx', curator: 'z-ai/glm-5.3', assessor: 'z-ai/glm-5.3' }, true)).toBe('glm-5.3-flashx · curator, assessor glm-5.3')
     expect(modelLine({ employee: 'e/one', subagents: null })).toBe('employee e/one')
     expect(modelLine({})).toBe('')
     expect(researchLine({ channel: 'claude', model: 'sonnet', effort: 'medium', budget: 1 })).toBe('claude · sonnet · medium · at most $1.00 a call')

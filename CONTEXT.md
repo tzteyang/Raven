@@ -206,7 +206,7 @@ is the generic loop: `Trial`s run the worker (a conversation, a dataset, a simul
 measure the sessions into `Signal`s (text, per-item results, metrics, their own satisfied verdict,
 attachments for material handed over), the analyst decides, and only a `curate` decision or a handover
 reaches `workflow.improve`. An **Assessor** holds a standard the worker never sees (criteria, materials,
-references, held-out cases) as its own state; the loop sees only its `Signal`; the protocol and the generic
+references, held-out cases) as its own state; the loop sees only its `Signal`; `AssessorProtocol` and the generic
 human and dataset assessors live in `experimental/assessor/`. `iteration/hearing.py`
 decides what the Curator hears of the signals and the history: a `Remark` (source, text, satisfied,
 attachments), never per-item results, metrics or references.
@@ -242,8 +242,8 @@ spared per speaker; identifiers stay sealed.
 **Model role** (`experimental/model_roles.py`):
 A role of a cultivation that calls a model, beside the partner: `curator`, `attribution`, `analyst`, `collector` (the
 research stage's own calls), `counterpart` (the owner's review and its answers to the collector), `conversant`,
-`judge` (the `StandardAssessor`, the holdout judge and the post-run reading of interventions against the owner's
-rules), `critic` and `sub-harness`. The partner runs on its Raven configuration's model and effort; a run names any
+`assessor` (the `Assessor`, the holdout assessor and the post-run reading of interventions against the owner's
+rules), `rubric_builder`, `meta_reviewer` and `sub-harness`. The partner runs on its Raven configuration's model and effort; a run names any
 other role's model or effort as `role=value` (`--model`, `--effort`), and a role it does not name runs on the
 partner's, never on another role's. The resolved map is the `models` and `efforts` of the run's `settings.json`. The
 sub-harness runs in the partner's processes and takes only a model; its effort stays its own configuration's.
@@ -285,22 +285,118 @@ revision. `ledger.held` is the one rule for holding; the ledger joins the entrie
 groups them by attributor identity, so versions of attribution can be compared.
 
 **Standard** (`experimental/assessor/standard.py`):
-The criteria a round is held to on the evaluation side: declared (the counterpart's checks), derived (written
-by the standard critic from the norms the counterpart stands behind, of strength should until the counterpart
-confirms them) and
-sedimented (every requirement raised so far, kept as a regression check). The `StandardAssessor`
-judges each round against it and returns a `Signal`.
+The criteria a round is held to on the evaluation side: declared (the counterpart's checks), derived (constructed
+from the task and materials), and sedimented (historical requirements retained as regression checks). `Criterion.origin`
+records this entry path independently of `authority`. Confirmation makes a derived criterion external;
+model revisions and sedimentation cannot weaken it. The `Assessor`
+returns a `Signal`; unknown applicable hard criteria cannot produce a satisfied verdict.
 
-**Standard critic** (`experimental/assessor/critic.py`):
-The role that writes and revises the derived criteria of a `Standard` before every assessment, so a round can be
-judged where no counterpart says what good work is. It reads every norm handed over so far and, per criterion it
-wrote, only whether the last round's judge could decide it (`Decidability`), never whether it passed; each change
-(`add`, `rewrite`, `retire`) names a reason from a closed set that the evidence must bear out, and every criterion
-quotes the norm passage it rests on verbatim, refused otherwise. Its numbered revisions are kept in the run's
-`standard.json`. It is the critic of the actor (Curator), critic and judge triad; reviewing the critic itself is
-not built.
-_Avoid_: calling it the experience critic (`experimental/experience/`, another branch), which reviews experience
-candidates across curations; showing it pass or fail results.
+**Criterion** (`experimental/assessor/rubric.py`):
+One rubric condition with an identity, origin, authority, kind, definition, basis, assessment plan and optional
+`parent_id`. The parent identifies a necessary semantic refinement within a forest; every level remains a complete
+condition. Depth does not confer authority or inherit a verdict. `Definition`
+names the subject, applicability and sole acceptance statement. `kind` distinguishes gate, guardrail and quality;
+`strength` is derived, not independently editable. `Basis` contains source `Reference` entries, supporting quotes and
+an inference explanation. The host binds each reference to its source content version; a grounded quote alone does
+not prove that the criterion follows from it. Builder and Meta Reviewer inspect the same definition.
+
+**Assessment plan** (`experimental/assessor/rubric.py`, `AssessmentPlan`):
+How to measure a criterion: required evidence channels, one whole-criterion decision and necessary local checks.
+`EvidenceRequirement` names conversation, execution, delivered text or a supplied material; unavailable required
+evidence blocks a pass. `LLMCheck` carries judgment instructions. `ProgramCheck` names either a host verifier or a
+restricted expression. Local passes alone cannot establish the criterion. Every program decision and every generated
+expression needs independent positive/negative calibration bound to the exact definition, basis and assessment plan.
+Auxiliary observations remain evidence; they are not extra voting checks. This is distinct from Runtime stint `Check`.
+
+**Rubric Builder** (`experimental/assessor/builder.py`, `RubricBuilder`):
+The role that constructs a forest of derived criteria from the task and materials. Fresh source inputs, new measurement
+undecidability or explicit review corrections create scoped construction work; otherwise the rubric is reused. Each
+change may request a reasoned `refine` follow-up for its resulting node, bounded by the host's call and addition budgets.
+Ordinary work receives raw measurement `Decidability`, not the score or synthetic construction/review uncertainty.
+Corrective work receives typed Meta Reviewer issues and may not open another refinement cycle. Each change
+(`add`, `rewrite`, `remove`) names a reason from a closed set that the evidence must bear out. Removal takes a criterion
+out of the current rubric while keeping its previous definition in revision history. Direct quotations are
+checked against their source; an inferred condition records its reasoning in `basis.derivation`, separately from why
+the revision was requested. Changed source contents under the same name count as new input.
+External criteria cannot be rewritten or removed by this role. Its numbered revisions are kept in the run's
+`standard.json` under `rubric_builder`. `Assessor` (`experimental/assessor/standard.py`) judges the criteria;
+`AssessorProtocol` (`experimental/assessor/role.py`) is the shared interface for evaluation sources.
+_Avoid_: Standard critic or Critic for this role; calling it the experience critic (`experimental/experience/`, another branch), which reviews experience
+candidates across curations; optimizing the rubric to make the current answer pass.
+
+**Rubric revision scope** (`experimental/assessor/revision.py`, `RevisionScope`):
+A host-owned patch capability bound to the rubric version and source inputs. `Permission` specifies an addition's
+parent, a rewrite's exact id and fields, or a removal's id. Claimed reasons cannot expand this capability. Whole patches
+are checked before application; removal never implicitly cascades or reparents. Pending work is invalidated when its
+rubric, inputs or construction guidance changes. Records preserve the permission, actual diff and stopping reason.
+
+**Repair suite** (`experimental/assessor/validation.py`, `RepairSuite`):
+Host-owned independent cases for a specific criterion subtree, or the whole rubric with `criterion=None`. The issue
+being repaired and the property being verified are explicit; checker defects require that check's criterion scope.
+Positive and negative cases must show improvement without regression and all proposed property judgments must match
+their independent outcomes. Receipts bind the exact baseline, candidate and frozen evidence. A later suite can validate
+an earlier candidate without requiring another edit. Exact duplicate removal can instead use host-checked structural
+equivalence; evidence gaps can close when the recorded missing channel becomes available for an unchanged condition.
+
+**Meta Reviewer** (`experimental/assessor/reviewer.py`, `MetaReviewer`):
+Audits evaluation episodes against the task and materials. It returns evidenced rubric, check or evidence issues,
+plus candidate construction guidance. An Assessor configured with this role allows one audit and one corrective
+reassessment per evaluation cycle. Review agreement cannot authorize adoption, and independently observed program
+failures cannot be voted away. Unresolved diagnoses survive restart and an empty later review; unverified weakening
+does not erase their original mandatory strength. Simulation and live-session hosts enable this role with the derived
+rubric source.
+
+**Construction guidance** (`experimental/assessor/guidance.py`, `GuidanceStore`):
+Scoped principles and procedures proposed from named evaluation episodes. Episodes remain in assessment records;
+guidance retains cited snapshots for cross-run attribution, instruction text and shared candidate/active/inactive
+state. Legacy retired values remain compatibility history. The host compares the exact old and proposed instructions
+against independently verified replay cases before adoption. Only applicable active guidance is rendered into Builder
+requests, with a bounded selection. Restoring a replaced version requires fresh verification of its current context.
+_Avoid_: treating experience type, repetition or model agreement as authority; conflating this store with the worker's memory.
+
+**Experience governance** (`experimental/experience/governance.py`, `Governance`):
+A storage-independent host protocol for candidate, active and inactive role-owned experience. Admission records
+bind a candidate, its active baseline, policy and witnessed grounding, applicability and effect checks. Domains
+supply the meaning and evidence of those checks. Diagnoses bind local revision fields; usage snapshots retain the
+actual selected content and reject changed or withdrawn dependencies. `GovernanceFile` persists whole transitions
+under a file lock; the rubric store embeds the same protocol in its existing versioned JSON record.
+_Avoid_: equating a model's review approval with admission, or sharing a domain's score rule with every role.
+
+**Curator experience** (`experimental/experience/curator.py`, `CuratorExperience`):
+The Curator-specific adapter from reviewed conditional methods and independent source support to shared governance.
+It freezes a bounded package for diagnosis and generation stages, renders applicable guidance into the actual
+requests, and binds the package to local checkpoints. Source withdrawals invalidate recovery before another model
+call or installation. Domain `supported` evidence does not by itself authorize the shared active state.
+
+**Experience Builder and Experience Critic** (`experimental/experience/builder.py`, `critic.py`):
+The roles that extract conditional Curator methods from approved evidence and review their scope, expression and
+claims. `ExperiencePipeline` retains their bounded, resumable work. The Critic can accept a candidate's content;
+independent source evidence and host admission still decide whether it can guide another task.
+_Avoid_: conflating the Experience Builder with the Rubric Builder, or the Experience Critic with the Meta Reviewer.
+
+**Experience usage** (`experimental/experience/governance.py`, `Governance.capture`):
+A version-bound selection of experience for a consumer, stage, task, inputs, policy and renderer. Curator records
+which usage texts actually entered its model requests. Loading is distinct from observed application; only actual
+execution evidence can establish whether the method was followed or improved the result.
+
+**Replay corpus** (`experimental/assessor/validation.py`, `ReplayCorpus`):
+A bounded host-owned set of independently verified task executions, recorded by `Session.holdout` with their fixed
+policies and source records. It retains up to three positive and three negative outcomes for construction comparisons;
+changed or missing artifacts invalidate their labels. Repeated inputs cannot become unused held-out evidence merely
+by changing session or execution identifiers. Adaptive self-assessment never supplies the corpus labels.
+
+**External requirement** (`experimental/requirements.py`, `ExternalRequirement`):
+A reusable condition quoted from an actual external signal, with its criterion kind and situation. Analyst can retain
+it without reporting a worker defect. Session preserves it across restart and has configured assessors recheck newly
+supplied conditions on the current output; hard failures or unknowns can trigger one additional analysis. It remains
+separate from behavior gaps that need Curator attribution and repair.
+
+**Harness promotion** (`experimental/assessor/validation.py`, `experimental/iteration/session.py`):
+The host's adoption judgment about an installed experimental revision. A held-out assessment qualifies only with a
+fixed external rubric or dataset policy; revision identity, requirement context and retained execution evidence must
+remain unchanged. Independent failure rejects adoption; unavailable evidence or unresolved required conditions keep
+the revision a candidate. The record identifies the accepted revision separately from later experimental installations.
+_Avoid_: equating a completed run or a self-generated pass with promotion.
 
 **Counterpart layer** (`experimental/counterpart/`):
 The counterpart is the role on the other side of the partner's work: it holds the materials and the standard,

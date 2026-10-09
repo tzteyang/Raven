@@ -19,6 +19,7 @@ from ..curator.generation.run import GenerationError
 from ..curator.harness import Task
 from ..curator.raven_adapter.inspection import Baseline
 from ..curator.raven_adapter.worker import Worker, WorkerError
+from ..experience.curator import CuratorExperience
 from .conversation import Conversation
 from .exchange import ExchangeError
 from .run import run
@@ -42,12 +43,24 @@ async def main(args):
     async with Worker(baseline, root, timeout=args.timeout) as worker:
         print(f"Task records: {root}")
         print(f"Talk to the assistant; {DONE} ends a conversation, then leave feedback empty to finish.")
+        experience = None
         try:
+            if getattr(args, "experience_memory", None):
+                experience = CuratorExperience.from_provider(
+                    args.experience_memory,
+                    provider,
+                    access_scope=getattr(args, "experience_scope", "local"),
+                    model=roles["curator"].model,
+                    effort=roles["curator"].effort,
+                    migrate=getattr(args, "experience_migrate", False),
+                    writable_roots=(worker.root, worker.baseline.config.workspace_path),
+                )
             await run(
                 worker,
                 provider,
                 [Conversation(human, max_turns=args.turns)],
                 [human],
+                experience=experience,
                 analyst_model=roles["analyst"].model,
                 analyst_effort=roles["analyst"].effort,
                 curator_model=roles["curator"].model,
@@ -56,6 +69,9 @@ async def main(args):
             )
         except (GenerationError, ExchangeError, WorkerError, ValueError) as exc:
             print(f"Could not complete this operation: {exc}")
+        finally:
+            if experience is not None:
+                experience.close()
 
 
 def cli():
@@ -80,6 +96,15 @@ def cli():
         help=f"Run a model role at this reasoning effort ({', '.join(model_roles.EFFORTS)}); repeatable",
     )
     parser.add_argument("--rounds", type=int, default=5, help="Maximum feedback rounds")
+    parser.add_argument(
+        "--experience-memory", type=Path, help="Host-owned Curator experience directory outside Worker writable areas"
+    )
+    parser.add_argument(
+        "--experience-scope", default="local", help="Explicit access scope within the experience collection"
+    )
+    parser.add_argument(
+        "--experience-migrate", action="store_true", help="Permit the documented legacy experience database migration"
+    )
     parser.add_argument("--turns", type=int, default=20, help="Maximum messages per conversation")
     parser.add_argument("--timeout", type=float, default=120, help="Timeout for each worker operation in seconds")
     args = parser.parse_args()

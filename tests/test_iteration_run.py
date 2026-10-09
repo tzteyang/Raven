@@ -354,7 +354,7 @@ async def test_human_shows_the_reply_and_maps_terminal_input_to_the_protocols():
     assert await human.speak([Exchange("hey", execution)]) == "  Hello  "
     assert shown == ["Hi!", "Execution issue: boom"]
     assert await human.speak([]) is None
-    assert await human.evaluate({}) == Signal("human", "Ask budget first.")
+    assert await human.evaluate({}) == Signal("human", "Ask budget first.", authority="external")
     assert await human.evaluate({}) is None
 
     def eof(label):
