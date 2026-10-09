@@ -15,6 +15,7 @@ from ..curator.generation.run import Limits
 from ..curator.harness import Task
 from ..curator.raven_adapter.exploration import Withheld
 from ..curator.raven_adapter.observe import ObservedProvider, Recorder, plain
+from ..curator.raven_adapter.probe import exercise_translations
 from ..curator.workflow import improve
 from ..research.collection import CollectionLimits
 from ..research.curator import (
@@ -83,7 +84,11 @@ class Expert:
             "Research-only guidance suggests questions and is not established expert knowledge.\n"
             "Decide the division of work using the available root and child Harnesses. Explain what runs "
             "locally, what uses existing capabilities and what needs customization. "
-            "Report unsupported requirements explicitly."
+            "Report unsupported requirements explicitly.\n"
+            "Deliverables the user asks for as files are produced as files and handed over with the file "
+            "delivery tool; a reply that carries the content inline, or that describes a file not delivered, "
+            "is not delivery. Make the Harness hold this: a reply claiming delivery without a delivered file is "
+            "refused or revised, not a stylistic preference."
         )
         if objective:
             text += f"\nOwner objective:\n{objective}"
@@ -138,6 +143,7 @@ async def run(
     research_effort: str | None = None,
     research_budget: float | None = None,
     ask=None,
+    wait_for_input: bool = False,
     task: Task | None = None,
     materials: tuple[Path, ...] = (),
     research_references: tuple[Path, ...] = (),
@@ -244,6 +250,7 @@ async def run(
                 research_effort=research_effort,
                 research_budget=research_budget,
                 limits=collection_limits,
+                wait_for_input=wait_for_input,
                 replay=prepared,
             )
             report["information_version"] = information.snapshot.identity
@@ -262,6 +269,7 @@ async def run(
                     provider,
                     model=model,
                     limits=limits,
+                    probe=exercise_translations,
                     feedback={
                         "source": "owner",
                         "text": Expert.curation_request(objective),
@@ -335,14 +343,25 @@ def main() -> None:
     parser.add_argument("--request-file", type=Path, action="append", default=[])
     parser.add_argument("--curator-calls", type=int, default=24)
     parser.add_argument("--curator-queries", type=int, default=24)
+    parser.add_argument(
+        "--curator-stage-queries",
+        type=int,
+        default=12,
+        help="Exploration calls one Curator stage may spend out of --curator-queries before it must submit",
+    )
     parser.add_argument("--curator-checks", type=int, default=2)
     parser.add_argument("--curator-repairs", type=int, default=2)
+    parser.add_argument(
+        "--curator-call-timeout",
+        type=float,
+        default=600,
+        help="Seconds one Curator model call may take; a design call over a large context exceeds the 180 s default",
+    )
     parser.add_argument("--curation-timeout", type=float, default=900)
     parser.add_argument("--request-timeout", type=float, default=300)
-    parser.add_argument("--information-calls", type=int, default=16)
-    parser.add_argument("--information-reviews", type=int, default=3)
+    parser.add_argument("--information-reviews", type=int, default=2)
     parser.add_argument(
-        "--research-tasks", type=int, default=6, help="Maximum delegated research groups, not a required count"
+        "--research-tasks", type=int, default=3, help="Maximum concurrent research groups, not a required count"
     )
     parser.add_argument(
         "--guidance-calls", type=int, default=3, help="Maximum calls for optional case-guidance extraction"
@@ -353,12 +372,16 @@ def main() -> None:
     parser.add_argument(
         "--research-budget", type=float, help="Optional Claude CLI monetary cap; omitted for subscription use"
     )
-    parser.add_argument("--research-timeout", type=float, default=3600)
+    parser.add_argument("--research-window", type=float, default=1800, help="Seconds each research group may take")
+    parser.add_argument("--research-waves", type=int, default=1)
     parser.add_argument("--collection-timeout", type=float, default=3600)
     parser.add_argument("--research-revisions", type=int, default=1)
     parser.add_argument("--research-questions", type=int, default=2)
-    parser.add_argument("--submission-reserve", type=float, default=600)
+    parser.add_argument("--submission-reserve", type=float, default=900)
     parser.add_argument("--interactive", action="store_true", help="Answer information questions on the terminal")
+    parser.add_argument(
+        "--wait-for-input", action="store_true", help="Stop with needs_input while asked user questions are unanswered"
+    )
     args = parser.parse_args()
     answer_set = Answers.model_validate_json(args.answers_file.read_text()) if args.answers_file else None
 
@@ -372,23 +395,26 @@ def main() -> None:
             limits=Limits(
                 max_calls=args.curator_calls,
                 max_queries=args.curator_queries,
+                stage_queries=args.curator_stage_queries,
                 max_checks=args.curator_checks,
                 max_repairs=args.curator_repairs,
+                call_timeout=args.curator_call_timeout,
                 max_output=14000,
             ),
             curation_timeout=args.curation_timeout,
             request_timeout=args.request_timeout,
             collection_limits=CollectionLimits(
-                calls=args.information_calls,
                 reviews=args.information_reviews,
                 research_tasks=args.research_tasks,
                 guidance_calls=args.guidance_calls,
-                research_timeout=args.research_timeout,
+                research_window=args.research_window,
+                research_waves=args.research_waves,
                 total_timeout=args.collection_timeout,
                 research_revisions=args.research_revisions,
                 research_questions=args.research_questions,
                 reserve=args.submission_reserve,
             ),
+            wait_for_input=args.wait_for_input,
             researcher=None if args.research == "none" else args.research,
             research_model=args.research_model,
             research_effort=args.research_effort,

@@ -26,7 +26,7 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..automation.employee import FORWARDED
+from ..automation.employee import AREA, FORWARDED
 from .__main__ import CHAINS
 from .record import REDACTED, SUMMARY, build_record, export_record, redact
 from .scenario import Scenario
@@ -36,7 +36,13 @@ VALUE = "value.json"
 
 
 # USD per million tokens (fresh input, output, cache-read input) for models whose provider reports no cost.
-PRICES = {"deepseek/deepseek-flash": (0.30, 1.20, 0.006)}
+PRICES = {
+    "deepseek/deepseek-flash": (0.30, 1.20, 0.006),
+    # On OpenRouter, pinned to the StreamLake upstream.
+    "deepseek/deepseek-v4-flash": (0.042, 0.084, 0.0084),
+    # OpenRouter list price; a gateway that reports no cost per call is priced at it, an upper bound.
+    "openai/gpt-6.1-sol": (2.0, 10.0, 0.1),
+}
 
 
 def call_cost(attributes: dict, prices=PRICES) -> float:
@@ -53,22 +59,30 @@ def call_cost(attributes: dict, prices=PRICES) -> float:
     return sum(float(count) * rate for count, rate in zip(tokens, price, strict=True)) / 1_000_000
 
 
+def span_logs(folder: Path) -> list[Path]:
+    """The call logs of one Raven span-log folder in write order: the logs rotated into `archive/<date>/` at each day
+    boundary, then the active ones, laid out as `raven.trajectory.store.span_log_paths` lists them for a home. A run
+    that crosses midnight keeps most of its calls in the archive."""
+    return [*sorted(folder.glob("archive/*/audit-spans-*.log")), *sorted(folder.glob("audit-spans*.log*"))]
+
+
 def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, float]:
     """Model spend of one run from the calls its Raven home recorded, split by who made them.
 
     A child harness hosted beside the employee or one of its replicas keeps its own log under the run's records
-    (`children/<id>/native/traces/logs`, or under `replicas/<label>/`); every call there counts as a subagent's.
+    (`employee/children/<id>/native/traces/logs`, or the same under `replicas/<label>/`); every call there counts as a
+    subagent's.
     Replicas' own calls land in the run's Raven home with the employee's; once the home is gone, its logs are read
     from the copy the records keep under `traces/`.
     """
     parts = {"simulation": 0.0, "employee": 0.0, "subagents": 0.0}
-    logs = [(log, None) for log in (Path(state) / "traces" / "logs").glob("audit-spans*.log*")]
+    logs = [(log, None) for log in span_logs(Path(state) / "traces" / "logs")]
     if not logs and records is not None:
-        logs = [(log, None) for log in (Path(records) / "traces").glob("audit-spans*.log*")]
+        logs = [(log, None) for log in span_logs(Path(records) / "traces")]
     if records is not None:
         for owner in ("", "replicas/*/"):
-            found = Path(records).glob(f"{owner}children/*/native/traces/logs/audit-spans*.log*")
-            logs += [(log, "subagents") for log in found]
+            for folder in sorted(Path(records).glob(f"{owner}{AREA}/children/*/native/traces/logs")):
+                logs += [(log, "subagents") for log in span_logs(folder)]
     for log, fixed in logs:
         for line in log.open(errors="replace"):
             if '"llm.call"' not in line:
@@ -84,7 +98,7 @@ def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, 
     return {**parts, "total": sum(parts.values())}
 
 
-def _scrub(value) -> tuple[object, int]:
+def _scrub(value, secrets: set[str]) -> tuple[object, int]:
     if isinstance(value, dict):
         count = 0
         out = {}
@@ -92,33 +106,41 @@ def _scrub(value) -> tuple[object, int]:
             if (
                 isinstance(item, str)
                 and item
+                and item != REDACTED
                 and (key.lower() in ("apikey", "api_key") or key.endswith("_API_KEY") or redact(item) != item)
             ):
                 out[key], count = REDACTED, count + 1
+                secrets.add(item)
             else:
-                out[key], found = _scrub(item)
+                out[key], found = _scrub(item, secrets)
                 count += found
         return out, count
     if isinstance(value, list):
-        pairs = [_scrub(item) for item in value]
+        pairs = [_scrub(item, secrets) for item in value]
         return [item for item, _ in pairs], sum(found for _, found in pairs)
     return value, 0
 
 
 CONFIG_COPIES = ("config.json", "deployment.json", "deployment/*.json", ".config.rendered.*.json")
+# A credential is looked for in every other file only from this length on, so a short placeholder value in a config
+# cannot rewrite ordinary text that happens to contain it.
+SECRET_MINIMUM = 16
 
 
 def scrub(records: Path) -> int:
     """Redact credentials in every configuration copy written anywhere under a run's records: the worker's own and
     each child harness's, down to version folders, and the product configurations `employee.pin` writes under
-    `deployment/` for the employee and every replica; returns how many."""
-    total = 0
+    `deployment/` for the employee and every replica. Then every other file is searched for the credentials those
+    copies held, since a harness with a shell can read a copy and its session logs, observations and tool outputs
+    then carry the value; a text file gets the redaction mark, a binary one a mask of the same length. Returns how
+    many were redacted."""
+    total, secrets = 0, set()
     for pattern in CONFIG_COPIES:
         for path in Path(records).rglob(pattern):
             if path.is_symlink() or not path.is_file():
                 continue
             try:
-                data, count = _scrub(json.loads(path.read_text()))
+                data, count = _scrub(json.loads(path.read_text()), secrets)
             except ValueError:
                 continue
             if not count:
@@ -127,6 +149,23 @@ def scrub(records: Path) -> int:
             path.write_text(json.dumps(data, ensure_ascii=False, indent=2))
             os.chmod(path, mode)
             total += count
+    needles = [secret.encode() for secret in secrets if len(secret) >= SECRET_MINIMUM]
+    if not needles:
+        return total
+    for path in Path(records).rglob("*"):
+        if path.is_symlink() or not path.is_file():
+            continue
+        data = path.read_bytes()
+        found = sum(data.count(needle) for needle in needles)
+        if not found:
+            continue
+        binary = b"\0" in data
+        for needle in needles:
+            data = data.replace(needle, b"*" * len(needle) if binary else REDACTED.encode())
+        mode = path.stat().st_mode & 0o777
+        path.write_bytes(data)
+        os.chmod(path, mode)
+        total += found
     return total
 
 
@@ -174,18 +213,12 @@ def command(plan: list[str], args, *, config: Path, workdir: Path, records: Path
     argv += ["--rounds", str(args.rounds), "--turns", str(args.turns), "--repeats", str(args.repeats)]
     argv += ["--timeout", str(args.timeout)]
     for flag, value in (
-        ("--curator-model", args.curator_model),
-        ("--analyst-model", args.analyst_model),
-        ("--simulation-model", args.simulation_model),
-        ("--traveller-model", args.traveller_model),
         ("--curator-calls", getattr(args, "curator_calls", None)),
         ("--curator-queries", getattr(args, "curator_queries", None)),
-        ("--subagent-model", args.subagent_model),
-        ("--curator-effort", getattr(args, "curator_effort", None)),
-        ("--traveller-effort", getattr(args, "traveller_effort", None)),
     ):
         if value:
             argv += [flag, str(value)]
+    argv += [item for flag in ("model", "effort") for pair in getattr(args, flag, ()) for item in (f"--{flag}", pair)]
     if args.cards:
         argv += ["--cards", *args.cards]
     if getattr(args, "concurrent_drills", 1) > 1:
@@ -284,7 +317,6 @@ def stop(run: Run, reason: str, grace: float = 20) -> None:
 def finish(run: Run, args) -> dict:
     """Leave a run's records with its evidence and without credentials; returns its summary."""
     run.ended = run.ended or time.time()
-    redacted = scrub(run.records) if run.records.is_dir() else 0
     traces, workdir = run.state / "traces" / "logs", run.state / "workdir"
     if run.records.is_dir():
         if traces.is_dir():
@@ -295,6 +327,7 @@ def finish(run: Run, args) -> dict:
             if (run.state / name).is_file():
                 text = (run.state / name).read_text(errors="replace")
                 (run.records / name).write_text(redact(text))
+    redacted = scrub(run.records) if run.records.is_dir() else 0
     isolation = None
     try:
         from ..automation.isolation import write as check_isolation
@@ -428,15 +461,10 @@ def cli():
     parser.add_argument("--cards", nargs="+")
     parser.add_argument("--concurrent-drills", type=int, default=1, help="Drills each run plays at once in a round")
     parser.add_argument("--timeout", type=float, default=3600)
-    parser.add_argument("--curator-model")
-    parser.add_argument("--analyst-model")
-    parser.add_argument("--simulation-model")
-    parser.add_argument("--traveller-model")
+    parser.add_argument("--model", action="append", default=[], metavar="ROLE=MODEL", help="Passed to every run")
+    parser.add_argument("--effort", action="append", default=[], metavar="ROLE=LEVEL", help="Passed to every run")
     parser.add_argument("--curator-calls", type=int)
     parser.add_argument("--curator-queries", type=int)
-    parser.add_argument("--subagent-model")
-    parser.add_argument("--curator-effort", choices=("low", "medium", "high"))
-    parser.add_argument("--traveller-effort", choices=("low", "medium", "high"))
     parser.add_argument(
         "--budget", type=float, help="Stop every running run once the suite has spent this many dollars"
     )

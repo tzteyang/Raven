@@ -236,7 +236,7 @@ def prices(rules: Rules, trip: Trip) -> dict:
     for name, product in rules.products.items():
         expected = rules.expected(name, trip)
         if expected is None:
-            by_product[name] = "no price: the party is over this product's cap or the date is in no season"
+            by_product[name] = "no price: the counterpart is over this product's cap or the date is in no season"
             continue
         row = {
             "base_nights": product.base,

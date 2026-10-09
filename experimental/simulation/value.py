@@ -37,12 +37,13 @@ import argparse
 import json
 from pathlib import Path
 
+from ..counterpart.case import delivered_for
+
 MIN_ROUNDS = 2
 CULTIVATED = 2
 TOLERATED = 1
 HARD = frozenset({"planning", "action"})
 GATES = frozenset({"action.tool_gates", "action.hooks"})
-DECK = ".pptx"
 
 
 def _completed(record: dict) -> list[dict]:
@@ -51,16 +52,8 @@ def _completed(record: dict) -> list[dict]:
     ]
 
 
-def _delivered(item: dict) -> bool:
-    drills = item.get("drills", [])
-    return bool(drills) and all(
-        any(
-            str(file.get("name", "")).lower().endswith(DECK)
-            for turn in drill.get("exchanges", [])
-            for file in turn.get("delivered", [])
-        )
-        for drill in drills
-    )
+def _delivered(record: dict, item: dict) -> bool:
+    return delivered_for(record.get("run", {}).get("scenario"))(item)
 
 
 def reason_key(scope: str, target: str, reason: str) -> str:
@@ -261,7 +254,7 @@ def judge(record: dict) -> dict:
     completed = _completed(record)
     grown = cultivated(record)
     found, held = cases(record)
-    delivered = bool(completed) and _delivered(completed[-1])
+    delivered = bool(completed) and _delivered(record, completed[-1])
     met = core(record)
     checks = {
         "rounds": {"ok": len(completed) >= MIN_ROUNDS, "detail": f"{len(completed)} completed rounds after onboarding"},
@@ -277,9 +270,9 @@ def judge(record: dict) -> dict:
         "core": met,
         "delivered": {
             "ok": delivered,
-            "detail": "every drill of the last round delivered a deck"
+            "detail": "every drill of the last round handed over what the case delivers"
             if delivered
-            else "the last round lacks a deck in some drill",
+            else "some drill of the last round handed nothing over",
         },
         "isolated": _isolated(record.get("isolation")),
     }

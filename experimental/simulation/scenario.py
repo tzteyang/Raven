@@ -74,12 +74,12 @@ class Scenario:
 
     @classmethod
     def of(cls, read: Contract) -> "Scenario":
-        """The agency's view of a loaded contract: the materials and checks the party may receive. The agency judges
+        """The agency's view of a loaded contract: the materials and checks the counterpart may receive. The agency judges
         by checks, so a scenario without any it may read is refused."""
-        checks = [check for check in read.statements.checks if "party" in check.visibility]
+        checks = [check for check in read.statements.checks if "counterpart" in check.visibility]
         if not checks:
             raise ValueError(f"the scenario has no checks for the agency to judge by: {read.root}")
-        held = {name: material for name, material in read.materials.items() if "party" in material.visibility}
+        held = {name: material for name, material in read.materials.items() if "counterpart" in material.visibility}
         return cls(
             read.root,
             read.situation.profile,

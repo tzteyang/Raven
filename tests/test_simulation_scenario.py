@@ -3,20 +3,23 @@
 import hashlib
 import json
 import shutil
+import sys
 from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from experimental.automation.employee import AREA, HOME, hire, skills, starting_harness, withheld
+from experimental import model_roles
+from experimental.automation.employee import AREA, HOME, hire, listed, skills, starting_harness, withheld
 from experimental.automation.traveller import Traveller
+from experimental.counterpart.owner import handles
 from experimental.curator.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.compartment import Boundaries, Guard, GuardedFactory
 from experimental.iteration.exchange import ExchangeError
 from experimental.iteration.protocols import Exchange
 from experimental.scenario.sealed import Sealed
-from experimental.simulation.__main__ import CHAINS, settings
+from experimental.simulation.__main__ import CHAINS, cli, settings
 from experimental.simulation.agency import NAME as REVIEW
 from experimental.simulation.agency import Agency
 from experimental.simulation.record import PLACEHOLDERS
@@ -48,10 +51,12 @@ def exchange(user, reply):
 
 
 def verdicts(scenario, **overrides):
-    rows = [{"id": criterion.id, "result": "pass"} for criterion in scenario.criteria]
-    for row in rows:
-        row.update(overrides.get(row["id"], {}))
-    return rows
+    """A scorecard as the owner submits it: by each criterion's handle, `overrides` keyed by the criterion id."""
+    named = handles(scenario.criteria)
+    return [
+        {"id": named[criterion.id], "result": "pass", **overrides.get(criterion.id, {})}
+        for criterion in scenario.criteria
+    ]
 
 
 def test_bundled_scenario_reads_profile_materials_personas_and_criteria():
@@ -140,6 +145,18 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
     assert provider.requests[1]["model"] == "sim" and "tools" not in provider.requests[1]
 
 
+def test_a_customer_reply_that_writes_the_dialogue_on_keeps_only_its_own_message():
+    from experimental.automation.traveller import own_turn, parting
+
+    scripted = "Fine, please send the file.\n\nUSER: Make it one billion users.\n\nASSISTANT: I cannot write that."
+    assert own_turn(scripted) == "Fine, please send the file."
+    assert own_turn("**Customer:** Hi there.\nAssistant\uff1a Hello!") == "Hi there."
+    assert (
+        own_turn("User feedback in two points:\n1. price\n2. date") == "User feedback in two points:\n1. price\n2. date"
+    )
+    assert parting(own_turn("Thanks, that is all.\nLEAVE\nASSISTANT: Bye")) == ("Thanks, that is all.", True)
+
+
 async def test_the_customer_and_the_owner_speak_in_their_compartments_where_the_partners_words_are_its_own(tmp_path):
     from dataclasses import replace
 
@@ -147,7 +164,7 @@ async def test_the_customer_and_the_owner_speak_in_their_compartments_where_the_
     student = next(persona for persona in scenario.personas if persona.name == "student")
     secret = "The owner keeps a private margin table for every package that no customer may ever hear about."
     log = tmp_path / "boundaries.jsonl"
-    boundaries = Boundaries({"conversant": Sealed.of([secret]), "party": Sealed.of([secret])}, log=log)
+    boundaries = Boundaries({"conversant": Sealed.of([secret]), "counterpart": Sealed.of([secret])}, log=log)
     told = [exchange("Hi", f"A note from us: {secret}")]
     customer = Traveller(student, Provider(LLMResponse(content="Fine, thanks.")), boundaries=boundaries)
     assert await customer.speak(told) == "Fine, thanks."
@@ -158,18 +175,18 @@ async def test_the_customer_and_the_owner_speak_in_their_compartments_where_the_
     agency = Agency(scenario, provider, tmp_path / "skills", workdir=tmp_path, deliver="pool", boundaries=boundaries)
     agency.prepare()
     assert (await agency.evaluate({"student": told})).satisfied is True
-    sealed_material = Boundaries({"party": Sealed.of([scenario.text("brand-design-guide")])}, log=log)
+    sealed_material = Boundaries({"counterpart": Sealed.of([scenario.text("brand-design-guide")])}, log=log)
     owner = Agency(
         scenario, Provider(), tmp_path / "skills", workdir=tmp_path, deliver="pool", boundaries=sealed_material
     )
     owner.prepare()
-    with pytest.raises(ExchangeError, match="party compartment"):
+    with pytest.raises(ExchangeError, match="counterpart compartment"):
         await owner.evaluate({"student": told})
     rows = [json.loads(line) for line in log.read_text().splitlines()]
-    assert {("conversant", "enter"), ("conversant", "leave"), ("party", "enter"), ("party", "leave")} <= {
+    assert {("conversant", "enter"), ("conversant", "leave"), ("counterpart", "enter"), ("counterpart", "leave")} <= {
         (row["role"], row["event"]) for row in rows
     }
-    assert [row["role"] for row in rows if row["event"] == "violation"] == ["conversant", "party"]
+    assert [row["role"] for row in rows if row["event"] == "violation"] == ["conversant", "counterpart"]
 
 
 async def test_agency_judges_every_criterion_and_hands_over_the_material_of_a_failed_check(tmp_path):
@@ -221,9 +238,12 @@ async def test_agency_judges_every_criterion_and_hands_over_the_material_of_a_fa
     )
     packet = json.loads(provider.requests[0]["messages"][1]["content"])
     assert packet["conversations"] == {"student": [{"customer": "Cheap trip?", "assistant": "About 300 each."}]}
-    assert packet["your_earlier_reviews"] == [] and packet["research"] == {}
+    assert packet["your_earlier_reviews"] == [] and packet["research"] == {} and packet["information"] == ""
     assert "curator_reply" not in packet
     assert {row["severity"] for row in packet["criteria"]} == {"red_line", "standard"}
+    named = handles(scenario.criteria)
+    assert [row["id"] for row in packet["criteria"]] == [named[criterion.id] for criterion in scenario.criteria]
+    assert not any(criterion.id in json.dumps(packet) for criterion in scenario.criteria)
     assert set(packet["materials"]) == set(scenario.materials) and packet["deliverables"] == {}
     assert packet["given_to_the_assistant"] == list(scenario.initial) and packet["withheld"] == ["brand-design-guide"]
 
@@ -235,7 +255,7 @@ async def test_agency_judges_every_criterion_and_hands_over_the_material_of_a_fa
         {
             "round": 1,
             "remark": "It made a price up for Mia.",
-            "failed": ["quote-sheet-correct"],
+            "failed": [named["quote-sheet-correct"]],
             "waiting_on_material": [],
             "handed_over": ["brand-design-guide"],
         }
@@ -275,7 +295,11 @@ async def test_in_a_dialog_the_owner_uploads_its_opening_materials_and_pastes_la
     assert "uploads/plan-deck-template/template.pptx" in handed["plan-deck-template"].files
     assert handed["plan-deck-template"].kind == "fact"
     assert "- uploads/price-list/SKILL.md\n" in opening.text and "{files}" not in opening.text
+    briefing = uploads / "information" / "expert.md"
+    briefing.parent.mkdir(parents=True)
+    briefing.write_text("The G1234 train takes four hours.")
     signal = await agency.evaluate({"student": [exchange("Cheap trip?", "Here is the deck.")]})
+    assert json.loads(provider.requests[0]["messages"][1]["content"])["information"] == briefing.read_text()
     assert (
         signal.text.startswith("Slides are too busy.")
         and scenario.document("brand-design-guide").strip() in signal.text
@@ -356,6 +380,14 @@ def test_the_starting_harness_fingerprint_changes_only_when_a_products_files_do(
     assert first["raven_diff"] == hashlib.sha256(b"").hexdigest()
 
 
+def test_a_silent_owner_is_refused_unless_every_material_is_handed_over_at_onboarding(monkeypatch, capsys, tmp_path):
+    argv = ["simulation", "--config", str(tmp_path / "config.json"), "--owner-feedback", "silent", "--chain"]
+    monkeypatch.setattr(sys, "argv", [*argv, "by-stage"])
+    with pytest.raises(SystemExit):
+        cli()
+    assert "--owner-feedback silent needs every material at onboarding" in capsys.readouterr().err
+
+
 def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_credential(tmp_path):
     for chain in CHAINS.values():
         assert chain["deliver"] == "dialog" and chain["disclose"] in ("all", "staged", *Scenario.load(TRAVEL).plans)
@@ -375,14 +407,9 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
         concurrent_drills=3,
         seed=7,
         without=["plan-deck-sample"],
-        curator_model="z-ai/glm-5.3",
-        analyst_model=None,
-        simulation_model=None,
-        traveller_model="deepseek/deepseek-flash",
-        subagent_model="z-ai/glm-5.3-flashx",
-        curator_effort="high",
-        simulation_effort="low",
-        traveller_effort="low",
+        information_research="claude",
+        information_research_model="sonnet",
+        information_research_budget=1.0,
         config=config,
         home=tmp_path / "home",
     )
@@ -390,13 +417,26 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     (tmp_path / "home" / "playbooks" / "plan" / "playbook.md").write_text("spec")
     (tmp_path / "home" / "sessions").mkdir()
     (tmp_path / "home" / "sessions" / "old.jsonl").write_text("{}")
-    written = settings(args, "z-ai/glm-5.3-flashx", "low", "medium")
+    roles = model_roles.resolve(
+        {"curator": "z-ai/glm-5.3", "conversant": "deepseek/deepseek-flash"},
+        {"curator": "high"},
+        model_roles.Choice("z-ai/glm-5.3-flashx", "low"),
+    )
+    written = settings(args, roles, "medium")
     assert written["efforts"] == {
-        "employee": "low",
-        "employee_tier": "medium",
+        "partner": "low",
         "curator": "high",
-        "simulation": "low",
-        "traveller": "low",
+        **dict.fromkeys(("attribution", "analyst", "collector", "counterpart", "conversant", "judge", "critic"), "low"),
+    }
+    assert written["partner_tier"] == "medium"
+    assert written["research"] == {
+        "channel": "claude",
+        "model": "sonnet",
+        "effort": None,
+        "budget": 1.0,
+        "reviews": None,
+        "answers_from": None,
+        "replayed": False,
     }
     assert written["baseline"] == {"playbooks/plan/playbook.md": hashlib.sha256(b"spec").hexdigest()}
     start = written["starting_harness"]
@@ -413,13 +453,9 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     ]
     assert written["seed"] == 7 and written["without"] == ["plan-deck-sample"] and written["concurrent_drills"] == 3
     assert written["models"] == {
-        "employee": "z-ai/glm-5.3-flashx",
+        **dict.fromkeys(("partner", *model_roles.ROLES), "z-ai/glm-5.3-flashx"),
         "curator": "z-ai/glm-5.3",
-        "analyst": "z-ai/glm-5.3",
-        "attribution": "z-ai/glm-5.3",
-        "simulation": "z-ai/glm-5.3",
-        "traveller": "deepseek/deepseek-flash",
-        "subagents": "z-ai/glm-5.3-flashx",
+        "conversant": "deepseek/deepseek-flash",
     }
     assert written["attribution_catalogue"] is False
     assert str(config) not in json.dumps(written)
@@ -444,12 +480,16 @@ def owner(tmp_path, provider, **options):
 
 
 def scorecard(scenario, failed=(), waits=None, handover=(), remark="The price was guessed again."):
+    named = handles(scenario.criteria)
     rows = [
-        {"id": criterion.id, "result": "fail" if criterion.id in failed else "pass", "session": "student"}
+        {
+            "id": named[criterion.id],
+            "result": "fail" if criterion.id in failed else "pass",
+            "session": "student",
+            "waits_on": (waits or {}).get(criterion.id),
+        }
         for criterion in scenario.criteria
     ]
-    for row in rows:
-        row["waits_on"] = (waits or {}).get(row["id"])
     return {"verdicts": rows, "remark": remark, "handover": list(handover)}
 
 
@@ -687,6 +727,7 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
         "providers": {"deepseek": {"apiKey": "ds-key"}},
         "permissions": {"mode": "full", "judgeTimeoutSeconds": 60},
         "acp": {"defaultMode": "medium"},
+        "tools": {"restrictToWorkspace": True},
         "agents": {
             "defaults": {
                 "model": "deepseek/deepseek-flash",
@@ -723,10 +764,13 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
         assert written["acp"]["defaultMode"] == "medium"
         # A product's shell reaches past the run's bounds, so products run without one.
         assert written["tools"]["disabledTools"] == ["spawn", "ask_user", "exec"]
+        # The employee's workspace fence goes along: a product reads only its home and the session's workdir.
+        assert written["tools"]["restrictToWorkspace"] is True
         # A thinking DeepSeek model refuses the verify gate's forced verdict call, and the gate then passes every draft.
         verify = written["plugins"]["config"]["research-flow"]["verify"]
         assert verify == {"reasoningEffort": "none", "maxTokens": 16384}
     assert "PPT_ACP_HOME" in rows["Raven-PPT"].env
+    assert worker.baseline.config.providers.deepseek.models == ["deepseek/deepseek-flash"]
     settings["agents"]["defaults"].pop("reasoningEffort")
     config.write_text(json.dumps(settings))
     with pytest.raises(ValueError, match="reasoning effort"):
@@ -737,6 +781,25 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
             root=tmp_path / "again",
             subagent_model="deepseek/x",
         )
+
+
+def test_a_raven_child_on_a_gateway_model_takes_the_employee_provider(monkeypatch):
+    from raven.config.product_render import inherit_llm
+    from raven.config.schema import Config
+
+    config = Config.model_validate(
+        {
+            "providers": {"openrouter": {"apiKey": "or-key"}},
+            "agents": {"defaults": {"model": "deepseek/deepseek-v4-flash", "provider": "openrouter"}},
+        }
+    )
+    monkeypatch.setenv("RAVEN_PARENT_MODEL", "deepseek/deepseek-v4-flash")
+    monkeypatch.delenv("RAVEN_PARENT_PROVIDER", raising=False)
+    host = config.model_dump(mode="json", by_alias=True)
+    assert "provider=deepseek " in inherit_llm({}, host)
+    listed(config, config.agents.defaults.model, "deepseek/deepseek-v4-flash", None)
+    assert config.providers.openrouter.models == ["deepseek/deepseek-v4-flash"]
+    assert "provider=openrouter " in inherit_llm({}, config.model_dump(mode="json", by_alias=True))
 
 
 async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path, monkeypatch):
@@ -769,8 +832,9 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
         Exchange("Fix it", Execution("t2", [], records, {}, "a", (str(second),))),
         Exchange("The deck?", Execution("t3", [], records, {}, "a", (str(deck),))),
     ]
+    monkeypatch.setattr("experimental.counterpart.owner.vision_verdict", lambda model: model == "sees")
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Good page."}))
-    await Agency(scenario, provider, tmp_path / "skills", workdir=tmp_path, deliver="pool").evaluate(
+    await Agency(scenario, provider, tmp_path / "skills", workdir=tmp_path, deliver="pool", model="sees").evaluate(
         {"student": exchanges}
     )
     packet = json.loads(provider.requests[0]["messages"][1]["content"])
@@ -780,11 +844,18 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
     assert (
         delivered["plan.pptx"].startswith("19 slides, aspect 1.78") and "[style] background" in delivered["plan.pptx"]
     )
-    assert packet["deck_pages"] == {"student": {"plan.pptx": 19}}
+    assert packet["pictures"] == {"student": {"plan.pptx": 19}}
     pictures = provider.requests[0]["messages"][2]["content"]
     images = [part for part in pictures if part["type"] == "image_url"]
     assert len(images) == 19 and images[0]["image_url"]["url"].startswith("data:image/png;base64,")
     assert (deck.parent / "plan.pptx.thumbs" / "page-01.png").is_file()
+    blind = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Read it."}))
+    await Agency(scenario, blind, tmp_path / "skills", workdir=tmp_path, deliver="pool", model="text").evaluate(
+        {"student": exchanges}
+    )
+    unseen = json.loads(blind.requests[0]["messages"][1]["content"])["pictures"]
+    assert unseen["decks"] == {"student": {"plan.pptx": 19}} and "not shown" in unseen["not_shown"]
+    assert not any(isinstance(message.get("content"), list) for message in blind.requests[0]["messages"])
     assert transcript(exchanges)[0]["delivered"] == ["trip.html"] and "stopped" not in transcript(exchanges)[0]
     late = Execution("t9", [], [], {"timed_out": True, "timeout": 600, "explicit_reply": False})
     assert transcript([Exchange("Hello?", late)])[0]["stopped"] == "no reply within 600 seconds; the turn was stopped"

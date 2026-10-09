@@ -13,7 +13,9 @@ from experimental.analyst.activity import activity
 from experimental.analyst.role import Analyst
 from experimental.analyst.run import NAME as FEEDBACK
 from experimental.automation.channel import seen
+from experimental.counterpart.owner import back_office, handles
 from experimental.curator.harness import Task
+from experimental.curator.raven_adapter.action.runtime import REFUSED
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.conversation import Conversation
 from experimental.iteration.history import entry
@@ -24,6 +26,7 @@ from experimental.simulation.agency import NAME as REVIEW
 from experimental.simulation.agency import Agency, reports
 from experimental.simulation.scenario import BUNDLED, Scenario
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
+from raven.security.trust import wrap_untrusted
 
 TRAVEL = BUNDLED / "travel_agency"
 CAPTION = "Your plan deck is ready: quote HL-Q-1026-4P, prices and dates match the quote sheet."
@@ -60,7 +63,9 @@ def delivery_turn():
                 "name": "",
                 "ok": True,
                 "result_preview": f"Delivered 1 file(s): {DECK} (241.4 KB).",
-                "metadata": {"raven_delivery": {"message": CAPTION, "files": [{"name": DECK}]}},
+                "metadata": {
+                    "raven_delivery": {"message": CAPTION, "files": [{"path": f"/work/decks/{DECK}", "name": DECK}]}
+                },
             },
         },
         {"kind": "runner.event", "event_type": "Progress", "event": {"content": "Checking the price list now"}},
@@ -94,10 +99,56 @@ def played(records, deliverables=()):
 
 
 def test_the_customer_and_the_owner_read_the_delivery_caption_and_never_progress_lines():
-    text = seen(delivery_turn(), [DECK])
+    text = seen(delivery_turn())
     assert "One moment." in text and CAPTION in text
     assert "Checking the price list" not in text
-    assert CAPTION not in seen(delivery_turn(), [])
+
+
+def test_a_delivery_the_action_strategy_refused_sent_nothing_so_its_caption_is_not_read():
+    rows = delivery_turn()
+    rows[2]["event"].update(metadata=None, result_preview="Action refused this call [r1]: hold the deck for review.")
+    assert seen(rows) == "One moment."
+
+
+def test_a_delivery_naming_its_files_as_bare_strings_delivers_nothing_and_its_caption_is_not_read():
+    rows = [
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"name": "deliver_files", "phase": "start", "arguments": {"message": CAPTION, "files": [DECK]}},
+        },
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"name": "", "phase": "complete", "ok": False, "result_preview": "Error: delivered no files."},
+        },
+    ]
+    assert seen(rows) == ""
+
+
+def test_the_owner_lists_a_delivery_naming_its_files_as_bare_strings_without_any_file():
+    rows = [
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"name": "deliver_files", "phase": "start", "tool_call_id": "d1", "arguments": {"files": [DECK]}},
+        },
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"name": "deliver_files", "phase": "complete", "tool_call_id": "d1", "ok": True},
+        },
+    ]
+    assert back_office([played(rows)]) == [{"turn": 1, "action": "deliver_files", "target": [], "ok": True}]
+
+
+def test_the_owner_sees_a_call_the_action_strategy_refused_as_failed():
+    rows = delivery_turn()
+    refusal = f"{REFUSED} [r1]: hold the deck for review."
+    rows[2]["event"].update(metadata=None, result_preview=refusal)
+    assert back_office([played(rows)]) == [
+        {"turn": 1, "action": "deliver_files", "target": [DECK], "ok": False, "error": refusal}
+    ]
 
 
 def test_the_owner_reads_what_each_colleague_was_asked_and_answered_once():
@@ -125,6 +176,36 @@ def test_the_owner_reads_what_each_colleague_was_asked_and_answered_once():
     assert found == [
         {"task": "Research Xi'an for the deck.", "report": "G1234 Hefei to Xi'an, 4h (source: 12306)."},
         {"task": "DAG run r1: node 'design-brief' needs your decision.", "report": "The brief is filed as brief.md."},
+    ]
+
+
+def test_the_owner_reads_a_delegations_whole_hand_over_and_its_failed_calls_once():
+    """Raven's announcement of a delegation's result, also quoted as JSON in a strategy's inference request."""
+    task = "Watch the six stores three times.\n\n" + "Run store_read.py on Local lab with --live. " * 40
+    announced = (
+        "[Runtime Context - metadata only]\nChannel: curator\n\n\n[Subagent 'Watch six stores' returned]\n\n"
+        f"Task: {task}\n\nInstance handle: w1 -- pass it as spawn's `instance` to continue this same conversation.\n"
+        f"Working directory: /work\n\nResult:\n{wrap_untrusted('Three looks, no change.', source='subagent')}"
+        "\n\nRecord: /work/nodes/watch.out.md\n\n[raven] 1 of this run's 18 tool calls failed. Say so, and do not "
+        "describe the task as done on the strength of the text above. The calls it named, in its own words:\n"
+        f"{wrap_untrusted('exec store_read.py', source='subagent')}\n\nSummarize this naturally for the user."
+    )
+    turn = {"kind": "provider.request", "parameters": {"messages": [{"role": "user", "content": announced}]}}
+    quoted = json.dumps({"evidence": [{"text": announced}]}, ensure_ascii=False)
+    inference = {"kind": "provider.request", "parameters": {"messages": [{"role": "user", "content": quoted}]}}
+    cut_marker = "[1 more items in the child's log]"
+    trimmed = {
+        "kind": "provider.request",
+        "parameters": {"messages": [cut_marker, {"role": "user", "content": announced}]},
+    }
+    found = reports([played([turn, inference, trimmed])])
+    assert len(task) > 1_500
+    assert found == [
+        {
+            "task": task.strip(),
+            "report": "Three looks, no change.",
+            "failed_calls": "1 of 18 failed: exec store_read.py",
+        }
     ]
 
 
@@ -263,9 +344,10 @@ def test_the_owner_reads_what_the_employee_filed_and_not_the_hosts_bookkeeping(t
 async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_neither_analyst_nor_curator(tmp_path):
     scenario = Scenario.load(TRAVEL)
     rule = next(criterion for criterion in scenario.criteria if criterion.id == "no-internal-chatter")
+    named = handles(scenario.criteria)
     verdicts = [
         {
-            "id": c.id,
+            "id": named[c.id],
             "result": "fail" if c.id == rule.id else "pass",
             "session": "family",
             "actual": "[internal material request]",

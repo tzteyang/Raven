@@ -1,12 +1,12 @@
-"""When the party hands each material over: the disclosure schedule of one cultivation.
+"""When the counterpart hands each material over: the disclosure schedule of one cultivation.
 
 The contract declares what a scenario allows (`Exchange.initial` and the named `Exchange.plans`); a run chooses one,
-and `Disclosure.of` turns that choice into the one rule every party follows. `all` hands everything over at
-onboarding; `staged` hands over the initial set, then whatever the party chooses with each review; a named plan or an
+and `Disclosure.of` turns that choice into the one rule every counterpart follows. `all` hands everything over at
+onboarding; `staged` hands over the initial set, then whatever the counterpart chooses with each review; a named plan or an
 explicit partition gives step 0 at onboarding and step k with the review of round k. With `rounds`, whatever is still
 withheld is due with the review before the last round, so the last round tries a partner that has everything.
 
-The schedule is the party's: the loop never reads it and only carries what the party hands over
+The schedule is the counterpart's: the loop never reads it and only carries what the counterpart hands over
 (`Signal.attachments`), so a person in the Studio and the simulated owner follow the same schedule the same way.
 """
 
@@ -28,7 +28,7 @@ def partition(steps, materials: Iterable[str]) -> tuple[tuple[str, ...], ...]:
 @dataclass(frozen=True)
 class Disclosure:
     """`plan` names the choice (`all`, `staged`, a plan's name, or `partition`); `opening` is handed over at
-    onboarding, `steps[k]` with the review of round k; `chooses` says the party picks what else to hand over."""
+    onboarding, `steps[k]` with the review of round k; `chooses` says the counterpart picks what else to hand over."""
 
     plan: str
     materials: tuple[str, ...]
@@ -70,7 +70,7 @@ class Disclosure:
 
     def due(self, review: int, released: Iterable[str] = ()) -> list[str]:
         """What the schedule hands over with the review of round `review`, leaving out what is already released,
-        whatever the party chooses besides."""
+        whatever the counterpart chooses besides."""
         released = set(released)
         due = list(self.steps[review]) if review < len(self.steps) else []
         if self.rounds is not None and review >= self.rounds - 1:
