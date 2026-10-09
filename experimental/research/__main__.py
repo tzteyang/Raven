@@ -104,16 +104,16 @@ async def research(args):
 
     answerer = terminal_answer if args.interactive else None
     if getattr(args, "answer_material", None):
-        from ..simulation.information import PartyAnswers
+        from ..simulation.information import CounterpartAnswers
 
         if scenario is None:
             raise ValueError("simulated answers require a Scenario")
-        answerer = PartyAnswers(
+        answerer = CounterpartAnswers(
             native,
             scenario,
             args.answer_material,
             released,
-            records=root / "party-answers",
+            records=root / "counterpart-answers",
             model=args.model,
             timeout=args.timeout,
         )
@@ -133,12 +133,13 @@ async def research(args):
             research_effort=getattr(args, "research_effort", None),
             research_budget=args.research_budget,
             ask=answerer,
+            wait_for_input=args.wait_for_input,
             admit=guard.check if guard else None,
             limits=CollectionLimits(
-                calls=args.calls,
                 research_tasks=args.research_tasks,
                 timeout=args.timeout,
-                research_timeout=args.research_timeout,
+                research_window=args.research_window,
+                research_waves=args.research_waves,
                 total_timeout=args.collection_timeout,
                 research_revisions=args.research_revisions,
                 research_questions=args.research_questions,
@@ -193,7 +194,7 @@ def cli():
     parser.add_argument(
         "--submission-reserve",
         type=float,
-        default=600,
+        default=900,
         help="Seconds of the collection deadline kept for submitting the description and its review",
     )
     parser.add_argument("--research-model")
@@ -201,14 +202,17 @@ def cli():
     parser.add_argument(
         "--research-budget", type=float, help="Optional Claude CLI monetary cap; omitted for subscription use"
     )
-    parser.add_argument("--research-tasks", type=int, default=6)
-    parser.add_argument("--research-timeout", type=float, default=3600)
-    parser.add_argument("--calls", type=int, default=16)
+    parser.add_argument("--research-tasks", type=int, default=3, help="Maximum concurrent research groups")
+    parser.add_argument("--research-window", type=float, default=1800, help="Seconds each research group may take")
+    parser.add_argument("--research-waves", type=int, default=1)
     parser.add_argument("--timeout", type=float, default=300)
+    parser.add_argument(
+        "--wait-for-input", action="store_true", help="Stop with needs_input while asked user questions are unanswered"
+    )
     answers = parser.add_mutually_exclusive_group()
     answers.add_argument("--interactive", action="store_true")
     answers.add_argument(
-        "--answer-material", nargs="+", help="Scenario material the simulated party may use to answer questions"
+        "--answer-material", nargs="+", help="Scenario material the simulated counterpart may use to answer questions"
     )
     args = parser.parse_args()
     if not args.scenario and args.release is not None:

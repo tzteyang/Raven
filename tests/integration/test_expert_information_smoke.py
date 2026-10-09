@@ -11,17 +11,28 @@ from experimental.curator.raven_adapter.exploration import Exploration, Withheld
 from experimental.curator.raven_adapter.inspection import Inspection, file_source
 from experimental.curator.raven_adapter.targets import catalogue
 from experimental.research import curator
-from experimental.research.collection import GUIDANCE, RESEARCH, REVIEW, SUBMIT
+from experimental.research.collection import ASSESS, PLAN, REVIEW, SUBMIT
 from experimental.research.guidance import SUBMIT as SUBMIT_GUIDANCE
 from experimental.research.information import Request, Result, Review, Snapshot
 from experimental.research.inquiry import Inquiry
 from raven.config.schema import Config
-from tests.research_helpers import Provider, research_brief, response
+from tests.research_helpers import Provider, response
 from tests.test_harness_curator_exploration import Executor
-from tests.test_research_collection import accepted, description, snapshot
+from tests.test_research_collection import accepted, assessment, description, group, need, plan, snapshot
 from tests.test_research_inquiry import FOUND, PAGE, TEXT, Pages
 
 pytestmark = pytest.mark.integration
+
+
+def research_review(*admitted, withheld=(), issues=(), needs_new_sources=False, reason="The delivery is supported."):
+    return {
+        "reason": reason,
+        "findings": [{"id": id, "admit": True} for id in admitted]
+        + [{"id": id, "admit": False, "reason": why} for id, why in withheld],
+        "synthesis_admitted": not issues,
+        "issues": list(issues),
+        "needs_new_sources": needs_new_sources,
+    }
 
 
 def host(tmp_path, monkeypatch):
@@ -72,6 +83,7 @@ async def test_native_file_and_shell_evidence_is_reviewed_without_deploying_the_
     provider = Provider(
         response("read_file", {"path": "source/raven/evidence.py"}),
         response("exec", {"command": "cat source/raven/evidence.py"}),
+        response(ASSESS, assessment(evidence=("evidence-3", "evidence-4"))),
         response(
             SUBMIT, description(evidence=("evidence-3", "evidence-4"), text="The inspected module defines VALUE as 42.")
         ),
@@ -104,6 +116,7 @@ async def test_modified_source_snapshot_invalidates_even_an_accepted_collection(
     worker, reference, executor, _ = host(tmp_path, monkeypatch)
     provider = Provider(
         response("exec", {"command": "printf changed > source/raven/evidence.py"}),
+        response(ASSESS, assessment()),
         response(SUBMIT, description()),
         response(REVIEW, accepted()),
     )
@@ -131,18 +144,14 @@ async def test_supplied_interaction_content_can_satisfy_collection_without_resea
     material = tmp_path / "provided.md"
     material.write_text("Use the evidence checklist supplied by the owner.")
 
-    def read_material(kwargs):
-        packet = json.loads(kwargs["messages"][1]["content"])
-        context = json.loads(packet["context"]["result"])
-        source = next(iter(context["interaction_sources"].values()))
-        return response("read_file", {"path": source["path"]})
-
     async def unused(*args, **kwargs):
         pytest.fail("optional guidance must not be extracted before a research need exists")
 
     monkeypatch.setattr(curator, "derive_guidance", unused)
     provider = Provider(
-        read_material, response(SUBMIT, description(evidence=("evidence-3",))), response(REVIEW, accepted())
+        response(ASSESS, assessment(evidence=("evidence-3",))),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
     )
     result = await curator.collect_for_curator(
         worker,
@@ -154,6 +163,8 @@ async def test_supplied_interaction_content_can_satisfy_collection_without_resea
         researcher=None,
     )
     assert result.ready and "owner" in result.snapshot.evidence[-1].content
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["sources"][0]["evidence"] == "evidence-3" and "owner" in packet["sources"][0]["text"]
     assert not (tmp_path / "records/guidance").exists()
 
 
@@ -208,18 +219,11 @@ async def test_research_only_case_is_isolated_and_guides_a_multi_dimension_resea
         )
 
     provider = Provider(
-        response(GUIDANCE, {"question": "Missing service hours", "dimensions": ["knowledge", "methods"]}),
+        response(ASSESS, assessment(research_needs=[need("Missing service hours")])),
         read_guidance,
         submit_guidance,
-        response(
-            RESEARCH,
-            {
-                "dimensions": ["knowledge", "methods"],
-                "brief": research_brief("How should service hours affect planning?"),
-                "known_evidence": ["evidence-1"],
-            },
-        ),
-        response("review_research", accepted()),
+        response(PLAN, plan(group("How should service hours affect planning?", known_evidence=["evidence-1"]))),
+        response("review_research", research_review("researched-1")),
         response(SUBMIT, description(evidence=("evidence-3",), text=FOUND["text"])),
         response(REVIEW, accepted()),
     )
@@ -231,16 +235,16 @@ async def test_research_only_case_is_isolated_and_guides_a_multi_dimension_resea
         records=tmp_path / "records",
     )
     assert result.ready and len(tasks) == 1 and len(explorations) == 2
-    assert tasks[0]["questions"] == ["How should service hours affect planning?"]
+    assert tasks[0]["questions"] == ["How should service hours affect planning?", "Missing service hours"]
     assert 0 < tasks[0]["time_budget_seconds"] < 3600
     assert "dimensions" not in tasks[0] and "guidance" not in tasks[0]
     assert "evidence-1" not in json.dumps(tasks[0])
-    research_review = next(
+    review_request = next(
         request
         for request in provider.requests
         if any(tool["function"]["name"] == "review_research" for tool in request.get("tools", []))
     )
-    assert json.loads(research_review["messages"][1]["content"])["source_views"][PAGE] == TEXT
+    assert json.loads(review_request["messages"][1]["content"])["source_views"][PAGE] == TEXT
     assert "UNVERIFIED_PRODUCT_RULE" not in result.snapshot.model_dump_json()
     assert case not in explorations[0].originals and case in explorations[1].originals
     assert (tmp_path / "records/guidance/guidance.json").is_file()
@@ -257,16 +261,15 @@ async def test_explicit_interaction_file_is_not_hidden_by_a_research_reference_p
     provided.write_text("This checklist was supplied in the interaction.")
     hidden.write_text("This separate case is for research guidance only.")
 
-    def read_material(kwargs):
+    def assess(kwargs):
         packet = json.loads(kwargs["messages"][1]["content"])
         context = json.loads(packet["context"]["result"])
         source = next(iter(context["interaction_sources"].values()))
         assert source["source_path"] == str(provided) and source["worker_path"] is None
-        return response("read_file", {"path": source["path"]})
+        assert "supplied in the interaction" in packet["sources"][0]["text"]
+        return response(ASSESS, assessment(evidence=("evidence-3",)))
 
-    provider = Provider(
-        read_material, response(SUBMIT, description(evidence=("evidence-3",))), response(REVIEW, accepted())
-    )
+    provider = Provider(assess, response(SUBMIT, description(evidence=("evidence-3",))), response(REVIEW, accepted()))
     result = await curator.collect_for_curator(
         worker,
         provider,
@@ -311,7 +314,7 @@ async def test_frozen_result_replays_without_model_calls_but_refuses_changed_inp
     request = Request(objective="Review the current project.")
     first = await curator.collect_for_curator(
         worker,
-        Provider(response(SUBMIT, description()), response(REVIEW, accepted())),
+        Provider(response(ASSESS, assessment()), response(SUBMIT, description()), response(REVIEW, accepted())),
         request,
         materials=(material,),
         records=tmp_path / "first",
@@ -354,7 +357,7 @@ async def test_offline_entry_returns_reviewed_information_without_curation(tmp_p
     monkeypatch.setattr(type(worker), "__aenter__", enter, raising=False)
     monkeypatch.setattr(type(worker), "__aexit__", leave, raising=False)
     monkeypatch.setattr(entry, "hire_task", lambda *args, **kwargs: worker)
-    provider = Provider(response(SUBMIT, description()), response(REVIEW, accepted()))
+    provider = Provider(response(ASSESS, assessment()), response(SUBMIT, description()), response(REVIEW, accepted()))
     factories = []
     monkeypatch.setattr(entry, "make_lazy_provider", lambda config: factories.append("lazy") or provider)
     monkeypatch.setattr(entry, "make_resolving_provider", lambda config: factories.append("resolving") or provider)
@@ -376,14 +379,18 @@ async def test_offline_entry_returns_reviewed_information_without_curation(tmp_p
         research_model=None,
         research_budget=2,
         research_tasks=0,
-        calls=4,
         timeout=30,
-        research_timeout=3600,
+        research_window=1800,
+        research_waves=1,
         collector="provider",
         collection_effort="high",
+        spend_limit=None,
         collection_timeout=3600,
+        submission_reserve=600,
+        research_questions=2,
         research_revisions=1,
         interactive=False,
+        wait_for_input=False,
     )
     result = await entry.research(args)
     assert provider.requests[0]["model"] == model
@@ -409,20 +416,15 @@ async def test_scenario_onboarding_uses_the_shared_flow_and_release_boundary(tmp
     source = load(make_scenario(tmp_path / "shop"))
     worker.baseline.task = Task(text=source.situation.profile)
     stage_released(source, ("prices",), worker.baseline.config.workspace_path)
-    pending = (
-        (
-            {
-                "id": "authority",
-                "dimension": "methods",
-                "question": "Who authorizes this method?",
-                "reason": "A required decision is missing.",
-                "blocking": True,
-            },
-        )
-        if blocked
-        else ()
+
+    def compose(kwargs):
+        pending = json.loads(kwargs["messages"][1]["content"])["open_user_questions"]
+        return response(SUBMIT, description(unresolved=pending))
+
+    asked = {"dimension": "methods", "question": "Who authorizes this method?", "reason": "A decision is missing."}
+    provider = Provider(
+        response(ASSESS, assessment(questions=[asked] if blocked else [])), compose, response(REVIEW, accepted())
     )
-    provider = Provider(response(SUBMIT, description(unresolved=pending)), response(REVIEW, accepted()))
     curated = []
 
     async def curate(worker, provider, **kwargs):
@@ -441,6 +443,8 @@ async def test_scenario_onboarding_uses_the_shared_flow_and_release_boundary(tmp
             worker.baseline.config.workspace_path / "uploads",
             records=worker.root / "information",
             researcher=None,
+            ask=lambda question: None,
+            wait_for_input=blocked,
         ),
     )
     assert await session.onboard() is not blocked
@@ -480,6 +484,31 @@ def test_environment_binding_ignores_run_locations_but_not_permissions(tmp_path)
     assert a != _environment(second, inspection(second, "deny"), second.root / "home")
 
 
+@pytest.mark.parametrize("model", ["child/model", "other/model"])
+def test_environment_binding_follows_a_childs_definition_not_the_version_its_run_paths_give_it(tmp_path, model):
+    import hashlib
+
+    from experimental.research.curator import _environment
+
+    def worker(name, child_model):
+        root = tmp_path / model / name
+        worker = SimpleNamespace(
+            root=root, baseline=SimpleNamespace(workdir=root / "work", task=Task(text="Review evidence."))
+        )
+        content = json.dumps(
+            {"workdir": str(worker.baseline.workdir), "task": worker.baseline.task.id, "model": child_model}
+        )
+        definition = root / "children/c1/versions" / hashlib.sha256(content.encode()).hexdigest() / "deployment.json"
+        definition.parent.mkdir(parents=True)
+        definition.write_text(content)
+        facts = {"configuration": {"command": f"python -m acp --deployment {definition}"}}
+        return worker, SimpleNamespace(sources={}, facts=facts)
+
+    (first, seen), (second, again) = worker("a", "child/model"), worker("b", model)
+    same = _environment(first, seen, first.root / "home") == _environment(second, again, second.root / "home")
+    assert same == (model == "child/model")
+
+
 @pytest.mark.asyncio
 async def test_replay_cannot_ignore_new_answers(tmp_path, monkeypatch):
     from experimental.research.information import Question
@@ -500,7 +529,11 @@ async def test_replay_cannot_ignore_new_answers(tmp_path, monkeypatch):
     request = Request(objective="Review project evidence.", previous=previous)
     first = await curator.collect_for_curator(
         worker,
-        Provider(response(SUBMIT, previous.description.model_dump(mode="json")), response(REVIEW, accepted())),
+        Provider(
+            response(ASSESS, assessment()),
+            response(SUBMIT, previous.description.model_dump(mode="json")),
+            response(REVIEW, accepted()),
+        ),
         request,
         materials=(material,),
         records=tmp_path / "first",
@@ -527,7 +560,7 @@ async def test_research_only_source_exclusion_survives_handoff_and_replay(tmp_pa
     request = Request(objective="Review project evidence.")
     result = await curator.collect_for_curator(
         worker,
-        Provider(response(SUBMIT, description()), response(REVIEW, accepted())),
+        Provider(response(ASSESS, assessment()), response(SUBMIT, description()), response(REVIEW, accepted())),
         request,
         research_references=(case,),
         records=tmp_path / "first",
@@ -551,33 +584,27 @@ async def test_collector_requests_repair_through_the_shared_curator_path(tmp_pat
 
         async def research(self, packet, web, check, **kwargs):
             requests.append(packet)
-            found = {**FOUND, "text": "Tea is served at midnight."} if len(requests) == 1 else FOUND
-            return Inquiry(findings=[found]), {"researcher": "controlled"}
+            return Inquiry(findings=[{**FOUND, "text": "Tea is served at midnight."}]), {"researcher": "controlled"}
+
+        async def revise(self, packet, check, **kwargs):
+            requests.append(packet)
+            return Inquiry(findings=[FOUND]), {"researcher": "controlled", "editorial": True}
 
     monkeypatch.setattr(curator, "Exchange", Researcher)
     monkeypatch.setattr(curator.Web, "of", lambda *args, **kwargs: Pages({PAGE: TEXT}))
 
-    def repair(kwargs):
-        feedback = json.loads(kwargs["messages"][-1]["content"])
-        assert feedback["review"]["issues"] == ["Correct the serving time."]
-        assert "midnight" not in json.dumps(feedback)
-        return response(
-            RESEARCH,
-            {
-                "dimensions": ["knowledge", "methods"],
-                "brief": research_brief("When is tea served?"),
-                "previous_attempt": feedback["attempt"],
-            },
-        )
-
     provider = Provider(
-        response(RESEARCH, {"dimensions": ["knowledge", "methods"], "brief": research_brief("When is tea served?")}),
+        response(ASSESS, assessment(research_needs=[need("When is tea served?")])),
+        response(PLAN, plan(group("When is tea served?"))),
         response(
             "review_research",
-            {"accepted": False, "reason": "The claim contradicts the quote.", "issues": ["Correct the serving time."]},
+            research_review(
+                withheld=(("researched-1", "The passage says two to five."),),
+                issues=["Correct the serving time."],
+                reason="The claim contradicts the quote.",
+            ),
         ),
-        repair,
-        response("review_research", accepted()),
+        response("review_research", research_review("researched-1")),
         response(SUBMIT, description(evidence=("evidence-3",), text=FOUND["text"])),
         response(REVIEW, accepted()),
     )
@@ -585,8 +612,10 @@ async def test_collector_requests_repair_through_the_shared_curator_path(tmp_pat
         worker, provider, Request(objective="Describe the service."), records=tmp_path / "records"
     )
     assert result.ready and len(requests) == 2
-    assert requests[1]["revision"]["source_views"][PAGE] == TEXT
+    assert requests[1]["revision"]["editorial"] and requests[1]["revision"]["source_views"][PAGE] == TEXT
     assert requests[1]["revision"]["previous_reviews"][0]["issues"] == ["Correct the serving time."]
     assert "midnight" not in result.snapshot.model_dump_json()
+    composed = json.loads(provider.requests[4]["messages"][1]["content"])
+    assert "midnight" not in json.dumps(composed["evidence"])
     assert json.loads((tmp_path / "records/research-1/status.json").read_text())["status"] == "rejected"
     assert json.loads((tmp_path / "records/research-2/status.json").read_text())["status"] == "accepted"

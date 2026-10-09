@@ -1,4 +1,4 @@
-"""Information collection preserves evidence, review decisions and focused updates before curation."""
+"""Information collection runs fixed stages, keeps evidence and open points, and hands only reviewed results on."""
 
 import asyncio
 import json
@@ -8,11 +8,10 @@ import pytest
 from pydantic import ValidationError
 
 from experimental.research.collection import (
-    ASK,
-    GUIDANCE,
-    READ,
-    RESEARCH,
+    ASSESS,
+    PLAN,
     REVIEW,
+    SOURCE_CHARS,
     SUBMIT,
     CollectionLimits,
     collect_information,
@@ -25,6 +24,7 @@ from experimental.research.information import (
     Question,
     Request,
     ResearchGuide,
+    ResearchReview,
     Result,
     Review,
     Snapshot,
@@ -33,7 +33,7 @@ from experimental.research.information import (
 from raven.agent.tools.filesystem import ReadFileTool
 from raven.agent.tools.registry import ToolRegistry
 from raven.contracts.llm_provider import RunMeta, TruncationInfo
-from tests.research_helpers import Provider, research_brief, response
+from tests.research_helpers import Provider, rejections, research_brief, response
 
 
 def description(*, evidence=("evidence-1",), text="Use the stated professional scope.", unresolved=()):
@@ -69,289 +69,74 @@ def snapshot():
     )
 
 
-def test_the_contract_distinguishes_missing_content_from_sufficient_content():
-    data = description()
-    data["sections"][2].update(text="", evidence=(), coverage="missing", reason="No domain knowledge is supplied.")
-    assert Description.model_validate(data).sections[2].coverage == "missing"
-    data["sections"][2]["coverage"] = "sufficient"
-    with pytest.raises(ValidationError, match="content and evidence"):
-        Description.model_validate(data)
-    with pytest.raises(ValidationError, match="each dimension exactly once"):
-        Description.model_validate({**description(), "sections": description()["sections"][:-1]})
-    with pytest.raises(ValidationError, match="initial collection"):
-        Request(objective="Research pricing only", focus=("knowledge",))
-
-
-@pytest.mark.asyncio
-async def test_native_reads_research_delegation_and_user_answers_share_real_evidence(tmp_path):
-    (tmp_path / "method.md").write_text("Verify claims against the supplied project evidence.")
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
-    delegated, asked = [], []
-
-    async def research(task):
-        delegated.append(task)
-        return {"finding": "Record uncertainty explicitly.", "sources": ["https://example.org/method"]}
-
-    async def ask(question):
-        asked.append(question)
-        return "Use our project evidence; do not invent missing results."
-
-    provider = Provider(
-        response("read_file", {"path": "method.md"}),
-        response(
-            RESEARCH,
-            {
-                "dimensions": ["knowledge", "methods"],
-                "brief": research_brief(
-                    "How should uncertainty be recorded?", deliverable="Source-backed methods and limitations."
-                ),
-            },
-        ),
-        response(
-            ASK,
-            {
-                "dimension": "methods",
-                "question": "What evidence may be used?",
-                "reason": "Define the organisation's boundary.",
-                "blocking": True,
-            },
-        ),
-        response(SUBMIT, description(evidence=("evidence-3", "evidence-4", "evidence-5"))),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider,
-        Request(objective="Construct a project evidence expert."),
-        registry=registry,
-        research=research,
-        ask=ask,
-        records=tmp_path / "records",
-    )
-    assert result.ready and result.status == "ready"
-    assert [source.channel for source in result.snapshot.evidence] == ["request", "request", "tool", "research", "user"]
-    assert delegated[0].brief.deliverable == "Source-backed methods and limitations."
-    assert asked[0].question == "What evidence may be used?"
-    assert "https://example.org/method" in render(result.snapshot)
-    review_input = json.loads(provider.requests[-1]["messages"][1]["content"])
-    assert len(review_input["evidence"]) == 3
-    assert "Verify claims" in review_input["evidence"][0]["content"]
-    record = json.loads((tmp_path / "records/status.json").read_text())
-    assert record["version"] == result.snapshot.identity and record["status"] == "ready"
-
-
-@pytest.mark.asyncio
-async def test_semantic_review_receives_evidence_and_can_return_a_contradiction_for_repair(tmp_path):
-    (tmp_path / "hours.md").write_text("Afternoon tea is served from two to five.")
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
-    provider = Provider(
-        response("read_file", {"path": "hours.md"}),
-        response(SUBMIT, description(evidence=("evidence-3",), text="Afternoon tea is served at midnight.")),
-        response(
-            REVIEW,
-            {
-                "accepted": False,
-                "reason": "The claim contradicts its evidence.",
-                "issues": ["The knowledge section says midnight; the source says two to five."],
-            },
-        ),
-        response(SUBMIT, description(evidence=("evidence-3",), text="Afternoon tea is served from two to five.")),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider, Request(objective="Describe service hours."), registry=registry, records=tmp_path / "records"
-    )
-    assert result.ready
-    assert result.snapshot.description.sections[2].text == "Afternoon tea is served from two to five."
-    first_review = json.loads(provider.requests[2]["messages"][1]["content"])
-    assert "two to five" in first_review["evidence"][0]["content"]
-    correction = next(
-        row for row in provider.requests[3]["messages"] if row["role"] == "user" and '"review"' in row["content"]
-    )
-    assert correction["role"] == "user" and "contradicts" in correction["content"]
-    assert not json.loads((tmp_path / "records/review-1.json").read_text())["accepted"]
-    assert json.loads((tmp_path / "records/review-2.json").read_text())["accepted"]
-
-
-@pytest.mark.asyncio
-async def test_unanswered_user_questions_cannot_disappear_or_reach_curator(tmp_path):
-    question = {
-        "dimension": "methods",
-        "question": "Who approves exceptions?",
-        "reason": "Approval authority is missing.",
-        "blocking": True,
-    }
-    provider = Provider(
-        response(ASK, question),
-        response(SUBMIT, description()),
-        lambda kwargs: response(
-            SUBMIT,
-            description(
-                unresolved=(
-                    next(
-                        json.loads(row["content"])["unanswered"]
-                        for row in kwargs["messages"]
-                        if row["role"] == "tool" and "unanswered" in json.loads(row["content"])
-                    ),
-                )
-            ),
-        ),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Define exception handling."))
-    assert result.status == "needs_input" and not result.ready
-    errors = [json.loads(row["content"]) for row in provider.requests[2]["messages"] if row["role"] == "tool"]
-    assert any("preserve unanswered" in row.get("error", "") for row in errors)
-    worker = SimpleNamespace(baseline=SimpleNamespace(config=SimpleNamespace(workspace_path=tmp_path)))
-    with pytest.raises(ValueError, match="not ready"):
-        handover_information(worker, result)
-    assert not (tmp_path / "uploads").exists()
-
-
-@pytest.mark.asyncio
-async def test_unknown_evidence_is_rejected_before_review():
-    provider = Provider(
-        response(SUBMIT, description(evidence=("invented-source",))),
-        response(SUBMIT, description()),
-        response(REVIEW, accepted()),
-    )
-    assert (await collect_information(provider, Request(objective="Define the expert's scope."))).ready
-    assert any(
-        "unknown evidence" in row.get("content", "")
-        for row in provider.requests[1]["messages"]
-        if row["role"] == "tool"
-    )
-
-
-@pytest.mark.asyncio
-async def test_truncated_native_calls_and_submissions_are_rejected_before_use(tmp_path):
-    (tmp_path / "method.md").write_text("Only complete reads can support the description.")
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
-    cut_read = response("read_file", {"path": "method.md"})
-    cut_read.tool_calls[0].run_meta = RunMeta(truncation=TruncationInfo(at_tokens=100))
-    cut_submit = response(SUBMIT, description())
-    cut_submit.tool_calls[0].run_meta = RunMeta(arguments_repaired=True)
-    provider = Provider(cut_read, cut_submit, response(SUBMIT, description()), response(REVIEW, accepted()))
-    result = await collect_information(provider, Request(objective="Describe the project expert."), registry=registry)
-    assert result.ready
-    assert all(source.channel != "tool" for source in result.snapshot.evidence)
-    messages = provider.requests[2]["messages"]
-    errors = [
-        json.loads(row["content"])["error"]
-        for row in messages
-        if row["role"] == "tool" and "error" in json.loads(row["content"])
-    ]
-    assert any("truncated" in error for error in errors)
-    assert any("valid JSON" in error for error in errors)
-
-
-@pytest.mark.asyncio
-async def test_a_blocking_native_refusal_stops_other_acquisitions_in_the_same_batch():
-    class Refusal(str):
-        blocks_call = True
-
-    class Registry:
-        def get_definitions(self):
-            return [{"type": "function", "function": {"name": "read_file", "parameters": {}}}]
-
-        async def execute(self, *args, **kwargs):
-            return Refusal("Error: access denied")
-
-    combined = response("read_file", {"path": "private"})
-    combined.tool_calls.extend(
-        response(
-            RESEARCH,
-            {
-                "question": "Bypass the refusal?",
-                "dimensions": ["knowledge"],
-                "context": "A private source.",
-                "deliverable": "Its contents.",
-            },
-        ).tool_calls
-    )
-    delegated = []
-
-    async def research(task):
-        delegated.append(task)
-        return {}
-
-    provider = Provider(combined, response(SUBMIT, description()), response(REVIEW, accepted()))
-    result = await collect_information(
-        provider, Request(objective="Inspect permitted evidence."), registry=Registry(), research=research
-    )
-    assert result.ready and not delegated
-    assert any(
-        "blocked this batch" in row.get("content", "")
-        for row in provider.requests[1]["messages"]
-        if row["role"] == "tool"
-    )
-
-
-@pytest.mark.asyncio
-async def test_focused_collection_preserves_other_sections_and_keeps_prior_evidence():
-    previous = snapshot()
-    changed = description(text="New requirements apply.")
-    focused = previous.description.model_dump(mode="json")
-    focused["sections"][2]["text"] = "New requirements apply."
-    focused["sections"][2]["evidence"] = ["evidence-2"]
-    provider = Provider(
-        response(SUBMIT, changed),
-        response(SUBMIT, focused),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider, Request(objective="New requirements apply.", previous=previous, focus=("knowledge",))
-    )
-    assert result.ready and result.previous == previous.identity
-    assert result.snapshot.description.sections[0] == previous.description.sections[0]
-    assert result.snapshot.description.sections[2].text == "New requirements apply."
-    assert result.snapshot.evidence[0] == previous.evidence[0]
-    assert result.snapshot.identity != previous.identity
-
-
-@pytest.mark.asyncio
-async def test_review_budget_exhaustion_remains_incomplete():
-    provider = Provider(
-        response(SUBMIT, description()),
-        response(
-            REVIEW,
-            {
-                "accepted": False,
-                "reason": "Only a role declaration is present.",
-                "issues": ["Research the knowledge and methods required by the task."],
-            },
-        ),
-    )
-    result = await collect_information(
-        provider, Request(objective="Construct a complete expert."), limits=CollectionLimits(reviews=1)
-    )
-    assert not result.ready and result.status == "incomplete"
-
-
-def test_handover_keeps_reference_transcripts_out_of_the_worker_workspace(tmp_path):
-    original = snapshot()
-    raw = Evidence(
-        id="reference-data",
-        channel="tool",
-        origin="reference product",
-        content="Original customer identity, secret example values, and product-specific installation instructions.",
-    )
-    information = original.model_copy(update={"evidence": (*original.evidence, raw)})
-    result = Result(snapshot=information, review=Review.model_validate(accepted()))
-    worker = SimpleNamespace(baseline=SimpleNamespace(config=SimpleNamespace(workspace_path=tmp_path)))
-    assert handover_information(worker, result) == INFORMATION_FILE
-    text = (tmp_path / INFORMATION_FILE).read_text()
-    assert "Professional knowledge" in text and "Original customer identity" not in text
-    assert set(path.name for path in (tmp_path / "uploads/information").iterdir()) == {"expert.md", "version.json"}
-
-
-def research_group(question="How should evidence and uncertainty be handled?", **overrides):
+def assessment(
+    *, evidence=("evidence-1",), questions=(), research_needs=(), coverage="sufficient", dimensions=DIMENSIONS
+):
     return {
-        "dimensions": ["knowledge", "methods"],
-        "brief": research_brief(question),
-        **overrides,
+        "reading": "The material describes a project evidence expert and leaves its approval path open.",
+        "coverage": [
+            {"dimension": dimension, "coverage": coverage, "reason": "The input states it.", "evidence": list(evidence)}
+            for dimension in dimensions
+        ],
+        "questions": list(questions),
+        "research_needs": list(research_needs),
+    }
+
+
+def question(dimension="methods", text="Who approves exceptions?", **extra):
+    return {"dimension": dimension, "question": text, "reason": "The material does not say.", **extra}
+
+
+def need(text="How should uncertainty be recorded?", dimensions=("knowledge", "methods")):
+    return {"question": text, "dimensions": list(dimensions), "why": "No public method is supplied."}
+
+
+def group(text="How should uncertainty be recorded?", **overrides):
+    return {"dimensions": ["knowledge", "methods"], "serves": ["need-1"], "brief": research_brief(text), **overrides}
+
+
+def plan(*groups, deferred=()):
+    return {"rationale": "One group per open method question.", "groups": list(groups), "deferred": list(deferred)}
+
+
+def finding(number=1, text="Record uncertainty next to each claim."):
+    return {
+        "id": f"researched-{number}",
+        "text": text,
+        "kind": "norm",
+        "question": "How should uncertainty be recorded?",
+        "sources": ["https://example.org/method"],
+        "evidence": "record uncertainty next to each claim",
+        "situation": "",
+        "conflicts": [],
+        "unmatched_sources": [],
+    }
+
+
+def delivery(
+    *, findings=1, withheld=(), synthesis="Uncertainty is recorded next to each claim.", needs_new_sources=False
+):
+    admitted = [finding(number) for number in range(1, findings + 1)]
+    verdicts = [{"id": row["id"], "admit": True} for row in admitted]
+    verdicts += [{"id": id, "admit": False, "reason": reason} for id, reason in withheld]
+    held = bool(withheld) or not synthesis
+    review = ResearchReview(
+        reason="Checked against the retrieved pages.",
+        findings=verdicts,
+        synthesis_admitted=bool(synthesis),
+        issues=("Repair the withheld parts.",) if held else (),
+        needs_new_sources=needs_new_sources if held else False,
+    )
+    return {
+        "findings": admitted,
+        "withheld": [{"id": id, "question": "How?", "text": "Unsupported.", "reasons": [why]} for id, why in withheld],
+        "unanswered": [],
+        "synthesis": synthesis,
+        "disagreements": [],
+        "review": review.record(),
+        "leads": [],
+        "refused": [],
+        "status": "accepted" if review.accepted else ("partial" if admitted else "rejected"),
     }
 
 
@@ -365,276 +150,595 @@ def guide():
     )
 
 
-@pytest.mark.parametrize(
-    "channel,status", [("user", "needs_input"), ("research", "incomplete"), ("native", "incomplete")]
-)
-def test_blocking_acquisition_channels_are_not_all_user_questions(channel, status):
-    original = snapshot()
-    question = Question(
-        id="pending",
-        dimension="methods",
-        question="Which evidence is missing?",
-        reason="The current objective needs it.",
-        channel=channel,
+def labels(trace_path):
+    return [row["label"] for row in json.loads(trace_path.read_text()) if row.get("event") == "model.call"]
+
+
+def test_the_contract_distinguishes_missing_content_from_sufficient_content():
+    data = description()
+    data["sections"][2].update(text="", evidence=(), coverage="missing", reason="No domain knowledge is supplied.")
+    assert Description.model_validate(data).sections[2].coverage == "missing"
+    data["sections"][2]["coverage"] = "sufficient"
+    with pytest.raises(ValidationError, match="content and evidence"):
+        Description.model_validate(data)
+    with pytest.raises(ValidationError, match="each dimension exactly once"):
+        Description.model_validate({**description(), "sections": description()["sections"][:-1]})
+    with pytest.raises(ValidationError, match="initial collection"):
+        Request(objective="Research pricing only", focus=("knowledge",))
+
+
+def test_only_user_questions_can_block_and_only_they_hold_the_result():
+    with pytest.raises(ValidationError, match="only a user question can block"):
+        Question(
+            id="q", dimension="methods", question="Which method?", reason="Unknown.", channel="research", blocking=True
+        )
+    base = snapshot()
+    open_point = Question(id="q", dimension="methods", question="Which method?", reason="Unknown.", assumption="Any.")
+    proposal = base.model_copy(
+        update={"description": base.description.model_copy(update={"unresolved": (open_point,)})}
     )
-    proposal = original.model_copy(
-        update={"description": original.description.model_copy(update={"unresolved": (question,)})}
-    )
+    assert Result(snapshot=proposal, review=Review.model_validate(accepted())).status == "ready"
+    assert "Until settled: Any." in render(proposal)
+    waiting = open_point.model_copy(update={"blocking": True})
+    proposal = base.model_copy(update={"description": base.description.model_copy(update={"unresolved": (waiting,)})})
     result = Result(snapshot=proposal, review=Review.model_validate(accepted()))
-    assert result.status == status and not result.ready
+    assert result.status == "needs_input" and not result.ready
 
 
 @pytest.mark.asyncio
-async def test_group_budget_is_visible_before_planning_and_after_each_delivery():
-    async def research(task):
-        return {"finding": "A supported method."}
-
-    provider = Provider(
-        response(RESEARCH, research_group()),
-        response(RESEARCH, research_group()),
-        response(SUBMIT, description(evidence=("evidence-3", "evidence-4"))),
-        response(REVIEW, accepted()),
-    )
-    await collect_information(
-        provider,
-        Request(objective="Describe the complete expert."),
-        research=research,
-        limits=CollectionLimits(research_tasks=2),
-    )
-    packet = json.loads(provider.requests[0]["messages"][1]["content"])
-    assert packet["acquisition_allowance"]["research_groups"] == 2
-    remaining = [
-        json.loads(row["content"])["research_groups_remaining"]
-        for row in provider.requests[-2]["messages"]
-        if row["role"] == "tool" and "research_groups_remaining" in json.loads(row["content"])
-    ]
-    assert remaining == [1, 0]
-
-
-@pytest.mark.asyncio
-async def test_guidance_extraction_is_bounded_without_an_independent_audit_loop(tmp_path):
-    from experimental.research.guidance import SUBMIT as GUIDE_SUBMIT
-    from experimental.research.guidance import derive_guidance
-
-    source = tmp_path / "reference.md"
-    source.write_text("The example accepts transcripts and written notes as alternatives.")
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
-    exploration = SimpleNamespace(
-        root=tmp_path,
-        registry=registry,
-        sources={"reference": {"snapshot_path": str(source), "digest": "fixed"}},
-        describe=lambda: {"root": str(tmp_path)},
-        verify=lambda: None,
-    )
-    good = {
-        "groups": [
-            {
-                "topic": "Record interpretation",
-                "dimensions": ["methods"],
-                "questions": ["How should notes and transcripts be interpreted?"],
-                "rationale": "Both input types are accepted; the distinction needs research.",
-                "sources": ["reference"],
-            }
-        ]
+async def test_unconfigured_channels_have_no_stage_and_open_points_carry_assumptions(tmp_path):
+    open_point = {
+        "id": "scope",
+        "dimension": "role",
+        "question": "Which projects are in scope?",
+        "reason": "The material names none.",
+        "channel": "user",
     }
     provider = Provider(
-        response("read_file", {"path": str(source)}),
-        response(GUIDE_SUBMIT, good),
+        response(ASSESS, assessment(questions=[question()])),
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(ASSESS, assessment()),
+        response(SUBMIT, description(unresolved=[open_point])),
+        response(SUBMIT, description(unresolved=[{**open_point, "assumption": "All projects of the team."}])),
+        response(REVIEW, accepted()),
     )
-    groups = await derive_guidance(
-        provider,
-        "Describe record interpretation.",
-        exploration,
-        records=tmp_path / "records",
-        limits=CollectionLimits(guidance_calls=4),
-    )
-    assert groups[0].rationale == good["groups"][0]["rationale"]
-    assert len(provider.requests) == 2
-    assert not list((tmp_path / "records").glob("review-*.json"))
+    result = await collect_information(provider, Request(objective="Describe the expert."), records=tmp_path / "run")
+    assert result.ready and result.status == "ready"
+    assert result.snapshot.description.unresolved[0].assumption == "All projects of the team."
+    assert not result.snapshot.description.unresolved[0].blocking
+    assert any("no user channel" in error for error in rejections(provider.requests[2]))
+    assert any("no research channel" in error for error in rejections(provider.requests[2]))
+    assert any("needs the assumption" in error for error in rejections(provider.requests[4]))
+    assert labels(tmp_path / "run/trace.json") == ["assess"] * 3 + ["compose"] * 2 + ["information.review"]
+    assert json.loads((tmp_path / "run/assessment.json").read_text())["questions"] == []
+    assert json.loads((tmp_path / "run/status.json").read_text())["status"] == "ready"
+    assert not (tmp_path / "run/questions.json").exists() and not (tmp_path / "run/plan-1.json").exists()
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["channels"] == {"native": False, "research": False, "user": False}
 
 
-@pytest.mark.parametrize("guided", [False, True])
 @pytest.mark.asyncio
-async def test_sufficient_interaction_material_needs_no_research_or_guidance(tmp_path, guided):
-    (tmp_path / "provided.md").write_text("The user supplied the complete method for this task.")
-    registry = ToolRegistry()
-    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
+@pytest.mark.parametrize("wait", [False, True])
+async def test_user_questions_are_asked_once_and_unanswered_ones_become_open_points(tmp_path, wait):
+    asked = []
 
-    async def unused(*args):
-        pytest.fail("sufficient interaction information must not trigger extra acquisition")
+    async def ask(item):
+        asked.append(item)
+        return "The team lead approves exceptions." if item.dimension == "methods" else None
+
+    def compose(request):
+        pending = json.loads(request["messages"][1]["content"])["open_user_questions"]
+        assert len(pending) == 1 and pending[0]["dimension"] == "cases"
+        garbled = {**pending[0], "question": "Reworded by the model", "assumption": "Treat worked examples as cases."}
+        return response(SUBMIT, description(evidence=("evidence-3",), unresolved=[garbled]))
 
     provider = Provider(
-        response("read_file", {"path": "provided.md"}),
+        response(ASSESS, assessment(questions=[question(), question("cases", "Are there documented incidents?")])),
         response(SUBMIT, description(evidence=("evidence-3",))),
+        compose,
         response(REVIEW, accepted()),
     )
     result = await collect_information(
-        provider,
-        Request(objective="Use the supplied method."),
-        registry=registry,
-        research=unused,
-        guidance=unused if guided else None,
+        provider, Request(objective="Describe the expert."), ask=ask, wait_for_input=wait, records=tmp_path / "run"
     )
-    assert result.ready and all(source.channel != "research" for source in result.snapshot.evidence)
+    assert [item.question for item in asked] == ["Who approves exceptions?", "Are there documented incidents?"]
+    assert result.snapshot.evidence[2].channel == "user" and "team lead" in result.snapshot.evidence[2].content
+    assert any("carry every open user question" in error for error in rejections(provider.requests[2]))
+    point = result.snapshot.description.unresolved[0]
+    assert point.question == "Are there documented incidents?" and point.assumption == "Treat worked examples as cases."
+    assert point.blocking is wait and result.status == ("needs_input" if wait else "ready")
+    rows = json.loads((tmp_path / "run/questions.json").read_text())
+    assert [row["answered"] for row in rows] == [True, False]
+    assert labels(tmp_path / "run/trace.json") == ["assess", "compose", "compose", "information.review"]
 
 
 @pytest.mark.asyncio
-async def test_research_groups_span_dimensions_reuse_evidence_and_share_lazy_guidance(tmp_path):
-    tasks, guidance_calls = [], []
-
-    async def guidance():
-        guidance_calls.append(True)
-        return (guide(),)
+async def test_research_groups_run_concurrently_and_findings_become_evidence_one_by_one(tmp_path):
+    timeline = []
 
     async def research(task):
-        tasks.append(task)
-        return {"finding": "Explain which claims remain uncertain.", "sources": ["https://example.org/evidence"]}
+        timeline.append(("start", task.attempt, task.remaining_seconds))
+        await asyncio.sleep(0.05)
+        timeline.append(("end", task.attempt))
+        return delivery(findings=2)
 
     provider = Provider(
-        response(RESEARCH, research_group(known_evidence=["evidence-1"])),
-        response(RESEARCH, research_group(question="How should the method be checked?", known_evidence=["evidence-3"])),
-        response(SUBMIT, description(evidence=("evidence-3", "evidence-4"))),
+        response(ASSESS, assessment(research_needs=[need(), need("Which review cadence applies?", ("performance",))])),
+        response(PLAN, plan(group(), group("Which review cadence applies?", serves=["need-2"]), group("Third?"))),
+        response(
+            PLAN,
+            plan(
+                group(),
+                group("Which review cadence applies?", serves=["need-2"], dimensions=["performance"]),
+                deferred=["Third"],
+            ),
+        ),
+        response(SUBMIT, description(evidence=("evidence-3", "evidence-7"))),
         response(REVIEW, accepted()),
     )
-    provider.responses.insert(
-        0,
-        response(
-            GUIDANCE, {"question": "Research the missing evidence method", "dimensions": ["knowledge", "methods"]}
-        ),
+    limits = CollectionLimits(research_tasks=2)
+    result = await collect_information(
+        provider, Request(objective="Describe the expert."), research=research, limits=limits, records=tmp_path / "run"
+    )
+    assert result.ready
+    assert [row[0] for row in timeline] == ["start", "start", "end", "end"]
+    assert {row[1] for row in timeline} == {"research-1", "research-2"}
+    assert all(row[2] <= limits.research_window for row in timeline if row[0] == "start")
+    assert any("at most 2 research groups" in error for error in rejections(provider.requests[2]))
+    research_evidence = [source for source in result.snapshot.evidence if source.channel == "research"]
+    assert len(research_evidence) == 6
+    assert [json.loads(source.origin).get("finding") for source in research_evidence[:2]] == [
+        "researched-1",
+        "researched-2",
+    ]
+    assert json.loads(research_evidence[2].origin)["synthesis"] is True
+    assert research_evidence[3].dimensions == ("performance",)
+    wave = json.loads((tmp_path / "run/wave-1.json").read_text())
+    assert [row["status"] for row in wave] == ["accepted", "accepted"]
+    assert [len(row["admitted"]) for row in wave] == [3, 3]
+    planned = json.loads(provider.requests[1]["messages"][1]["content"])
+    assert planned["allowance"]["window_seconds_per_group"] <= 1800 and planned["previous_wave"] is None
+    composed = json.loads(provider.requests[3]["messages"][1]["content"])
+    assert len(composed["research"]["outcomes"]) == 2 and composed["research"]["gaps"] == []
+    assert labels(tmp_path / "run/trace.json") == ["assess", "plan", "plan", "compose", "information.review"]
+
+
+@pytest.mark.asyncio
+async def test_plans_are_checked_for_focus_questions_and_known_evidence():
+    async def research(task):
+        return delivery()
+
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group(known_evidence=["evidence-99"]))),
+        response(PLAN, plan(group(brief=research_brief(questions=["One?", "Two?", "Three?"])))),
+        response(PLAN, plan(group(dimensions=["knowledge", "knowledge"]))),
+        response(PLAN, plan(group("Which internal form do they file?", serves=["need-2"]))),
+        response(SUBMIT, description()),
+        response(REVIEW, accepted()),
     )
     result = await collect_information(
-        provider,
-        Request(objective="Construct an evidence expert."),
-        research=research,
-        guidance=guidance,
-        records=tmp_path / "records",
+        provider, Request(objective="Describe the expert."), research=research, limits=CollectionLimits(plan_calls=5)
     )
-    assert result.ready and len(guidance_calls) == 1
-    assert tasks[0].dimensions == ("knowledge", "methods")
-    assert tasks[0].known_information[0].channel == "request"
-    assert tasks[1].known_information[0].channel == "research"
-    assert tasks[0].guidance == tasks[1].guidance == (guide(),)
-    assert result.snapshot.evidence[-1].dimensions == ("knowledge", "methods")
-    assert not any("guide-only-source" in item.content for item in result.snapshot.evidence)
-    assert len(json.loads((tmp_path / "records/research-tasks.json").read_text())) == 2
+    errors = rejections(provider.requests[5])
+    assert any("answers only the listed refs ['need-1'], got ['need-2']" in error for error in errors)
+    assert any("unknown research evidence" in error for error in errors)
+    assert any("at most 2 questions" in error for error in errors)
+    assert any("each dimension once" in error for error in errors)
+    assert result.stop_reason == "error" and not result.ready
 
 
-@pytest.mark.parametrize("use_guidance", [False, True])
 @pytest.mark.asyncio
-async def test_research_can_use_or_decline_prepared_guidance(use_guidance):
+async def test_a_group_is_asked_the_question_of_every_need_it_serves(tmp_path):
     tasks = []
 
     async def research(task):
         tasks.append(task)
-        return {"finding": "Check the original evidence."}
+        return delivery()
 
+    sharper = "How should uncertainty be recorded next to each claim in a project review?"
+    restated = "Which ‘review cadence’  applies? -- the template asks for it."
     provider = Provider(
-        response(RESEARCH, research_group(use_guidance=use_guidance)),
+        response(
+            ASSESS, assessment(research_needs=[need(), need("Which 'review cadence' applies?", ("performance",))])
+        ),
+        response(
+            PLAN,
+            plan(
+                group(sharper),
+                group("Which internal form do they file?", serves=["need-1", "need-2"]),
+                group(restated, serves=["need-2"]),
+            ),
+        ),
         response(SUBMIT, description(evidence=("evidence-3",))),
         response(REVIEW, accepted()),
     )
-    if use_guidance:
-        provider.responses.insert(
-            0,
-            response(
-                GUIDANCE, {"question": "Research the missing evidence method", "dimensions": ["knowledge", "methods"]}
-            ),
-        )
     result = await collect_information(
-        provider, Request(objective="Construct an evidence expert.", guidance=(guide(),)), research=research
+        provider, Request(objective="Describe the expert."), research=research, records=tmp_path / "run"
     )
-    assert result.ready and tasks[0].guidance == ((guide(),) if use_guidance else ())
+    assert result.ready
+    assert [task.brief.questions for task in tasks] == [
+        (sharper, "How should uncertainty be recorded?"),
+        ("Which internal form do they file?", "How should uncertainty be recorded?", "Which 'review cadence' applies?"),
+        (restated,),
+    ]
+    kept = json.loads((tmp_path / "run/plan-1.json").read_text())
+    assert kept["groups"][1]["brief"]["questions"][1:] == [
+        "How should uncertainty be recorded?",
+        "Which 'review cadence' applies?",
+    ]
 
 
 @pytest.mark.asyncio
-async def test_optional_guidance_failure_falls_back_to_unguided_research(tmp_path):
+@pytest.mark.parametrize("new_sources", [False, True])
+async def test_a_withheld_group_is_repaired_once_by_host_rule(tmp_path, new_sources):
     tasks = []
-
-    async def unavailable():
-        raise ValueError("the optional case cannot be interpreted")
 
     async def research(task):
         tasks.append(task)
-        return {"finding": "Research the stated gap directly."}
+        if task.previous_attempt is None:
+            return delivery(
+                findings=1, withheld=(("researched-2", "The passage says cream."),), needs_new_sources=new_sources
+            )
+        return delivery(findings=1)
 
     provider = Provider(
-        response(RESEARCH, research_group()),
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group())),
         response(SUBMIT, description(evidence=("evidence-3",))),
         response(REVIEW, accepted()),
     )
-    provider.responses.insert(
-        0,
-        response(
-            GUIDANCE, {"question": "Research the missing evidence method", "dimensions": ["knowledge", "methods"]}
-        ),
-    )
+    limits = CollectionLimits(research_window=500, wave_minimum=300, acquisition_minimum=600, editorial_minimum=300)
     result = await collect_information(
-        provider,
-        Request(objective="Construct an evidence expert."),
-        research=research,
-        guidance=unavailable,
-        records=tmp_path / "records",
+        provider, Request(objective="Describe the expert."), research=research, limits=limits, records=tmp_path / "run"
     )
-    assert result.ready and not tasks[0].guidance
-    assert any(
-        item["event"] == "guidance.unavailable" for item in json.loads((tmp_path / "records/trace.json").read_text())
-    )
+    assert result.ready
+    wave = json.loads((tmp_path / "run/wave-1.json").read_text())[0]
+    trace = json.loads((tmp_path / "run/trace.json").read_text())
+    if new_sources:
+        assert [task.attempt for task in tasks] == ["research-1"]
+        assert wave["status"] == "partial" and wave["withheld"][0]["id"] == "researched-2"
+        assert any(row.get("event") == "repair.skipped" and row["seconds_needed"] == 600 for row in trace)
+    else:
+        assert [(task.attempt, task.previous_attempt) for task in tasks] == [
+            ("research-1", None),
+            ("research-2", "research-1"),
+        ]
+        assert tasks[1].remaining_seconds < 500
+        assert wave["status"] == "accepted" and [row["attempt"] for row in wave["attempts"]] == [
+            "research-1",
+            "research-2",
+        ]
+    admitted = [source for source in result.snapshot.evidence if source.channel == "research"]
+    assert len(admitted) == (2 if new_sources else 4)
 
 
 @pytest.mark.asyncio
-async def test_timeout_is_visible_to_the_collector_without_admitting_evidence():
-    async def timed_out(task):
-        raise TimeoutError
+async def test_research_is_skipped_when_no_group_window_remains(tmp_path):
+    delegated = []
 
-    def preserve_gap(request):
-        failure = json.loads(request["messages"][-1]["content"])
-        assert failure["error_type"] == "TimeoutError" and failure["error"]
-        assert failure["research_groups_remaining"] == 0
-        return response(
-            SUBMIT,
-            description(
-                unresolved=[
-                    {
-                        "id": "research-pending",
-                        "dimension": "methods",
-                        "question": "What method is supported?",
-                        "reason": "The research did not complete.",
-                        "channel": "research",
-                        "blocking": True,
-                    }
-                ]
-            ),
-        )
+    async def research(task):
+        delegated.append(task)
+        return delivery()
 
-    provider = Provider(response(RESEARCH, research_group()), preserve_gap, response(REVIEW, accepted()))
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(SUBMIT, description()),
+        response(REVIEW, accepted()),
+    )
+    limits = CollectionLimits(total_timeout=1000, reserve=600, wave_minimum=600)
+    result = await collect_information(
+        provider, Request(objective="Describe the expert."), research=research, limits=limits, records=tmp_path / "run"
+    )
+    assert result.ready and not delegated
+    trace = json.loads((tmp_path / "run/trace.json").read_text())
+    assert any(row.get("event") == "wave.skipped" and row["window"] <= 400 for row in trace)
+    assert labels(tmp_path / "run/trace.json") == ["assess", "compose", "information.review"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("gap", [False, True])
+async def test_a_second_wave_runs_only_when_gaps_remain(tmp_path, gap):
+    async def research(task):
+        answer = delivery()
+        if gap and task.attempt == "research-1":
+            answer["unanswered"] = [
+                {"question": "Which cadence?", "channel": "research", "why": "No page found."},
+                {"question": "Which cadence did the board set?", "channel": "user", "why": "Only the board knows."},
+            ]
+        return answer
+
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group())),
+        *([response(PLAN, plan(group("Which cadence?", serves=["gap-1"])))] if gap else []),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
     result = await collect_information(
         provider,
         Request(objective="Describe the expert."),
-        research=timed_out,
-        limits=CollectionLimits(research_tasks=1),
+        research=research,
+        limits=CollectionLimits(research_waves=2),
+        records=tmp_path / "run",
     )
-    assert result.status == "incomplete"
-    assert not any(item.channel == "research" for item in result.snapshot.evidence)
+    assert result.ready
+    plans = [path.name for path in (tmp_path / "run").iterdir() if path.name.startswith("plan-")]
+    assert sorted(plans) == (["plan-1.json", "plan-2.json"] if gap else ["plan-1.json"])
+    if gap:
+        second = json.loads(provider.requests[2]["messages"][1]["content"])
+        assert [(row["kind"], row.get("ref")) for row in second["previous_wave"]["gaps"]] == [
+            ("unanswered", "gap-1"),
+            ("unanswered", None),
+        ]
+        assert [row["ref"] for row in second["research_needs"]] == ["need-1"]
+        assert (tmp_path / "run/wave-2.json").exists()
 
 
 @pytest.mark.asyncio
-async def test_group_scope_and_known_evidence_are_checked_before_delegation():
-    previous = snapshot()
+async def test_guidance_is_loaded_once_before_planning_and_attached_to_groups(tmp_path):
+    loaded, tasks = [], []
+
+    async def guidance():
+        loaded.append(True)
+        return [guide().model_dump(mode="json")]
+
+    async def research(task):
+        tasks.append(task)
+        return delivery()
+
     provider = Provider(
-        response(RESEARCH, research_group()),
-        response(RESEARCH, research_group(dimensions=["knowledge"], known_evidence=["unknown"])),
-        response(SUBMIT, previous.description.model_dump(mode="json")),
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group(), group(use_guidance=False))),
+        response(SUBMIT, description(evidence=("evidence-3",))),
         response(REVIEW, accepted()),
     )
+    result = await collect_information(
+        provider, Request(objective="Review evidence."), research=research, guidance=guidance, records=tmp_path / "run"
+    )
+    assert result.ready and loaded == [True]
+    planned = json.loads(provider.requests[1]["messages"][1]["content"])
+    assert planned["guidance"][0]["sources"] == ["guide-only-source"]
+    assert [len(task.guidance) for task in tasks] == [1, 0]
 
-    async def unused(task):
-        pytest.fail("invalid research groups must not spend a research call")
+
+@pytest.mark.asyncio
+async def test_guidance_failure_leaves_research_unguided(tmp_path):
+    async def guidance():
+        raise ValueError("guidance source unreadable")
+
+    async def research(task):
+        return delivery()
+
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group())),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider, Request(objective="Review evidence."), research=research, guidance=guidance, records=tmp_path / "run"
+    )
+    assert result.ready
+    trace = json.loads((tmp_path / "run/trace.json").read_text())
+    assert any(row.get("event") == "guidance.unavailable" for row in trace)
+    assert json.loads(provider.requests[1]["messages"][1]["content"])["guidance"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_failed_group_is_a_gap_and_the_others_still_land(tmp_path):
+    async def failing(task):
+        if task.brief.questions[0].startswith("Which"):
+            raise TimeoutError("codex: no answer")
+        return delivery()
+
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need(), need("Which review cadence applies?", ("performance",))])),
+        response(PLAN, plan(group(), group("Which review cadence applies?", serves=["need-2"]))),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider, Request(objective="Describe."), research=failing, records=tmp_path / "run"
+    )
+    assert result.ready
+    wave = json.loads((tmp_path / "run/wave-1.json").read_text())
+    assert [row["status"] for row in wave] == ["accepted", "failed"] and wave[1]["error_type"] == "TimeoutError"
+    assert wave[1]["attempts"] == [
+        {"attempt": "research-2", "previous_attempt": None, "status": "failed", "error": "codex: no answer"}
+    ]
+    composed = json.loads(provider.requests[2]["messages"][1]["content"])
+    assert composed["research"]["gaps"] == [
+        {"group": 2, "kind": "failed", "error": "codex: no answer", "questions": ["Which review cadence applies?"]}
+    ]
+
+
+@pytest.mark.asyncio
+async def test_review_rejection_is_repaired_once_and_then_the_review_limit_holds(tmp_path):
+    rejected = {"accepted": False, "reason": "The approval path is asserted without evidence.", "issues": ["Cite it."]}
+    provider = Provider(
+        response(ASSESS, assessment()),
+        response(SUBMIT, description()),
+        response(REVIEW, rejected),
+        response(SUBMIT, description(text="The approval path is left open.")),
+        response(REVIEW, rejected),
+    )
+    result = await collect_information(provider, Request(objective="Describe."), records=tmp_path / "run")
+    assert result.stop_reason == "review_limit" and not result.ready and result.status == "incomplete"
+    repair = provider.requests[3]["messages"]
+    assert repair[-1]["role"] == "user" and "Cite it." in repair[-1]["content"]
+    assert any(row["role"] == "tool" and "submitted_for_review" in row["content"] for row in repair)
+    assert (tmp_path / "run/proposal-2.json").exists() and (tmp_path / "run/review-2.json").exists()
+    assert labels(tmp_path / "run/trace.json") == [
+        "assess",
+        "compose",
+        "information.review",
+        "compose",
+        "information.review",
+    ]
+
+
+@pytest.mark.asyncio
+async def test_stage_timeouts_and_group_windows_keep_the_evidence(tmp_path):
+    class Slow:
+        async def chat_with_retry(self, **kwargs):
+            await asyncio.sleep(10)
 
     result = await collect_information(
-        provider, Request(objective="Check knowledge.", focus=("knowledge",), previous=previous), research=unused
+        Slow(), Request(objective="Describe the expert."), limits=CollectionLimits(assessment_timeout=0.01)
     )
-    assert result.ready and result.changed_dimensions == ()
+    assert result.stop_reason == "time_limit" and not result.ready
+    assert "assessment stage" in result.review.reason and result.snapshot.evidence[0].content == "Describe the expert."
+    cancelled = []
+
+    async def research(task):
+        try:
+            await asyncio.sleep(10)
+        finally:
+            cancelled.append(task.attempt)
+
+    provider = Provider(
+        response(ASSESS, assessment(research_needs=[need()])),
+        response(PLAN, plan(group())),
+        response(SUBMIT, description()),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider,
+        Request(objective="Describe the expert."),
+        research=research,
+        limits=CollectionLimits(
+            research_window=0.05, wave_minimum=0.01, verification_reserve=0, editorial_minimum=0.001
+        ),
+        records=tmp_path / "run",
+    )
+    assert cancelled == ["research-1"] and result.ready
+    wave = json.loads((tmp_path / "run/wave-1.json").read_text())
+    assert wave[0]["status"] == "failed" and wave[0]["error_type"] == "TimeoutError"
+    assert not any(source.channel == "research" for source in result.snapshot.evidence)
+    composed = json.loads(provider.requests[2]["messages"][1]["content"])
+    assert composed["research"]["gaps"][0]["kind"] == "failed"
+
+
+@pytest.mark.asyncio
+async def test_deadline_preserves_focused_state_and_reports_actual_changes():
+    class Slow:
+        async def chat_with_retry(self, **kwargs):
+            await asyncio.sleep(10)
+
+    previous = snapshot()
+    result = await collect_information(
+        Slow(),
+        Request(objective="Recheck knowledge.", previous=previous, focus=("knowledge",)),
+        limits=CollectionLimits(total_timeout=0.01),
+    )
+    assert result.snapshot.description == previous.description
+    assert result.changed_dimensions == () and not result.resources_changed and not result.questions_changed
+    assert result.stop_reason == "time_limit" and not result.ready
+
+
+def test_every_stage_at_its_cap_fits_inside_the_hour():
+    limits = CollectionLimits()
+    worst = (
+        limits.assessment_timeout
+        + limits.plan_timeout * limits.research_waves
+        + limits.research_window
+        + limits.reserve
+    )
+    assert worst <= limits.total_timeout
+    assert limits.wave_window(420) == 1800 and limits.wave_window(2000) == 700
+    assert limits.acquisition_window(1800) == 1650 and limits.acquisition_window(200) == 100
+    with pytest.raises(ValueError, match="verification reserve"):
+        CollectionLimits(editorial_minimum=100, verification_reserve=100)
+    with pytest.raises(ValueError, match="nonnegative"):
+        CollectionLimits(research_tasks=-1)
+
+
+@pytest.mark.asyncio
+async def test_native_tools_are_bounded_queries_of_the_assessment(tmp_path):
+    (tmp_path / "method.md").write_text("Verify claims against the supplied project evidence.")
+    (tmp_path / "other.md").write_text("Another file.")
+    registry = ToolRegistry()
+    registry.register(ReadFileTool(workspace=tmp_path, allowed_dirs=(tmp_path,), follow_binding=False))
+    cut_read = response("read_file", {"path": "method.md"})
+    cut_read.tool_calls[0].run_meta = RunMeta(truncation=TruncationInfo(at_tokens=100))
+    provider = Provider(
+        cut_read,
+        response("read_file", {"path": "method.md"}),
+        response("read_file", {"path": "other.md"}),
+        response(ASSESS, assessment(evidence=("evidence-3",))),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider,
+        Request(objective="Describe the project expert."),
+        registry=registry,
+        limits=CollectionLimits(assessment_calls=5, native_queries=1),
+    )
+    assert result.ready
+    tools = [source for source in result.snapshot.evidence if source.channel == "tool"]
+    assert len(tools) == 1 and "Verify claims" in tools[0].content
+    errors = rejections(provider.requests[3])
+    assert any("truncated" in error for error in errors)
+    assert any("allowance exhausted" in error for error in errors)
+
+
+@pytest.mark.asyncio
+async def test_a_blocking_native_refusal_stops_the_rest_of_the_batch():
+    class Refusal(str):
+        blocks_call = True
+
+    class Registry:
+        def get_definitions(self):
+            return [{"type": "function", "function": {"name": "read_file", "parameters": {}}}]
+
+        async def execute(self, *args, **kwargs):
+            return Refusal("Error: access denied")
+
+    combined = response("read_file", {"path": "private"})
+    combined.tool_calls.extend(response("read_file", {"path": "second"}).tool_calls)
+    provider = Provider(
+        combined, response(ASSESS, assessment()), response(SUBMIT, description()), response(REVIEW, accepted())
+    )
+    result = await collect_information(provider, Request(objective="Inspect permitted evidence."), registry=Registry())
+    assert result.ready
+    assert any("blocked this batch" in error for error in rejections(provider.requests[1]))
+
+
+@pytest.mark.asyncio
+async def test_listed_sources_are_read_by_the_host_before_the_assessment(tmp_path):
+    (tmp_path / "expert.md").write_text("A project reviewer who checks evidence.")
+    (tmp_path / "long.md").write_text("x" * (SOURCE_CHARS + 10))
+    context = {
+        "interaction_sources": {
+            "information.material.1.expert.md": {
+                "path": str(tmp_path / "expert.md"),
+                "source_path": "/home/uploads/materials/1-pack/expert.md",
+                "worker_path": "uploads/materials/1-pack/expert.md",
+                "digest": "abc",
+            },
+            "information.material.1.long.md": {"path": str(tmp_path / "long.md"), "digest": "def"},
+            "information.material.1.gone.md": {"path": str(tmp_path / "gone.md"), "digest": "ghi"},
+        }
+    }
+    provider = Provider(
+        response(ASSESS, assessment(evidence=("evidence-3",))),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider, Request(objective="Describe.", context=context), records=tmp_path / "run"
+    )
+    assert result.ready
+    read = [source for source in result.snapshot.evidence if source.channel == "tool"]
+    assert len(read) == 2 and read[0].sources == ("uploads/materials/1-pack/expert.md#sha256=abc",)
+    assert "truncated at" in read[1].content and len(read[1].content) < SOURCE_CHARS + 200
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert [row.get("read", False) for row in packet["sources"]] == [True, True, False]
+    assert "A project reviewer" in packet["sources"][0]["text"] and "error" in packet["sources"][2]
+    recorded = json.loads((tmp_path / "run/sources.json").read_text())
+    assert "text" not in recorded[0] and recorded[1]["truncated"] is True
 
 
 @pytest.mark.asyncio
@@ -648,7 +752,7 @@ async def test_focused_followup_accepts_answers_and_preserves_other_pending_ques
             dimension="cases",
             question="Are there historical cases?",
             reason="Additional examples would help.",
-            blocking=False,
+            assumption="Worked examples stand in for cases.",
         ),
     )
     previous = snapshot()
@@ -658,7 +762,9 @@ async def test_focused_followup_accepts_answers_and_preserves_other_pending_ques
     data = previous.description.model_dump(mode="json")
     data["unresolved"] = [questions[1].model_dump(mode="json")]
     data["sections"][4].update(text="The team lead approves exceptions.", evidence=["evidence-4"])
-    provider = Provider(response(SUBMIT, data), response(REVIEW, accepted()))
+    provider = Provider(
+        response(ASSESS, assessment(dimensions=("methods",))), response(SUBMIT, data), response(REVIEW, accepted())
+    )
     result = await collect_information(
         provider,
         Request(
@@ -676,6 +782,129 @@ async def test_focused_followup_accepts_answers_and_preserves_other_pending_ques
     assert Snapshot.model_validate_json((tmp_path / "records/snapshot.json").read_text()) == result.snapshot
     with pytest.raises(ValidationError, match="known questions inside"):
         Request(objective="Resolve methods.", previous=previous, focus=("methods",), answers={"question-2": "Yes"})
+
+
+@pytest.mark.asyncio
+async def test_sections_and_open_points_outside_focus_are_preserved():
+    outside = Question(
+        id="outside", dimension="cases", question="Any incidents?", reason="None supplied.", assumption="None yet."
+    )
+    base = snapshot()
+    previous = Snapshot(
+        description=base.description.model_copy(update={"unresolved": (outside,)}), evidence=base.evidence
+    )
+    changed = previous.description.model_dump(mode="json")
+    changed["sections"][6]["text"] = "A rewritten cases section."
+    dropped = previous.description.model_dump(mode="json")
+    dropped["unresolved"] = []
+    kept = previous.description.model_dump(mode="json")
+    kept["sections"][2]["text"] = "Updated knowledge."
+    provider = Provider(
+        response(ASSESS, assessment(dimensions=("knowledge",))),
+        response(SUBMIT, changed),
+        response(SUBMIT, dropped),
+        response(SUBMIT, kept),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider, Request(objective="Recheck knowledge.", previous=previous, focus=("knowledge",))
+    )
+    assert result.ready and result.changed_dimensions == ("knowledge",)
+    errors = rejections(provider.requests[3])
+    assert any("section outside focus: cases" in error for error in errors)
+    assert any("open point outside focus: outside" in error for error in errors)
+
+
+@pytest.mark.asyncio
+async def test_uncited_user_constraints_are_still_visible_to_review():
+    answer = "Do not process restricted project data."
+    provider = Provider(
+        response(ASSESS, assessment(questions=[question("role", "What is excluded?")])),
+        response(SUBMIT, description()),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(provider, Request(objective="Build a project reviewer."), ask=lambda q: answer)
+    reviewed = json.loads(provider.requests[-1]["messages"][1]["content"])
+    assert any(row["channel"] == "user" and row["content"] == answer for row in reviewed["evidence"])
+    assert result.snapshot.evidence[-1].id not in result.snapshot.description.references
+
+
+@pytest.mark.asyncio
+async def test_adoption_answers_are_tied_to_the_exact_proposal_and_question():
+    seen = []
+
+    def answer(item):
+        seen.append(item)
+        return "Adopt this proposal for the review team."
+
+    provider = Provider(
+        response(
+            ASSESS,
+            assessment(
+                questions=[
+                    question(text="Adopt this workflow?", proposal="Require a second reviewer for uncertain claims.")
+                ]
+            ),
+        ),
+        response(SUBMIT, description(evidence=("evidence-3",))),
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(provider, Request(objective="Define the workflow."), ask=answer)
+    origin = json.loads(result.snapshot.evidence[-1].origin)
+    assert origin["id"] == seen[0].id
+    assert origin["proposal"] == "Require a second reviewer for uncertain claims."
+    assert "Adopt this proposal" in render(result.snapshot)
+
+
+@pytest.mark.asyncio
+async def test_resource_and_question_changes_are_reported_without_section_changes():
+    prior = snapshot()
+    pending = Question(id="known", dimension="methods", question="Which service?", reason="Access is unknown.")
+    prior = Snapshot(
+        description=prior.description.model_copy(update={"unresolved": (pending,)}), evidence=prior.evidence
+    )
+    data = prior.description.model_dump(mode="json")
+    data["unresolved"] = []
+    data["resources"] = [
+        {
+            "name": "Registry",
+            "purpose": "Check evidence",
+            "availability": "unavailable",
+            "requirements": ["User access is needed."],
+        }
+    ]
+    provider = Provider(
+        response(ASSESS, assessment(dimensions=("methods",))), response(SUBMIT, data), response(REVIEW, accepted())
+    )
+    result = await collect_information(
+        provider,
+        Request(
+            objective="Clarify prerequisites.",
+            previous=prior,
+            focus=("methods",),
+            answers={"known": "The registry is unavailable; use supplied evidence only."},
+            answers_version=prior.identity,
+        ),
+    )
+    assert result.changed_dimensions == ()
+    assert result.resources_changed and result.questions_changed
+
+
+def test_handover_keeps_reference_transcripts_out_of_the_worker_workspace(tmp_path):
+    original = snapshot()
+    raw = Evidence(
+        id="reference-data",
+        channel="tool",
+        origin="reference product",
+        content="Original customer identity, secret example values, and product-specific installation instructions.",
+    )
+    information = original.model_copy(update={"evidence": (*original.evidence, raw)})
+    result = Result(snapshot=information, review=Review.model_validate(accepted()))
+    worker = SimpleNamespace(baseline=SimpleNamespace(config=SimpleNamespace(workspace_path=tmp_path)))
+    assert handover_information(worker, result) == INFORMATION_FILE
+    text = (tmp_path / INFORMATION_FILE).read_text()
+    assert "Professional knowledge" in text and "Original customer identity" not in text
+    assert set(path.name for path in (tmp_path / "uploads/information").iterdir()) == {"expert.md", "version.json"}
 
 
 def test_information_handoff_checks_base_version_content_and_pending_curation(tmp_path):
@@ -703,74 +932,6 @@ def test_information_handoff_checks_base_version_content_and_pending_curation(tm
     (worker.baseline.config.workspace_path / INFORMATION_FILE).write_text("Unversioned edit")
     with pytest.raises(ValueError, match="changed outside"):
         handover_information(worker, updated)
-
-
-@pytest.mark.asyncio
-async def test_uncited_user_constraints_are_still_visible_to_review():
-    answer = "Do not process restricted project data."
-    provider = Provider(
-        response(ASK, {"dimension": "role", "question": "What is excluded?", "reason": "Establish scope."}),
-        response(SUBMIT, description()),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Build a project reviewer."), ask=lambda q: answer)
-    reviewed = json.loads(provider.requests[-1]["messages"][1]["content"])
-    assert any(row["channel"] == "user" and row["content"] == answer for row in reviewed["evidence"])
-    assert result.snapshot.evidence[-1].id not in result.snapshot.description.references
-
-
-@pytest.mark.asyncio
-async def test_guidance_is_read_before_grouping_and_can_change_the_group():
-    tasks = []
-
-    async def research(task):
-        tasks.append(task)
-        return {"finding": "Record scope and uncertainty together."}
-
-    provider = Provider(
-        response(RESEARCH, research_group()),
-        response(GUIDANCE, {"question": "How to review uncertain evidence?", "dimensions": ["knowledge", "methods"]}),
-        response(RESEARCH, research_group(question="How should scope and uncertainty be reviewed together?")),
-        response(SUBMIT, description(evidence=("evidence-3",))),
-        response(REVIEW, accepted()),
-    )
-    await collect_information(provider, Request(objective="Review evidence.", guidance=(guide(),)), research=research)
-    assert len(tasks) == 1 and "together" in tasks[0].brief.questions[0]
-    messages = provider.requests[2]["messages"]
-    assert any("prepare_research" in row.get("content", "") for row in messages if row["role"] == "tool")
-    assert any("guide-only-source" in row.get("content", "") for row in messages if row["role"] == "tool")
-
-
-@pytest.mark.asyncio
-async def test_resource_and_question_changes_are_reported_without_section_changes():
-    prior = snapshot()
-    pending = Question(id="known", dimension="methods", question="Which service?", reason="Access is unknown.")
-    prior = Snapshot(
-        description=prior.description.model_copy(update={"unresolved": (pending,)}), evidence=prior.evidence
-    )
-    data = prior.description.model_dump(mode="json")
-    data["unresolved"] = []
-    data["resources"] = [
-        {
-            "name": "Registry",
-            "purpose": "Check evidence",
-            "availability": "unavailable",
-            "requirements": ["User access is needed."],
-        }
-    ]
-    provider = Provider(response(SUBMIT, data), response(REVIEW, accepted()))
-    result = await collect_information(
-        provider,
-        Request(
-            objective="Clarify prerequisites.",
-            previous=prior,
-            focus=("methods",),
-            answers={"known": "The registry is unavailable; use supplied evidence only."},
-            answers_version=prior.identity,
-        ),
-    )
-    assert result.changed_dimensions == ()
-    assert result.resources_changed and result.questions_changed
 
 
 @pytest.mark.parametrize("checkpoint", ["composition.json", "attribution-scope/root/curation/pending.json"])
@@ -820,34 +981,6 @@ def test_review_cannot_be_reused_after_changing_its_snapshot(tmp_path):
         Result.model_validate(data)
 
 
-@pytest.mark.asyncio
-async def test_adoption_answers_are_tied_to_the_exact_proposal_and_question():
-    seen = []
-
-    def answer(question):
-        seen.append(question)
-        return "Adopt this proposal for the review team."
-
-    provider = Provider(
-        response(
-            ASK,
-            {
-                "dimension": "methods",
-                "question": "Adopt this workflow?",
-                "proposal": "Require a second reviewer for uncertain claims.",
-                "reason": "This is an organisational choice.",
-            },
-        ),
-        response(SUBMIT, description(evidence=("evidence-3",))),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Define the workflow."), ask=answer)
-    origin = json.loads(result.snapshot.evidence[-1].origin)
-    assert origin["id"] == seen[0].id
-    assert origin["proposal"] == "Require a second reviewer for uncertain claims."
-    assert "Adopt this proposal" in render(result.snapshot)
-
-
 def test_abandoned_composition_scope_does_not_block_new_information(tmp_path):
     worker = SimpleNamespace(
         root=tmp_path / "run", baseline=SimpleNamespace(config=SimpleNamespace(workspace_path=tmp_path / "home"))
@@ -863,21 +996,19 @@ def test_abandoned_composition_scope_does_not_block_new_information(tmp_path):
 
 def test_answers_refuse_another_snapshot_even_when_question_ids_match():
     base = snapshot()
-    question = Question(
+    item = Question(
         id="known-question",
         dimension="methods",
         question="Adopt this method?",
         proposal="Use two reviewers.",
         reason="An organisational decision is needed.",
     )
-    previous = Snapshot(
-        description=base.description.model_copy(update={"unresolved": (question,)}), evidence=base.evidence
-    )
+    previous = Snapshot(description=base.description.model_copy(update={"unresolved": (item,)}), evidence=base.evidence)
     with pytest.raises(ValueError, match="exact previous information version"):
         Request(
             objective="Resolve adoption.",
             previous=previous,
-            answers={question.id: "Yes"},
+            answers={item.id: "Yes"},
             answers_version="another-version",
         )
 
@@ -891,308 +1022,3 @@ def test_recorded_information_restores_source_scope_on_a_new_worker():
     information_scope(worker, feedback)
     information_scope(worker, feedback)
     assert worker.withheld.paths == ("evaluation/*", "docs/research-case.md")
-
-
-@pytest.mark.asyncio
-async def test_review_repair_acknowledges_the_prior_submission_before_next_model_call():
-    def revise(kwargs):
-        messages = kwargs["messages"]
-        submitted = next(
-            index for index, row in enumerate(messages) if row["role"] == "assistant" and row.get("tool_calls")
-        )
-        acknowledgement = messages[submitted + 1]
-        assert acknowledgement["role"] == "tool"
-        assert acknowledgement["tool_call_id"] == messages[submitted]["tool_calls"][0]["id"]
-        assert json.loads(acknowledgement["content"])["status"] == "submitted_for_review"
-        return response(SUBMIT, description(text="A corrected description."))
-
-    provider = Provider(
-        response(SUBMIT, description()),
-        response(REVIEW, {"accepted": False, "reason": "Clarify scope", "issues": ["State the limitation."]}),
-        revise,
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Describe the expert."))
-    assert result.ready
-    review_input = json.loads(provider.requests[-1]["messages"][1]["content"])
-    assert review_input["previous_reviews"][0]["issues"] == ["State the limitation."]
-
-
-@pytest.mark.asyncio
-async def test_collector_owns_repair_and_rejected_content_never_becomes_evidence(tmp_path):
-    tasks = []
-
-    async def research(task):
-        tasks.append(task)
-        if len(tasks) == 1:
-            return {
-                "synthesis": "Unsupported operational claim.",
-                "review": {
-                    "accepted": False,
-                    "reason": "Missing conditions.",
-                    "issues": ["Qualify when the method applies."],
-                },
-            }
-        assert task.previous_attempt == tasks[0].attempt
-        assert task.brief.questions == ("When is the method applicable?",)
-        return {"findings": [], "synthesis": "A qualified method.", "review": accepted()}
-
-    def repair(request):
-        feedback = json.loads(request["messages"][-1]["content"])
-        assert not feedback["review"]["accepted"]
-        assert "Unsupported operational claim" not in json.dumps(feedback)
-        assert feedback["research_groups_remaining"] == 0
-        return response(
-            RESEARCH, research_group(question="When is the method applicable?", previous_attempt=feedback["attempt"])
-        )
-
-    provider = Provider(
-        response(RESEARCH, research_group()),
-        repair,
-        response(SUBMIT, description(evidence=("evidence-3",))),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider,
-        Request(objective="Describe the expert."),
-        research=research,
-        limits=CollectionLimits(research_tasks=1),
-        records=tmp_path / "run",
-    )
-    assert result.ready and len(tasks) == 2
-    assert "Unsupported operational claim" not in result.snapshot.model_dump_json()
-    state = json.loads((tmp_path / "run/research-attempts.json").read_text())
-    assert state["research-1"]["superseded"] and state["research-2"]["accepted"]
-
-
-@pytest.mark.asyncio
-async def test_collector_cannot_branch_from_an_old_attempt_to_reset_revision_allowance():
-    tasks = []
-
-    async def research(task):
-        tasks.append(task)
-        return {"review": {"accepted": False, "reason": "Unsupported.", "issues": ["Find supporting evidence."]}}
-
-    provider = Provider(
-        response(RESEARCH, research_group()),
-        response(RESEARCH, research_group(previous_attempt="research-1")),
-        response(RESEARCH, research_group(previous_attempt="research-1")),
-        response(RESEARCH, research_group(previous_attempt="research-2")),
-        response(
-            SUBMIT,
-            description(
-                unresolved=[
-                    {
-                        "id": "method",
-                        "dimension": "methods",
-                        "question": "What method is supported?",
-                        "reason": "Research remains incomplete.",
-                        "channel": "research",
-                        "blocking": True,
-                    }
-                ]
-            ),
-        ),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider,
-        Request(objective="Describe the expert."),
-        research=research,
-        limits=CollectionLimits(research_tasks=1, research_revisions=1),
-    )
-    assert len(tasks) == 2 and result.status == "incomplete"
-    errors = [
-        json.loads(row["content"]).get("error", "")
-        for row in provider.requests[-2]["messages"]
-        if row["role"] == "tool"
-    ]
-    assert any("latest unaccepted" in error for error in errors)
-    assert any("revision allowance exhausted" in error for error in errors)
-
-
-@pytest.mark.asyncio
-async def test_overall_deadline_cancels_nested_research_and_retains_unfinished_snapshot(tmp_path):
-    cancelled = []
-
-    async def research(task):
-        try:
-            await asyncio.sleep(10)
-        finally:
-            cancelled.append(task.attempt)
-
-    provider = Provider(response(RESEARCH, research_group()))
-    result = await collect_information(
-        provider,
-        Request(objective="Describe the expert."),
-        research=research,
-        limits=CollectionLimits(total_timeout=0.02, reserve=0, research_minimum=0.001, verification_reserve=0),
-        records=tmp_path / "run",
-    )
-    assert cancelled == ["research-1"]
-    assert result.status == "incomplete" and result.stop_reason == "time_limit"
-    assert not any(e.channel == "research" for e in result.snapshot.evidence)
-    assert (tmp_path / "run/conversation.json").exists()
-    assert Result.model_validate_json((tmp_path / "run/result.json").read_text()).stop_reason == "time_limit"
-
-
-@pytest.mark.asyncio
-async def test_call_exhaustion_returns_an_incomplete_result_instead_of_losing_evidence():
-    provider = Provider(response("unknown_tool", {}))
-    result = await collect_information(
-        provider, Request(objective="Describe the expert."), limits=CollectionLimits(calls=1)
-    )
-    assert result.stop_reason == "call_limit" and not result.ready
-    assert result.snapshot.evidence[0].content == "Describe the expert."
-
-
-@pytest.mark.asyncio
-async def test_deadline_preserves_focused_state_and_reports_actual_changes():
-    class Slow:
-        async def chat_with_retry(self, **kwargs):
-            await asyncio.sleep(10)
-
-    previous = snapshot()
-    result = await collect_information(
-        Slow(),
-        Request(objective="Recheck knowledge.", previous=previous, focus=("knowledge",)),
-        limits=CollectionLimits(total_timeout=0.01),
-    )
-    assert result.snapshot.description == previous.description
-    assert result.changed_dimensions == () and not result.resources_changed and not result.questions_changed
-    assert result.stop_reason == "time_limit" and not result.ready
-
-
-@pytest.mark.asyncio
-async def test_default_hour_budget_is_shared_and_elapsed_time_is_not_refunded(monkeypatch):
-    from experimental.research import collection
-
-    clock = [100.0]
-    monkeypatch.setattr(collection, "time", SimpleNamespace(monotonic=lambda: clock[0]))
-    remaining = []
-
-    async def research(task):
-        remaining.append(task.remaining_seconds)
-        clock[0] += 901
-        return {"finding": "A supported method."}
-
-    provider = Provider(
-        response(RESEARCH, research_group()),
-        response(RESEARCH, research_group()),
-        response(SUBMIT, description(evidence=("evidence-3", "evidence-4"))),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Describe the expert."), research=research)
-    assert result.ready
-    assert remaining == [3000, 2099]
-    packet = json.loads(provider.requests[0]["messages"][1]["content"])
-    assert packet["acquisition_allowance"]["total_timeout_seconds"] == 3600
-    assert packet["acquisition_allowance"]["submission_reserve_seconds"] == 600
-
-
-@pytest.mark.asyncio
-async def test_research_is_refused_once_the_submission_reserve_begins():
-    async def unused(task):
-        pytest.fail("no research may start inside the submission reserve")
-
-    def preserve_gap(request):
-        error = json.loads(request["messages"][-1]["content"])["error"]
-        assert "submission reserve" in error and "submit" in error
-        return response(SUBMIT, description())
-
-    provider = Provider(response(RESEARCH, research_group()), preserve_gap, response(REVIEW, accepted()))
-    result = await collect_information(
-        provider,
-        Request(objective="Describe the expert."),
-        research=unused,
-        limits=CollectionLimits(total_timeout=100, reserve=70, research_minimum=60, verification_reserve=20),
-    )
-    assert result.ready
-    packet = json.loads(provider.requests[0]["messages"][1]["content"])
-    assert packet["acquisition_allowance"]["submission_reserve_seconds"] == 70
-    assert packet["acquisition_allowance"]["questions_per_group"] == 2
-
-
-@pytest.mark.asyncio
-async def test_research_time_excludes_the_reserve_and_groups_are_capped_by_questions():
-    delegated = []
-
-    async def research(task):
-        delegated.append(task)
-        return {"finding": "A supported method.", "sources": ["https://example.org/method"]}
-
-    def narrowed(request):
-        error = json.loads(request["messages"][-1]["content"])["error"]
-        assert "at most 2 questions" in error
-        return response(RESEARCH, research_group(brief=research_brief(questions=["One?", "Two?"])))
-
-    provider = Provider(
-        response(RESEARCH, research_group(brief=research_brief(questions=["One?", "Two?", "Three?"]))),
-        narrowed,
-        response(SUBMIT, description(evidence=("evidence-3",))),
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(
-        provider,
-        Request(objective="Describe the expert."),
-        research=research,
-        limits=CollectionLimits(total_timeout=1000, reserve=400, research_timeout=3600),
-    )
-    assert result.ready and len(delegated) == 1
-    assert 590 < delegated[0].remaining_seconds <= 600
-    replies = [json.loads(row["content"]) for row in provider.requests[2]["messages"] if row["role"] == "tool"]
-    delivered = next(reply for reply in replies if "evidence" in reply)
-    assert 0 < delivered["research_seconds_available"] <= 600
-
-
-@pytest.mark.asyncio
-async def test_read_sources_reads_listed_sources_together_as_separate_evidence(tmp_path):
-    (tmp_path / "role.md").write_text("The role prompt.")
-    (tmp_path / "skill.md").write_text("x" * 30_500)
-    context = {
-        "interaction_sources": {
-            "material.1.role.md": {
-                "path": str(tmp_path / "role.md"),
-                "source_path": "/home/uploads/role.md",
-                "digest": "a",
-            },
-            "material.1.skill.md": {
-                "path": str(tmp_path / "skill.md"),
-                "source_path": "/home/uploads/skill.md",
-                "digest": "b",
-            },
-        }
-    }
-
-    def submit(request):
-        rejection, reply = (json.loads(row["content"]) for row in request["messages"] if row["role"] == "tool")
-        assert "unknown: ['missing']" in rejection["error"]
-        assert [row["name"] for row in reply["sources"]] == ["material.1.role.md", "material.1.skill.md"]
-        assert reply["sources"][0]["result"] == "The role prompt." and not reply["sources"][0]["truncated"]
-        assert reply["sources"][1]["truncated"] and "truncated at 30000" in reply["sources"][1]["result"]
-        return response(SUBMIT, description(evidence=("evidence-3", "evidence-4")))
-
-    provider = Provider(
-        response(READ, {"names": ["material.1.role.md", "missing"]}),
-        response(READ, {"names": ["material.1.role.md", "material.1.skill.md"]}),
-        submit,
-        response(REVIEW, accepted()),
-    )
-    result = await collect_information(provider, Request(objective="Read the material.", context=context))
-    assert result.ready
-    read = [source for source in result.snapshot.evidence if source.channel == "tool"]
-    assert len(read) == 2 and read[0].sources == ("/home/uploads/role.md#sha256=a",)
-    assert json.loads(read[1].origin)["source"] == "material.1.skill.md"
-    assert READ in {entry["function"]["name"] for entry in provider.requests[0]["tools"]}
-    bare = Provider(response(SUBMIT, description()), response(REVIEW, accepted()))
-    await collect_information(bare, Request(objective="No listed sources."))
-    assert READ not in {entry["function"]["name"] for entry in bare.requests[0]["tools"]}
-
-
-def test_the_researcher_keeps_time_for_verification_and_review_inside_its_window():
-    limits = CollectionLimits()
-    assert limits.acquisition_window(600) == 450
-    assert limits.acquisition_window(320) == 170
-    assert limits.acquisition_window(limits.research_minimum) == 150
-    with pytest.raises(ValueError, match="verification reserve"):
-        CollectionLimits(research_minimum=100, verification_reserve=100)

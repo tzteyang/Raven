@@ -6,7 +6,7 @@ from pathlib import Path
 from ..iteration.compartment import Guard
 from ..iteration.hearing import heard
 from ..iteration.protocols import Handover, Signal
-from ..scenario import Scenario
+from ..scenario import Scenario, contents
 from ..scenario.sealed import sealed_for
 from .curator import collect_for_curator, handover_information
 from .information import Request
@@ -38,19 +38,25 @@ def stage_released(scenario: Scenario, released, home: Path) -> tuple[Path, ...]
 
 
 def release_guard(scenario, released, *, log=None):
-    """Keep later-disclosed material sealed during preparation of an earlier release."""
+    """Keep later-disclosed material sealed during preparation of an earlier release.
+
+    The curator's own seal holds whole: checks, cases and whatever it never sees. A material not yet released is
+    sealed against copying (`Sealed.copying`): text composed from released material can restate one of its clauses
+    in the same order, such as the kinds of ticket a procedure lists for the template it names, which is no leak,
+    while a copied run of it, or any of a short one, still is."""
     selected = released_materials(scenario, released)
+    pending = {
+        name for name, item in scenario.materials.items() if name not in selected and "curator" in item.visibility
+    }
     view = scenario.model_copy(
-        update={
-            "materials": {
-                name: item
-                if name in selected
-                else item.model_copy(update={"visibility": item.visibility - {"partner", "curator"}})
-                for name, item in scenario.materials.items()
-            }
-        }
+        update={"materials": {name: item for name, item in scenario.materials.items() if name not in pending}}
     )
-    return Guard("curator", sealed_for(view, "curator"), log=log)
+    later = [text for name in sorted(pending) for text in contents(scenario.materials[name].path)[0].values()]
+    shown = [text for name in selected for text in contents(scenario.materials[name].path)[0].values()]
+    if scenario.visible("profile", "curator"):
+        shown.append(scenario.situation.profile)
+    shown.extend(text for text in (scenario.exchange.onboarding, scenario.exchange.handover) if text)
+    return Guard("curator", sealed_for(view, "curator").copying(later, visible=shown), log=log)
 
 
 def opening_feedback(scenario, released):
@@ -89,9 +95,10 @@ def scenario_request(
 
 
 def scenario_preparer(scenario, released, material_root, *, records, **options):
-    """Configure first-onboarding preparation; no later-round scheduling is installed."""
+    """Configure first-onboarding preparation; no later-round scheduling is installed. `options` reach
+    `collect_for_curator`, the collector's `model` and `effort` among them."""
 
-    async def prepare(worker, provider, *, feedback=None, model=None, admit=None):
+    async def prepare(worker, provider, *, feedback=None, admit=None):
         names = tuple(released() if callable(released) else released)
         selected = released_materials(scenario, names)
         request = scenario_request(scenario, names, feedback=feedback)
@@ -110,7 +117,6 @@ def scenario_preparer(scenario, released, material_root, *, records, **options):
             request,
             materials=tuple(Path(material_root) / name for name in selected),
             records=records,
-            model=model,
             admit=checked,
             **options,
         )

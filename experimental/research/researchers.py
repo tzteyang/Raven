@@ -25,7 +25,8 @@ from pathlib import Path
 from ..curator.generation.context.render import tool
 from ..curator.harness.declaration import schema_for
 from ..iteration.exchange import exchange, messages
-from .inquiry import NAME, PROMPT, Inquiry
+from .inquiry import NAME, Inquiry
+from .voice import prompt
 
 AGENTS = ("claude", "codex")
 OUTPUT = 20_000
@@ -37,6 +38,15 @@ _AGENT_END = (
 _EXCHANGE_END = (
     "Search with `search` and read pages with `read`. Answer by calling `submit_findings` exactly once; a plain text "
     "reply is not delivered."
+)
+_REVISE_END = (
+    "This is an editorial revision: do not search or read anything new. Repair only the withheld findings and the "
+    "synthesis from the supplied source views; deliver the repaired findings and the corrected synthesis, not the "
+    "findings admitted earlier; copy every passage exactly from a supplied view."
+)
+_AGENT_REVISE_END = _REVISE_END + " Your final answer is the JSON object the output schema describes, and nothing else."
+_EXCHANGE_REVISE_END = (
+    _REVISE_END + " Answer by calling `submit_findings` exactly once; a plain text reply is not delivered."
 )
 
 
@@ -59,7 +69,7 @@ def strict(schema: dict) -> dict:
 
 
 def instructions(end: str) -> str:
-    return f"{PROMPT.read_text().strip()}\n\n{end}"
+    return f"{prompt('research.md')}\n\n{end}"
 
 
 def _codex_tokens(out: bytes) -> int | None:
@@ -336,6 +346,11 @@ class Agent:
         prompt = f"{instructions(_AGENT_END)}\n\n{json.dumps(brief, ensure_ascii=False, indent=2)}"
         return await self.stage(prompt, Inquiry, web=True, records=records, trace=trace)
 
+    async def revise(self, packet: dict, check=None, *, trace=None, records=None) -> tuple[Inquiry, dict]:
+        """Rewrite a delivery from the supplied source views, without web access; the host verifies it again."""
+        prompt = f"{instructions(_AGENT_REVISE_END)}\n\n{json.dumps(packet, ensure_ascii=False, indent=2)}"
+        return await self.stage(prompt, Inquiry, web=False, records=records, trace=trace)
+
     def _claude(self, schema: dict, *, web=True) -> list[str]:
         return [
             "claude",
@@ -434,6 +449,13 @@ class Exchange:
         }
 
     async def research(self, brief: dict, web, check, *, trace=None, records=None) -> tuple[Inquiry, dict]:
+        return await self._exchange(_EXCHANGE_END, brief, check, tools=web.tools(), query=web.queries(), trace=trace)
+
+    async def revise(self, packet: dict, check, *, trace=None, records=None) -> tuple[Inquiry, dict]:
+        """Rewrite a delivery from the supplied source views with no search or reader offered."""
+        return await self._exchange(_EXCHANGE_REVISE_END, packet, check, tools=[], query={}, trace=trace)
+
+    async def _exchange(self, end, packet, check, *, tools, query, trace):
         def accept(arguments) -> Inquiry:
             inquiry = Inquiry.model_validate(arguments)
             reasons = check(inquiry)
@@ -444,16 +466,13 @@ class Exchange:
         started = time.time()
         _, inquiry = await exchange(
             self.provider,
-            messages(instructions(_EXCHANGE_END), brief),
-            [
-                *web.tools(),
-                tool(NAME, "Submit the findings and the questions the web cannot answer.", schema_for(Inquiry)),
-            ],
+            messages(instructions(end), packet),
+            [*tools, tool(NAME, "Submit the findings and the questions the web cannot answer.", schema_for(Inquiry))],
             submit={NAME: accept},
-            query=web.queries(),
+            query=query,
             model=self.model,
             effort=self.effort,
-            max_calls=self.max_calls,
+            max_calls=self.max_calls if query else min(self.max_calls, 4),
             timeout=self.timeout,
             trace=trace,
             label="research",

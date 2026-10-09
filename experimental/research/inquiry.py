@@ -24,8 +24,9 @@ _WRAPPED_WORD = re.compile(r"(?<=[A-Za-z])-(?:[ \t]+|\r?\n[ \t]*)(?=[A-Za-z])")
 
 @dataclass(frozen=True)
 class Finding:
-    """One finding: `kind` is `fact` or `norm`, `sources` the pages it was read from and `evidence` the passage of
-    one of them that states it; `conflicts` explain tensions with supplied information in words."""
+    """One finding: `kind` is `fact` or `norm`, `sources` the pages that hold `evidence`, the passage that states
+    it; `unmatched_sources` are the addresses the researcher also listed where the passage was not found;
+    `conflicts` explain tensions with supplied information in words."""
 
     id: str
     text: str
@@ -35,6 +36,7 @@ class Finding:
     evidence: str
     situation: str = ""
     conflicts: tuple[str, ...] = ()
+    unmatched_sources: tuple[str, ...] = ()
 
     def record(self) -> dict:
         return asdict(self)
@@ -80,7 +82,7 @@ class Inquiry(BaseModel):
 
 @dataclass(frozen=True)
 class Researched:
-    """A research's outcome: the findings that held, the questions left for the party, the findings refused with
+    """A research's outcome: the findings that held, the questions left for the counterpart, the findings refused with
     their reasons, and how the researcher ran (who, on what model, at what cost)."""
 
     findings: tuple[Finding, ...]
@@ -209,16 +211,18 @@ async def verify(
         if reasons:
             refused.append({**found.model_dump(), "reasons": reasons})
             continue
+        matched = tuple(source for source in found.sources if quoted(found.evidence, pages.get(source) or ""))
         kept.append(
             Finding(
                 f"{prefix}-{number}",
                 found.text,
                 found.kind,
                 found.question,
-                tuple(found.sources),
+                matched,
                 found.evidence,
                 found.situation,
                 tuple(found.conflicts),
+                tuple(source for source in found.sources if source not in matched),
             )
         )
     unanswered = []
