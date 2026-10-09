@@ -23,9 +23,11 @@ class GenerationState(BaseModel):
     validation: Validation | None = None
     messages: list[dict] = Field(default_factory=list)
     staged: dict[str, str] = Field(default_factory=dict)
+    edited: list[str] = Field(default_factory=list)
     trace: list[dict] = Field(default_factory=list)
     calls: int = Field(default=0, ge=0)
     queries: int = Field(default=0, ge=0)
+    stage_queries: int = Field(default=0, ge=0)
     checks: int = Field(default=0, ge=0)
     repairs: int = Field(default=0, ge=0)
 
@@ -41,6 +43,7 @@ class GenerationState(BaseModel):
                 "feedback": context.feedback,
                 "observations": context.observations,
                 "previous_plan": context.previous_plan.model_dump(mode="json") if context.previous_plan else None,
+                "commitments": [item.model_dump(mode="json") for item in context.commitments],
                 "exploration": context.exploration,
             }
         )
@@ -57,3 +60,4 @@ class GenerationState(BaseModel):
     def advance(self, stage):
         self.stage = stage
         self.messages = []
+        self.stage_queries = 0

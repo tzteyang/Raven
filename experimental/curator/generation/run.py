@@ -21,6 +21,7 @@ from raven.security.trust import wrap_untrusted
 
 from ...model_calls import argument_errors
 from ..harness import Attributed, Candidate, Plan, Validation
+from ..harness.commitments import coverage
 from ..raven_adapter.observe import plain
 from .context import query, render
 from .context.collect import Context
@@ -31,7 +32,10 @@ from .state import GenerationState
 @dataclass(frozen=True)
 class Limits:
     """`max_output` caps one model call's output tokens (thinking included); None leaves the host's per-call cap,
-    which also bounds any larger value."""
+    which also bounds any larger value.
+
+    `stage_queries` is how many exploration calls one stage may spend out of `max_queries`: a stage that spends them
+    is told to submit, and the stages after it keep the rest of the pool. None leaves the pool as the only cap."""
 
     max_calls: int = 12
     max_queries: int = 8
@@ -39,6 +43,11 @@ class Limits:
     call_timeout: float = 180
     max_checks: int = 3
     max_output: int | None = None
+    stage_queries: int | None = None
+
+    @property
+    def stage_allowance(self) -> int:
+        return self.max_queries if self.stage_queries is None else self.stage_queries
 
     def __post_init__(self):
         if (
@@ -50,6 +59,7 @@ class Limits:
             or self.max_queries < 0
             or self.max_repairs < 0
             or self.max_checks < 0
+            or (self.stage_queries is not None and (not isinstance(self.stage_queries, int) or self.stage_queries < 0))
             or not isfinite(self.call_timeout)
             or self.call_timeout <= 0
             or (self.max_output is not None and (not isinstance(self.max_output, int) or self.max_output < 1))
@@ -111,14 +121,14 @@ def cached(messages: list[dict], tools: list[dict] | None, model: str) -> tuple[
     """Copies of a stage request with cache breakpoints, for a model that reads them only when marked.
 
     The tools, the shared rules and the curation's materials (the first two messages) stay the same across the
-    stages and scopes of one curation, and a stage's messages only grow while the trailing budget changes every
-    call. So the marks go on the tools, those two messages and the last message before the budget: each call reads
-    what the previous call or stage already sent and pays fresh only for what is new.
+    stages and scopes of one curation, and a stage's messages only grow. So the marks go on the tools, those two
+    messages and the last message: each call reads what the previous call or stage already sent and pays fresh
+    only for what is new.
     """
     if not accepts_cache_control(model):
         return messages, tools
     marked = list(messages)
-    tail = next((index for index in range(len(marked) - 2, 1, -1) if _marked(marked[index])), None)
+    tail = next((index for index in range(len(marked) - 1, 1, -1) if _marked(marked[index])), None)
     for index in dict.fromkeys(index for index in (0, 1, tail) if index is not None and index < len(marked)):
         marked[index] = _marked(marked[index]) or marked[index]
     if tools:
@@ -149,6 +159,7 @@ def _shared_tools(context, tool_registry) -> list[dict]:
         repair.reopen(),
         check,
         implement.stage_tool(),
+        implement.edit_tool(),
         shared.gap_tool(),
     ]
     names = [item["function"]["name"] for item in tools]
@@ -158,7 +169,16 @@ def _shared_tools(context, tool_registry) -> list[dict]:
 
 
 STAGED_ACTIONS = frozenset(
-    {select.NAME, select.REVISE, design.NAME, implement.NAME, repair.NAME, CHECK, implement.STAGE_FILE}
+    {
+        select.NAME,
+        select.REVISE,
+        design.NAME,
+        implement.NAME,
+        repair.NAME,
+        CHECK,
+        implement.STAGE_FILE,
+        implement.EDIT_FILE,
+    }
 )
 
 
@@ -168,6 +188,8 @@ def _budget(state, limits) -> str:
         queries=limits.max_queries - state.queries,
         checks=limits.max_checks - state.checks,
         repairs=limits.max_repairs - state.repairs,
+        stage_queries=min(limits.stage_allowance - state.stage_queries, limits.max_queries - state.queries),
+        stage_allowance=limits.stage_allowance,
     )
 
 
@@ -193,12 +215,14 @@ async def ask(
     tools=None,
     staged=None,
     budget=None,
+    effort=None,
 ):
     """One stage's tool loop. `schemas` gives the narrowed argument schema of each submission this stage accepts.
 
     `tools` is the request's tool list (the curation's shared list by default), `staged` the submission and preflight
-    actions in it that a stage offers only when its parsers name them, and `budget(state, limits)` the trailing
-    budget note; an exchange with its own tools and budget, such as the attribution's, supplies all three."""
+    actions in it that a stage offers only when its parsers name them, and `budget(state, limits)` the budget note
+    appended before each call; an exchange with its own tools and budget, such as the attribution's, supplies all three.
+    `effort` is the reasoning effort the stage's calls start from, the provider's own when None."""
     trace = state.trace
     tools = _shared_tools(context, tool_registry) if tools is None else tools
     staged = STAGED_ACTIONS if staged is None else staged
@@ -207,7 +231,7 @@ async def ask(
         *parsers,
         shared.GAP,
         *((CHECK,) if check_parser is not None else ()),
-        *((implement.STAGE_FILE,) if stage_files else ()),
+        *((implement.STAGE_FILE, implement.EDIT_FILE) if stage_files else ()),
     }
     available = {name for name in (item["function"]["name"] for item in tools) if name not in staged} | offered
     if not state.messages:
@@ -217,7 +241,7 @@ async def ask(
             {
                 **stage_materials,
                 "submission_schemas": schemas,
-                "history": [event for event in trace if event.get("event") != "model.call"],
+                "history": render.history(trace),
             },
             tools=tools,
             available=available,
@@ -235,7 +259,10 @@ async def ask(
         if progress:
             progress(state)
         shown = replace(limits, max_calls=limits.max_calls + grace) if grace else limits
-        request_messages = render.trailing(messages, budget(state, shown))
+        # The note stays in the conversation: the provider's prompt cache serves a request only up to the end of an
+        # earlier request it has seen whole, so each request must begin with the previous one, note included.
+        messages.append({"role": "user", "content": budget(state, shown)})
+        request_messages = list(messages)
         state.calls += 1
         trace.append({"stage": stage, "event": "model.call", "call": state.calls})
         default = getattr(provider, "get_default_model", None)
@@ -248,7 +275,7 @@ async def ask(
                     model=model,
                     tool_choice="auto",
                     **({"max_tokens": limits.max_output} if limits.max_output else {}),
-                    **({"reasoning_effort": THINKING[thinking]} if thinking else {}),
+                    **({"reasoning_effort": THINKING[thinking] or effort} if thinking or effort else {}),
                 )
         except asyncio.CancelledError:
             raise
@@ -260,7 +287,10 @@ async def ask(
         if response.finish_reason == "error":
             raise GenerationInterruptedError(f"{stage}: provider error: {response.content}", state)
         if response.content:
-            trace.append({"stage": stage, "event": "model.note", "content": response.content})
+            note = {"stage": stage, "event": "model.note", "content": render.echoed_text(response.content)}
+            if len(response.content) > render.ECHOED_CHARS:
+                note["content_chars"] = len(response.content)
+            trace.append(note)
         assistant = render.assistant_message(response)
         messages.append(assistant)
         invalid_calls = argument_errors(response)
@@ -358,6 +388,24 @@ async def ask(
                     {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}
                 )
                 continue
+            if stage_files and call.name == implement.EDIT_FILE:
+                candidate_files = state.candidate.artifact.files if state.stage == "repair" and state.candidate else {}
+                installed = (context.facts.get("authored") or {}).get("files") or {}
+                try:
+                    path, content = implement.edit(call.arguments, (state.staged, candidate_files, installed))
+                    state.staged[path] = content
+                    if path not in state.edited:
+                        state.edited.append(path)
+                    result = {"edited": path, "chars": len(content), "staged_files": sorted(state.staged)}
+                except (ValueError, TypeError) as exc:
+                    result = {"error": str(exc)[:2000]}
+                trace.append(
+                    {"stage": stage, "event": "file.edited", "path": call.arguments.get("path"), "result": result}
+                )
+                messages.append(
+                    {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}
+                )
+                continue
             if call.name == CHECK and check_parser is not None:
                 if state.checks >= limits.max_checks:
                     result = {"error": "preflight budget exhausted; submit the candidate or report the gap"}
@@ -373,6 +421,7 @@ async def ask(
                             "passed": validation.passed,
                             "errors": validation.errors,
                             "observations": render.observations(validation.observations),
+                            "changes": implement.changes(context.facts.get("authored") or {}, candidate),
                             "candidate": location,
                         }
                     except (ValueError, TypeError, KeyError) as exc:
@@ -382,9 +431,12 @@ async def ask(
                     {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}
                 )
                 continue
-            if state.queries >= limits.max_queries:
+            if state.queries >= limits.max_queries or state.stage_queries >= limits.stage_allowance:
                 result = {
                     "error": "exploration query budget exhausted; use retained evidence to submit or report a gap"
+                    if state.queries >= limits.max_queries
+                    else f"this stage's exploration allowance of {limits.stage_allowance} calls is spent; submit "
+                    "from what you have read, revise the selection, or report a gap"
                 }
                 trace.append(
                     {
@@ -398,6 +450,7 @@ async def ask(
                 messages.append({"role": "tool", "tool_call_id": call.id, "content": json.dumps(result)})
                 continue
             state.queries += 1
+            state.stage_queries += 1
             if tool_registry is not None and tool_registry.get(call.name) is not None:
                 set_current_tool_call_id(call.id)
                 output = await tool_registry.execute(call.name, call.arguments, run_meta=call.run_meta)
@@ -522,6 +575,7 @@ async def generate(
                 "event": "validation",
                 "errors": validation.errors,
                 "observations": validation.observations,
+                "changes": implement.changes(context.facts.get("authored") or {}, candidate),
             }
         )
         if progress:
@@ -533,18 +587,27 @@ async def generate(
         state.repairs += 1
         state.plan = candidate.plan
         state.candidate, state.validation = candidate, validation
+        # Repair starts from the checked candidate: a staged file the submission replaced holds the submitted copy,
+        # and the edits made before the check are part of that candidate.
+        files = candidate.artifact.files
+        state.staged = {path: files[path] for path in state.staged if path in files}
+        state.edited = []
         state.advance("repair")
         return None
 
     def parse_selection(value):
         return context.declaration.parse_selection(value, attribution.attribution)
 
+    # What the current commitments leave open against this curation's inputs; computed after the attribution, which
+    # diagnoses those inputs, so only the stages that choose and design see it.
+    open_inputs = coverage(context.commitments, [diagnosis.about for diagnosis in attribution.attribution.diagnoses])
+
     while True:
         if state.stage == "select":
             _, state.selection = await run_stage(
                 "select",
                 ("select",),
-                select.stage_materials(attribution.attribution),
+                {**select.stage_materials(attribution.attribution), "commitment_coverage": open_inputs},
                 {},
                 {select.NAME: parse_selection},
             )
@@ -561,10 +624,10 @@ async def generate(
             name, proposal = await run_stage(
                 "design",
                 ("design",),
-                design.materials(context, selection),
+                {**design.materials(context, selection), "commitment_coverage": open_inputs},
                 {design.NAME: design.schema(context.declaration, selection)},
                 {
-                    design.NAME: lambda value: design.parse(context.declaration, selection, value),
+                    design.NAME: lambda value: design.parse(context, selection, attribution.attribution, value),
                     select.REVISE: parse_selection,
                 },
             )
@@ -584,21 +647,34 @@ async def generate(
                 raise ValueError("repair state is missing its candidate or validation")
             materials = repair.materials(context, selection, state.candidate, state.validation)
         artifact_schema = context.declaration.artifact_schema(plan)
+
+        def parse_artifact(value):
+            return implement.parse(
+                context.declaration,
+                plan,
+                value,
+                state.staged,
+                authored,
+                commitments=context.commitments,
+                edited=state.edited,
+            )
+
         name, proposal = await run_stage(
             state.stage,
             ("implement",) if state.stage == "implement" else ("implement", "repair"),
             materials,
             {implement.NAME: artifact_schema, CHECK: artifact_schema},
             {
-                implement.NAME: lambda value: implement.parse(context.declaration, plan, value, state.staged, authored),
+                implement.NAME: parse_artifact,
                 repair.NAME: repair.Revision.model_validate,
                 select.REVISE: parse_selection,
             },
-            check_parser=lambda value: implement.parse(context.declaration, plan, value, state.staged, authored),
+            check_parser=parse_artifact,
             stage_files=True,
         )
         if name in (repair.NAME, select.REVISE):
             state.staged = {}
+            state.edited = []
             if stage_candidate:
                 stage_candidate(None)
             if name == select.REVISE:

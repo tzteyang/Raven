@@ -14,7 +14,8 @@ _GROUPS: ContextVar[tuple] = ContextVar("curator_operation_groups", default=())
 
 @dataclass
 class Operation:
-    """Host-owned identity and one inference allowance across a sequential peer chain."""
+    """Host-owned identity and the inference allowance a sequential peer chain shares: the calls it made and when
+    the first one started."""
 
     id: str
     owner: str
@@ -22,7 +23,8 @@ class Operation:
     source_id: str | None
     task: asyncio.Task
     active: bool = True
-    inference_used: bool = False
+    inference_calls: int = 0
+    inference_started: float | None = None
 
 
 _OPERATION: ContextVar[Operation | None] = ContextVar("curator_strategy_operation", default=None)

@@ -122,6 +122,7 @@ def _root_scope(worker, inspection, actual_children, directory):
         artifact=worker.artifact,
         root=Path(directory) / "root",
         last_plan=worker.last_plan,
+        commitments=worker.commitments,
         last_execution=worker.last_execution,
         inspect=root_inspection,
         check=root_check,
@@ -323,6 +324,7 @@ async def improve(
                         root=directory,
                         artifact=child.artifact,
                         last_plan=child.plan,
+                        commitments=child.commitments,
                         last_execution=None,
                         inspect=inspect,
                         check=check,
@@ -379,10 +381,12 @@ async def improve(
                     withdrawn_children=withdrawn,
                     revision={
                         "root": worker.artifact.model_dump(mode="json"),
+                        "commitments": [item.model_dump(mode="json") for item in worker.commitments],
                         "children": {
                             name: {
                                 "artifact": child.artifact.model_dump(mode="json"),
                                 "plan": child.plan.model_dump(mode="json") if child.plan else None,
+                                "commitments": [item.model_dump(mode="json") for item in child.commitments],
                             }
                             for name, child in worker.children.items()
                         },

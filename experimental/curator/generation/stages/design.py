@@ -1,9 +1,12 @@
 """Develop selected entries into a checked mechanism before generating code."""
 
 import json
+from collections import Counter
 
 from ...harness import Declaration, Plan
 from ...harness.artifact import Selection
+from ...harness.attribution import Attribution
+from ...harness.commitments import check_design
 from ..context.collect import Context
 from ..context.render import tool
 
@@ -22,10 +25,38 @@ def _decoded(value):
 
 
 def materials(context: Context, selection: Selection) -> dict:
-    """What design adds to the curation's materials: the current selection and its expanded contracts."""
+    """What design adds to the curation's materials: the current selection and its expanded contracts.
+
+    A knowledge document that several selected contracts carry travels once, under `shared_knowledge`; each contract
+    names it and keeps the full text only of what it alone carries. Listed references are deduplicated the same way
+    under `shared_references`, each keeping one name to read it by, and a reference another selected contract
+    inlines in full is not listed at all."""
+    contracts = [context.declaration.target(name).describe() for name in selection.targets]
+    carriers = Counter(item["source"] for contract in contracts for item in contract["knowledge"])
+    shared = {}
+    for contract in contracts:
+        for item in contract["knowledge"]:
+            if carriers[item["source"]] > 1:
+                shared.setdefault(item["source"], item)
+        contract["shared_knowledge"] = [item["source"] for item in contract["knowledge"] if item["source"] in shared]
+        contract["knowledge"] = [item for item in contract["knowledge"] if item["source"] not in shared]
+    inlined = set(carriers)
+    listed = Counter(item["source"] for contract in contracts for item in contract["references"])
+    shared_references = {}
+    for contract in contracts:
+        for item in contract["references"]:
+            if listed[item["source"]] > 1 and item["source"] not in inlined:
+                shared_references.setdefault(item["source"], item)
+        contract["references"] = [
+            item
+            for item in contract["references"]
+            if item["source"] not in shared_references and item["source"] not in inlined
+        ]
     return {
         "selection": selection.model_dump(mode="json"),
-        "selected_contracts": [context.declaration.target(name).describe() for name in selection.targets],
+        "selected_contracts": contracts,
+        "shared_knowledge": list(shared.values()),
+        "shared_references": list(shared_references.values()),
     }
 
 
@@ -42,9 +73,15 @@ def output(declaration: Declaration) -> dict:
     )
 
 
-def parse(declaration: Declaration, selection: Selection, arguments: dict) -> Plan:
+def parse(context: Context, selection: Selection, attribution: Attribution, arguments: dict) -> Plan:
+    """A design checked against the selection, with its commitment changes checked against the current
+    commitments and the diagnosed inputs, and every added commitment given its id."""
     if isinstance(arguments, dict):
-        arguments = {key: _decoded(value) if key in ("changes", "state") else value for key, value in arguments.items()}
+        arguments = {
+            key: _decoded(value) if key in ("changes", "state", "commitments") else value
+            for key, value in arguments.items()
+        }
+    declaration = context.declaration
     plan = declaration.parse_plan(arguments)
     if {change.target for change in plan.changes} != set(selection.targets):
         raise ValueError("design must cover exactly the current selection; revise selection first")
@@ -53,4 +90,13 @@ def parse(declaration: Declaration, selection: Selection, arguments: dict) -> Pl
         raise ValueError(
             f"say for every change whether it modifies, replaces or adds a mechanism (treatment): {untreated}"
         )
-    return plan
+    commitments = check_design(
+        context.commitments,
+        plan.commitments,
+        surfaces=[target.name for target in declaration.targets],
+        inputs=[diagnosis.about for diagnosis in attribution.diagnoses],
+        selected=selection.targets,
+        grounds=selection.grounds,
+        authored=(context.facts.get("authored") or {}).get("values") or {},
+    )
+    return plan.model_copy(update={"commitments": commitments})

@@ -5,11 +5,25 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from .... import audience
 from ...harness.channels import execution_control, model_decision, model_input, tool_interaction
+from ...harness.commitments import active
 from ...harness.declaration import schema_for
 from ...harness.view import Mechanism, project
 from ..context import render
 from ..context.collect import Context, read_reference
 from ..context.render import tool
+
+
+def _information(context: Context) -> dict | None:
+    """The reviewed expert description handed over with the feedback, read in full once for every stage.
+
+    The handoff names the file under the worker's uploads; it is registered as the `upload.` source of that path.
+    Every stage of a construction reads it, so it travels as a material instead of being queried stage by stage."""
+    handoff = context.feedback.get("information") if isinstance(context.feedback, dict) else None
+    file = handoff.get("file") if isinstance(handoff, dict) else None
+    if not isinstance(file, str) or not file.startswith("uploads/"):
+        return None
+    reference = read_reference(context, "upload." + file.removeprefix("uploads/"))
+    return {**reference, "version": handoff.get("version")} if reference else None
 
 
 def materials(context: Context) -> dict:
@@ -74,6 +88,7 @@ def materials(context: Context) -> dict:
     # requests of later rounds keep the longest possible prefix for the provider's cache.
     return {
         "task": context.task,
+        "information": _information(context),
         "orientation": read_reference(context, "reference.index"),
         "fact_sections": list(facts),
         "worker": worker,
@@ -81,6 +96,7 @@ def materials(context: Context) -> dict:
             "values": facts.get("authored", {}).get("values", {}),
             "files": facts.get("authored", {}).get("files", {}),
         },
+        "commitments": audience.project(active(context.commitments), "curator"),
         "previous_plan": audience.project(context.previous_plan, "curator") if context.previous_plan else None,
         "feedback": context.feedback,
         "observations": render.observation_index(context.observations),

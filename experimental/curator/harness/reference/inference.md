@@ -1,7 +1,7 @@
 # Single-step strategy inference
 
 `infer` is an optional keyword-only factory dependency implementing
-StrategyInference. The worker model, not the Curator model, performs one
+StrategyInference. The worker model, not the Curator model, performs each
 runtime judgment. Use it when interpreting supplied evidence or combined task
 constraints helps; deterministic rules remain valid and need no inference.
 It neither runs tools nor calls a child agent or the main Loop recursively.
@@ -32,6 +32,48 @@ review = await self.infer(
     output_type=Review,
 )
 ```
+
+The call may also set `max_output_tokens` and `reasoning_effort` (one of the
+choices `worker.inference` lists); omitted, each follows the worker's own
+generation settings. Neither may exceed the worker's own: a judgment is never
+made by a stronger configuration than the work it judges. A reasoning model
+spends its reasoning from the same output allowance, so a judgment over a long
+standard and evidence needs room for both; a lower effort reduces the reasoning
+only where the worker's provider honours it. A judgment cut off before its JSON
+is a result failure, not a verdict.
+
+## Judging one rule at a time
+
+A judgment that weighs many rules against a long text at once is the one most
+likely to run out of output, and the one whose verdict says least about which
+rule failed. Judge each rule that needs interpretation on its own, with the
+candidate and only the evidence that rule needs, and let the strategy combine
+the verdicts by its own rule:
+
+```python
+from experimental.curator.harness.inference import InferenceError, InferenceRequest
+
+requests = [
+    InferenceRequest(instruction=rule.instruction, data={"candidate": text, "evidence": rule.evidence(evidence)})
+    for rule in self.rules
+]
+verdicts = await self.infer.each(requests, output_type=RuleVerdict)
+unjudged = [rule.name for rule, verdict in zip(self.rules, verdicts) if isinstance(verdict, InferenceError)]
+violated = [
+    rule.name
+    for rule, verdict in zip(self.rules, verdicts)
+    if not isinstance(verdict, InferenceError) and verdict.verdict == "violated"
+]
+```
+
+`each` makes the judgments at once and returns them in order, each a result
+or the InferenceError that kept it from one. A rule's instruction states what
+the rule allows as well as what it forbids, in the material's own terms; where
+the material leaves a boundary open, the instruction says how the judgment
+treats the open case instead of leaving the model to guess. What the strategy
+does with an unjudged rule is part of the commitment that owns the check: say
+there what happens when the judgment cannot be made, and which actions other
+commitments carry out that this choice could stop.
 
 This result type is an example, not a fixed verdict protocol. The result must
 be a concrete BaseModel with extra='forbid'. The host derives the output schema,
@@ -86,24 +128,32 @@ every strategy to use the same class layout, verdict type or judgment algorithm.
 ## Host boundaries
 
 The outermost host strategy operation and its sequential peer calls share one
-attempt. A second call in that chain is rejected even after the first failed.
-The host supplies operation identity; changing helper names or invoking another
-owner does not obtain another attempt. Background tasks and callbacks escaping
-the operation are refused. Only active worker turns may infer: constructors,
-prepare, assembly-time initialization and inspection may not call the model.
+allowance of calls and of time from its first judgment; every call spends from
+it, failed or not, and from the turn's allowance of calls and input bytes. A
+batch through `each` is admitted whole or refused whole. The host supplies
+operation identity; changing helper names or invoking another owner does not
+obtain another allowance. Tasks the strategy starts itself, background tasks
+and callbacks escaping the operation are refused; `each` is the way to judge
+at once. Only active worker turns may infer: constructors, prepare,
+assembly-time initialization and inspection may not call the model.
 
-`worker.inference` reports actual turn, input, output and timeout limits. Each
-new main-loop event can have a new operation, within the same turn budget.
-The adapter uses one provider.chat call with the worker's effective model and
-generation settings, capped by its output/timeout allowance. It does not use
-the provider retry ladder, repair malformed JSON or resample its own judgment.
+`worker.inference` reports the actual operation and turn limits, the input and
+timeout limits, the accepted reasoning efforts and the worker's defaults. Each
+new main-loop event can have a new operation, within the same turn allowance.
+Each judgment is one provider.chat call with the worker's effective model, the
+strategy's chosen output allowance and effort, and the worker's generation
+settings for anything not chosen. The host does not use the provider retry
+ladder, repair malformed JSON or resample a judgment; a strategy that wants a
+second judgment asks for it within its allowance.
 This constrains framework calls, not hidden transport retries inside a provider.
 
 InferenceError identifies scope, budget, timeout, provider or result failure.
-Cancellation propagates. Required checks must keep errors visible; native
-dispatch refuses errors and the Action hook stops an incomplete required check.
-Optional guidance can explicitly catch InferenceError and continue, recording
-the chosen degradation. Never translate a failed check into a satisfied verdict.
+Cancellation propagates. An error the strategy lets propagate ends its
+operation: native dispatch refuses the call being decided, and the Action hook
+stops the incomplete check. An error that `each` returns, or that the strategy
+catches, stops nothing by itself; the strategy's own result decides what
+follows and records the choice. A failed judgment is neither a satisfied nor a
+violated verdict.
 
 ## Verification
 

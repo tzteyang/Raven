@@ -1,11 +1,11 @@
-"""Keep task intent, host facts, the previous plan and observations distinct."""
+"""Keep task intent, host facts, the previous plan, the current commitments and observations distinct."""
 
 from collections.abc import Callable, Mapping, Sequence
 from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from ...harness import Declaration, Plan
+from ...harness import Commitment, Declaration, Plan
 
 
 @dataclass(frozen=True)
@@ -19,6 +19,7 @@ class Context:
     observations: tuple[dict, ...] = ()
     previous_plan: Plan | None = None
     exploration: dict | None = None
+    commitments: tuple[Commitment, ...] = ()
 
 
 def collect(
@@ -32,6 +33,7 @@ def collect(
     observations: Sequence[dict] = (),
     previous_plan: Plan | None = None,
     exploration: dict | None = None,
+    commitments: Sequence[Commitment] = (),
 ) -> Context:
     if not task.strip():
         raise ValueError("generation requires the current task")
@@ -45,6 +47,7 @@ def collect(
         tuple(deepcopy(observations)),
         previous_plan,
         deepcopy(exploration),
+        tuple(commitments),
     )
 
 

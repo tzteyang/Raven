@@ -34,6 +34,7 @@ def worker(tmp_path, monkeypatch):
         root=tmp_path / "worker",
         baseline=SimpleNamespace(config=Config()),
         last_plan=None,
+        commitments=(),
         last_execution=None,
         artifact=Artifact(values={}, files={"rules.py": ""}),
         inspect=AsyncMock(return_value=inspection),

@@ -73,6 +73,23 @@ def plan_for(*names):
     )
 
 
+def submitted(plan, serves=("task",)):
+    """`plan` as the Curator submits it at design: one added Harness commitment per changed target, whose id the
+    host assigns."""
+    return {
+        **plan.model_dump(mode="json"),
+        "commitments": [
+            {
+                "action": "add",
+                "surface": change.target,
+                "statement": f"{change.target} carries out the task",
+                "serves": list(serves),
+            }
+            for change in plan.changes
+        ],
+    }
+
+
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_local_projection_overflow_uses_native_recovery(baseline, tmp_path):
@@ -348,9 +365,7 @@ async def test_generation_queries_plans_repairs_and_runs_a_composed_harness(base
                     ],
                 ),
                 response("submit_selection", selection(*(change.target for change in plan.changes))),
-                LLMResponse(
-                    content=None, tool_calls=[ToolCallRequest("plan", "submit_plan", plan.model_dump(mode="json"))]
-                ),
+                LLMResponse(content=None, tool_calls=[ToolCallRequest("plan", "submit_plan", submitted(plan))]),
                 LLMResponse(content=None, tool_calls=[ToolCallRequest("bad", "submit_artifact", bad)]),
                 LLMResponse(content=None, tool_calls=[ToolCallRequest("good", "submit_artifact", good)]),
             ]

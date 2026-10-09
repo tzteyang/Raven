@@ -13,6 +13,7 @@ from pydantic.json_schema import GenerateJsonSchema
 
 from .artifact import Artifact, Candidate, Plan, Selection
 from .attribution import Attribution
+from .commitments import NATIVE
 from .state import StateUse
 
 
@@ -67,9 +68,42 @@ def typed(annotation, value):
     return TypeAdapter(annotation).validate_json(data, strict=True, extra="forbid", by_alias=False, by_name=True)
 
 
+type Knowledge = type | Callable[..., Any] | Path
+
+
+def _source_name(item: Knowledge) -> str:
+    return str(item) if isinstance(item, Path) else f"{item.__module__}:{item.__qualname__}"
+
+
+def _content(item: Knowledge) -> str:
+    return item.read_text() if isinstance(item, Path) else getsource(item)
+
+
+@dataclass(frozen=True)
+class Reference:
+    """Knowledge a target lists for reading on demand: `purpose` says what it answers and when to read it.
+
+    A document needs an authored purpose; a class or function may fall back to the first paragraph of its docstring.
+    """
+
+    item: Knowledge
+    purpose: str = ""
+
+    def __post_init__(self) -> None:
+        if not self.purpose.strip() and (isinstance(self.item, Path) or not getdoc(self.item)):
+            raise ValueError(f"a listed reference needs a purpose: {_source_name(self.item)}")
+
+    def describe(self) -> dict[str, Any]:
+        purpose = self.purpose.strip() or (getdoc(self.item) or "").split("\n\n", 1)[0].replace("\n", " ")
+        return {"source": _source_name(self.item), "purpose": purpose, "chars": len(_content(self.item))}
+
+
 @dataclass(frozen=True)
 class Target:
-    """A host authoring entry; a catalogue entry alone is not a worker grant."""
+    """A host authoring entry; a catalogue entry alone is not a worker grant.
+
+    `knowledge` travels in full with the target's contract; `references` travel as a listing and are read on demand
+    by the names `sources()` gives them."""
 
     name: str
     contract: type | Callable[..., Any]
@@ -82,7 +116,13 @@ class Target:
     result: Any = None
     fields: tuple[str, ...] | None = None
     state: tuple[StateUse, ...] = ()
-    knowledge: tuple[type | Callable[..., Any] | Path, ...] = ()
+    knowledge: tuple[Knowledge, ...] = ()
+    references: tuple[Reference, ...] = ()
+
+    def sources(self) -> dict[str, Knowledge]:
+        """Every knowledge item under the name a reader uses for it, inlined knowledge first."""
+        items = (*self.knowledge, *(reference.item for reference in self.references))
+        return {f"{self.name}.knowledge.{index}": item for index, item in enumerate(items)}
 
     def schema(self) -> dict[str, Any]:
         return _prune_definitions(self.project_schema(schema_for(self.payload)))
@@ -150,12 +190,10 @@ class Target:
             "phases": list(self.phases),
             "result_schema": schema_for(self.result) if self.result is not None else None,
             "state": [state.model_dump() for state in self.state],
-            "knowledge": [
-                {
-                    "source": str(item) if isinstance(item, Path) else f"{item.__module__}:{item.__qualname__}",
-                    "content": item.read_text() if isinstance(item, Path) else getsource(item),
-                }
-                for item in self.knowledge
+            "knowledge": [{"source": _source_name(item), "content": _content(item)} for item in self.knowledge],
+            "references": [
+                {"name": name, **reference.describe()}
+                for name, reference in zip(list(self.sources())[len(self.knowledge) :], self.references)
             ],
         }
 
@@ -257,6 +295,9 @@ class Declaration:
             change_schema["required"] = sorted({*change_schema.get("required", ()), "treatment"})
         else:
             schema["properties"]["changes"]["maxItems"] = 0
+        commitment_ref = schema["properties"]["commitments"]["items"]["$ref"]
+        commitment_schema = schema["$defs"][commitment_ref.rsplit("/", 1)[-1]]
+        commitment_schema["properties"]["surface"]["enum"] = ["", *(target.name for target in self.targets), NATIVE]
         return schema
 
     def parse_plan(self, value: Any) -> Plan:

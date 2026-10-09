@@ -258,7 +258,7 @@ async def test_semantic_result_resamples_the_main_loop_with_one_attempt_per_prop
             and row["receipt"]["source_id"] == judgments[0]["source_id"]
             for row in execution.records
         )
-        assert (await worker.inspect()).facts["inference"]["attempts_per_operation_chain"] == 1
+        assert (await worker.inspect()).facts["inference"]["max_calls_per_operation"] == 12
 
 
 @pytest.mark.integration

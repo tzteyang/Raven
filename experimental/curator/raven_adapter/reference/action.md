@@ -25,8 +25,10 @@ judgment inside the current operation. Curator authors its prompt, selected
 evidence and result-to-control mapping. Inspect worker.inference for the actual
 limits and read the supplied StrategyInference guide. Inference results carry
 no independent control authority; the current event still limits their effect.
-An operation and its sequential peer calls share one attempt, including failed
-attempts. Do not repair an invalid judgment by invoking the model again.
+An operation and its sequential peer calls share one allowance of calls and time,
+failed calls included, and `each` makes several judgments of the operation at
+once. A judgment that failed may be asked again within the allowance; there is
+no hidden retry.
 
 StrategyPeers reads detached views and invokes typed operations of the real owner. Cycle and read-only checks occur before peer writes. One owner's failure does not roll back another owner's success. Tool interaction, event rules and the gate share one active Action owner; no second policy instance or duplicate plan is created.
 

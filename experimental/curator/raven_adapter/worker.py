@@ -19,7 +19,7 @@ from pydantic import TypeAdapter
 
 from raven.spine.message import ChatType, Source
 from raven.spine.scheduler import conversation_id
-from raven.spine.turn import TurnRequest
+from raven.spine.turn import AnswerlessTurnError, TurnRequest
 
 from ...audience import HEARD
 from ..harness import Artifact, Candidate, Validation
@@ -34,7 +34,7 @@ from .materialize import (
     extend_artifact,
     restore_content,
 )
-from .observe import Recorder, observed_errors, plain
+from .observe import Recorder, delivered_files, observed_errors, plain
 from .preparation import PreparedHarness
 from .targets import catalogue
 
@@ -47,20 +47,36 @@ def _receive(connection):
     return json.loads(connection.recv_bytes())
 
 
-async def follow_up(busy, announcements, run_turn, *, poll=0.5):
-    """Run what finished background work announces, as follow-up turns, until nothing is running or waiting.
+async def follow_up(busy, announcements, run_turn, *, poll=0.5, away=None):
+    """Run what finished background work announces, as follow-up turns.
 
-    Raven delivers a background sub-agent's or playbook graph's result to its conversation as a new turn;
-    the worker does the same before it returns, so a delegated deliverable lands in the exchange that asked
-    for it. `busy` says whether any background work is still in flight.
+    Raven delivers a background sub-agent's or playbook graph's result to its conversation as a new turn; the worker
+    does the same before it returns. `busy` says whether any background work is still in flight. Without `away`, the
+    conversant waits in the chat until nothing is running or waiting, so a delegated deliverable lands in the exchange
+    that asked for it. With `away`, the conversant is gone that many seconds and comes back whether or not the work is
+    done: what is announced meanwhile runs as it comes, and work still in flight keeps running for a later exchange.
     """
+    clock = asyncio.get_running_loop().time
+    until = None if away is None else clock() + away
     while True:
-        while busy() and announcements.empty():
+        while announcements.empty() and (busy() if until is None else clock() < until):
             await asyncio.sleep(poll)
         if announcements.empty():
             return
         request = announcements.get_nowait()
         await run_turn(request if request.turn_id else replace(request, turn_id=uuid4().hex))
+
+
+async def trial_turn(run_turn, turn, follow) -> dict:
+    """The outcome of one trial turn, then `follow` for the work the turn started. Raven ends a turn the model never
+    answered with `AnswerlessTurnError`; that is the worker's outcome for the turn, kept for the assessors like a
+    timed-out one (`Exchange.stopped`), not a fault of the worker, so nothing follows it."""
+    try:
+        outcome = await run_turn(turn)
+    except AnswerlessTurnError as exc:
+        return {"answerless": True, "error": str(exc), "explicit_reply": False}
+    await follow()
+    return plain(outcome)
 
 
 def _serve(
@@ -244,14 +260,19 @@ def _serve(
 
                         child_before = await snapshots(children)
                         try:
-                            outcome = await run_turn(turn)
-                            await follow_up(busy, announcements, run_turn)
+                            # Announcements that came after the previous exchange ended run before the new message.
+                            await follow_up(busy, announcements, run_turn, away=0)
+                            outcome = await trial_turn(
+                                run_turn,
+                                turn,
+                                lambda: follow_up(busy, announcements, run_turn, away=request.get("away")),
+                            )
                             await record_children(
                                 children, child_before, recorder, conversation_id(turn), recorder.rows[offset:]
                             )
                         finally:
                             recorder.turn_id = None
-                        data = {"events": events, "records": recorder.rows[offset:], "outcome": plain(outcome)}
+                        data = {"events": events, "records": recorder.rows[offset:], "outcome": outcome}
                     else:
                         raise ValueError(f"unknown worker operation: {operation}")
                     _send(connection, {"ok": True, "data": data})
@@ -285,7 +306,7 @@ def _serve(
 class Execution:
     """One turn's evidence; `deliverables` are copies of the files the turn handed over through deliver_files."""
 
-    # Who may receive each field (experimental.audience): a turn's evidence is heard by the party that
+    # Who may receive each field (experimental.audience): a turn's evidence is heard by the counterpart that
     # judges it, the Analyst and the Curator.
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
         name: HEARD for name in ("turn_id", "events", "records", "outcome", "artifact_id", "deliverables")
@@ -382,6 +403,8 @@ class Worker:
         self.last_plan = None
         self.last_attribution = None
         self.last_selection = None
+        # The Harness commitments the installed code carries out (experimental.curator.harness.commitments).
+        self.commitments = ()
         # The child candidates the last activation installed, by name: what a composite curation revised in them.
         self.last_children = {}
         self.last_execution = None
@@ -551,7 +574,12 @@ class Worker:
         data = await self._exchange({"operation": "inspect"})
         return Inspection.restore(data, **self.limits)
 
-    async def run(self, request: str | TurnRequest, *, session_key="curator:task", stream=False) -> Execution:
+    async def run(
+        self, request: str | TurnRequest, *, session_key="curator:task", stream=False, away: float | None = None
+    ) -> Execution:
+        """One turn and the follow-up turns of the background work it started (see `follow_up`): by default the
+        exchange lasts until that work is done; with `away`, the conversant is gone that many seconds and the exchange
+        ends then, the work still in flight announcing itself in a later exchange."""
         if isinstance(request, str):
             channel, _, chat_id = session_key.partition(":")
             request = TurnRequest(
@@ -571,6 +599,7 @@ class Worker:
                         "operation": "run",
                         "turn": TypeAdapter(TurnRequest).dump_python(request, mode="json"),
                         "stream": stream,
+                        "away": away,
                     }
                 )
             except WorkerTimeoutError as exc:
@@ -597,17 +626,15 @@ class Worker:
     def _keep_deliverables(self, turn_id, records) -> tuple[str, ...]:
         """Copy what the turn delivered, so a later turn rewriting the same file does not erase this one.
 
-        Only a file inside the worker's workdir or area is kept, once links are resolved: this process reads it with
-        its own rights, so a path or a link the worker names elsewhere, such as the run's records, is never copied.
+        A file counts as delivered once Raven's tool handed it over (see `delivered_files`), so a refused or failed
+        call keeps nothing. Only a file inside the worker's workdir or area is kept, once links are resolved: this
+        process reads it with its own rights, so a path or a link the worker names elsewhere is never copied.
         """
         places = [self.baseline.workdir.resolve(), self.area.resolve()]
         kept = []
         for row in records:
-            event = row.get("event") or {}
-            if row["kind"] != "runner.event" or event.get("name") != "deliver_files" or event.get("phase") != "start":
-                continue
-            for item in (event.get("arguments") or {}).get("files", []):
-                source = Path(str(item.get("path", "")))
+            for item in delivered_files(row):
+                source = Path(str(item["path"]))
                 source = (source if source.is_absolute() else self.baseline.workdir / source).resolve()
                 if source.is_file() and any(source.is_relative_to(place) for place in places):
                     target = self.root / "deliverables" / turn_id / source.name

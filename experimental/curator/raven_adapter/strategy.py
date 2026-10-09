@@ -43,7 +43,8 @@ class TaskBinding(BaseModel):
         "Initialize missing data without resetting progress; migrations are explicit. Private attributes and "
         "external side effects are not checkpointed. An optional keyword-only infer dependency is supplied "
         "by the host for a typed single-step worker-model judgment within an active strategy operation. "
-        "It accepts instruction/data/output_type and shares one attempt across the peer chain. "
+        "It accepts instruction/data/output_type, and each() makes several such judgments at once; the peer "
+        "chain shares one allowance of calls and time. "
         "Deterministic factories need not accept it. Methods need concrete input and return annotations."
     )
 

@@ -9,7 +9,8 @@ from pathlib import Path
 
 from raven.config.schema import ThirdPartyAcpSubagentConfig
 
-from ..harness import Artifact, Plan
+from ..harness import Artifact, Commitment, Plan
+from ..harness.commitments import apply, withdraw
 from .baselines import Baseline
 from .inspection import fingerprint
 from .materialize import _write
@@ -24,6 +25,7 @@ class Child:
     plan: Plan | None = None
     grants: dict = field(default_factory=dict)
     original: Artifact | None = None
+    commitments: tuple[Commitment, ...] = ()
 
     def __post_init__(self):
         if set(self.grants) - {"names", "fields", "phases"}:
@@ -40,6 +42,7 @@ class Child:
             "plan": self.plan.model_dump(mode="json") if self.plan else None,
             "grants": self.grants,
             "original": self.original.model_dump(mode="json"),
+            "commitments": [item.model_dump(mode="json") for item in self.commitments],
         }
 
     @classmethod
@@ -50,6 +53,7 @@ class Child:
             Plan.model_validate(value["plan"]) if value.get("plan") else None,
             value.get("grants", {}),
             Artifact.model_validate(value["original"]) if "original" in value else None,
+            tuple(Commitment.model_validate(item) for item in value.get("commitments", ())),
         )
 
 
@@ -115,6 +119,7 @@ async def activate(worker, candidate, children=None):
         current = await worker._inspect()
         candidate = worker._accept(candidate, current)
         proposed = extend_artifact(worker.artifact, candidate.artifact)
+        commitments = apply(worker.commitments, candidate.plan.commitments)
         previous = {name: Child.restore(child.export()) for name, child in worker.children.items()}
         revised = {name: Child.restore(child.export()) for name, child in worker.children.items()}
         if set(children or {}) - set(revised):
@@ -129,11 +134,17 @@ async def activate(worker, candidate, children=None):
             child.artifact = child_artifact(child, submitted, inspection, restoring=restoring)
             if restoring:
                 child.plan = None
+                child.commitments = withdraw(child.commitments, "the child Harness returned to its original version")
             elif submitted is not None:
                 child.plan = submitted.plan
+                child.commitments = apply(child.commitments, submitted.plan.commitments)
         if proposed == worker.artifact and all(
             revised[name].artifact == child.artifact for name, child in previous.items()
         ):
+            # Nothing to restart, but the curation still happened: its plan and commitments become the current ones.
+            for name, child in revised.items():
+                worker.children[name].plan, worker.children[name].commitments = child.plan, child.commitments
+            _settle(worker, candidate, children, commitments)
             return current
         async with worker._validation_copy(candidate, inspection=current, children=children) as trial:
             prepared = trial.prepared
@@ -199,14 +210,19 @@ async def activate(worker, candidate, children=None):
                 if not isinstance(exc, asyncio.CancelledError):
                     await worker._start()
             raise
-        worker.last_plan = candidate.plan
-        worker.last_attribution = getattr(candidate, "attribution", None)
-        worker.last_selection = getattr(candidate, "selection", None)
-        worker.last_children = {
-            name: submitted for name, submitted in (children or {}).items() if submitted is not None
-        }
+        _settle(worker, candidate, children, commitments)
         worker._preview = None
         return installed
+
+
+def _settle(worker, candidate, children, commitments):
+    """Make an activated curation the worker's current one: its plan, the attribution and selection it came from,
+    the child candidates it installed and the commitment list it leaves."""
+    worker.last_plan = candidate.plan
+    worker.last_attribution = getattr(candidate, "attribution", None)
+    worker.last_selection = getattr(candidate, "selection", None)
+    worker.last_children = {name: submitted for name, submitted in (children or {}).items() if submitted is not None}
+    worker.commitments = commitments
 
 
 def child_artifact(child, candidate, inspection, *, restoring=False):

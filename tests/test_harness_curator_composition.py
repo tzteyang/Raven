@@ -194,6 +194,7 @@ class Composite:
         self.child_declaration = declaration_for("hosted@1", {})
         self.artifact = Artifact(values={})
         self.last_plan = self.last_execution = None
+        self.commitments = ()
         self.timeout = 5
         self.withheld = Withheld()
         self._content_baseline = {}

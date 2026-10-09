@@ -96,6 +96,7 @@ def input_key(context: Context, required) -> str:
             "feedback": context.feedback,
             "observations": context.observations,
             "previous_plan": context.previous_plan.model_dump(mode="json") if context.previous_plan else None,
+            "commitments": [item.model_dump(mode="json") for item in context.commitments],
             "subjects": list(required),
         }
     )
@@ -129,12 +130,13 @@ def _digest(paths, tools) -> str:
 
 @dataclass(frozen=True)
 class ModelAttributor:
-    """Diagnose with a model; `model` None is the curation's model, `catalogue` True puts the granted targets in the
-    request (by default they stay out, so the diagnosis is not drawn toward what could be changed: in a paired real
-    run without them, more requirements held at the same cost), and `prompts` is the directory of the version to
-    run."""
+    """Diagnose with a model; `model` None is the curation's model and `effort` None the provider's own, `catalogue`
+    True puts the granted targets in the request (by default they stay out, so the diagnosis is not drawn toward what
+    could be changed: in a paired real run without them, more requirements held at the same cost), and `prompts` is
+    the directory of the version to run."""
 
     model: str | None = None
+    effort: str | None = None
     catalogue: bool = False
     limits: AttributionLimits = field(default_factory=AttributionLimits)
     prompts: Path = PROMPTS
@@ -150,6 +152,7 @@ class ModelAttributor:
             "implementation": "model",
             "prompts": _digest([*own, *prompt_files()], [submission(), shared.gap_tool()]),
             "model": self.model or model,
+            "effort": self.effort,
             "catalogue": self.catalogue,
         }
 
@@ -188,6 +191,7 @@ class ModelAttributor:
                 limits=self.limits,
                 validate=None,
                 model=self.model or model,
+                effort=self.effort,
                 tool_registry=tool_registry,
                 stage_candidate=None,
                 progress=progress,

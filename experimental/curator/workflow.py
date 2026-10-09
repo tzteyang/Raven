@@ -247,6 +247,7 @@ async def _generate_local(
         feedback=feedback,
         observations=observations,
         previous_plan=worker.last_plan,
+        commitments=worker.commitments,
     )
 
     async def validate(candidate):
@@ -480,6 +481,7 @@ async def _generate_local(
             exploration.verify()
         if install:
             await worker.install(result.candidate)
+            record["commitments"] = [item.model_dump(mode="json") for item in worker.commitments]
         else:
             completed = latest["state"]
             completed.candidate = result.candidate

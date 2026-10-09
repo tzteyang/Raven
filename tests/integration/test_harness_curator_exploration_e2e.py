@@ -11,7 +11,7 @@ from experimental.curator.raven_adapter.worker import Worker
 from experimental.curator.workflow import improve
 from tests.fixtures.harness_curator.authoring import action, profile
 from tests.integration.test_harness_curator_e2e import baseline as baseline
-from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
+from tests.integration.test_harness_curator_e2e import plan_for, replay_provider, submitted
 from tests.integration.test_harness_curator_planning_e2e import CuratorProvider, response
 from tests.test_harness_curator_exploration import Executor
 from tests.test_harness_curator_generation import diagnosis, selection
@@ -42,7 +42,7 @@ async def test_native_exploration_preflight_repair_and_worker_installation(basel
                 response("exec", {"command": "printf EXPLORATION_EXECUTED"}),
                 response("submit_diagnosis", diagnosis()),
                 response("submit_selection", selection("action.strategy")),
-                response("submit_plan", plan_for("action.strategy").model_dump(mode="json")),
+                response("submit_plan", submitted(plan_for("action.strategy"))),
                 response("check_candidate", draft),
                 None,
                 response("submit_artifact", fixed),
@@ -86,7 +86,7 @@ async def test_real_worker_budget_pause_resumes_and_installs_without_reselection
         [
             response("submit_diagnosis", diagnosis()),
             response("submit_selection", selection("action.strategy")),
-            response("submit_plan", plan_for("action.strategy").model_dump(mode="json")),
+            response("submit_plan", submitted(plan_for("action.strategy"))),
         ]
     )
     async with Worker(baseline, tmp_path / "resumed-worker", provider_factory=replay_provider) as worker:
