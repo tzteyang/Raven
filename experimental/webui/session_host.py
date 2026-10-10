@@ -243,7 +243,7 @@ class Host:
         path."""
         spec = self.spec
         settings = {
-            "chain": "live",
+            "disclose": "live",
             "scenario": self.contract.root.name,
             "rounds": spec["rounds"],
             "turns": spec["turns"],

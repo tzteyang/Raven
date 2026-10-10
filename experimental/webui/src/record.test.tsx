@@ -2,7 +2,7 @@ import { cleanup, fireEvent, render, screen, within } from '@testing-library/rea
 import { afterEach, describe, expect, it, test, vi } from 'vitest'
 
 import {
-  chainLabel, changesOf, columns, costLabel, evidenceCount, groupCurations, handedAfter, landed, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, differingRoles,
+  disclosureLabel, changesOf, columns, costLabel, evidenceCount, groupCurations, handedAfter, landed, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, differingRoles,
   normalizeRecord, quotesOf, requirementsOf, roundSummaries, settle, statusOf, versionLabel,
 } from './record'
 import { RecordView } from './views/Record'
@@ -19,12 +19,12 @@ const raw = {
     record_id: 'e5618b30afab4ceb8daf205a2c3bed6d',
     status: 'error',
     error: 'stopped by the suite: spend passed the $40 budget',
-    chain: 'staged',
-    settings: { chain: 'staged', models: { partner: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', analyst: 'deepseek/deepseek-flash', 'sub-harness': 'z-ai/glm-5.3' }, efforts: { partner: 'low', curator: 'high', analyst: 'high' }, rounds: 3 },
+    disclose: 'staged',
+    settings: { disclose: 'staged', models: { partner: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', analyst: 'deepseek/deepseek-flash', 'sub-harness': 'z-ai/glm-5.3' }, efforts: { partner: 'low', curator: 'high', analyst: 'high' }, rounds: 3 },
     revisions: ['198e3eca4c09a1a8be51', A1, A2],
     suite: { status: 'error', stopped: 'spend passed the $40 budget', notes: [] },
     warnings: [],
-    reproduce: 'uv run python -m experimental.simulation --chain staged',
+    reproduce: 'uv run python -m experimental.simulation --disclose staged',
   },
   inputs: {
     profile: 'Harbour Light Travel',
@@ -188,10 +188,10 @@ describe('the record as read', () => {
   })
 
   it('labels chains, models, handovers and cost from any shape', () => {
-    expect(chainLabel('staged')).toBe('staged')
-    expect(chainLabel(['documents', 'by-stage'])).toBe('documents / by-stage')
-    expect(chainLabel({ label: 'examples' })).toBe('examples')
-    expect(chainLabel(null)).toBe('')
+    expect(disclosureLabel('staged')).toBe('staged')
+    expect(disclosureLabel(['all', 'by-stage'])).toBe('all / by-stage')
+    expect(disclosureLabel({ label: 'none' })).toBe('none')
+    expect(disclosureLabel(null)).toBe('')
     expect(modelLine(record.run.settings.models)).toBe('partner, curator, analyst deepseek/deepseek-flash · sub-harness z-ai/glm-5.3')
     expect(modelLine({ partner: 'z-ai/glm-5.3-flashx', curator: 'z-ai/glm-5.3', assessor: 'z-ai/glm-5.3' }, true)).toBe('glm-5.3-flashx · curator, assessor glm-5.3')
     expect(modelLine({ employee: 'e/one', subagents: null })).toBe('employee e/one')
@@ -443,7 +443,7 @@ test('the record view leads with the value verdict and ends with the mining sess
   const sessions = [{
     file: 'hoh-mining-0925-1200.json', modified: 1, spend: 51.2,
     ranking: [
-      { label: 'by-stage', plan: ['--chain', 'by-stage'], name: 'hoh-by-stage-0925', rounds: 4, spend: 25, value: { verdict: 'qualifies', score: 40, cases: 2 } },
+      { label: 'by-stage', plan: ['--disclose', 'by-stage'], name: 'hoh-by-stage-0925', rounds: 4, spend: 25, value: { verdict: 'qualifies', score: 40, cases: 2 } },
       { label: 'r1-1', plan: ['--partition', JSON.stringify([['service-sop'], ['price-list']])], name: 'staged-01', rounds: 3, spend: 26.2, value: { verdict: 'partial', score: 21, cases: 1 } },
     ],
   }]

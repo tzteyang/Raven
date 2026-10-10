@@ -336,7 +336,7 @@ describe('run labels', () => {
     expect(entryLabel(control)).toBe('archive-c · control · 4/11 · running')
     expect(entryLabel({ ...entries[0], status: 'stalled' })).toBe('w · Curator · 1/2 → 2/2 · stalled or stopped')
     const suite: RunEntry = {
-      ...entries[0], status: 'error', chain: 'staged', stopped: 'spend passed the $40 budget',
+      ...entries[0], status: 'error', disclose: 'staged', stopped: 'spend passed the $40 budget',
       models: { partner: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', 'sub-harness': 'z-ai/glm-5.3' },
     }
     expect(entryLabel(suite)).toBe('w · staged · Curator · 1/2 → 2/2 · deepseek-flash · sub-harness glm-5.3 · stopped by the suite')

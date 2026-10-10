@@ -37,8 +37,8 @@ def held_back(root, *names):
     spec = json.loads(path.read_text())
     spec["initial"] = [name for name in spec.get("initial", []) if name not in names]
     spec["plans"] = {
-        plan: [[name for name in step if name not in names] for step in steps]
-        for plan, steps in spec.get("plans", {}).items()
+        name: {**plan, "steps": [[item for item in step if item not in names] for step in plan["steps"]]}
+        for name, plan in spec.get("plans", {}).items()
     }
     path.write_text(json.dumps(spec))
 

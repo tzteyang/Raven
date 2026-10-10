@@ -64,7 +64,7 @@ def record(rounds, ledger, isolation=CLEAN):
     """A judged run whose attribution read every intervention reason `FOR_RULE` as enforcing each rule its target was
     sedimented for, and any other reason as enforcing none (see `experimental.simulation.bench.attribution`)."""
     value = {
-        "run": {"name": "hoh-staged", "chain": "staged", "status": "finished"},
+        "run": {"name": "hoh-staged", "disclose": "staged", "status": "finished"},
         "rounds": rounds,
         "ledger": ledger,
         "isolation": isolation,

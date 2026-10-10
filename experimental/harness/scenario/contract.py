@@ -23,7 +23,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from experimental.harness.scenario.disclosure import partition
+from experimental.harness.scenario.disclosure import Plan, partition
 
 Role = Literal["partner", "conversant", "counterpart", "analyst", "curator"]
 ROLES: tuple[Role, ...] = ("partner", "conversant", "counterpart", "analyst", "curator")
@@ -136,11 +136,18 @@ class _Criterion(_Model):
     severity: Literal["red_line", "standard"] = "standard"
 
 
+class _Plan(_Model):
+    """A named plan in `scenario.json`: its steps, and a label per step saying what that step is meant to give."""
+
+    steps: tuple[tuple[str, ...], ...]
+    labels: tuple[str, ...] = ()
+
+
 class _Spec(_Model):
     """`scenario.json`: the checks and the disclosure schedule; an unknown key is a misspelling, never ignored."""
 
     initial: tuple[str, ...] = ()
-    plans: dict[str, tuple[tuple[str, ...], ...]] = Field(default_factory=dict)
+    plans: dict[str, _Plan] = Field(default_factory=dict)
     criteria: tuple[_Criterion, ...] = ()
 
 
@@ -178,7 +185,7 @@ class Exchange(_Model):
     to hears it once it is said."""
 
     initial: tuple[str, ...] = ()
-    plans: dict[str, tuple[tuple[str, ...], ...]] = Field(default_factory=dict)
+    plans: dict[str, Plan] = Field(default_factory=dict)
     observability: tuple[str, ...] = VIEWS
     onboarding: str = ""
     handover: str = ""
@@ -258,11 +265,11 @@ class Scenario(_Model):
         kept = sorted(set(self.exchange.initial) - set(self.handed))
         if kept:
             raise ValueError(f"the initial release names materials the partner may not receive: {kept}")
-        for plan, steps in self.exchange.plans.items():
+        for name, plan in self.exchange.plans.items():
             try:
-                partition(steps, self.handed)
+                partition(plan.steps, self.handed)
             except ValueError as exc:
-                raise ValueError(f"plan {plan}: {exc}") from exc
+                raise ValueError(f"plan {name}: {exc}") from exc
         return self
 
     @property
@@ -478,7 +485,7 @@ def load(root: Path) -> Scenario:
         materials=materials,
         exchange=Exchange(
             initial=spec.initial,
-            plans=dict(spec.plans),
+            plans={name: Plan(plan.steps, plan.labels) for name, plan in spec.plans.items()},
             observability=tuple(contract.get("observability", VIEWS)),
             onboarding=_text(root, "onboarding.md") or "",
             handover=_text(root, "handover.md") or "",

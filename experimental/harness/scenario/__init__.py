@@ -25,7 +25,7 @@ from experimental.harness.scenario.contract import (
     default_visibility,
     load,
 )
-from experimental.harness.scenario.disclosure import Disclosure
+from experimental.harness.scenario.disclosure import Disclosure, Plan
 
 __all__ = [
     "KINDS",
@@ -38,6 +38,7 @@ __all__ = [
     "Exchange",
     "Material",
     "Origin",
+    "Plan",
     "Prior",
     "Provenance",
     "Scenario",

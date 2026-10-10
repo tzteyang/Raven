@@ -1,5 +1,9 @@
 {
-  "initial": ["brand-norms", "proposal-template", "voice-messaging"],
+  "initial": [
+    "brand-norms",
+    "proposal-template",
+    "voice-messaging"
+  ],
   "criteria": [
     {
       "id": "no-forbidden-wording",
@@ -48,6 +52,22 @@
     }
   ],
   "plans": {
-    "by-stage": [["brand-norms", "proposal-template", "voice-messaging"], ["watch-brief", "consistency-checklist"]]
+    "by-stage": {
+      "steps": [
+        [
+          "brand-norms",
+          "proposal-template",
+          "voice-messaging"
+        ],
+        [
+          "watch-brief",
+          "consistency-checklist"
+        ]
+      ],
+      "labels": [
+        "norms and templates",
+        "watch brief and checklist"
+      ]
+    }
   }
 }

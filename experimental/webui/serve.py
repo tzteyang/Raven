@@ -102,7 +102,7 @@ def _glanced(path: str, mtime_ns: int, size: int) -> dict:
         return {"status": "error", "error": f"the run record could not be read: {type(exc).__name__}: {exc}"}
     pending = run.get("pending") if isinstance(run.get("pending"), dict) else {}
     return {
-        **{key: run[key] for key in ("task", "curator", "status", "error", "stop", "chain") if key in run},
+        **{key: run[key] for key in ("task", "curator", "status", "error", "stop", "disclose") if key in run},
         **({"initial_curation": True} if "initial_curation" in run else {}),
         **({"pending": {part: _names(pending.get(part)) for part in ("sessions", "holdout")}} if pending else {}),
         "rounds": [
@@ -186,25 +186,25 @@ def _small_json(path: Path) -> dict:
 
 
 def setup(worker_root: Path, record_path: Path, run: dict) -> dict:
-    """How the run was set up and how it ended, for the run list: its chain, models and efforts from `settings.json`,
-    and the suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields are read out of
-    either file; a cultivation record already built here fills a chain neither file names."""
+    """How the run was set up and how it ended, for the run list: its disclosure plan, models and efforts from
+    `settings.json`, and the suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields
+    are read out of either file; a cultivation record already built here fills a plan neither file names."""
     settings = _small_json(worker_root / "settings.json")
     summary = _small_json(worker_root / "suite-summary.json")
     models, efforts = (
         {key: value for key, value in named.items() if isinstance(value, str)} if isinstance(named, dict) else {}
         for named in (settings.get("models"), settings.get("efforts"))
     )
-    chain = settings.get("chain") or run.get("chain")
-    if not chain:
+    disclose = settings.get("disclose") or run.get("disclose")
+    if not disclose:
         cached = _records.get(record_path.resolve())
-        chain = (cached[1].get("run") or {}).get("chain") if cached else None
+        disclose = (cached[1].get("run") or {}).get("disclose") if cached else None
     total = (summary.get("spend") or {}).get("total") if isinstance(summary.get("spend"), dict) else None
     stopped = summary.get("stopped")
     value = summary.get("value") if isinstance(summary.get("value"), dict) else {}
     return redact(
         {
-            "chain": chain if isinstance(chain, str) else None,
+            "disclose": disclose if isinstance(disclose, str) else None,
             "models": models,
             "efforts": efforts,
             "stopped": stopped if isinstance(stopped, str) else None,

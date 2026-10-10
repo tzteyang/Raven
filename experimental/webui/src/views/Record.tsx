@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { RECORD_UNAVAILABLE, loadBundle, loadMining, loadRecord } from '../api'
 import {
-  chainLabel, changesOf, completed, costLabel, diffLines, facetOf, groupCurations, handedAfter, inForce, isOnboarding,
+  disclosureLabel, changesOf, completed, costLabel, diffLines, facetOf, groupCurations, handedAfter, inForce, isOnboarding,
   isRoot, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, quotesOf, requirementsOf, revisionLabel, roundAt, roundSummaries, scopeLabel,
   VERDICT_LABEL,
 } from '../record'
@@ -103,7 +103,7 @@ interface Place {
 
 function Header({ record, entry, bundle }: { record: CultivationRecord; entry: RunEntry | undefined; bundle: { folder: string; bundle: Bundle | null } | null }): JSX.Element {
   const { run, cost } = record
-  const chain = chainLabel(run.chain) || entry?.chain || ''
+  const plan = disclosureLabel(run.disclose) || entry?.disclose || ''
   const models = modelLine(run.settings.models) || modelLine(entry?.models)
   const roles = roleChoices(run.settings.models, run.settings.efforts)
   const research = researchLine(run.settings.research)
@@ -124,7 +124,7 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
       </p>
       <dl className="rstats">
         <div><dt>status</dt><dd><span className={`dot ${run.status ?? ''}`} />{run.status ?? 'unknown'}</dd></div>
-        <div><dt>chain</dt><dd>{chain ? <code className="chainv">{chain}</code> : <span className="dim">not recorded</span>}</dd></div>
+        <div><dt>disclosure</dt><dd>{plan ? <code className="chainv">{plan}</code> : <span className="dim">not recorded</span>}</dd></div>
         <div><dt>rounds</dt><dd>{completed(record)}{typeof run.settings.rounds === 'number' ? ` of ${run.settings.rounds}` : ''} judged</dd></div>
         <div>
           <dt>versions</dt>

@@ -22,8 +22,8 @@ export interface RunEntry {
   status: RunStatus
   error: string | null
   recorded: number
-  /** How the owner hands over the materials in this run (documents, staged, by-stage, examples or a partition), from settings.json. */
-  chain?: string | null
+  /** When the owner hands its materials over in this run (all, none, staged, a plan's name or partition), from settings.json. */
+  disclose?: string | null
   /** Each model role's model name, the partner first (an older run names employee, simulation and the like), from
       settings.json. */
   models?: Record<string, string>

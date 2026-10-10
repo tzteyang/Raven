@@ -1043,7 +1043,7 @@ def test_the_run_list_carries_the_verdict_and_mining_summaries_rank_their_runs(s
                 "ranking": [
                     {
                         "label": "staged",
-                        "plan": ["--chain", "staged"],
+                        "plan": ["--disclose", "staged"],
                         "name": "hoh-staged-0925",
                         "status": "finished",
                         "rounds": 4,
@@ -1065,7 +1065,7 @@ def test_the_run_list_carries_the_verdict_and_mining_summaries_rank_their_runs(s
     assert session["ranking"] == [
         {
             "label": "staged",
-            "plan": ["--chain", "staged"],
+            "plan": ["--disclose", "staged"],
             "name": "hoh-staged-0925",
             "status": "finished",
             "rounds": 4,

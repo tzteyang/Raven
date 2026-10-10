@@ -1068,12 +1068,17 @@ def _materials(scenario: dict, run: dict, settings: dict, root: Path) -> list[di
     """Each scenario material with its hash and when the owner gave it (see the module docstring)."""
     rounds = _dicts(run.get("rounds"))
     opening = _handed(run.get("opening"))
-    if settings.get("disclose") == "all":
+    schedule = settings.get("disclosure") if isinstance(settings.get("disclosure"), dict) else {}
+    if isinstance(schedule.get("opening"), list):
+        opening |= {str(name) for name in schedule["opening"]}
+    elif settings.get("disclose") == "all":
         opening |= set(scenario["materials"])
     elif settings.get("disclose") == "staged":
         opening |= set(scenario["initial"])
-    if not opening and rounds:
+    if not opening and rounds and settings.get("disclose") != "none":
         opening = _skills(rounds[0])
+    steps = [set(map(str, step)) for step in schedule.get("steps") or [] if isinstance(step, list)]
+    labels = [str(label) for label in schedule.get("labels") or []]
     handed: dict[str, int] = {}
     for number, item in enumerate(rounds, start=1):
         arrived = _handed(item.get("signals")) | (_skills(rounds[number]) if number < len(rounds) else set())
@@ -1085,12 +1090,15 @@ def _materials(scenario: dict, run: dict, settings: dict, root: Path) -> list[di
     for name, folder in scenario["materials"].items():
         present = (home / "skills" / name).is_dir() or (home / "uploads" / name).is_dir()
         given = "opening" if name in opening else "handed_over" if name in handed or present else "withheld"
+        step = next((index for index, names in enumerate(steps) if name in names), None)
         out.append(
             {
                 "name": name,
                 "sha256": _sha256(folder / "SKILL.md"),
                 "given": given,
                 "round": handed.get(name),
+                "step": step,
+                "label": labels[step] if step is not None and step < len(labels) else None,
                 "files": {
                     path.name: _sha256(path)
                     for path in sorted(folder.iterdir())
@@ -1282,15 +1290,14 @@ def _command(settings: dict) -> str | None:
     ]
     if settings.get("scenario"):
         argv += ["--scenario", str(settings["scenario"])]
-    chain, disclose = settings.get("chain"), settings.get("disclose")
-    if chain == "partition" or (not chain and isinstance(disclose, list)):
-        argv += ["--partition", json.dumps(disclose, ensure_ascii=False)]
-    elif chain:
-        argv += ["--chain", str(chain)]
-    else:
-        argv += [
-            flag for key in ("deliver", "disclose") if settings.get(key) for flag in (f"--{key}", str(settings[key]))
-        ]
+    if settings.get("partition"):
+        argv += ["--partition", json.dumps(settings["partition"], ensure_ascii=False)]
+    elif settings.get("disclose"):
+        argv += ["--disclose", str(settings["disclose"])]
+    if settings.get("deliver"):
+        argv += ["--deliver", str(settings["deliver"])]
+    if settings.get("completes") is False:
+        argv.append("--no-completion")
     for key in ("rounds", "turns", "repeats"):
         if settings.get(key) is not None:
             argv += [f"--{key}", str(settings[key])]
@@ -1517,7 +1524,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
             "stop": run.get("stop"),
             "started": started,
             "updated": updated,
-            "chain": settings.get("chain"),
+            "disclose": settings.get("disclose"),
             "settings": {
                 **({"curator": run["curator"]} if run.get("curator") else {}),
                 **{key: value for key, value in settings.items() if key != "baseline"},
@@ -2096,7 +2103,8 @@ def transcript(record: dict, labels: dict | None = None) -> str:
     run = record["run"]
     lines = [f"# {labels['title']}: {run['name']}", ""]
     lines += [
-        f"- Status: {run['status']}; chain: {run['chain'] or 'not recorded'}; started {run['started']}; updated {run['updated']}"
+        f"- Status: {run['status']}; disclosure: {run['disclose'] or 'not recorded'}; started {run['started']}; "
+        f"updated {run['updated']}"
     ]
     if run["error"] or run["stop"]:
         lines += [f"- Ended: {_cell(run['error'] or run['stop'], 600)}"]

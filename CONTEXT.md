@@ -266,7 +266,8 @@ exemplars, counterexamples, checks, the exchange's schedule and wording, the pri
 evaluation aids, each item with the roles that may receive it (partner, conversant, counterpart,
 analyst, curator). `load` reads a scenario directory and refuses a file outside every category;
 `sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the counterpart's
-schedule of handing materials over, which the loop never reads. `provenance.json` says where each
+schedule of handing materials over (`all`, `none`, `staged`, or a named `Plan` whose labelled steps say what
+each step is meant to give), which the loop never reads. `provenance.json` says where each
 material came from and whether the counterpart stands behind it (`Scenario.confirmed`).
 _Avoid_: calling a check a norm: a norm is handed over, a check is the counterpart's own standard and stays
 on the evaluation side; writing a check as a translation of a norm sentence: the sealing is differential only

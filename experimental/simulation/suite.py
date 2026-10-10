@@ -1,8 +1,8 @@
 """Mine for the value case: run cultivation runs over disclosure plans within a budget, judge each, rank them.
 
-A candidate is one disclosure plan: a chain preset, a partition given as JSON, or a random partition of the scenario's
-materials (the owner still knows everything from the start and has handed everything over before the last round; only
-the partition differs, see `experimental.simulation.__main__`). Each finished run is judged by
+A candidate is one disclosure plan: a schedule `--disclose` takes (`all`, `none`, `staged` or a scenario plan's name),
+a partition given as JSON, or a random partition of the scenario's materials (the owner still knows everything from
+the start; only when it hands things over differs, see `experimental.simulation.__main__`). Each finished run is judged by
 `experimental.simulation.bench.value`; with `--stop-on-value` the first run that qualifies stops the others.
 
 Each run gets its own Raven home under `--state-root` (the only place a configuration with credentials is written,
@@ -27,7 +27,6 @@ from dataclasses import dataclass, field
 from pathlib import Path
 
 from experimental.cultivation.employee import AREA, FORWARDED
-from experimental.simulation.__main__ import CHAINS
 from experimental.simulation.bench.record import REDACTED, SUMMARY, build_record, export_record, redact
 from experimental.simulation.bench.scenario import Scenario
 
@@ -187,7 +186,7 @@ def random_partition(materials: list[str], rounds: int, rng: random.Random, onbo
 
 def candidates(args) -> list[tuple[str, list[str]]]:
     """Each disclosure plan to try, as a label and the simulation arguments that select it."""
-    found = [(chain, ["--chain", chain]) for chain in args.chains or ()]
+    found = [(plan, ["--disclose", plan]) for plan in args.discloses or ()]
     given = json.loads(Path(args.partitions).read_text()) if args.partitions else []
     found += [
         (f"p{index}", ["--partition", json.dumps(steps, ensure_ascii=False)]) for index, steps in enumerate(given, 1)
@@ -211,7 +210,9 @@ def command(plan: list[str], args, *, config: Path, workdir: Path, records: Path
     argv = [sys.executable, "-m", "experimental.simulation", "--config", str(config), "--workdir", str(workdir)]
     argv += ["--home", str(args.home), "--state-dir", str(records), "--scenario", str(args.scenario), *plan]
     argv += ["--rounds", str(args.rounds), "--turns", str(args.turns), "--repeats", str(args.repeats)]
-    argv += ["--timeout", str(args.timeout)]
+    argv += ["--timeout", str(args.timeout), "--deliver", str(getattr(args, "deliver", "dialog"))]
+    if getattr(args, "no_completion", False):
+        argv.append("--no-completion")
     for flag, value in (
         ("--curator-calls", getattr(args, "curator_calls", None)),
         ("--curator-queries", getattr(args, "curator_queries", None)),
@@ -399,7 +400,7 @@ def main(args) -> list[dict]:
         for label, plan in candidates(args)
     ]
     if not runs:
-        raise ValueError("name at least one chain, partition file or random partition")
+        raise ValueError("name at least one disclosure plan, partition file or random partition")
     for run in runs:
         if run.records.exists() or run.state.exists():
             raise ValueError(f"a run named {run.name} already exists")
@@ -441,7 +442,19 @@ def cli():
     parser.add_argument("--runs-dir", type=Path, required=True, help="Where each run's record directory is created")
     parser.add_argument("--state-root", type=Path, required=True, help="Where each run's Raven home is created")
     parser.add_argument("--scenario", type=Path, default=Path("travel_agency"))
-    parser.add_argument("--chains", nargs="+", choices=sorted(CHAINS), default=[])
+    parser.add_argument(
+        "--discloses",
+        nargs="+",
+        default=[],
+        metavar="PLAN",
+        help="Disclosure plans to try, each as --disclose takes it: all, none, staged or a scenario plan's name",
+    )
+    parser.add_argument("--deliver", choices=("pool", "dialog"), default="dialog", help="Passed to every run")
+    parser.add_argument(
+        "--no-completion",
+        action="store_true",
+        help="Passed to every run: never hand the rest over before the last round",
+    )
     parser.add_argument("--partitions", type=Path, help="A JSON file holding a list of partitions to try")
     parser.add_argument("--random-partitions", type=int, default=0, help="How many random partitions to try")
     parser.add_argument(

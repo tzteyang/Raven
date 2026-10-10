@@ -183,7 +183,6 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
     write(
         run / "settings.json",
         {
-            "chain": "staged",
             "scenario": "scenario",
             "deliver": "dialog",
             "disclose": "staged",
@@ -479,11 +478,13 @@ def test_a_run_with_onboarding_and_two_rounds_reads_as_one_record(tmp_path):
     run, scenario = make_run(tmp_path)
     data = build_record(run, scenario)
     assert data["schema"] == 1
-    assert data["run"]["name"] == "staged-1" and data["run"]["record_id"] == "r1" and data["run"]["chain"] == "staged"
+    assert (
+        data["run"]["name"] == "staged-1" and data["run"]["record_id"] == "r1" and data["run"]["disclose"] == "staged"
+    )
     assert "baseline" not in data["run"]["settings"] and data["inputs"]["baseline"] == {"skills/x/SKILL.md": "ab" * 32}
     assert data["run"]["started"] == "2026-09-21T14:13:20Z"
     assert data["run"]["revisions"] == ["c" * 20, "A" * 64, "B" * 64]
-    assert "--chain staged" in data["run"]["reproduce"] and "--cards family" in data["run"]["reproduce"]
+    assert "--disclose staged" in data["run"]["reproduce"] and "--cards family" in data["run"]["reproduce"]
     assert "--analysis" not in data["run"]["reproduce"] and "--judge" not in data["run"]["reproduce"]
     assert [(c["round"], c["outcome"]) for c in data["curations"]] == [(0, "installed"), (1, "installed")]
     onboarding, after = data["curations"]
@@ -548,6 +549,35 @@ def test_a_material_is_handed_over_in_the_round_whose_signals_name_it(tmp_path):
     materials = by_id(build_record(run, scenario)["inputs"]["materials"], "name")
     assert (materials["brand"]["given"], materials["brand"]["round"]) == ("handed_over", 2)
     assert (materials["price-list"]["given"], materials["price-list"]["round"]) == ("handed_over", 1)
+    assert materials["brand"]["step"] is None and materials["brand"]["label"] is None
+
+
+def test_a_material_carries_the_labelled_step_of_the_plan_that_hands_it_over(tmp_path):
+    run, scenario = make_run(tmp_path)
+    settings = json.loads((run / "settings.json").read_text())
+    settings["disclose"] = "by-stage"
+    settings["disclosure"] = {
+        "plan": "by-stage",
+        "opening": ["sop"],
+        "steps": [["sop"], ["price-list"], ["brand"]],
+        "labels": ["process", "prices", "brand"],
+        "chooses": False,
+        "rounds": 2,
+        "completes": True,
+    }
+    write(run / "settings.json", settings)
+    materials = by_id(build_record(run, scenario)["inputs"]["materials"], "name")
+    assert [(materials[name]["step"], materials[name]["label"]) for name in ("sop", "price-list", "brand")] == [
+        (0, "process"),
+        (1, "prices"),
+        (2, "brand"),
+    ]
+    assert materials["sop"]["given"] == "opening"
+    settings["disclose"], settings["disclosure"] = "none", {"plan": "none", "opening": [], "steps": [], "labels": []}
+    write(run / "settings.json", settings)
+    materials = by_id(build_record(run, scenario)["inputs"]["materials"], "name")
+    assert all(materials[name]["step"] is None and materials[name]["label"] is None for name in materials)
+    assert materials["sop"]["given"] == "opening" and materials["brand"]["given"] == "withheld"
 
 
 def test_the_reproduce_command_is_the_stored_command_line_with_the_readers_own_paths():
@@ -569,14 +599,16 @@ def test_the_reproduce_command_is_the_stored_command_line_with_the_readers_own_p
         "9000",
         "--seed=3",
     ]
-    drawn = shlex.split(record._command({"argv": ["--chain", "documents"], "seed": 5, "analysis": "owner"}))
-    assert drawn[-4:] == ["--chain", "documents", "--seed", "5"]
+    drawn = shlex.split(record._command({"argv": ["--disclose", "all"], "seed": 5, "analysis": "owner"}))
+    assert drawn[-4:] == ["--disclose", "all", "--seed", "5"]
 
 
 def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
     old = {
-        "chain": "partition",
-        "disclose": [["sop"], ["price-list"]],
+        "disclose": "partition",
+        "partition": [["sop"], ["price-list"]],
+        "deliver": "dialog",
+        "completes": False,
         "scenario": "travel_agency",
         "rounds": 3,
         "curator": "improve",
@@ -594,7 +626,8 @@ def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
         "seed": 11,
     }
     argv = shlex.split(record._command(old))
-    assert "--chain" not in argv and argv[argv.index("--partition") + 1] == json.dumps([["sop"], ["price-list"]])
+    assert "--disclose" not in argv and argv[argv.index("--partition") + 1] == json.dumps([["sop"], ["price-list"]])
+    assert argv[argv.index("--deliver") + 1] == "dialog" and "--no-completion" in argv
     assert "--analysis" not in argv and "--judge" not in argv
     assert [argv[index + 1] for index, flag in enumerate(argv) if flag == "--model"] == [
         "curator=c",
@@ -605,7 +638,8 @@ def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
     assert [argv[index + 1] for index, flag in enumerate(argv) if flag == "--effort"] == ["curator=high"]
     assert argv[argv.index("--curator-calls") + 1] == "96" and "--curator-queries" not in argv
     assert argv[argv.index("--seed") + 1] == "11"
-    assert "--chain documents" in record._command({**old, "chain": "documents", "disclose": "all"})
+    rebuilt = record._command({**old, "disclose": "all", "partition": None, "completes": True})
+    assert "--disclose all" in rebuilt and "--partition" not in rebuilt and "--no-completion" not in rebuilt
     assert "--model" not in record._command({**old, "models": {"employee": "e", "curator": "c"}})
 
 

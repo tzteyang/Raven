@@ -19,7 +19,7 @@ from experimental.harness.participation.protocols import Exchange
 from experimental.harness.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
 from experimental.harness.raven_adapter.worker import Execution
 from experimental.harness.scenario.sealed import Sealed
-from experimental.simulation.__main__ import CHAINS, cli, settings
+from experimental.simulation.__main__ import cli, settings
 from experimental.simulation.bench.conversant import Conversant
 from experimental.simulation.bench.record import PLACEHOLDERS
 from experimental.simulation.bench.scenario import BUNDLED, Scenario
@@ -368,6 +368,39 @@ async def test_by_need_the_owner_chooses_and_the_rest_comes_before_the_last_roun
     assert agency.withheld == [] and all((skills / name / "SKILL.md").is_file() for name in remaining)
 
 
+async def test_under_none_the_owner_hands_nothing_over_and_still_judges_by_every_material(tmp_path):
+    scenario = Scenario.load(TRAVEL)
+    everything = list(scenario.materials)
+    skills, uploads = tmp_path / "home" / "skills", tmp_path / "home" / "uploads"
+    waiting = verdicts(scenario, **{scenario.criteria[0].id: {"result": "fail", "waits_on": everything[-1]}})
+    provider = Provider(
+        response(REVIEW, {"verdicts": waiting, "remark": "Not yet.", "handover": [everything[0]]}),
+        response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Still nothing to give."}),
+    )
+    agency = Agency(
+        scenario,
+        provider,
+        skills,
+        workdir=tmp_path,
+        disclosure=scenario.disclosure("none", rounds=2),
+        deliver="dialog",
+        uploads=uploads,
+    )
+    agency.prepare()
+    assert agency.released == [] and agency.withheld == everything and not agency.chooses
+    (opening,) = agency.opening()
+    assert opening.attachments == () and "{files}" not in opening.text and not uploads.exists()
+    sessions = {"student": [exchange("Cheap trip?", "Here.")]}
+    first = await agency.evaluate(sessions)
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["given_to_the_assistant"] == [] and packet["withheld"] == everything
+    assert packet["handing_over_now"] == [] and packet["you_choose_handover"] is False
+    assert set(packet["materials"]) == set(everything)
+    assert first.attachments == () and agency.released == [] and first.satisfied is False
+    last = await agency.evaluate(sessions)
+    assert last.attachments == () and agency.withheld == everything and not uploads.exists()
+
+
 def test_the_starting_harness_fingerprint_changes_only_when_a_products_files_do(tmp_path):
     product = tmp_path / "agents" / "raven-ppt"
     (product / "__pycache__").mkdir(parents=True)
@@ -382,7 +415,7 @@ def test_the_starting_harness_fingerprint_changes_only_when_a_products_files_do(
 
 
 def test_a_silent_owner_is_refused_unless_every_material_is_handed_over_at_onboarding(monkeypatch, capsys, tmp_path):
-    argv = ["simulation", "--config", str(tmp_path / "config.json"), "--owner-feedback", "silent", "--chain"]
+    argv = ["simulation", "--config", str(tmp_path / "config.json"), "--owner-feedback", "silent", "--disclose"]
     monkeypatch.setattr(sys, "argv", [*argv, "by-stage"])
     with pytest.raises(SystemExit):
         cli()
@@ -462,13 +495,10 @@ def test_simulation_timeout_reaches_the_information_preparer(tmp_path, monkeypat
     assert limits.total_timeout == 3600 and limits.compose_timeout == 600
 
 
-def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_credential(tmp_path):
-    for chain in CHAINS.values():
-        assert chain["deliver"] == "dialog" and chain["disclose"] in ("all", "staged", *Scenario.load(TRAVEL).plans)
+def test_settings_name_the_disclosure_and_carry_no_credential(tmp_path):
     config = tmp_path / "config.json"
     args = SimpleNamespace(
-        argv=[f"--config={config}", "--chain", "staged", "--home", str(tmp_path / "home"), "--seed", "7"],
-        chain="staged",
+        argv=[f"--config={config}", "--disclose", "staged", "--home", str(tmp_path / "home"), "--seed", "7"],
         scenario=TRAVEL,
         deliver="dialog",
         disclose="staged",
@@ -527,7 +557,8 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     assert written["baseline"] == {"playbooks/plan/playbook.md": hashlib.sha256(b"spec").hexdigest()}
     start = written["starting_harness"]
     assert {"raven-research", "raven-ppt"} <= set(start["products"]) and start["raven_commit"]
-    assert written["chain"] == "staged" and written["scenario"] == "travel_agency"
+    assert written["disclose"] == "staged" and written["scenario"] == "travel_agency"
+    assert written["partition"] is None and written["completes"] is True and written["deliver"] == "dialog"
     assert written["owner_feedback"] == "spoken"
     assert (
         settings(SimpleNamespace(**{**vars(args), "owner_feedback": "silent"}), roles, "medium")["owner_feedback"]
@@ -535,7 +566,7 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     )
     assert written["argv"] == [
         f"--config={PLACEHOLDERS['--config']}",
-        "--chain",
+        "--disclose",
         "staged",
         "--home",
         str(tmp_path / "home"),
@@ -1109,8 +1140,9 @@ def test_a_scenario_without_a_material_loses_it_from_its_materials_opening_set_a
     control = scenario.without(["plan-deck-sample"])
     assert "plan-deck-sample" in scenario.materials and "plan-deck-sample" not in control.materials
     assert "plan-deck-sample" not in control.initial and len(control.initial) == len(scenario.initial) - 1
-    assert all("plan-deck-sample" not in step for steps in control.plans.values() for step in steps)
-    assert control.disclosure("by-stage").steps == control.plans["by-stage"]
+    assert all("plan-deck-sample" not in step for plan in control.plans.values() for step in plan.steps)
+    assert control.disclosure("by-stage").steps == control.plans["by-stage"].steps
+    assert control.disclosure("by-stage").labels == scenario.plans["by-stage"].labels
     with pytest.raises(ValueError, match="brochure"):
         scenario.without(["brochure"])
 
@@ -1167,7 +1199,7 @@ async def test_the_owner_hands_over_a_candidate_it_never_confirmed_as_files_and_
         folder.mkdir()
         (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Supplied method\n---\n{text}\n")
         contract["materials"][name] = {"kind": "norm"}
-        spec["plans"]["two"][1].append(name)
+        spec["plans"]["two"]["steps"][1].append(name)
     (root / "contract.json").write_text(json.dumps(contract))
     (root / "scenario.json").write_text(json.dumps(spec))
     (root / "provenance.json").write_text(

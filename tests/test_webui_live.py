@@ -186,8 +186,8 @@ def test_the_materials_offered_are_those_the_curator_may_receive_with_where_each
     spec = json.loads((scenario / "scenario.json").read_text())
     spec["initial"] = [name for name in spec["initial"] if name != "price-list"]
     spec["plans"] = {
-        plan: [[name for name in step if name != "price-list"] for step in steps]
-        for plan, steps in spec["plans"].items()
+        name: {**plan, "steps": [[item for item in step if item != "price-list"] for step in plan["steps"]]}
+        for name, plan in spec["plans"].items()
     }
     (scenario / "scenario.json").write_text(json.dumps(spec))
     origin = {"origin": "induced", "confirmed": False, "items": ["greet-by-name"]}
@@ -214,7 +214,7 @@ async def test_a_live_session_takes_the_loops_steps_as_the_page_asks_and_refuses
         assert state["failed"] is None and state["status"] == "running" and not state["onboarded"]
         assert host.session.boundaries.policy == "warn" and hired[0].guard is not None and hired[0].employee.started
         settings = json.loads((host.root / "settings.json").read_text())
-        assert settings["chain"] == "live" and settings["models"]["partner"] == "deepseek/deepseek-flash"
+        assert settings["disclose"] == "live" and settings["models"]["partner"] == "deepseek/deepseek-flash"
         assert settings["models"]["curator"] == "deepseek/deepseek-flash" and "counterpart" not in settings["models"]
         assert "raven.json" not in json.dumps(settings) and settings["efforts"]["curator"] == "low"
 

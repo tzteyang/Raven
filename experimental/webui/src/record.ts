@@ -22,8 +22,8 @@ export interface RecordRun {
   stop?: string | null
   started?: string | number | null
   updated?: string | number | null
-  chain?: unknown
-  /** How the run was set up (settings.json): chain, teaching, models, rounds, cards; never a credential. */
+  disclose?: unknown
+  /** How the run was set up (settings.json): disclosure plan, models, rounds, cards; never a credential. */
   settings: Record<string, unknown>
   revisions: unknown[]
   /** Why the suite stopped the run early, for example its spending budget. */
@@ -456,11 +456,11 @@ function requirement(value: unknown): RecordRequirement {
   }
 }
 
-/** A chain label from whatever shape the record gives it: a word, a list of steps or an object naming it. */
-export function chainLabel(chain: unknown): string {
-  if (typeof chain === 'string') return chain
-  if (Array.isArray(chain)) return chain.map(chainLabel).filter(Boolean).join(' / ')
-  const row = obj(chain)
+/** A disclosure plan's label from whatever shape the record gives it: a word, a list of steps or an object naming it. */
+export function disclosureLabel(plan: unknown): string {
+  if (typeof plan === 'string') return plan
+  if (Array.isArray(plan)) return plan.map(disclosureLabel).filter(Boolean).join(' / ')
+  const row = obj(plan)
   for (const key of ['label', 'name', 'kind']) if (typeof row[key] === 'string') return row[key] as string
   return Object.values(row).filter((item) => typeof item === 'string').join(' / ')
 }

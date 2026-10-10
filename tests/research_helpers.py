@@ -80,7 +80,9 @@ def make_scenario(root: Path, *, facts=True, instances=True, checks=True, norms=
     handed = [name for name in kinds if name != "owner-policy"]
     contract, spec = {"materials": kinds}, {"initial": sorted(handed)}
     first = [name for name in ("sop", "prices") if name in kinds]
-    spec["plans"] = {"two": [first, [name for name in handed if name not in first]]} if instances and first else {}
+    spec["plans"] = (
+        {"two": {"steps": [first, [name for name in handed if name not in first]]}} if instances and first else {}
+    )
     if checks:
         spec["criteria"] = [{"id": "quote-total", "check": CHECK}]
         contract["checks"] = {"quote-total": {"derived_from": ["sop", "owner-policy"] if norms else []}}

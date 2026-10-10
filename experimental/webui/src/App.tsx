@@ -39,7 +39,7 @@ const VIEWS: { id: View; label: string }[] = [
   { id: 'record', label: 'Record' },
 ]
 
-/** A run is named by its folder; its chain, the arm, each round's passed/judged checks and its models follow. */
+/** A run is named by its folder; its disclosure plan, the arm, each round's passed/judged checks and its models follow. */
 export function entryLabel(entry: RunEntry): string {
   const arm = entry.curator === 'untouched' ? 'control' : 'Curator'
   const scores = entry.passes.map(([pass, fail]) => `${pass}/${pass + fail}`).join(' → ')
@@ -48,7 +48,7 @@ export function entryLabel(entry: RunEntry): string {
     : entry.status === 'finished' ? '' : ` · ${entry.status === 'stalled' ? 'stalled or stopped' : entry.status}`
   const models = modelLine(entry.models, true)
   const verdict = entry.verdict ? ` · ${VERDICT_LABEL[entry.verdict] ?? entry.verdict}${typeof entry.score === 'number' ? ` ${entry.score}` : ''}` : ''
-  return `${entry.name}${entry.chain ? ` · ${entry.chain}` : ''} · ${arm}${scores ? ` · ${scores}` : ''}${models ? ` · ${models}` : ''}${verdict}${state}`
+  return `${entry.name}${entry.disclose ? ` · ${entry.disclose}` : ''} · ${arm}${scores ? ` · ${scores}` : ''}${models ? ` · ${models}` : ''}${verdict}${state}`
 }
 
 /** The full stop reason and models of a run, for the run list's hover text. */

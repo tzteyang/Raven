@@ -109,7 +109,7 @@ name its encompassing criterion, or `None` for an explicitly verified whole-rubr
 accepted as substitutes for a checker-specific oracle. Missing verification leaves the repair a candidate. Exact
 duplicates can be removed with a host-checked equivalent condition retained; this proves preservation, not judging accuracy.
 
-Use `--owner-feedback silent --chain documents` for simulation comparisons where the owner's scores are measurements
+Use `--owner-feedback silent --disclose all` for simulation comparisons where the owner's scores are measurements
 only. All materials must be available at onboarding. Measurement signals remain in the record and are excluded from
 Analyst input, curation, historical requirements and stopping decisions. Actual external feedback still takes precedence.
 
@@ -151,7 +151,7 @@ See [design](docs/evaluation-system-design.md) and [implementation evidence](doc
 ```bash
 # 旅行社模拟：一次运行（需要自备带 key 的配置文件）
 uv run python -m experimental.simulation --config <config.json> --home <基线 home> \
-  --state-dir <新的空目录> --scenario travel_agency --chain documents --rounds 4
+  --state-dir <新的空目录> --scenario travel_agency --disclose all --rounds 4
 
 # 离线准备：只使用指定披露计划的首轮材料，输出审核结果与记录
 uv run python -m experimental.cultivation.collector --scenario <场景目录> --disclose staged \
@@ -172,7 +172,7 @@ uv run python -m experimental.simulation --config <config.json> --state-dir <新
 # 老板只评不说：评审照常记进每轮记录作度量，但不进 Analyst、停止判断、历史和 Curator，
 # 改进只靠雇员自评与 --standard；材料须在入职时交齐
 uv run python -m experimental.simulation --config <config.json> --state-dir <新的空目录> \
-  --scenario brand_strategist --chain documents --owner-feedback silent --standard derived sedimented
+  --scenario brand_strategist --disclose all --owner-feedback silent --standard derived sedimented
 
 # 真人 CLI：真人既是对话方也是评价者
 uv run python -m experimental.cultivation --help

@@ -3,11 +3,12 @@ digital employee, reviews the drills and speaks to the Curator, and the loop cur
 agency is the loop's assessor: it only speaks, and the base Analyst turns its words into the Curator's requirements
 (see `experimental.simulation.cases.travel_agency.owner`).
 
-The owner knows all of the scenario's materials from the start and has handed every one over by the review before the
-last round; what varies is the partition of the materials into steps, which is how cultivation runs are told apart and
-what mining searches over. A chain names one such plan (all at once, as the owner decides, or a scenario's named
-partition), and `--partition` gives any other as JSON. The run's settings, with its command line but without any
-credential or configuration path, are written to `settings.json` beside the records.
+The owner knows all of the scenario's materials from the start; what varies is when it hands them over, which is how
+cultivation runs are told apart and what mining searches over. `--disclose` names the schedule (everything at once,
+nothing ever, the initial set and then as the owner decides, or a scenario's named partition), `--partition` gives any
+other partition as JSON, and `--deliver` says how a material reaches the employee (see
+`experimental.harness.scenario.disclosure`). The run's settings, with its command line but without any credential or
+configuration path, are written to `settings.json` beside the records.
 
 Each model role runs on the model and effort `--model ROLE=MODEL` and `--effort ROLE=LEVEL` name for it, and a role
 not named on the partner's, from `--config` (see `experimental.harness.participation.model_roles`); the resolved map is in `settings.json`.
@@ -89,11 +90,6 @@ from raven.config.mode_catalogue import build_mode_catalogue
 
 # The owner each bundled scenario is judged by; the travel agency's is the default for a scenario directory given by path.
 OWNERS = {"brand_strategist": BrandOwner}
-CHAINS = {
-    "documents": {"deliver": "dialog", "disclose": "all"},
-    "staged": {"deliver": "dialog", "disclose": "staged"},
-    "by-stage": {"deliver": "dialog", "disclose": "by-stage"},
-}
 
 
 def settings(args, roles: dict, partner_tier=None) -> dict:
@@ -104,11 +100,12 @@ def settings(args, roles: dict, partner_tier=None) -> dict:
     """
     return {
         "argv": placed(args.argv, {"--config": PLACEHOLDERS["--config"]}),
-        "chain": args.chain,
         "owner_feedback": getattr(args, "owner_feedback", "spoken"),
         "scenario": Path(args.scenario).name,
         "deliver": args.deliver,
-        "disclose": [list(step) for step in args.disclose] if isinstance(args.disclose, tuple) else args.disclose,
+        "disclose": args.disclose,
+        "partition": [list(step) for step in args.partition] if getattr(args, "partition", None) else None,
+        "completes": not getattr(args, "no_completion", False),
         "rounds": args.rounds,
         "turns": args.turns,
         "repeats": args.repeats,
@@ -162,7 +159,9 @@ async def main(args):
     if confinement is not None:
         root.mkdir(parents=True, exist_ok=True)
         seal(root)
-    disclosure = scenario.disclosure(args.disclose, rounds=args.rounds)
+    disclosure = scenario.disclosure(
+        args.partition or args.disclose, rounds=args.rounds, completes=not getattr(args, "no_completion", False)
+    )
     contract = scenario.contract
     # The contract's prior and the command line's, read before anything is hired so a bad record fails fast.
     args.prior_records = [*contract.prior.records, *(args.prior or ())]
@@ -332,7 +331,7 @@ async def main(args):
                 )
             print(f"Task records: {root}")
             print(
-                f"Scenario: {scenario.root.name}; chain: {args.chain}; disclosure: {args.disclose}; delivery: {args.deliver}; "
+                f"Scenario: {scenario.root.name}; disclosure: {disclosure.plan}; delivery: {args.deliver}; "
                 f"cards: {', '.join(card.name for card in cards)}; skills: {skills(employee)}"
             )
             try:
@@ -496,10 +495,16 @@ def cli():
     parser.add_argument("--state-dir", type=Path, help="New task directory; defaults to a temporary directory")
     parser.add_argument(
         "--disclose",
-        choices=("all", "staged"),
         default="staged",
-        help="Hand every material over at onboarding, or the scenario's initial set first and the rest as the owner "
-        "chooses after each round",
+        metavar="PLAN",
+        help="When the owner hands its materials over: all (every material at onboarding), none (never), staged (the "
+        "scenario's initial set at onboarding, the rest as the owner chooses after each round), or the name of one "
+        "of the scenario's plans (step 0 at onboarding, step k with the review of round k)",
+    )
+    parser.add_argument(
+        "--no-completion",
+        action="store_true",
+        help="Keep withholding what the plan never hands over, instead of handing everything over before the last round",
     )
     parser.add_argument(
         "--model",
@@ -614,11 +619,6 @@ def cli():
         "--without", nargs="+", help="Leave these materials out of the scenario, as if the agency never had them"
     )
     parser.add_argument(
-        "--chain",
-        choices=sorted(CHAINS),
-        help="How the owner cultivates the employee; sets delivery and disclosure, overriding --deliver and --disclose",
-    )
-    parser.add_argument(
         "--owner-feedback",
         choices=("spoken", "silent"),
         default="spoken",
@@ -630,7 +630,7 @@ def cli():
         "--partition",
         type=json.loads,
         help='A partition of the materials into steps as JSON, e.g. [["service-sop", "price-list"], ["handover-ticket"]]: '
-        "step 0 at onboarding, step k with the review of round k; overrides --chain and --disclose",
+        "step 0 at onboarding, step k with the review of round k; overrides --disclose",
     )
     parser.add_argument(
         "--timeout", type=float, default=180, help="Timeout for each worker or model operation in seconds"
@@ -660,14 +660,12 @@ def cli():
         parser.error(str(exc))
     if args.seed is None:
         args.seed = random.randrange(2**31)
-    if args.chain:
-        args.deliver, args.disclose = CHAINS[args.chain]["deliver"], CHAINS[args.chain]["disclose"]
     if args.partition is not None:
-        args.chain, args.deliver = "partition", "dialog"
-        args.disclose = tuple(tuple(step) for step in args.partition)
+        args.partition = tuple(tuple(step) for step in args.partition)
+        args.disclose = "partition"
     if args.owner_feedback == "silent" and args.disclose != "all":
         # A material handed over later arrives with the owner's remark, which a silent owner keeps from the loop.
-        parser.error("--owner-feedback silent needs every material at onboarding: --chain documents or --disclose all")
+        parser.error("--owner-feedback silent needs every material at onboarding: --disclose all")
     try:
         asyncio.run(main(args))
     except KeyboardInterrupt:

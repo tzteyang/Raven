@@ -315,7 +315,7 @@ def judge(record: dict) -> dict:
         "cultivated": grown,
         "cases": found,
         "held_cases": held,
-        "run": {key: record.get("run", {}).get(key) for key in ("name", "chain", "status")},
+        "run": {key: record.get("run", {}).get(key) for key in ("name", "disclose", "status")},
     }
 
 

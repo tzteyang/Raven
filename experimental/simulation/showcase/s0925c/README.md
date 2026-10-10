@@ -72,7 +72,7 @@ if computable and counts_set == {claimed}:
 
 ```bash
 uv run python -m experimental.simulation --config <config.json> --home <员工基线 home> --state-dir <新的空目录> \
-  --scenario travel_agency --chain documents --rounds 3 --turns 14 --repeats 1 --timeout 9000 \
+  --scenario travel_agency --disclose all --rounds 3 --turns 14 --repeats 1 --timeout 9000 \
   --analysis owner --cards family --seed 11 \
   --curator-model openrouter/anthropic/claude-opus-5.5 --simulation-model openrouter/anthropic/claude-opus-5.5 \
   --traveller-model deepseek/deepseek-flash --subagent-model deepseek/deepseek-flash \

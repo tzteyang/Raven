@@ -100,25 +100,32 @@
     }
   ],
   "plans": {
-    "by-stage": [
-      [
-        "service-sop",
-        "price-list",
-        "value-package",
-        "comfort-package",
-        "premium-package",
-        "booking-policy"
+    "by-stage": {
+      "steps": [
+        [
+          "service-sop",
+          "price-list",
+          "value-package",
+          "comfort-package",
+          "premium-package",
+          "booking-policy"
+        ],
+        [
+          "handover-ticket",
+          "plan-deck-spec",
+          "plan-deck-template",
+          "plan-deck-sample"
+        ],
+        [
+          "brand-design-guide",
+          "consultation-scripts"
+        ]
       ],
-      [
-        "handover-ticket",
-        "plan-deck-spec",
-        "plan-deck-template",
-        "plan-deck-sample"
-      ],
-      [
-        "brand-design-guide",
-        "consultation-scripts"
+      "labels": [
+        "service process and products",
+        "handover and deck specification",
+        "brand and consultation scripts"
       ]
-    ]
+    }
   }
 }

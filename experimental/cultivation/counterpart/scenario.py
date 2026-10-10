@@ -9,7 +9,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from experimental.harness.scenario import Disclosure
+from experimental.harness.scenario import Disclosure, Plan
 from experimental.harness.scenario import Scenario as Contract
 from experimental.harness.scenario.contract import document, frontmatter
 
@@ -29,7 +29,8 @@ class Scenario:
     """A scenario as the counterpart works it. Materials are skill directories the counterpart owns; releasing one copies it into the employee's skill pool.
 
     `initial` is what the employee has before the first round under the staged plan; the counterpart hands over the rest.
-    `plans` are named partitions of the materials into steps: step 0 at onboarding, step k with the review of round k.
+    `plans` are named partitions of the materials into steps, each step optionally labelled with what it is meant to
+    give: step 0 at onboarding, step k with the review of round k.
     `onboarding` and `handover` are the owner's words around uploaded files, each listing them at `{files}`. `kinds`
     are the materials' kinds in the contract's terms, and `contract` the loaded contract itself, whole even when
     `without` leaves materials out. `handed` are the materials the counterpart may hand over, those the partner may
@@ -42,7 +43,7 @@ class Scenario:
     initial: tuple[str, ...]
     onboarding: str = ""
     handover: str = ""
-    plans: dict[str, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
+    plans: dict[str, Plan] = field(default_factory=dict)
     kinds: dict[str, str] = field(default_factory=dict)
     contract: Contract = field(compare=False, repr=False, kw_only=True)
     handed: tuple[str, ...] = ()
@@ -81,15 +82,14 @@ class Scenario:
             kinds={name: kind for name, kind in self.kinds.items() if name not in names},
             handed=tuple(name for name in self.handed if name not in names),
             initial=tuple(name for name in self.initial if name not in names),
-            plans={
-                plan: tuple(tuple(name for name in step if name not in names) for step in steps)
-                for plan, steps in self.plans.items()
-            },
+            plans={name: plan.without(names) for name, plan in self.plans.items()},
         )
 
-    def disclosure(self, plan="staged", rounds: int | None = None) -> Disclosure:
+    def disclosure(self, plan="staged", rounds: int | None = None, completes: bool = True) -> Disclosure:
         """The schedule `plan` gives over this scenario's materials (see `experimental.harness.scenario.disclosure`)."""
-        return Disclosure.of(plan, materials=self.handed, initial=self.initial, plans=self.plans, rounds=rounds)
+        return Disclosure.of(
+            plan, materials=self.handed, initial=self.initial, plans=self.plans, rounds=rounds, completes=completes
+        )
 
     def text(self, material: str) -> str:
         """A material's own document (see `experimental.harness.scenario.contract.document`)."""
