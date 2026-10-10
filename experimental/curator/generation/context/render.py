@@ -153,14 +153,17 @@ def observation_index(rows) -> list | dict:
     """What a request carries of the execution's observations: one entry per row to choose from, read on demand.
 
     Each entry gives the row's index, its short scalar fields, its size and the kinds of records nested in it; the
-    rows themselves are read with `read_observation`. Only when the index alone would outgrow a request is it
-    reduced to counts per kind.
+    rows themselves are read with `read_observation`. A row's `reply` and `deliverables` go whole: they are what the
+    worker handed back, which the Curator should see for every turn without reading the rows. Only when the index
+    alone would outgrow a request is it reduced to counts per kind.
     """
     index = []
     for number, row in enumerate(rows):
         entry = {"index": number, "bytes": len(json.dumps(row, ensure_ascii=False, default=str).encode())}
         for key, value in row.items():
-            if isinstance(value, (str, int, float, bool)) and len(str(value)) <= 120:
+            if key in ("reply", "deliverables") or (
+                isinstance(value, (str, int, float, bool)) and len(str(value)) <= 120
+            ):
                 entry[key] = value
             elif isinstance(value, list) and value and all(isinstance(item, dict) for item in value):
                 kinds = {}
