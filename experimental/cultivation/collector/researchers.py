@@ -27,6 +27,8 @@ from experimental.cultivation.collector.voice import prompt
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
 from experimental.harness.participation.exchange import exchange, messages
+from raven.observability import execution, provider_usage
+from raven.providers.usage import merge_usage, reported_cost, token_count
 
 AGENTS = ("claude", "codex")
 OUTPUT = 20_000
@@ -81,6 +83,39 @@ def _codex_tokens(out: bytes) -> int | None:
             if digits.isdigit():
                 return int(digits)
     return None
+
+
+def _sum_usage(reports):
+    reports = list(reports)
+    keys = ("prompt_tokens", "completion_tokens", "cache_read_input_tokens", "cache_creation_input_tokens")
+    result = {"prompt_tokens_include_cache": False}
+    for key in keys:
+        values = [token_count(report.get(key)) for report in reports]
+        result[key] = sum(values) if values and all(value is not None for value in values) else None
+    return result
+
+
+def _claude_usage(envelope, key_source):
+    raw = envelope.get("usage")
+    models = envelope.get("modelUsage")
+    models = models if isinstance(models, dict) else {}
+    if isinstance(raw, dict):
+        usage = provider_usage.anthropic(raw)
+    else:
+        usage = _sum_usage(
+            {
+                "prompt_tokens": value.get("inputTokens"),
+                "completion_tokens": value.get("outputTokens"),
+                "cache_read_input_tokens": value.get("cacheReadInputTokens"),
+                "cache_creation_input_tokens": value.get("cacheCreationInputTokens"),
+            }
+            for value in models.values()
+            if isinstance(value, dict)
+        )
+    amount = reported_cost(envelope.get("total_cost_usd"))
+    key = "quota_usd" if key_source == "none" else "cost_usd" if key_source else "unclassified_cost_usd"
+    usage[key] = amount
+    return usage
 
 
 def correction_prompt(value, error):
@@ -146,7 +181,11 @@ class Agent:
         started = time.monotonic()
         run = {**self.record(), "events": 0, "tool_calls": 0}
         envelope, out, err = None, bytearray(), bytearray()
-        with tempfile.TemporaryDirectory(prefix="raven-research-claude-") as place:
+        key_source, message_usage = None, {}
+        with (
+            tempfile.TemporaryDirectory(prefix="raven-research-claude-") as place,
+            execution.attempt("claude", self.model, external=True) as accounting,
+        ):
             process = await asyncio.create_subprocess_exec(
                 *command,
                 cwd=place,
@@ -158,7 +197,7 @@ class Agent:
             )
 
             async def stdout():
-                nonlocal envelope
+                nonlocal envelope, key_source
                 while line := await process.stdout.readline():
                     out.extend(line)
                     del out[:-OUTPUT]
@@ -174,9 +213,30 @@ class Agent:
                     run["events"] += 1
                     run["last_event"] = item.get("type")
                     run["last_event_seconds"] = round(time.monotonic() - started, 2)
+                    if item.get("type") == "system" and item.get("subtype") == "init":
+                        key_source = item.get("apiKeySource")
                     if item.get("type") == "result":
                         envelope = item
+                        models = item.get("modelUsage")
+                        model = next(iter(models)) if isinstance(models, dict) and len(models) == 1 else None
+                        accounting.usage(
+                            _claude_usage(item, key_source),
+                            raw={key: item[key] for key in ("usage", "modelUsage", "total_cost_usd") if key in item},
+                            served_model=model,
+                            complete=True,
+                        )
+                        if item.get("is_error"):
+                            accounting.status("error")
                     if item.get("type") == "assistant":
+                        message = item.get("message") or {}
+                        if message.get("id") and isinstance(message.get("usage"), dict):
+                            identity = message["id"]
+                            message_usage[identity] = merge_usage(
+                                message_usage.get(identity), provider_usage.anthropic(message["usage"])
+                            )
+                            accounting.usage(
+                                _sum_usage(message_usage.values()), raw={"messages": {identity: message["usage"]}}
+                            )
                         run["tool_calls"] += sum(
                             block.get("type") == "tool_use"
                             for block in item.get("message", {}).get("content", [])
@@ -197,6 +257,8 @@ class Agent:
                 await process.stdin.drain()
                 process.stdin.close()
                 await asyncio.wait_for(asyncio.shield(readers), self.timeout)
+                if process.returncode:
+                    accounting.status("error")
                 if envelope is None:
                     if process.returncode:
                         raise ResearchError(
@@ -206,6 +268,7 @@ class Agent:
                 value = self._claude_answer(json.dumps(envelope).encode(), run)
                 if process.returncode:
                     raise ResearchError(f"claude exited with {process.returncode}")
+                accounting.finish()
                 try:
                     return output.model_validate(value), run
                 except ValueError as exc:
@@ -270,7 +333,10 @@ class Agent:
         started = time.monotonic()
         run = self.record()
         out = err = b""
-        with tempfile.TemporaryDirectory(prefix="raven-research-codex-") as place:
+        with (
+            tempfile.TemporaryDirectory(prefix="raven-research-codex-") as place,
+            execution.attempt("codex", self.model, external=True) as accounting,
+        ):
             place = Path(place)
             command = self._codex(strict(schema_for(output)), place, web=web)
             if records is not None:
@@ -303,11 +369,15 @@ class Agent:
                 value = self._codex_answer(place, run)
                 run["outcome"] = "success"
             finally:
+                tokens = _codex_tokens(err)
+                if tokens is None:
+                    tokens = _codex_tokens(out)
                 run.update(
                     seconds=round(time.monotonic() - started, 2),
                     exit=process.returncode,
-                    tokens=_codex_tokens(err) or _codex_tokens(out),
+                    tokens=tokens,
                 )
+                accounting.usage({"total_tokens": run["tokens"]}, complete=process.returncode == 0)
                 if records is not None:
                     (records / "run.json").write_text(json.dumps(run, indent=2))
                     (records / "stdout.txt").write_bytes(out[-OUTPUT:])

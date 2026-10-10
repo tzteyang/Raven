@@ -17,6 +17,7 @@ from experimental.cultivation.employee import hire_task, withheld
 from experimental.harness.contract import Task
 from experimental.harness.raven_adapter.observe import ObservedProvider, Recorder
 from experimental.harness.scenario import Disclosure, load
+from raven.observability import execution
 from raven.providers.factory import make_lazy_provider, make_resolving_provider
 
 
@@ -74,6 +75,11 @@ async def research(args, *, answerer_factory=None):
             update={"guidance": Guidance.model_validate_json(args.research_guidance.read_text()).groups}
         )
     root.mkdir(parents=True, mode=0o700, exist_ok=False)
+    with execution.run(root, name="collector"):
+        return await _collect(args, root, task, request, scenario, released, answerer_factory)
+
+
+async def _collect(args, root, task, request, scenario, released, answerer_factory):
     (root / "workdir").mkdir()
     worker = hire_task(
         task, args.config, workdir=root / "workdir", root=root, **({"withheld": withheld(scenario)} if scenario else {})

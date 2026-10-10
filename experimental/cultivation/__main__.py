@@ -23,6 +23,7 @@ from experimental.harness.raven_adapter.inspection import Baseline
 from experimental.harness.raven_adapter.worker import Worker, WorkerError
 from raven.config.raven import load_raven_config
 from raven.core.config_stack import load_runtime_config
+from raven.observability import execution
 
 ROLES = ("curator", "attribution", "analyst")
 
@@ -33,6 +34,11 @@ async def main(args):
     root = args.state_dir or Path(tempfile.mkdtemp(prefix="raven-iteration-task-"))
     if root.exists() and any(root.iterdir()):
         raise ValueError("state-dir must be a new or empty task directory")
+    with execution.run(root):
+        await _run(args, config, extensions, root)
+
+
+async def _run(args, config, extensions, root):
     baseline = Baseline(config, extensions, args.workdir, task=Task(text=args.task))
     roles = model_roles.resolve(
         model_roles.pairs(args.model), model_roles.pairs(args.effort), model_roles.partner_of(config), roles=ROLES

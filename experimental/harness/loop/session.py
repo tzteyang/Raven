@@ -23,6 +23,7 @@ from experimental.harness.curator.generation.run import Limits as CuratorLimits
 from experimental.harness.curator.workflow import PENDING, improve
 from experimental.harness.loop.history import Entry, entry, read_history
 from experimental.harness.loop.ledger import mark
+from experimental.harness.loop.observability import step
 from experimental.harness.loop.records import Cultivation
 from experimental.harness.participation.audience import project
 from experimental.harness.participation.compartment import Boundaries, Compartment
@@ -38,6 +39,7 @@ from experimental.harness.participation.requirements import ExternalRequirement
 from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import plain
 from experimental.harness.raven_adapter.worker import Execution
+from raven.observability import execution
 
 
 @dataclass(frozen=True)
@@ -237,6 +239,7 @@ class Session:
         self.attributions = _Records(worker.root / "attribution")
         self.path = Path(path) if path else worker.root / "iteration" / f"{uuid4().hex}.json"
         self.record: dict = {
+            **({"execution_run_id": execution.current().run_id} if execution.current() else {}),
             "task_id": worker.baseline.task.id,
             "task": worker.baseline.task.text,
             "status": "running",
@@ -294,6 +297,7 @@ class Session:
                     "error",
                     "information",
                     "experience_pending",
+                    "execution_run_id",
                 )
                 if key in record
             }
@@ -462,6 +466,7 @@ class Session:
                     )
         return "done"
 
+    @step
     async def onboard(self, opening=()) -> bool:
         """Prepare inputs when configured, then curate once; False when preparation is unready or curation pauses."""
         self._require(
@@ -513,6 +518,7 @@ class Session:
             self.save()
         return status != "paused"
 
+    @step
     async def trial(self, *trials) -> Sessions:
         """Play trials on the worker as it stands; their sessions join the round in progress."""
         self._require(self.onboarded and self.review is None, "a trial runs after onboarding and before the analysis")
@@ -523,6 +529,7 @@ class Session:
         self.save()
         return produced
 
+    @step
     async def holdout(self, trials, assessors) -> tuple[Signal, ...]:
         """Play held-out trials on the worker as it stands and assess them apart from the round: their sessions
         and signals join the round's record, never the Analyst's reading or the Curator's citations.
@@ -612,6 +619,7 @@ class Session:
         self.signals.append(signal)
         self.save()
 
+    @step
     async def assess(self, *assessors) -> tuple[Signal, ...]:
         """Each assessor's signal joins the round and the record as soon as it is given, so one that fails after
         others have spoken ends the run with their words kept in the round."""
@@ -696,6 +704,7 @@ class Session:
         self.external_requirements.extend({requirement.id: requirement for requirement in added}.values())
         return added
 
+    @step
     async def analyse(self) -> Outcome:
         """The Analyst reads the round; the round is recorded, and the outcome says what the loop would do next."""
         self._require(self.sessions and self.review is None, "the analysis needs trials and runs once per round")
@@ -777,6 +786,7 @@ class Session:
         self.save()
         return self.outcome
 
+    @step
     async def curate(self, attribution=None) -> bool:
         """Revise the Harness from the analysed round; False when the Curator paused and may be called again. A
         reported gap ends the round unrevised with its question kept (see `_curate`).

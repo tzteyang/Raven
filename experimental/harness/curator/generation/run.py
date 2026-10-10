@@ -25,6 +25,7 @@ from experimental.harness.raven_adapter.observe import plain
 from raven.agent.tools.registry import call_failed
 from raven.contracts.llm_provider import LLMProvider
 from raven.contracts.tool import SKIPPED_AFTER_BLOCKED_CALL, Continuation
+from raven.observability.execution import stage as observed_stage
 from raven.permissions.turn import set_current_tool_call_id
 from raven.providers.prompt_cache import accepts_cache_control, cache_control, claim_marks
 from raven.security.trust import wrap_untrusted
@@ -197,6 +198,7 @@ def _budget(state, limits) -> str:
     )
 
 
+@observed_stage("curator", argument="stage")
 async def ask(
     stage,
     stages,

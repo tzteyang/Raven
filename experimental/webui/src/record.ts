@@ -227,7 +227,7 @@ export interface CultivationRecord {
   ledger: LedgerRow[]
   /** What the run spent, by part; `quota` is what ran under a subscription login, priced at its API equivalent and
       not in the total (experimental/simulation/bench/record.py _research_spend). */
-  cost: { total: number; by_part: Record<string, number>; quota?: Record<string, number> } | null
+  cost: { total: number | null; by_part: Record<string, number>; quota?: Record<string, number>; missing_calls?: number } | null
   /** The value judge's reading of this run (experimental/simulation/bench/value.py), when the record carries one. */
   value: ValueVerdict | null
 }
@@ -398,7 +398,7 @@ export function normalizeRecord(raw: unknown): CultivationRecord {
         }),
       }
     }),
-    cost: typeof cost.total === 'number' ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number>, quota: obj(cost.quota) as Record<string, number> } : null,
+    cost: typeof cost.total === 'number' || cost.total === null ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number>, quota: obj(cost.quota) as Record<string, number>, missing_calls: typeof cost.missing_calls === 'number' ? cost.missing_calls : undefined } : null,
     value: verdictOf(value.value),
   }
 }

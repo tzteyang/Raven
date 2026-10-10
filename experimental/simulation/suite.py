@@ -15,6 +15,7 @@ whole process. Then the cultivation record is exported and judged, and a summary
 """
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -29,6 +30,7 @@ from pathlib import Path
 from experimental.cultivation.employee import AREA, FORWARDED
 from experimental.simulation.bench.record import REDACTED, SUMMARY, build_record, export_record, redact
 from experimental.simulation.bench.scenario import Scenario
+from raven.providers.usage import reported_cost
 
 KEPT_FILES = ("run.log", "command.json")
 VALUE = "value.json"
@@ -47,15 +49,67 @@ PRICES = {
 def call_cost(attributes: dict, prices=PRICES) -> float:
     """A model call's cost: what the provider reported, else its tokens at the model's price (0 when unpriced)."""
     try:
-        reported = float(attributes.get("llm.usage.cost_total") or 0)
+        value = attributes.get("llm.usage.cost_total")
+        reported = reported_cost(float(value)) if not isinstance(value, bool) else None
     except (TypeError, ValueError):
-        reported = 0.0
+        reported = None
     model = str(attributes.get("llm.model") or "")
     price = prices.get(model) or next((p for name, p in prices.items() if name.split("/")[-1] == model), None)
-    if reported or not price:
+    if reported is not None:
         return reported
+    if not price:
+        return 0.0
     tokens = [attributes.get(f"llm.usage.{key}") or 0 for key in ("input_tokens", "output_tokens", "cache_read_tokens")]
     return sum(float(count) * rate for count, rate in zip(tokens, price, strict=True)) / 1_000_000
+
+
+def execution_spend(accounting, prices):
+    """Keep the budget estimate distinct from reported spend, using the same unique records."""
+    from raven.observability.report import cost
+
+    amount = cost(accounting)
+    estimated, unpriced = 0.0, 0
+    for row in accounting["attempts"]:
+        usage = row.get("usage", {})
+        if usage.get("cost_usd") is not None or usage.get("quota_usd") is not None:
+            continue
+        model = str(row["attributes"].get("model") or "")
+        priced = model in prices or any(name.split("/")[-1] == model for name in prices)
+        if (
+            row["kind"] == "external"
+            or not priced
+            or usage.get("input_total_tokens") is None
+            or usage.get("inconsistent")
+        ):
+            unpriced += 1
+            continue
+        fresh = usage.get("input_tokens")
+        if fresh is None:
+            fresh = max(
+                0,
+                usage["input_total_tokens"]
+                - (usage.get("cache_read_tokens") or 0)
+                - (usage.get("cache_write_tokens") or 0),
+            )
+        attributes = {
+            "llm.model": model,
+            "llm.usage.input_tokens": fresh,
+            "llm.usage.output_tokens": usage.get("output_tokens"),
+            "llm.usage.cache_read_tokens": usage.get("cache_read_tokens"),
+        }
+        estimated += call_cost(attributes, prices)
+    return {
+        **amount["by_part"],
+        "total": amount["total"],
+        "accounting": amount,
+        "budget_total": (amount["total"] or 0) + estimated,
+        "budget_estimate_usd": estimated,
+        "budget_unpriced_calls": unpriced,
+        "budget_pricing": {
+            "rates": {name: list(rates) for name, rates in prices.items()},
+            "version": hashlib.sha256(json.dumps(prices, sort_keys=True).encode()).hexdigest()[:16],
+        },
+    }
 
 
 def span_logs(folder: Path) -> list[Path]:
@@ -65,8 +119,8 @@ def span_logs(folder: Path) -> list[Path]:
     return [*sorted(folder.glob("archive/*/audit-spans-*.log")), *sorted(folder.glob("audit-spans*.log*"))]
 
 
-def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, float]:
-    """Model spend of one run from the calls its Raven home recorded, split by who made them.
+def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict:
+    """Reported execution spend, with the audit-log estimate retained only for historical runs.
 
     A child harness hosted beside the employee or one of its replicas keeps its own log under the run's records
     (`employee/children/<id>/native/traces/logs`, or the same under `replicas/<label>/`); every call there counts as a
@@ -74,6 +128,11 @@ def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, 
     Replicas' own calls land in the run's Raven home with the employee's; once the home is gone, its logs are read
     from the copy the records keep under `traces/`.
     """
+    from raven.observability.report import read
+
+    accounting = read(records or state)
+    if accounting["available"]:
+        return execution_spend(accounting, prices)
     parts = {"simulation": 0.0, "employee": 0.0, "subagents": 0.0}
     logs = [(log, None) for log in span_logs(Path(state) / "traces" / "logs")]
     if not logs and records is not None:
@@ -384,7 +443,10 @@ def finish(run: Run, args) -> dict:
 
 
 def over_budget(runs: list[Run], budget: float | None) -> bool:
-    return budget is not None and sum(spend(run.state, run.records)["total"] for run in runs if run.started) >= budget
+    if budget is None:
+        return False
+    amounts = [spend(run.state, run.records) for run in runs if run.started]
+    return sum((amount.get("budget_total", amount["total"]) or 0) for amount in amounts) >= budget
 
 
 def main(args) -> list[dict]:
@@ -427,11 +489,14 @@ def main(args) -> list[dict]:
                     pending.clear()
         time.sleep(args.poll)
     ranking = sorted(done, key=lambda summary: -((summary["value"] or {}).get("score") or 0))
-    total = sum(summary["spend"]["total"] for summary in done)
+    known = [summary["spend"]["total"] for summary in done if summary["spend"]["total"] is not None]
+    total = sum(known) if known else None
+    missing = sum(summary["spend"].get("accounting", {}).get("missing_calls", 0) for summary in done)
     (args.runs_dir / f"{args.prefix}mining-{stamp}.json").write_text(
-        json.dumps({"spend": total, "ranking": ranking}, ensure_ascii=False, indent=2)
+        json.dumps({"spend": total, "unpriced_calls": missing, "ranking": ranking}, ensure_ascii=False, indent=2)
     )
-    print(f"mining finished: {len(done)} runs, ${total:.2f}", flush=True)
+    amount = f"${total:.2f}" if total is not None else "unknown"
+    print(f"mining finished: {len(done)} runs, reported spend {amount}, {missing} unpriced calls", flush=True)
     return ranking
 
 

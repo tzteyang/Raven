@@ -87,6 +87,7 @@ from experimental.simulation.cases.brand_strategist.owner import BrandOwner
 from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
+from raven.observability import execution
 
 # The owner each bundled scenario is judged by; the travel agency's is the default for a scenario directory given by path.
 OWNERS = {"brand_strategist": BrandOwner}
@@ -159,6 +160,11 @@ async def main(args):
     if confinement is not None:
         root.mkdir(parents=True, exist_ok=True)
         seal(root)
+    with execution.run(root):
+        await _run(args, scenario, root, confinement)
+
+
+async def _run(args, scenario, root, confinement):
     disclosure = scenario.disclosure(
         args.partition or args.disclose, rounds=args.rounds, completes=not getattr(args, "no_completion", False)
     )

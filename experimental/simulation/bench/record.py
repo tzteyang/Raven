@@ -1146,11 +1146,17 @@ def _revisions(root: Path, curations: list[dict], rounds: list[dict]) -> list[st
 
 
 def _cost(root: Path, state_root) -> dict | None:
-    """The suite's own spend when it summarised the run, else the model calls the audit spans of the run's Raven home
-    and of every child harness recorded (see `experimental.simulation.suite.spend`)."""
+    """Execution accounting when present; historical runs retain their original spend sources."""
+    from raven.observability.report import cost, read
+
+    accounting = read(root)
+    if accounting["available"]:
+        return cost(accounting)
     summary = _json(root / SUMMARY)
     spend = summary.get("spend") if isinstance(summary, dict) else None
     if isinstance(spend, dict):
+        if isinstance(spend.get("accounting"), dict):
+            return spend["accounting"]
         parts = {key: float(value) for key, value in spend.items() if key != "total" and isinstance(value, int | float)}
         total = spend.get("total")
         return {
@@ -2017,7 +2023,10 @@ def _cost_md(record: dict, labels: dict) -> list[str]:
     run, cost = record["run"], record["cost"]
     lines = [f"## {labels['cost']}", ""]
     if cost:
-        lines += [f"Total ${cost['total']:.4f} (from {cost['source']}).", ""]
+        amount = f"${cost['total']:.4f}" if cost["total"] is not None else "unknown"
+        lines += [f"Total {amount} (from {cost['source']}).", ""]
+        if cost.get("missing_calls"):
+            lines += [f"Partial total: {cost['missing_calls']} calls have no classified reported price.", ""]
         lines += _table(["Part", "USD"], [[part, f"{value:.4f}"] for part, value in cost["by_part"].items()])
         for part, value in (cost.get("quota") or {}).items():
             lines += [

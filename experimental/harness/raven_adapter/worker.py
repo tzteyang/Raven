@@ -39,6 +39,7 @@ from experimental.harness.raven_adapter.materialize import (
 )
 from experimental.harness.raven_adapter.observe import Recorder, delivered_files, observed_errors, plain
 from experimental.harness.raven_adapter.preparation import PreparedHarness
+from raven.observability import execution
 from raven.spine.message import ChatType, Source
 from raven.spine.scheduler import conversation_id
 from raven.spine.turn import AnswerlessTurnError, TurnRequest
@@ -69,7 +70,11 @@ async def follow_up(busy, announcements, run_turn, *, poll=0.5, away=None):
         if announcements.empty():
             return
         request = announcements.get_nowait()
-        await run_turn(request if request.turn_id else replace(request, turn_id=uuid4().hex))
+        context = execution.current()
+        if isinstance(request, tuple):
+            request, context = request
+        with execution.bind(context):
+            await run_turn(request if request.turn_id else replace(request, turn_id=uuid4().hex))
 
 
 async def trial_turn(run_turn, turn, follow) -> dict:
@@ -98,6 +103,7 @@ def _serve(
     restored_content,
     children_data,
     restored_children,
+    execution_context=None,
 ):
     from experimental.harness.raven_adapter.bind import assemble
 
@@ -140,20 +146,21 @@ def _serve(
             declaration = declaration_for("assembly", unavailable_targets(baseline), **limits)
             # Assembly sources outlive a process so paused curation keeps the same material locations.
             assembly_root = root_path.parent / "assembly"
-            bound = assemble(
-                baseline, artifact, declaration, assembly_root, recorder, provider_factory, Path(planning_state)
-            )
-            if children:
-                from experimental.harness.raven_adapter.capability.protected import protect_delegation
-
-                protect_delegation(
-                    bound.runtime.loop,
-                    [row for row in baseline.config.subagents.agents if row.name in children],
+            with execution.scope("worker.assembly"):
+                bound = assemble(
+                    baseline, artifact, declaration, assembly_root, recorder, provider_factory, Path(planning_state)
                 )
-            await bound.prepare()
+                if children:
+                    from experimental.harness.raven_adapter.capability.protected import protect_delegation
+
+                    protect_delegation(
+                        bound.runtime.loop,
+                        [row for row in baseline.config.subagents.agents if row.name in children],
+                    )
+                await bound.prepare()
             announcements = asyncio.Queue()
             loop = bound.runtime.loop
-            loop.subagents.set_submit(announcements.put_nowait)
+            loop.subagents.set_submit(lambda request: announcements.put_nowait((request, execution.current())))
 
             async def dag_progress(conversation, name, payload):
                 recorder.add("dag.progress", conversation=conversation, name=name, payload=payload)
@@ -173,125 +180,132 @@ def _serve(
             while True:
                 request = await asyncio.to_thread(_receive, connection)
                 offset = len(recorder.rows)
-                try:
-                    operation = request["operation"]
-                    if operation == "close":
-                        from raven.acp_client.pool import close_pool
+                with execution.receive(request.get("execution"), root_path):
+                    try:
+                        operation = request["operation"]
+                        if operation == "close":
+                            from raven.acp_client.pool import close_pool
 
-                        try:
-                            await bound.close()
-                        finally:
-                            bound = None
-                            await close_pool()
-                        _send(connection, {"ok": True})
-                        break
-                    if operation == "idle":
-                        data = not busy() and announcements.empty()
-                    elif operation == "inspect":
-                        data = describe_bound(bound, recorder.rows[:offset])
-                        if children:
-                            from experimental.harness.raven_adapter.inspection import redact
+                            try:
+                                await bound.close()
+                            finally:
+                                bound = None
+                                await close_pool()
+                            _send(connection, {"ok": True})
+                            break
+                        if operation == "idle":
+                            data = not busy() and announcements.empty()
+                        elif operation == "inspect":
+                            data = describe_bound(bound, recorder.rows[:offset])
+                            if children:
+                                from experimental.harness.raven_adapter.inspection import redact
 
-                            data["facts"]["scope"] = {"kind": "root"}
-                            data["facts"]["composition"] = {
-                                "nodes": playbook_nodes(bound.runtime, bound.baseline),
-                                "children": {name: redact(child.export()) for name, child in children.items()},
-                            }
-                            data["identity"] = fingerprint(
-                                {"root": data["identity"], "composition": data["facts"]["composition"]}
-                            )
-                    elif operation == "inspect_agent":
-                        from experimental.harness.raven_adapter.hosting.connection import connection as agent_connection
-                        from experimental.harness.raven_adapter.hosting.evidence import inspect as inspect_child
-
-                        backend = loop.subagents._resolve_backend(request["agent"])
-                        if getattr(backend, "kind", None) != "acp":
-                            raise ValueError("this child has not been prepared for full Harness hosting")
-                        session = request.get("session_key")
-                        binding = loop.binding_for_session(session) if session is not None else loop.default_binding
-                        active = await agent_connection(
-                            backend, workspace=baseline.workdir, provider=binding.provider, model=binding.model
-                        )
-                        data = await inspect_child(active.client, offset=0)
-                    elif operation == "probe":
-                        from experimental.harness.raven_adapter.validate import run_probe
-
-                        await run_probe(bound, probe)
-                        data = {"records": recorder.rows[offset:]}
-                    elif operation == "materials":
-                        data = {
-                            "content": bound.prepared.content,
-                            "skills": {
-                                name: {
-                                    path: {
-                                        "content": base64.b64encode(content).decode() if content is not None else None,
-                                        "mode": mode,
-                                    }
-                                    for path, (content, mode) in files.items()
+                                data["facts"]["scope"] = {"kind": "root"}
+                                data["facts"]["composition"] = {
+                                    "nodes": playbook_nodes(bound.runtime, bound.baseline),
+                                    "children": {name: redact(child.export()) for name, child in children.items()},
                                 }
-                                for name, files in (bound.capability.catalog.skills.items() if bound.capability else ())
-                            },
-                        }
-                    elif operation == "run":
-                        from experimental.harness.raven_adapter.runner import run_turn as run_scoped_turn
-
-                        turn = TypeAdapter(TurnRequest).validate_python(request["turn"])
-                        if turn.origin != baseline.origin:
-                            raise ValueError("turn origin differs from the inspected worker origin")
-                        spoken[conversation_id(turn)] = request.get("spoken", ())
-                        if baseline.mode is not None:
-                            from raven.config.mode_catalogue import build_mode_catalogue
-
-                            profile = build_mode_catalogue(bound.baseline.config).get(baseline.mode)
-                            if profile is None:
-                                raise ValueError(f"configured worker mode is unavailable: {baseline.mode}")
-                            bound.runtime.loop.set_session_policy(
-                                turn.conversation or f"{turn.source.channel}:{turn.source.chat_id}",
-                                max_iterations=profile.max_iterations,
-                                mode=profile.id,
-                                mode_overlay=profile.overlay,
-                                reasoning_effort=profile.reasoning_effort,
-                            )
-                        recorder.turn_id = turn.turn_id
-                        events = []
-
-                        async def emit(event):
-                            events.append(plain(event))
-
-                        async def run_turn(request_turn):
-                            with Compartment("partner", spoken=spoken.get(conversation_id(request_turn), ())):
-                                return await run_scoped_turn(
-                                    bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
+                                data["identity"] = fingerprint(
+                                    {"root": data["identity"], "composition": data["facts"]["composition"]}
                                 )
-
-                        from experimental.harness.raven_adapter.hosting.evidence import record_children, snapshots
-
-                        child_before = await snapshots(children)
-                        try:
-                            # Announcements that came after the previous exchange ended run before the new message.
-                            await follow_up(busy, announcements, run_turn, away=0)
-                            outcome = await trial_turn(
-                                run_turn,
-                                turn,
-                                lambda: follow_up(busy, announcements, run_turn, away=request.get("away")),
+                        elif operation == "inspect_agent":
+                            from experimental.harness.raven_adapter.hosting.connection import (
+                                connection as agent_connection,
                             )
-                            await record_children(
-                                children, child_before, recorder, conversation_id(turn), recorder.rows[offset:]
+                            from experimental.harness.raven_adapter.hosting.evidence import inspect as inspect_child
+
+                            backend = loop.subagents._resolve_backend(request["agent"])
+                            if getattr(backend, "kind", None) != "acp":
+                                raise ValueError("this child has not been prepared for full Harness hosting")
+                            session = request.get("session_key")
+                            binding = loop.binding_for_session(session) if session is not None else loop.default_binding
+                            active = await agent_connection(
+                                backend, workspace=baseline.workdir, provider=binding.provider, model=binding.model
                             )
-                        finally:
-                            recorder.turn_id = None
-                        data = {"events": events, "records": recorder.rows[offset:], "outcome": outcome}
-                    else:
-                        raise ValueError(f"unknown worker operation: {operation}")
-                    _send(connection, {"ok": True, "data": data})
-                except Exception as exc:
-                    recorder.add(
-                        "runtime.error", error=f"{type(exc).__name__}: {exc}", traceback=traceback.format_exc()
-                    )
-                    _send(
-                        connection,
-                        {"ok": False, "error": f"{type(exc).__name__}: {exc}", "records": recorder.rows[offset:]},
-                    )
+                            data = await inspect_child(active.client, offset=0)
+                        elif operation == "probe":
+                            from experimental.harness.raven_adapter.validate import run_probe
+
+                            await run_probe(bound, probe)
+                            data = {"records": recorder.rows[offset:]}
+                        elif operation == "materials":
+                            data = {
+                                "content": bound.prepared.content,
+                                "skills": {
+                                    name: {
+                                        path: {
+                                            "content": base64.b64encode(content).decode()
+                                            if content is not None
+                                            else None,
+                                            "mode": mode,
+                                        }
+                                        for path, (content, mode) in files.items()
+                                    }
+                                    for name, files in (
+                                        bound.capability.catalog.skills.items() if bound.capability else ()
+                                    )
+                                },
+                            }
+                        elif operation == "run":
+                            from experimental.harness.raven_adapter.runner import run_turn as run_scoped_turn
+
+                            turn = TypeAdapter(TurnRequest).validate_python(request["turn"])
+                            if turn.origin != baseline.origin:
+                                raise ValueError("turn origin differs from the inspected worker origin")
+                            spoken[conversation_id(turn)] = request.get("spoken", ())
+                            if baseline.mode is not None:
+                                from raven.config.mode_catalogue import build_mode_catalogue
+
+                                profile = build_mode_catalogue(bound.baseline.config).get(baseline.mode)
+                                if profile is None:
+                                    raise ValueError(f"configured worker mode is unavailable: {baseline.mode}")
+                                bound.runtime.loop.set_session_policy(
+                                    turn.conversation or f"{turn.source.channel}:{turn.source.chat_id}",
+                                    max_iterations=profile.max_iterations,
+                                    mode=profile.id,
+                                    mode_overlay=profile.overlay,
+                                    reasoning_effort=profile.reasoning_effort,
+                                )
+                            recorder.turn_id = turn.turn_id
+                            events = []
+
+                            async def emit(event):
+                                events.append(plain(event))
+
+                            async def run_turn(request_turn):
+                                with Compartment("partner", spoken=spoken.get(conversation_id(request_turn), ())):
+                                    return await run_scoped_turn(
+                                        bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
+                                    )
+
+                            from experimental.harness.raven_adapter.hosting.evidence import record_children, snapshots
+
+                            child_before = await snapshots(children)
+                            try:
+                                # Announcements that came after the previous exchange ended run before the new message.
+                                await follow_up(busy, announcements, run_turn, away=0)
+                                outcome = await trial_turn(
+                                    run_turn,
+                                    turn,
+                                    lambda: follow_up(busy, announcements, run_turn, away=request.get("away")),
+                                )
+                                await record_children(
+                                    children, child_before, recorder, conversation_id(turn), recorder.rows[offset:]
+                                )
+                            finally:
+                                recorder.turn_id = None
+                            data = {"events": events, "records": recorder.rows[offset:], "outcome": outcome}
+                        else:
+                            raise ValueError(f"unknown worker operation: {operation}")
+                        _send(connection, {"ok": True, "data": data})
+                    except Exception as exc:
+                        recorder.add(
+                            "runtime.error", error=f"{type(exc).__name__}: {exc}", traceback=traceback.format_exc()
+                        )
+                        _send(
+                            connection,
+                            {"ok": False, "error": f"{type(exc).__name__}: {exc}", "records": recorder.rows[offset:]},
+                        )
         except Exception as exc:
             if bound is not None and not ready and bound.content_installation is not None:
                 bound.content_installation.rollback()
@@ -307,7 +321,8 @@ def _serve(
                 await close_pool()
                 connection.close()
 
-    asyncio.run(main())
+    with execution.receive(execution_context, Path(root)):
+        asyncio.run(main())
 
 
 @dataclass(frozen=True)
@@ -480,7 +495,7 @@ class Worker:
             data, passed = self.confinement.translate(data), self.confinement.translate(passed)
             self._hand_over()
         process = Process(
-            (*data, self.provider_factory, start_resources, probe, *passed),
+            (*data, self.provider_factory, start_resources, probe, *passed, execution.carrier()),
             confinement=self.confinement,
             area=self.area,
         )
@@ -519,7 +534,7 @@ class Worker:
         if self.confinement is not None:
             self._hand_over()
         try:
-            _send(self._connection, request)
+            _send(self._connection, {**request, "execution": execution.carrier()})
             reply = await asyncio.wait_for(asyncio.to_thread(_receive, self._connection), self.timeout)
             return self._check_reply(reply)
         except asyncio.CancelledError:
@@ -863,3 +878,9 @@ class Worker:
                 yield trial
             finally:
                 await trial.close()
+                if context := execution.current():
+                    from raven.observability.ledger import read_tree
+
+                    for row in read_tree(trial.root):
+                        if row["run_id"] == context.run_id:
+                            context.ledger.put(row)

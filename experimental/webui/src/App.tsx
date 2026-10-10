@@ -7,6 +7,7 @@ import { loopOf } from './loop'
 import { VERDICT_LABEL, modelLine, roleChoices } from './record'
 import { Compare } from './views/Compare'
 import { Cultivation } from './views/Cultivation'
+import { Execution } from './views/Execution'
 import { HarnessView } from './views/Harness'
 import { Live } from './views/Live'
 import { usePhase } from './views/LoopMap'
@@ -30,13 +31,14 @@ const STATUS_LABEL: Record<RunStatus, string> = {
   needs_input: 'stopped before onboarding: the research stage needs answers',
 }
 
-export type View = 'live' | 'cultivation' | 'harness' | 'record'
+export type View = 'live' | 'cultivation' | 'harness' | 'record' | 'execution'
 
 const VIEWS: { id: View; label: string }[] = [
   { id: 'live', label: 'Live' },
   { id: 'cultivation', label: 'Cultivation' },
   { id: 'harness', label: 'Harness' },
   { id: 'record', label: 'Record' },
+  { id: 'execution', label: 'Execution' },
 ]
 
 /** A run is named by its folder; its disclosure plan, the arm, each round's passed/judged checks and its models follow. */
@@ -359,6 +361,7 @@ export function App(): JSX.Element {
       <main className="page">
         {selected && !run && !error ? <p className="quiet pad">Loading run...</p> : null}
         {run && selected && view === 'live' ? <Live runId={selected} running={status === 'running'} /> : null}
+        {run && selected && view === 'execution' ? <Execution runId={selected} running={status === 'running'} /> : null}
         {run && view === 'cultivation' ? <Cultivation run={run} runId={selected ?? ''} name={name} scenario={scenario} trial={panel ? place.round : null} versions={versions} entries={conversation} laps={laps} onTrial={trial} /> : null}
         {run && selected && view === 'record' ? (
           <RecordView

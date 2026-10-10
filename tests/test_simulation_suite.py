@@ -84,6 +84,7 @@ def test_a_call_its_provider_did_not_price_is_priced_from_its_tokens():
     cached = {**usage, "llm.usage.input_tokens": 0, "llm.usage.cache_read_tokens": 1_000_000}
     assert round(suite.call_cost({"llm.model": "deepseek-flash", **cached}), 6) == round(0.006 + 0.60, 6)
     assert suite.call_cost({"llm.model": "deepseek/deepseek-flash", "llm.usage.cost_total": 0.5, **usage}) == 0.5
+    assert suite.call_cost({"llm.model": "deepseek/deepseek-flash", "llm.usage.cost_total": 0, **usage}) == 0
     assert suite.call_cost({"llm.model": "unknown/model", **usage}) == 0
 
 

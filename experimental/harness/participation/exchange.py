@@ -9,6 +9,7 @@ from pydantic import ValidationError
 from experimental.harness.curator.generation.context.render import ECHOED_CHARS, assistant_message
 from experimental.harness.participation.model_calls import MalformedArgumentsError
 from raven.contracts.llm_provider import REASONING_EFFORT_LADDER
+from raven.observability.execution import stage as observed_stage
 
 # Every call asks for as much output as the model accepts; the provider bounds the ask by the model's own ceiling.
 # Left unasked, a call gets the reservation an agent loop keeps per iteration (32768 tokens), and a reasoning model
@@ -91,6 +92,7 @@ def undelivered(exc: Exception) -> bool:
     return isinstance(exc, ValidationError) and all(error["type"] in SHAPE_ERRORS for error in exc.errors())
 
 
+@observed_stage("exchange", argument="label")
 async def exchange(
     provider,
     messages,

@@ -124,6 +124,20 @@ cards and an owner. `tests/test_experimental_layers.py` enforces the direction.
 _Avoid_: calling the bench a case, or a case a scenario: a scenario is the contract a case's
 materials satisfy, and a case is what the bench plays.
 
+**Execution accounting** (`raven/observability/execution.py`):
+The experimental run's durable operation and provider request records. A scope records
+one operation's lifetime and carries its run, round, revision and parent identity into
+async tasks. Worker commands and ACP prompts transmit that identity to receiver-owned
+SQLite shards. A **request attempt** is one call at the concrete provider's transport
+boundary; retries have separate identities, and streaming usage updates one cumulative
+snapshot. Stage totals are derived from unique attempts, never from sums of parent totals.
+Missing usage remains unknown, including attempts interrupted before the final report.
+An **external invocation** records one collector-owned Claude or Codex process's
+reported aggregate usage; its internal request count is unknown. Subscription
+quota equivalents are separate from metered USD, and corrections are separate invocations.
+_Avoid_: equating a logical model call (which may retry), or an external invocation,
+with a request attempt.
+
 **Harness Curator** (`experimental/harness/curator/`):
 Experimental generation of a worker's Harness from its task, the materials handed to it and
 feedback. The `contract/` package supplies one host-owned `Declaration` for model schemas, grants

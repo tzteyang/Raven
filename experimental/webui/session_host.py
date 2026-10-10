@@ -136,6 +136,13 @@ class Host:
             self.step = None
 
     async def _boot(self) -> None:
+        from raven.observability import execution
+
+        saved = json.loads(Path(self.spec["record"]).read_text()) if self.spec.get("record") else {}
+        with execution.run(self.root, run_id=saved.get("execution_run_id"), name="setup"):
+            await self._boot_run()
+
+    async def _boot_run(self) -> None:
         spec = self.spec
         self.employ.prepare()
         self.contract = contract = load(Path(spec["scenario"]))

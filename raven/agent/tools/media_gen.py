@@ -58,6 +58,8 @@ from loguru import logger
 from raven.agent import workdir
 from raven.contracts.token_strategy import UsageSnapshot
 from raven.contracts.tool import Tool
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers.usage import image_usage
 from raven.providers.wire import wire_model
 from raven.security.network import guarded_fetch
@@ -219,19 +221,35 @@ class _OpenRouterMediaTool(Tool):
         except Exception:
             logger.warning("Image usage recording failed")
 
+    async def _post_generation(self, client, url, model, **kwargs):
+        with execution.attempt(self.name, model) as accounting:
+            response = await client.post(url, **kwargs)
+            accounting.status(response.status_code)
+            if response.status_code >= 400:
+                provider_usage.capture_error(accounting, response, provider_usage.media)
+            response.raise_for_status()
+            payload = response.json()
+            accounting.usage(
+                provider_usage.media(payload.get("usage")),
+                raw=payload.get("usage"),
+                response_id=payload.get("id"),
+                complete=True,
+            )
+            return payload
+
     async def _chat(self, payload: dict[str, Any]) -> dict[str, Any]:
         """POST to chat/completions and return the assistant message dict.
 
         Raises ``httpx.HTTPStatusError`` on non-2xx so callers can format it.
         """
         async with httpx.AsyncClient(proxy=self._proxy, timeout=180.0) as client:
-            r = await client.post(
+            data = await self._post_generation(
+                client,
                 f"{self.api_base}/chat/completions",
+                payload["model"],
                 headers={"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"},
                 json=payload,
             )
-            r.raise_for_status()
-            data = r.json()
         await self._record_usage(data, payload["model"], "chat")
         choice = (data.get("choices") or [{}])[0]
         message = dict(choice.get("message") or {})
@@ -676,6 +694,8 @@ class ImageGenerateTool(_OpenRouterMediaTool):
                     model_id, prompt, images, aspect_ratio if frames else None, quality, output_dir, stem
                 )
             return self._format_http_error(e)
+        except LedgerError:
+            raise
         except Exception as e:
             logger.error("image_generate error: {}", e)
             return json.dumps({"error": type(e).__name__, "detail": str(e)}, ensure_ascii=False)
@@ -745,7 +765,9 @@ class ImageGenerateTool(_OpenRouterMediaTool):
                         body["quality"] = quality
                     if refs:
                         body["input_references"] = refs
-                    r = await client.post(f"{self.api_base}/images", headers=headers, json=body)
+                    payload = await self._post_generation(
+                        client, f"{self.api_base}/images", model_id, headers=headers, json=body
+                    )
                 elif refs:
                     files = []
                     for i, part in enumerate(refs):
@@ -770,20 +792,24 @@ class ImageGenerateTool(_OpenRouterMediaTool):
                         form["size"] = size
                     if quality:
                         form["quality"] = quality
-                    r = await client.post(f"{self.api_base}/images/edits", headers=headers, data=form, files=files)
+                    payload = await self._post_generation(
+                        client, f"{self.api_base}/images/edits", model_id, headers=headers, data=form, files=files
+                    )
                 else:
                     body = {"model": model_id, "prompt": prompt, "n": 1}
                     if size := images_api_size(model_id, aspect_ratio):
                         body["size"] = size
                     if quality:
                         body["quality"] = quality
-                    r = await client.post(f"{self.api_base}/images/generations", headers=headers, json=body)
-                r.raise_for_status()
-                payload = r.json()
+                    payload = await self._post_generation(
+                        client, f"{self.api_base}/images/generations", model_id, headers=headers, json=body
+                    )
                 await self._record_usage(payload, model_id, "images")
                 items = payload.get("data") or []
         except httpx.HTTPStatusError as e:
             return self._format_http_error(e)
+        except LedgerError:
+            raise
         except Exception as e:
             logger.error("image_generate error: {}", e)
             return json.dumps({"error": type(e).__name__, "detail": str(e)}, ensure_ascii=False)
@@ -878,6 +904,8 @@ class SpeechGenerateTool(_OpenRouterMediaTool):
             pcm, transcript = await self._stream_audio_pcm(payload)
         except httpx.HTTPStatusError as e:
             return self._format_http_error(e)
+        except LedgerError:
+            raise
         except Exception as e:
             logger.error("text_to_speech error: {}", e)
             return json.dumps({"error": type(e).__name__, "detail": str(e)}, ensure_ascii=False)
@@ -918,27 +946,37 @@ class SpeechGenerateTool(_OpenRouterMediaTool):
             "Authorization": f"Bearer {self.api_key}",
             "Content-Type": "application/json",
         }
-        async with httpx.AsyncClient(proxy=self._proxy, timeout=180.0) as client:
-            async with client.stream("POST", f"{self.api_base}/chat/completions", headers=headers, json=payload) as r:
-                if r.status_code >= 400:
-                    await r.aread()  # load body so .text/raise_for_status carry the error
-                    r.raise_for_status()
-                async for line in r.aiter_lines():
-                    if not line.startswith("data:"):
-                        continue
-                    data = line[len("data:") :].strip()
-                    if data == "[DONE]":
-                        break
-                    try:
-                        obj = json.loads(data)
-                    except json.JSONDecodeError:
-                        continue
-                    delta = (obj.get("choices") or [{}])[0].get("delta") or {}
-                    audio = delta.get("audio") or {}
-                    if chunk := audio.get("data"):
-                        pcm += base64.b64decode(chunk)
-                    if t := audio.get("transcript"):
-                        transcript_parts.append(t)
+        with execution.attempt(self.name, payload["model"]) as accounting:
+            async with httpx.AsyncClient(proxy=self._proxy, timeout=180.0) as client:
+                async with client.stream(
+                    "POST", f"{self.api_base}/chat/completions", headers=headers, json=payload
+                ) as r:
+                    accounting.status(r.status_code)
+                    if r.status_code >= 400:
+                        await r.aread()  # load body so .text/raise_for_status carry the error
+                        provider_usage.capture_error(accounting, r, provider_usage.media)
+                        r.raise_for_status()
+                    async for line in r.aiter_lines():
+                        if not line.startswith("data:"):
+                            continue
+                        data = line[len("data:") :].strip()
+                        if data == "[DONE]":
+                            accounting.usage({}, complete=True)
+                            break
+                        try:
+                            obj = json.loads(data)
+                        except json.JSONDecodeError:
+                            continue
+                        if obj.get("usage"):
+                            accounting.usage(
+                                provider_usage.media(obj.get("usage")), raw=obj.get("usage"), response_id=obj.get("id")
+                            )
+                        delta = (obj.get("choices") or [{}])[0].get("delta") or {}
+                        audio = delta.get("audio") or {}
+                        if chunk := audio.get("data"):
+                            pcm += base64.b64decode(chunk)
+                        if t := audio.get("transcript"):
+                            transcript_parts.append(t)
         return bytes(pcm), "".join(transcript_parts)
 
     def _write_wav(self, path: Path, pcm: bytes) -> None:
@@ -1079,46 +1117,63 @@ class VideoGenerateTool(_OpenRouterMediaTool):
 
         headers = {"Authorization": f"Bearer {self.api_key}", "Content-Type": "application/json"}
         try:
-            async with httpx.AsyncClient(proxy=self._proxy, timeout=120.0) as client:
-                # 1) submit job
-                r = await client.post(f"{self.api_base}/videos", headers=headers, json=body)
-                r.raise_for_status()
-                job = r.json()
-                poll_url = job.get("polling_url") or f"{self.api_base}/videos/{job.get('id')}"
-
-                # 2) poll
-                status = await self._poll(client, poll_url, headers)
-                state = status.get("status")
-                if state != "completed":
-                    return json.dumps(
-                        {
-                            "error": f"video job status={state}",
-                            "detail": status.get("error") or status,
-                            "model": model_id,
-                        },
-                        ensure_ascii=False,
+            with execution.attempt(self.name, model_id) as accounting:
+                async with httpx.AsyncClient(proxy=self._proxy, timeout=120.0) as client:
+                    # 1) submit job
+                    r = await client.post(f"{self.api_base}/videos", headers=headers, json=body)
+                    accounting.status(r.status_code)
+                    if r.status_code >= 400:
+                        provider_usage.capture_error(accounting, r, provider_usage.media)
+                    r.raise_for_status()
+                    job = r.json()
+                    accounting.usage(
+                        provider_usage.media(job.get("usage")), raw=job.get("usage"), response_id=job.get("id")
                     )
+                    poll_url = job.get("polling_url") or f"{self.api_base}/videos/{job.get('id')}"
 
-                # 3) locate + download the video
-                video_url = _pick_video_url(status)
-                if not video_url:
-                    return json.dumps(
-                        {"error": "completed but no video URL found", "raw": status},
-                        ensure_ascii=False,
+                    # 2) poll
+                    status = await self._poll(client, poll_url, headers)
+                    state = status.get("status")
+                    accounting.usage(
+                        provider_usage.media(status.get("usage")),
+                        raw=status.get("usage"),
+                        complete=state == "completed",
                     )
-                if video_url.startswith("data:"):
-                    data = base64.b64decode(video_url.split(",", 1)[1])
-                else:
-                    # OpenRouter returns "unsigned" content URLs on its own host
-                    # that need the same Authorization header as the API. Only
-                    # send it to OpenRouter — never leak the key to a third-party
-                    # (pre-signed CDN/S3) host.
-                    dl_headers = self._api_headers_for(video_url, headers)
-                    dl = await client.get(video_url, headers=dl_headers, timeout=180.0)
-                    dl.raise_for_status()
-                    data = dl.content
+                    if state != "completed":
+                        accounting.status("error")
+                        return json.dumps(
+                            {
+                                "error": f"video job status={state}",
+                                "detail": status.get("error") or status,
+                                "model": model_id,
+                            },
+                            ensure_ascii=False,
+                        )
+
+                    accounting.finish()
+
+                    # 3) locate + download the video
+                    video_url = _pick_video_url(status)
+                    if not video_url:
+                        return json.dumps(
+                            {"error": "completed but no video URL found", "raw": status},
+                            ensure_ascii=False,
+                        )
+                    if video_url.startswith("data:"):
+                        data = base64.b64decode(video_url.split(",", 1)[1])
+                    else:
+                        # OpenRouter returns "unsigned" content URLs on its own host
+                        # that need the same Authorization header as the API. Only
+                        # send it to OpenRouter — never leak the key to a third-party
+                        # (pre-signed CDN/S3) host.
+                        dl_headers = self._api_headers_for(video_url, headers)
+                        dl = await client.get(video_url, headers=dl_headers, timeout=180.0)
+                        dl.raise_for_status()
+                        data = dl.content
         except httpx.HTTPStatusError as e:
             return self._format_http_error(e)
+        except LedgerError:
+            raise
         except Exception as e:
             logger.error("video_generate error: {}", e)
             return json.dumps({"error": type(e).__name__, "detail": str(e)}, ensure_ascii=False)

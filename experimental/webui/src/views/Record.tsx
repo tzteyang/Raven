@@ -133,11 +133,12 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
         <div>
           <dt>cost</dt>
           <dd title={parts.map(([part, amount]) => `${part} ${costLabel(amount)}`).join(' · ')}>
-            {cost ? costLabel(cost.total) : entry?.spend != null ? costLabel(entry.spend) : <span className="dim">not recorded</span>}
+            {cost ? cost.total === null ? <span className="dim">unknown</span> : costLabel(cost.total) : entry?.spend != null ? costLabel(entry.spend) : <span className="dim">not recorded</span>}
           </dd>
         </div>
         {run.record_id ? <div><dt>record</dt><dd><code>{run.record_id.slice(0, 12)}</code></dd></div> : null}
       </dl>
+      {cost?.missing_calls ? <p className="quiet">Partial cost: {cost.missing_calls} calls have no classified reported price.</p> : null}
       {models ? <p className="rline"><span className="k">models</span>{models}</p> : null}
       {research ? <p className="rline"><span className="k">research</span>{research}</p> : null}
       {roles.length ? (

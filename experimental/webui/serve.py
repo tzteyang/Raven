@@ -553,6 +553,17 @@ def _run_paths(root: Path, run_id: str) -> tuple[Path, Path] | None:
     return path.parent.parent, path
 
 
+def execution_report(root: Path, run_id: str) -> dict | None:
+    """Execution accounting only for an indexed run, including its worker shards."""
+    from raven.observability.report import read
+
+    paths = _run_paths(root, run_id)
+    if paths is None:
+        return None
+    record = json.loads(paths[1].read_text())
+    return read(paths[0], run_id=record.get("execution_run_id", paths[1].stem))
+
+
 def node(root: Path, run_id: str, state_roots, dag: str, node_id: str, **options) -> dict | None:
     """One playbook node's process in a run (see `process.node_process`); None refuses the run or the node."""
     paths = _run_paths(root, run_id)
@@ -1160,6 +1171,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(scenario(run_scenario(self.root, query.get("run", [""])[0], self.scenario)))
         if url.path == "/api/live":
             body = live(self.root, query.get("run", [""])[0], cursors(query.get("logs", [""])[0]))
+            return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
+        if url.path == "/api/execution":
+            from raven.observability.ledger import LedgerError
+
+            try:
+                body = execution_report(self.root, query.get("run", [""])[0])
+            except (LedgerError, OSError, ValueError):
+                return self._json({"error": "Execution accounting is unavailable; records could not be read."}, 503)
             return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
         if url.path == "/api/phase":
             body = run_phase(self.root, query.get("run", [""])[0])
