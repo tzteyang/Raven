@@ -6,7 +6,7 @@ Action handles host events and agent requests using one set of domain rules. Its
 
 ProgressEvent describes a pre-decision observation. Its offered tools can still undergo native normalization; previous_capabilities is the last actual model-call view. ProposalEvent distinguishes a batch, one dispatch and a candidate reply. OutcomeEvent supplies actual transcript evidence, not a promise that every proposed call succeeded. FailureEvent distinguishes terminal recovery from ordinary progress. ControlEvent reports a host application result.
 
-Only selected event kinds are delivered. Use allowed_controls and can_guide from the host. continue means no intervention, not permission. reject refuses a dispatch; revise supplies correction feedback for bounded resampling; finish supplies a truthful terminal reply. Guidance and diagnostic reasons have different consumers.
+Only selected event kinds are delivered. Use allowed_controls and can_guide from the host. continue means no intervention, not permission. reject refuses a dispatch; revise supplies correction feedback for bounded resampling; finish supplies a truthful terminal reply. continue with unverified lets a dispatch through that the strategy could not judge (an exhausted or failed inference), naming why; it is never a refusal. Guidance and diagnostic reasons have different consumers.
 
 A valid decision is an intention. Read the host receipt before claiming a control was applied. Repeated observations, exhausted budgets and unsupported effects require explicit behavior. Mandatory per-call constraints need the binding's native dispatch gate; a voluntary self-check tool is insufficient.
 

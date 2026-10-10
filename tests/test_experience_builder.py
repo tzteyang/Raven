@@ -41,9 +41,7 @@ async def test_unknown_evidence_does_not_become_a_valid_proposal():
 async def test_input_overflow_fails_before_any_provider_call():
     provider = Provider()
     with pytest.raises(ModelCallError) as error:
-        await ModelExperienceBuilder(provider, limits=ModelLimits(max_input_bytes=1)).build(
-            BuildRequest(events=(event().view,))
-        )
+        await ModelExperienceBuilder(provider, limits=ModelLimits(window=1)).build(BuildRequest(events=(event().view,)))
     assert error.value.kind == "input_limit" and not error.value.called and not provider.requests
 
 

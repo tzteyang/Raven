@@ -28,6 +28,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from ..allowance import excerpt, reading_budget
 from ..audience import EVALUATION, audience
 from ..counterpart.owner import actions, back_office, reports
 from ..curator.generation.context.render import tool
@@ -52,7 +53,6 @@ NAME = "assessor"
 JUDGE = "submit_verdicts"
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 TEXT_FILES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html"})
-FILE_LIMIT = 40_000
 CHILD_ACTIONS = 60
 
 
@@ -221,21 +221,26 @@ def _rate(items: Sequence[Item], ids: set[str]) -> float | None:
     return sum(result == "pass" for result in judged) / len(judged) if judged else None
 
 
-def _delivered(path: str) -> tuple[str, str]:
+def _delivered(path: str, tokens: int) -> tuple[str, str]:
     file = Path(path)
     if file.suffix.lower() not in TEXT_FILES:
         return "", "This file format needs a dedicated verifier; its content is unavailable here."
     try:
-        with file.open(encoding="utf-8") as stream:
-            text = stream.read(FILE_LIMIT + 1)
+        text = file.read_text(encoding="utf-8")
     except (OSError, UnicodeError) as exc:
         return "", f"File content is unavailable: {type(exc).__name__}."
-    return text[:FILE_LIMIT], "File content is truncated." if len(text) > FILE_LIMIT else ""
+    shown = excerpt(text, tokens)
+    return (
+        shown,
+        "" if shown == text else f"File content is cut to about {tokens} tokens; the cut says how much is left out.",
+    )
 
 
-def conversations(sessions: Sessions) -> dict[str, list[dict]]:
+def conversations(sessions: Sessions, *, tokens: int | None = None) -> dict[str, list[dict]]:
     """Each session as the assessor reads it: the user's messages, the assistant's replies, the text of any text
-    file handed over with a reply (other files by name), and why a reply never came, if it did not."""
+    file handed over with a reply (other files by name, each cut to `tokens`, by default the share of the host's
+    default window that `experimental.allowance.reading_budget` gives), and why a reply never came, if it did not."""
+    tokens = reading_budget() if tokens is None else tokens
     told = {}
     for name, exchanges in sessions.items():
         rows = []
@@ -244,7 +249,7 @@ def conversations(sessions: Sessions) -> dict[str, list[dict]]:
             files, unavailable = {}, {}
             for path in exchange_.execution.deliverables:
                 filename = Path(path).name
-                files[filename], reason = _delivered(path)
+                files[filename], reason = _delivered(path, tokens)
                 if reason:
                     unavailable[filename] = reason
             if files:
@@ -296,9 +301,13 @@ def children(records) -> list[dict]:
     return found
 
 
-def observations(sessions: Sessions, task: str = "") -> dict:
+def observations(sessions: Sessions, task: str = "", *, tokens: int | None = None) -> dict:
     """The same retained evidence packet for judging, program checks and replay validation."""
-    return {"task": task, "conversations": conversations(sessions), "executions": executions(sessions)}
+    return {
+        "task": task,
+        "conversations": conversations(sessions, tokens=tokens),
+        "executions": executions(sessions),
+    }
 
 
 def _checked(jobs, sessions: Sessions, arguments) -> Verdicts:

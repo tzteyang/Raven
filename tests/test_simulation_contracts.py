@@ -321,7 +321,9 @@ def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut()
         ("write_file", None),
     ]
     assert "outside allowed directories" in timeline[0]["error"]
-    assert cut("x" * 10, 4) == "xxxx\n[... 6 more characters not shown]" and cut("short", 10) == "short"
+    shortened = cut("word " * 40, 4)
+    assert shortened.startswith("word word word word") and shortened.endswith(" more characters not shown]")
+    assert len(shortened) < len("word " * 40) and cut("short", 10) == "short"
 
 
 def test_the_owner_reads_what_the_employee_filed_and_not_the_hosts_bookkeeping(tmp_path):

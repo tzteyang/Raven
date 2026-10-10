@@ -1,6 +1,7 @@
 """Apply typed Action judgments at native event, request and mandatory gate boundaries."""
 
 import asyncio
+import json
 from dataclasses import dataclass
 from uuid import uuid4
 
@@ -21,6 +22,7 @@ from ...harness.action import (
     ProposalEvent,
     ProposedCall,
 )
+from ...harness.inference import InferenceError
 from ...harness.interaction import InteractionScope
 from ...harness.preparation import StrategyPreparation
 from ...harness.strategies import ActionStrategy
@@ -30,6 +32,9 @@ from ..strategy import SESSION, BoundStrategy, concrete
 
 # How a refused call is answered to the model; Raven records that answer as the call's result, with ok still true.
 REFUSED = "Action refused this call"
+# How often one turn may refuse the same call with the same arguments before the refusal tells the model to stop
+# resubmitting it unchanged: a model that keeps resubmitting spends the turn on refusals and delivers nothing.
+MAX_DISPATCH_REFUSALS = 4
 
 
 @dataclass
@@ -102,6 +107,7 @@ class BoundAction(BoundStrategy):
         self.guidance = {}
         self.sinks = {}
         self.failed_checks = {}
+        self.refusals = {}
 
     def bind(self, runtime):
         self.runtime = runtime
@@ -275,6 +281,7 @@ class BoundAction(BoundStrategy):
             self.guidance.pop(self._key(), None)
             self.sinks.pop(self._key(), None)
             self.failed_checks.pop(self._key(), None)
+            self.refusals.pop(self._key(), None)
 
     async def _guard(self, context, operation):
         try:
@@ -384,6 +391,17 @@ class BoundAction(BoundStrategy):
 
         return ActionHook()
 
+    def _unverified(self, event, name, reason):
+        self.recorder.add("action.unverified", stage="dispatch", source_id=event.event_id, call=name, reason=reason)
+
+    def _refused(self, name, params) -> int:
+        """How many times this turn has now refused `name` with these arguments."""
+        counts = self.refusals.setdefault(self._key(), {})
+        key = json.dumps([name, plain(params)], sort_keys=True, default=str)
+        counts[key] = counts.get(key, 0) + 1
+        self.recorder.add("action.refusal", stage="dispatch", call=name, repeat=counts[key])
+        return counts[key]
+
     def gate(self):
         owner = self
 
@@ -391,21 +409,43 @@ class BoundAction(BoundStrategy):
             name = "curator-action"
 
             async def adjudicate(self, name, params, *, session_workdir):
+                """None lets the call through; text refuses it and is the call's whole result.
+
+                A judgment the strategy could not obtain, whether it says so (`unverified`) or its inference
+                error escapes, lets the call through as unverified with the reason on record: Raven refuses a call
+                whose gate raises, which would make every exhausted allowance a refusal. A refusal repeated for the
+                same call and arguments within the turn is counted, and past `MAX_DISPATCH_REFUSALS` it tells the
+                model to stop resubmitting the call unchanged.
+                """
                 event = ProposalEvent(
                     **owner._base(("continue", "reject")),
                     stage="dispatch",
                     calls=(ProposedCall(name=name, arguments=plain(params)),),
                     capabilities=owner._capabilities(),
                 )
-                result = await owner.handle_event(event)
+                try:
+                    result = await owner.handle_event(event)
+                except InferenceError as exc:
+                    owner._unverified(event, name, f"{exc.kind}: {exc}")
+                    return None
                 if result.control == "continue":
+                    if result.unverified is not None:
+                        owner._unverified(event, name, result.unverified)
                     return None
                 receipt = owner._receipt(event.event_id, result, "applied")
                 try:
                     await owner.handle_event(ControlEvent(**owner._base(("continue",)), receipt=receipt))
                 except Exception as exc:
                     owner.recorder.add("action.error", operation="control_observation", error=str(exc))
-                return f"{REFUSED} [{receipt.control_id}]: {result.feedback}"
+                repeat = owner._refused(name, params)
+                feedback = result.feedback
+                if repeat > MAX_DISPATCH_REFUSALS:
+                    feedback = (
+                        f"{feedback} This call has now been refused {repeat} times with the same arguments in this "
+                        "turn. Do not resubmit it unchanged: change what you are doing, or tell the user what was "
+                        "refused and why."
+                    )
+                return f"{REFUSED} [{receipt.control_id}]: {feedback}"
 
         return ActionGate()
 

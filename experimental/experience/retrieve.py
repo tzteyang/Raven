@@ -40,7 +40,7 @@ class GuidanceQuery(Contract):
     }
 
     access_scope: NonemptyText
-    situation: NonemptyText = Field(max_length=2400)
+    situation: NonemptyText = Field(max_length=12000)
     phase: Phase
     scope_kind: str = Field(pattern=r"^(root|child)$")
     mechanism_states: tuple[MechanismState, ...] = ()

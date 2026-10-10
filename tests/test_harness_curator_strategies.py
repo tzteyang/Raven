@@ -9,12 +9,12 @@ from pydantic import BaseModel
 from pydantic_core import PydanticSerializationError
 
 from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.action import FailureEvent, ProposalEvent
+from experimental.curator.harness.action import ActionDecision, FailureEvent, ProposalEvent
 from experimental.curator.harness.context import ContextRequest, ContextSource
 from experimental.curator.harness.preparation import PreparationRequest
 from experimental.curator.harness.resources import EffectiveCapabilities, SelectionRequest
 from experimental.curator.raven_adapter.action.contracts import ActionBinding
-from experimental.curator.raven_adapter.action.runtime import BoundAction
+from experimental.curator.raven_adapter.action.runtime import REFUSED, BoundAction
 from experimental.curator.raven_adapter.capability.catalog import CapabilityCatalog
 from experimental.curator.raven_adapter.capability.contracts import CapabilityBinding
 from experimental.curator.raven_adapter.capability.runtime import BoundCapability
@@ -281,6 +281,65 @@ async def test_action_reply_and_terminal_failure_have_distinct_control_allowance
     with pytest.raises(ValueError, match="unsupported"):
         await owner.handle_event(proposal.model_copy(update={"allowed_controls": ("continue",)}))
     assert owner.state == restored.state
+
+
+DISPATCH_STRATEGY = '''
+"""Decide each dispatch the way its arguments say, standing in for a strategy whose judgment may be unavailable."""
+
+from experimental.curator.harness.action import ActionDecision, ActionEvent
+from experimental.curator.harness.inference import InferenceError
+from experimental.curator.harness.strategies import ActionStrategy
+
+
+class Action(ActionStrategy[None, None]):
+    def __init__(self, state):
+        self.state = state
+
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.kind != "proposal" or event.stage != "dispatch":
+            return ActionDecision()
+        mode = event.calls[0].arguments.get("mode")
+        if mode == "raise":
+            raise InferenceError("budget", "strategy inference turn budget exhausted")
+        if mode == "unverified":
+            return ActionDecision(unverified="judgment unavailable: the review's inference allowance is spent")
+        if mode == "reject":
+            return ActionDecision(control="reject", feedback="The file names no price.")
+        return ActionDecision()
+
+
+def create(state, task):
+    return Action(state)
+'''
+
+
+@pytest.mark.asyncio
+async def test_the_dispatch_gate_passes_an_unobtainable_judgment_as_unverified_and_counts_repeated_refusals(
+    tmp_path,
+):
+    owner = make(tmp_path, "action", contents={**files(), "task_action.py": DISPATCH_STRATEGY})
+    await owner.prepare()
+    gate = owner.gate()
+    assert await gate.adjudicate("deliver_files", {"mode": "unverified"}, session_workdir=None) is None
+    assert await gate.adjudicate("deliver_files", {"mode": "raise"}, session_workdir=None) is None
+    assert await gate.adjudicate("deliver_files", {"mode": "pass"}, session_workdir=None) is None
+    unverified = [row for row in owner.recorder.rows if row["kind"] == "action.unverified"]
+    assert [row["reason"] for row in unverified] == [
+        "judgment unavailable: the review's inference allowance is spent",
+        "budget: strategy inference turn budget exhausted",
+    ]
+    assert all(row["call"] == "deliver_files" and row["stage"] == "dispatch" for row in unverified)
+    refusals = [await gate.adjudicate("deliver_files", {"mode": "reject"}, session_workdir=None) for _ in range(5)]
+    assert all(text.startswith(f"{REFUSED} [") and "The file names no price." in text for text in refusals)
+    assert all("refused" not in text.split("]: ", 1)[1] for text in refusals[:4])
+    assert "refused 5 times with the same arguments in this turn" in refusals[4]
+    changed = await gate.adjudicate("deliver_files", {"mode": "reject", "path": "b"}, session_workdir=None)
+    assert changed.endswith("The file names no price.")
+    assert [row["repeat"] for row in owner.recorder.rows if row["kind"] == "action.refusal"] == [1, 2, 3, 4, 5, 1]
+    await owner.finish()
+    assert owner.refusals == {}
+    with pytest.raises(ValueError, match="unverified"):
+        ActionDecision(control="reject", feedback="x", unverified="no judgment")
 
 
 @pytest.mark.parametrize(

@@ -10,10 +10,13 @@ from math import isfinite
 from pydantic import BaseModel, JsonValue
 
 from raven.contracts.llm_provider import REASONING_EFFORT_LADDER, GenerationSettings
+from raven.providers.usage import token_count
 
+from ...allowance import Band, Calibration, context_window, estimate_tokens, measure_name
 from ..harness.declaration import parse_as
 from ..harness.inference import InferenceError, InferenceRequest, StrategyInference
 from .calls import current_operation
+from .inspection import fingerprint
 from .materialize import load_factory
 
 
@@ -21,11 +24,18 @@ class Inference(StrategyInference):
     """Use the configured worker provider without the native retry ladder.
 
     The current host operation supplies identity and an allowance of calls and time that its peer chain shares; the
-    turn has its own allowance of calls and input bytes. A decision can thus be split into small judgments, one per
+    turn has its own allowance of calls and input tokens. A decision can thus be split into small judgments, one per
     rule, made one after another or at once through `each`, whose tasks the host owns and ends with the call. The
     calling strategy chooses the output allowance and reasoning effort, which otherwise follow the worker's own
     generation settings and never exceed them. Ordinary strategy results remain the only route from a judgment to
     control.
+
+    Input is measured in tokens as `experimental.allowance` does: estimated before the call, settled from the
+    usage the provider reports, and admitted against bands that default to fractions of the worker model's context
+    window (`call_tokens` for one judgment, `turn_tokens` for the turn's total): `window` when configured, else the
+    window the native loop resolved for the worker's model (`observe_window`, set at each turn), else the rate
+    tables. A judgment repeated within one turn with the same instruction, data, schema and sampling is answered
+    from the turn's memory without spending any allowance: a strategy that wants a fresh sample changes its input.
     """
 
     def __init__(
@@ -35,23 +45,27 @@ class Inference(StrategyInference):
         *,
         operation_calls=12,
         turn_calls=48,
-        turn_input_bytes=512_000,
-        max_input_bytes=64_000,
+        call_tokens=(0.25, 0.5),
+        turn_tokens=(1.0, 2.0),
+        window=None,
         operation_seconds=360,
         timeout=180,
     ):
-        counts = (operation_calls, turn_calls, turn_input_bytes, max_input_bytes)
         if (
-            any(type(value) is not int or value < 0 for value in counts)
-            or max_input_bytes < 1
+            any(type(value) is not int or value < 0 for value in (operation_calls, turn_calls))
+            or (window is not None and (type(window) is not int or window < 1))
             or not all(isfinite(value) and value > 0 for value in (operation_seconds, timeout))
         ):
-            raise ValueError("inference limits must be finite and nonnegative, with positive input and time bounds")
+            raise ValueError("inference limits must be finite and nonnegative, with a positive window and time bounds")
         self.provider, self.recorder = provider, recorder
         self.operation_calls, self.turn_calls = operation_calls, turn_calls
-        self.turn_input_bytes, self.max_input_bytes = turn_input_bytes, max_input_bytes
+        self.call_tokens, self.turn_tokens, self.window = call_tokens, turn_tokens, window
         self.operation_seconds, self.timeout = operation_seconds, timeout
+        self.calibration = Calibration()
         self.budgets = {}
+        self.memory = {}
+        self.observed = None
+        Band.of(1, call_tokens), Band.of(1, turn_tokens)
 
     @property
     def calls(self):
@@ -59,6 +73,25 @@ class Inference(StrategyInference):
 
     def release(self, turn_id):
         self.budgets.pop(turn_id, None)
+        self.memory.pop(turn_id, None)
+
+    def _model(self) -> str | None:
+        return self.provider.get_default_model() if self.provider is not None else None
+
+    def observe_window(self, tokens) -> None:
+        """Take the context window the native loop resolved for the worker's model; ignored when `window` is
+        configured or the value is not a positive integer."""
+        if type(tokens) is int and tokens > 0:
+            self.observed = tokens
+
+    def _bands(self) -> tuple[int, Band, Band]:
+        """The worker model's window and the call and turn bands derived from it."""
+        window = context_window(self._model(), configured=self.window or self.observed)
+        return window, Band.of(window, self.call_tokens), Band.of(window, self.turn_tokens)
+
+    def _estimate(self, messages) -> int:
+        """Tokens of one call's messages as the host counts them, scaled by what this model reported so far."""
+        return self.calibration.scaled(self._model(), sum(estimate_tokens(row["content"]) for row in messages))
 
     def _efforts(self) -> list[str]:
         """The efforts a judgment may choose: the worker's own and the weaker ones; none when the worker leaves its
@@ -70,11 +103,18 @@ class Inference(StrategyInference):
 
     def describe(self):
         generation = self._generation()
+        window, call, turn = self._bands()
         return {
             "max_calls_per_operation": self.operation_calls,
             "max_calls_per_turn": self.turn_calls,
-            "max_input_bytes": self.max_input_bytes,
-            "max_input_bytes_per_turn": self.turn_input_bytes,
+            "input_tokens": {
+                "measure": f"estimated with {measure_name()}, settled from the usage the provider reports",
+                "context_window": window,
+                "per_call": call.describe(),
+                "per_turn": turn.describe(),
+                "bands": "below clear an input passes, from refuse on it is refused, between it passes as near",
+            },
+            "memory": "a judgment repeated within one turn with the same input is answered from memory, unspent",
             "seconds_per_operation": self.operation_seconds,
             "timeout": self.timeout,
             "batch": "each(requests, output_type=...) makes several judgments of one operation at once",
@@ -159,20 +199,24 @@ class Inference(StrategyInference):
                 "content": json.dumps(parse_as(JsonValue, data, strict=True), ensure_ascii=False, allow_nan=False),
             },
         ]
-        if sum(len(row["content"].encode()) for row in messages) > self.max_input_bytes:
-            raise self._failure("budget", "strategy inference input exceeds its byte allowance", context)
         return messages
 
-    def _admit(self, operation, context, batch) -> tuple[float, int]:
+    def _remembered(self, messages, schema, chosen) -> tuple[str, BaseModel | None]:
+        """The key of a judgment within its turn and the result the turn already holds for it, if any."""
+        key = fingerprint({"messages": messages, "schema": schema, "chosen": chosen})
+        return key, self.memory.get(self.recorder.turn_id, {}).get(key)
+
+    def _admit(self, operation, context, batch) -> tuple[float, int, list[dict]]:
         """Spend the operation's and the turn's allowances on `batch` (the messages of each call) at once, or refuse
-        it whole; return the seconds each call may take and the turn's number for the first call. No await separates
-        the check from the spending, so calls racing in one event loop cannot both pass the same remaining
-        allowance."""
+        it whole; return the seconds each call may take, the turn's number for the first call and each call's input
+        measure. No await separates the check from the spending, so calls racing in one event loop cannot both pass
+        the same remaining allowance."""
         now = time.monotonic()
         started = now if operation.inference_started is None else operation.inference_started
         remaining = started + self.operation_seconds - now
         calls, spent = self.budgets.get(self.recorder.turn_id, (0, 0))
-        size = sum(len(row["content"].encode()) for messages in batch for row in messages)
+        _, call_band, turn_band = self._bands()
+        estimates = [self._estimate(messages) for messages in batch]
         if remaining <= 0:
             raise self._failure("budget", "this strategy operation's inference time is spent", context)
         if operation.inference_calls + len(batch) > self.operation_calls:
@@ -184,14 +228,46 @@ class Inference(StrategyInference):
             )
         if calls + len(batch) > self.turn_calls:
             raise self._failure("budget", "strategy inference turn budget exhausted", context)
-        if spent + size > self.turn_input_bytes:
-            raise self._failure("budget", "strategy inference turn input allowance exhausted", context)
+        largest = max(estimates)
+        if call_band.verdict(largest) == "over":
+            raise self._failure(
+                "budget",
+                f"strategy inference input of about {largest} tokens exceeds the per-call allowance of "
+                f"{call_band.refuse}",
+                context,
+            )
+        total = spent + sum(estimates)
+        if turn_band.verdict(total) == "over":
+            raise self._failure(
+                "budget",
+                f"strategy inference turn input allowance exhausted: about {total} tokens against {turn_band.refuse}",
+                context,
+            )
         operation.inference_calls += len(batch)
         operation.inference_started = started
-        self.budgets[self.recorder.turn_id] = (calls + len(batch), spent + size)
-        return min(self.timeout, self._generation().timeout, remaining), calls + 1
+        self.budgets[self.recorder.turn_id] = (calls + len(batch), total)
+        measures = [
+            {
+                "estimated_tokens": estimate,
+                "per_call": call_band.verdict(estimate),
+                "per_turn": turn_band.verdict(spent + sum(estimates[: index + 1])),
+            }
+            for index, estimate in enumerate(estimates)
+        ]
+        return min(self.timeout, self._generation().timeout, remaining), calls + 1, measures
 
-    async def _judge(self, messages, schema, output_type, chosen, context, timeout, number):
+    def _settle(self, measure, usage) -> None:
+        """Replace a call's estimate in the turn's spending with the prompt tokens the provider reported, and let
+        the next estimate for this model learn from the difference."""
+        reported = token_count((usage or {}).get("prompt_tokens")) if isinstance(usage, Mapping) else None
+        measure["reported_tokens"] = reported
+        if reported is None:
+            return
+        self.calibration.learn(self._model(), measure["estimated_tokens"], reported)
+        calls, spent = self.budgets.get(self.recorder.turn_id, (0, 0))
+        self.budgets[self.recorder.turn_id] = (calls, max(0, spent - measure["estimated_tokens"] + reported))
+
+    async def _judge(self, messages, schema, output_type, chosen, context, timeout, number, measure, key):
         generation = self._generation()
         # Only what the strategy chose is sent; the provider applies the worker's own settings to the rest.
         call = {"model": self.provider.get_default_model(), "tools": None, "tool_choice": None, **chosen}
@@ -210,6 +286,7 @@ class Inference(StrategyInference):
             output_schema=schema,
             parameters=parameters,
             timeout=timeout,
+            input_tokens=measure,
         )
         stage = "provider"
         try:
@@ -234,15 +311,24 @@ class Inference(StrategyInference):
             )
             raise
         except Exception as exc:
+            if stage == "result":
+                self._settle(measure, getattr(response, "usage", None))
             kind = "timeout" if isinstance(exc, TimeoutError) else stage
             raise self._failure(kind, f"{type(exc).__name__}: {exc}", context) from exc
+        self._settle(measure, response.usage)
+        self.memory.setdefault(self.recorder.turn_id, {})[key] = result
         self.recorder.add(
             "strategy.inference.result",
             **context,
             result=result,
             usage=response.usage,
             finish_reason=response.finish_reason,
+            input_tokens=measure,
         )
+        return result
+
+    def _recall(self, context, key, result):
+        self.recorder.add("strategy.inference.memo", **context, key=key, result=result)
         return result
 
     async def __call__[ResultT: BaseModel](
@@ -258,8 +344,11 @@ class Inference(StrategyInference):
         chosen = self._sampling(output_type, max_output_tokens, reasoning_effort)
         schema = output_type.model_json_schema()
         messages = self._messages(instruction, data, schema, context)
-        timeout, number = self._admit(operation, context, [messages])
-        return await self._judge(messages, schema, output_type, chosen, context, timeout, number)
+        key, held = self._remembered(messages, schema, chosen)
+        if held is not None:
+            return self._recall(context, key, held)
+        timeout, number, measures = self._admit(operation, context, [messages])
+        return await self._judge(messages, schema, output_type, chosen, context, timeout, number, measures[0], key)
 
     async def each[ResultT: BaseModel](
         self,
@@ -278,18 +367,29 @@ class Inference(StrategyInference):
         ]
         if not requests:
             raise ValueError("each needs at least one request")
-        batch = [self._messages(request.instruction, request.data, schema, context) for request in requests]
-        timeout, first = self._admit(operation, context, batch)
+        prepared = [self._messages(request.instruction, request.data, schema, context) for request in requests]
+        keys = [self._remembered(messages, schema, chosen) for messages in prepared]
+        fresh = [index for index, (_, held) in enumerate(keys) if held is None]
+        results: list = [None if held is None else self._recall(context, key, held) for key, held in keys]
+        if not fresh:
+            return results
+        batch = [prepared[index] for index in fresh]
+        timeout, first, measures = self._admit(operation, context, batch)
 
-        async def outcome(messages, number):
+        async def outcome(messages, number, measure, key):
             try:
-                return await self._judge(messages, schema, output_type, chosen, context, timeout, number)
+                return await self._judge(messages, schema, output_type, chosen, context, timeout, number, measure, key)
             except InferenceError as exc:
                 return exc
 
         async with asyncio.TaskGroup() as group:
-            tasks = [group.create_task(outcome(messages, first + index)) for index, messages in enumerate(batch)]
-        return [task.result() for task in tasks]
+            tasks = [
+                group.create_task(outcome(prepared[index], first + offset, measures[offset], keys[index][0]))
+                for offset, index in enumerate(fresh)
+            ]
+        for index, task in zip(fresh, tasks, strict=True):
+            results[index] = task.result()
+        return results
 
 
 HOST_DEPENDENCIES = ("infer", "plan", "registrar", "peers", "shared", "host")

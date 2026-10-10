@@ -4,7 +4,7 @@ ActionBinding selects event kinds, optional requests and an optional model tool.
 
 ## Event consumers
 
-progress runs before an iteration and supports continuation, guidance and a terminal reply. proposal at a batch or reply supports native bounded resampling and completion. With dispatch=true, the native ToolGate sends a single dispatch proposal, supporting continue/reject; gate errors refuse the call. Native permissions remain independent.
+progress runs before an iteration and supports continuation, guidance and a terminal reply. proposal at a batch or reply supports native bounded resampling and completion. With dispatch=true, the native ToolGate sends a single dispatch proposal, supporting continue/reject; a decision with unverified, or an InferenceError escaping the strategy, lets the call through recorded as unverified, while any other gate error refuses the call. A refusal repeated for the same call and arguments within one turn is counted, and past the host's limit the refusal tells the model to stop resubmitting it unchanged. Native permissions remain independent.
 
 outcome receives actual transcript evidence after a tool iteration. failure at terminal_answerless supports only the terminal choices stated in the event; native synthesis, early exit or scheduled rerun can make that point unreachable. control reports application receipts. An unselected kind has no implied call or state change.
 

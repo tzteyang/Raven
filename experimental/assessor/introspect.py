@@ -28,14 +28,13 @@ SOURCE = "self"
 VERDICT = re.compile(r"^\s*VERDICT\s*:\s*(pass|fail|unknown)\b", re.I | re.M)
 DEFECTS = re.compile(r"^\s*DEFECTS\s*:\s*(.*?)(?=^\s*NOTE\s*:|\Z)", re.I | re.M | re.S)
 NOTE = re.compile(r"^\s*NOTE\s*:\s*(.*)\Z", re.I | re.M | re.S)
-OPENED_LIMIT = 20_000
 _PROMPT = Path(__file__).resolve().parent / "prompts" / "introspect.md"
 
 
-def request(exchanges) -> str:
-    """What the worker is asked: the prompt with the conversation it had and the files it handed over."""
-    files = {name: text[:OPENED_LIMIT] for name, text in opened(exchanges).items()}
-    packet = {"conversation": transcript(exchanges, speaker="user"), "delivered": files}
+def request(exchanges, *, tokens: int | None = None) -> str:
+    """What the worker is asked: the prompt with the conversation it had and the files it handed over, each cut to
+    `tokens` (`experimental.allowance.reading_budget` by default)."""
+    packet = {"conversation": transcript(exchanges, speaker="user"), "delivered": opened(exchanges, tokens=tokens)}
     return _PROMPT.read_text() + "\n\n" + json.dumps(packet, ensure_ascii=False, indent=2)
 
 

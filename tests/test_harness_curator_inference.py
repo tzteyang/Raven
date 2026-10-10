@@ -62,9 +62,10 @@ def inference(tmp_path, provider=None, **limits):
     return Inference(provider, recorder, **limits), provider, recorder
 
 
-async def judge(infer, **sampling):
+async def judge(infer, item=0, **sampling):
+    """One judgment; `item` varies the input so that each call is a fresh judgment, not one the turn remembers."""
     return await infer(
-        instruction="Check the supplied evidence.", data={"evidence": []}, output_type=Verdict, **sampling
+        instruction="Check the supplied evidence.", data={"evidence": [], "item": item}, output_type=Verdict, **sampling
     )
 
 
@@ -76,13 +77,13 @@ async def test_an_operation_and_its_peers_share_an_allowance_of_calls_and_the_tu
         result = await judge(infer, max_output_tokens=400)
         assert result.verdict == "insufficient_evidence"
         async with owner_operation("memory", asyncio.Lock(), group=group, operation="interact"):
-            await judge(infer)
+            await judge(infer, 1)
             with pytest.raises(InferenceError, match="0 of its 2 inference calls left"):
-                await judge(infer)
+                await judge(infer, 2)
     async with owner_operation("action", asyncio.Lock(), group=group):
-        await judge(infer)
+        await judge(infer, 3)
         with pytest.raises(InferenceError, match="turn budget"):
-            await judge(infer)
+            await judge(infer, 4)
     assert len(provider.requests) == 3
     request = provider.requests[0]
     assert {key: value for key, value in request.items() if key != "messages"} == {
@@ -106,12 +107,84 @@ async def test_an_operation_and_its_peers_share_an_allowance_of_calls_and_the_tu
 
 @pytest.mark.asyncio
 async def test_the_turn_input_allowance_bounds_many_small_judgments(tmp_path):
-    infer, provider, _ = inference(tmp_path, turn_input_bytes=900)
+    infer, provider, recorder = inference(tmp_path, window=200, call_tokens=(0.5, 1.0), turn_tokens=(0.5, 1.0))
     async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
         await judge(infer)
-        with pytest.raises(InferenceError, match="turn input allowance"):
-            await judge(infer)
+        with pytest.raises(InferenceError, match="turn input allowance exhausted: about"):
+            await judge(infer, 1)
     assert len(provider.requests) == 1
+    [measure] = [row["input_tokens"] for row in recorder.rows if row["kind"] == "strategy.inference.result"]
+    assert 100 <= measure["estimated_tokens"] < 200 and measure["per_turn"] == "near"
+    assert measure["per_call"] == "near" and measure["reported_tokens"] is None
+
+
+@pytest.mark.asyncio
+async def test_input_is_measured_in_tokens_against_bands_of_the_worker_window(tmp_path):
+    infer, provider, recorder = inference(tmp_path, window=1000, call_tokens=(0.2, 0.3))
+    assert infer.describe()["input_tokens"] == {
+        "measure": "estimated with tiktoken o200k_base, settled from the usage the provider reports",
+        "context_window": 1000,
+        "per_call": {"clear": 200, "refuse": 300},
+        "per_turn": {"clear": 1000, "refuse": 2000},
+        "bands": "below clear an input passes, from refuse on it is refused, between it passes as near",
+    }
+    async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
+        with pytest.raises(InferenceError, match="about [0-9]+ tokens exceeds the per-call allowance of 300"):
+            await infer(instruction="Check.", data={"evidence": ["word " * 400]}, output_type=Verdict)
+        await infer(instruction="Check.", data={"evidence": ["word " * 120]}, output_type=Verdict)
+    assert len(provider.requests) == 1
+    [measure] = [row["input_tokens"] for row in recorder.rows if row["kind"] == "strategy.inference"]
+    assert measure["per_call"] == "near" and measure["per_turn"] == "clear"
+    with pytest.raises(ValueError, match="band fractions"):
+        Inference(provider, recorder, call_tokens=(0.5, 0.2))
+    observed = Inference(provider, recorder)
+    observed.observe_window(4000)
+    observed.observe_window(None)
+    assert observed.describe()["input_tokens"]["context_window"] == 4000
+    observed.window = 8000
+    assert observed.describe()["input_tokens"]["context_window"] == 8000
+
+
+@pytest.mark.asyncio
+async def test_reported_usage_settles_the_turn_spending_and_calibrates_the_next_estimate(tmp_path):
+    answer = LLMResponse(
+        content='{"verdict":"satisfied","explanation":"ok"}', usage={"prompt_tokens": 600, "completion_tokens": 9}
+    )
+    infer, provider, recorder = inference(
+        tmp_path, Provider(answer), window=1000, call_tokens=(1.0, 1.0), turn_tokens=(1.0, 1.0)
+    )
+    async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
+        await judge(infer)
+        calls, spent = infer.budgets["turn-a"]
+        assert (calls, spent) == (1, 600)
+        [first] = [row["input_tokens"] for row in recorder.rows if row["kind"] == "strategy.inference.result"]
+        assert first["reported_tokens"] == 600 and first["estimated_tokens"] < 600
+        assert infer.calibration.ratio("worker/model") == pytest.approx(600 / first["estimated_tokens"])
+        with pytest.raises(InferenceError, match="turn input allowance exhausted: about"):
+            await judge(infer, 1)
+    assert len(provider.requests) == 1
+
+
+@pytest.mark.asyncio
+async def test_a_judgment_repeated_within_the_turn_is_answered_from_memory_unspent(tmp_path):
+    infer, provider, recorder = inference(tmp_path, operation_calls=1)
+    async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
+        first = await judge(infer)
+        again = await judge(infer)
+        assert again == first and len(provider.requests) == 1 and infer.calls == 1
+        with pytest.raises(InferenceError, match="0 of its 1 inference calls left"):
+            await judge(infer, max_output_tokens=400)
+        results = await infer.each(
+            [("Check the supplied evidence.", {"evidence": [], "item": 0})] * 2, output_type=Verdict
+        )
+        assert results == [first, first] and len(provider.requests) == 1
+    memos = [row for row in recorder.rows if row["kind"] == "strategy.inference.memo"]
+    assert len(memos) == 3 and memos[0]["result"] == first.model_dump()
+    infer.release("turn-a")
+    recorder.turn_id = "turn-b"
+    async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
+        await judge(infer)
+    assert len(provider.requests) == 2
 
 
 @pytest.mark.asyncio
@@ -212,7 +285,7 @@ async def test_a_cut_off_judgment_says_why(tmp_path):
 
 @pytest.mark.asyncio
 async def test_scope_input_and_active_turn_are_enforced_before_the_provider_call(tmp_path):
-    infer, provider, recorder = inference(tmp_path, max_input_bytes=10)
+    infer, provider, recorder = inference(tmp_path, window=10)
     with pytest.raises(InferenceError, match="current host"):
         await judge(infer)
     async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
@@ -220,7 +293,7 @@ async def test_scope_input_and_active_turn_are_enforced_before_the_provider_call
         with pytest.raises(InferenceError, match="active worker turn"):
             await judge(infer)
         recorder.turn_id = "turn-a"
-        with pytest.raises(InferenceError, match="byte allowance"):
+        with pytest.raises(InferenceError, match="per-call allowance"):
             await judge(infer)
     assert provider.requests == []
 
@@ -313,12 +386,12 @@ async def test_an_operation_has_a_time_window_for_its_judgments(tmp_path):
         assert [row["timeout"] for row in recorder.rows if row["kind"] == "strategy.inference"][0] < 1
         await asyncio.sleep(0.06)
         with pytest.raises(InferenceError, match="inference time is spent"):
-            await judge(infer)
+            await judge(infer, 1)
     assert len(provider.requests) == 1
-    infer, provider, _ = inference(tmp_path, operation_seconds=0.05, turn_input_bytes=900)
+    infer, provider, _ = inference(tmp_path, operation_seconds=0.05, window=400, call_tokens=(0.5, 1.0))
     async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
-        with pytest.raises(InferenceError, match="input allowance"):
-            await infer(instruction="Check.", data={"evidence": ["x" * 1000]}, output_type=Verdict)
+        with pytest.raises(InferenceError, match="per-call allowance"):
+            await infer(instruction="Check.", data={"evidence": ["x " * 1000]}, output_type=Verdict)
         await asyncio.sleep(0.06)
         await judge(infer)
     assert len(provider.requests) == 1

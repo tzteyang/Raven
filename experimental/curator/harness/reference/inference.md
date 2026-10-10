@@ -129,8 +129,15 @@ every strategy to use the same class layout, verdict type or judgment algorithm.
 
 The outermost host strategy operation and its sequential peer calls share one
 allowance of calls and of time from its first judgment; every call spends from
-it, failed or not, and from the turn's allowance of calls and input bytes. A
-batch through `each` is admitted whole or refused whole. The host supplies
+it, failed or not, and from the turn's allowance of calls and input tokens. A
+batch through `each` is admitted whole or refused whole. Input is measured in
+tokens against bands derived from the worker model's context window, one for a
+single judgment and one for the turn's total: an estimate below the band's
+`clear` bound passes, one from its `refuse` bound on is refused, and the
+provider's reported usage settles what the turn actually spent. A judgment
+repeated within one turn with the same instruction, data, schema and sampling
+is answered from the turn's memory and spends nothing, so judge each candidate
+once per turn and vary the input when a fresh sample is wanted. The host supplies
 operation identity; changing helper names or invoking another owner does not
 obtain another allowance. Tasks the strategy starts itself, background tasks
 and callbacks escaping the operation are refused; `each` is the way to judge
@@ -148,6 +155,11 @@ second judgment asks for it within its allowance.
 This constrains framework calls, not hidden transport retries inside a provider.
 
 InferenceError identifies scope, budget, timeout, provider or result failure.
+None of them is a verdict on the candidate. At a dispatch, a strategy that
+cannot obtain its judgment returns `ActionDecision(unverified=<reason>)`: the
+host lets the call through and records the reason for reviewers, and an
+InferenceError that escapes the strategy there is treated the same way. Mapping
+an unavailable judgment to reject refuses work the strategy never reviewed.
 Cancellation propagates. An error the strategy lets propagate ends its
 operation: native dispatch refuses the call being decided, and the Action hook
 stops the incomplete check. An error that `each` returns, or that the strategy

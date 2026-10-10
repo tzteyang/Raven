@@ -314,7 +314,7 @@ class CuratorExperience:
             if any((parent / ".git").exists() for parent in path.resolve().parents):
                 raise ValueError("experience runtime storage must remain outside version control")
         request = {
-            "situation": situation[:2400],
+            "situation": situation,
             "scope_kind": scope_kind,
             "capabilities": list(capabilities),
             "contract_ids": list(contract_ids),
@@ -328,7 +328,7 @@ class CuratorExperience:
         queries = {
             phase: GuidanceQuery(
                 access_scope=self.access.access_scope,
-                situation=situation[:2400],
+                situation=situation,
                 phase=phase,
                 scope_kind=scope_kind,
                 capabilities=tuple(capabilities),

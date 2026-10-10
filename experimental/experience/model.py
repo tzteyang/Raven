@@ -13,6 +13,7 @@ from raven.contracts.llm_provider import LLMProvider
 from raven.contracts.tool import RAW_ARGUMENTS_KEY
 from raven.security.trust import wrap_untrusted
 
+from ..allowance import Band, context_window, estimate_tokens
 from .contracts import digest
 
 T = TypeVar("T", bound=BaseModel)
@@ -21,14 +22,18 @@ PROMPTS = Path(__file__).parent / "prompts"
 
 @dataclass(frozen=True)
 class ModelLimits:
-    max_input_bytes: int = 65536
+    """`input_tokens` is the band one call's input is admitted against, as fractions of the model's context window
+    (`experimental.allowance`); `window` overrides the window the rate tables know for the model."""
+
+    input_tokens: tuple[float, float] = (0.25, 0.5)
+    window: int | None = None
     max_output: int = 12000
     timeout: float = 60
 
     def __post_init__(self):
+        Band.of(1, self.input_tokens)
         if (
-            type(self.max_input_bytes) is not int
-            or self.max_input_bytes < 1
+            (self.window is not None and (type(self.window) is not int or self.window < 1))
             or type(self.max_output) is not int
             or self.max_output < 1
             or not math.isfinite(self.timeout)
@@ -101,14 +106,18 @@ class ModelClient:
             }
         ]
         payload = {"messages": messages, "tools": tools}
-        size = len(json.dumps(payload, ensure_ascii=False).encode())
-        if size > self.limits.max_input_bytes:
-            raise ModelCallError("input_limit", "The complete input exceeds its byte budget; split the batch.")
+        band = Band.of(context_window(self.model, configured=self.limits.window), self.limits.input_tokens)
+        size = estimate_tokens(json.dumps(payload, ensure_ascii=False))
+        if band.verdict(size) == "over":
+            raise ModelCallError(
+                "input_limit",
+                f"The complete input of about {size} tokens exceeds its allowance of {band.refuse}; split the batch.",
+            )
         audit = {
             "event": "model.call",
             "tool": name,
             "input_id": digest(packet),
-            "input_bytes": size,
+            "input_tokens": {"estimated": size, "band": band.verdict(size), "refuse": band.refuse},
             "model": self.model,
         }
         self.trace.append(audit)

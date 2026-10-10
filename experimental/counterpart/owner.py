@@ -34,6 +34,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from raven.providers.capabilities import vision_verdict
 from raven.providers.rates import warm_catalog_in_background
 
+from ..allowance import excerpt, reading_budget
 from ..automation.channel import said
 from ..automation.files import read_delivered
 from ..automation.traveller import transcript
@@ -52,10 +53,6 @@ if TYPE_CHECKING:
     from ..simulation.scenario import Scenario
 
 NAME = "submit_review"
-DELIVERABLE_LIMIT = 120_000
-RESEARCH_LIMIT = 40_000
-FILED_LIMIT = 20_000
-TASK_LIMIT = 12_000
 # Raven fences a report on lines of its own; a request that quotes one inside JSON (a strategy's inference input)
 # has escaped line breaks there, so it is not read as a report reaching the employee.
 REPORT = re.compile(
@@ -137,21 +134,19 @@ def waiting(review: Spoken) -> dict[str, str]:
     return {verdict.id: verdict.waits_on for verdict in review.verdicts if verdict.waits_on}
 
 
-def cut(text: str, limit: int) -> str:
-    """`text` up to `limit` characters; a longer one says how much was left out, so the owner never takes a cut
-    document for the whole of it."""
-    if len(text) <= limit:
-        return text
-    return text[:limit] + f"\n[... {len(text) - limit} more characters not shown]"
+def cut(text: str, tokens: int | None = None) -> str:
+    """`text` up to about `tokens` tokens (`experimental.allowance.reading_budget` by default); a longer one says how
+    much was left out, so the owner never takes a cut document for the whole of it."""
+    return excerpt(text, reading_budget() if tokens is None else tokens)
 
 
-def deliverables(exchanges) -> dict[str, str]:
+def deliverables(exchanges, *, tokens: int | None = None) -> dict[str, str]:
     """The last version of each file a conversation handed over, a deck read slide by slide with its styling."""
     files = {}
     for turn in exchanges:
         for path in turn.execution.deliverables:
             if Path(path).is_file():
-                files[Path(path).name] = cut(read_delivered(path, style=True), DELIVERABLE_LIMIT)
+                files[Path(path).name] = cut(read_delivered(path, style=True), tokens)
     return files
 
 
@@ -171,7 +166,7 @@ def no_pictures(sessions) -> tuple[dict, list[dict], str]:
     return {}, [], ""
 
 
-def research(exchanges) -> dict[str, str]:
+def research(exchanges, *, tokens: int | None = None) -> dict[str, str]:
     """What the research colleague reported in each playbook run of a conversation, read from the run manifest."""
     found = {}
     for turn in exchanges:
@@ -181,19 +176,19 @@ def research(exchanges) -> dict[str, str]:
             for node in ((row.get("payload") or {}).get("manifest") or {}).get("files", []):
                 path = Path(str(node.get("output_file") or ""))
                 if "Research" in str(node.get("subagent")) and path.is_file():
-                    found[str(node["node"])] = cut(path.read_text(errors="replace"), RESEARCH_LIMIT)
+                    found[str(node["node"])] = cut(path.read_text(errors="replace"), tokens)
     return found
 
 
-def reports(exchanges) -> list[dict]:
+def reports(exchanges, *, tokens: int | None = None) -> list[dict]:
     """Every report a colleague (a subagent or a playbook step) sent back to the employee, with the task it had.
 
     Read from the model requests of the employee's turns, where each reaches it in marked blocks: a delegation's
     announced result quotes the task the employee wrote for it, and a tally of its failed tool calls when it had any
     (`failed_calls`); a reviewed result names the task it was given, then what it returned as its answer (the tail of
     what it did is left out); a playbook step's account follows the note that names the step. The task is the
-    employee's own hand-over, so it is kept whole up to `TASK_LIMIT`. The same report repeats in every later request,
-    so each is kept once.
+    employee's own hand-over, so it is kept whole up to the same `tokens` as the report. The same report repeats in
+    every later request, so each is kept once.
     """
     found: dict[str, dict] = {}
     for turn in exchanges:
@@ -227,13 +222,13 @@ def reports(exchanges) -> list[dict]:
                         asked = task if ANSWER_LABEL in label else lead.split("\n\n")[-1]
                         asked = asked.split("Working directory:", 1)[0].strip()
                         asked = "" if asked.startswith("[Runtime Context") else asked
-                    report = cut(body, RESEARCH_LIMIT)
+                    report = cut(body, tokens)
                     last = found.setdefault(report, {"task": "", "report": report})
-                    last["task"] = last["task"] or cut(asked, TASK_LIMIT)
+                    last["task"] = last["task"] or cut(asked, tokens)
     return list(found.values())
 
 
-def written(folder: Path, before: Path, *, label: str, skip=frozenset()) -> dict[str, str]:
+def written(folder: Path, before: Path, *, label: str, skip=frozenset(), tokens: int | None = None) -> dict[str, str]:
     """Files under `folder` that are new or changed against `before`, keyed `label/relative path`.
 
     Text files come with their content; anything else (decks, scripts, build output) is listed by name only. Hidden
@@ -257,7 +252,7 @@ def written(folder: Path, before: Path, *, label: str, skip=frozenset()) -> dict
             continue
         key = f"{label}/{relative.as_posix()}"
         if path.suffix.lower() in TEXT_FILES and not relative.parts[0] == "decks":
-            files[key] = cut(path.read_text(errors="replace"), FILED_LIMIT)
+            files[key] = cut(path.read_text(errors="replace"), tokens)
         else:
             files[key] = f"[{path.suffix or 'file'}; content not shown]"
     return files
@@ -418,16 +413,25 @@ class Owner:
         if placed is None:
             return {}
         home = self.uploads.parent if self.uploads else None
+        tokens = self.reading
         return {
-            **written(placed["workdir"], self.workdir, label="workdir", skip=frozenset({"uploads", "decks"})),
-            **(written(placed["home"], home, label="home", skip=PRIVATE) if home else {}),
+            **written(
+                placed["workdir"], self.workdir, label="workdir", skip=frozenset({"uploads", "decks"}), tokens=tokens
+            ),
+            **(written(placed["home"], home, label="home", skip=PRIVATE, tokens=tokens) if home else {}),
         }
+
+    @property
+    def reading(self) -> int:
+        """Tokens one document may take in what the owner reads: a share of its model's window."""
+        default = getattr(self.provider, "get_default_model", None)
+        return reading_budget(self.model or (default() if default else None))
 
     def information(self) -> str:
         """The information snapshot the employee was briefed with (`experimental.research.curator`), as it stands in
         its home; empty when the run collected none."""
         path = self.uploads.parent / INFORMATION_FILE if self.uploads else None
-        return cut(path.read_text(errors="replace"), RESEARCH_LIMIT) if path is not None and path.is_file() else ""
+        return cut(path.read_text(errors="replace"), self.reading) if path is not None and path.is_file() else ""
 
     @property
     def chooses(self) -> bool:
@@ -546,8 +550,8 @@ class Owner:
         drawn = self.cards()
         found = {name: self.facts(name, exchanges, drawn.get(name)) for name, exchanges in sessions.items()}
         self._record(sessions, drawn, found)
-        delivered = {name: deliverables(exchanges) for name, exchanges in sessions.items()}
-        researched = {name: research(exchanges) for name, exchanges in sessions.items()}
+        delivered = {name: deliverables(exchanges, tokens=self.reading) for name, exchanges in sessions.items()}
+        researched = {name: research(exchanges, tokens=self.reading) for name, exchanges in sessions.items()}
         named = handles(self.scenario.criteria)
         packet = {
             "profile": self.scenario.profile,

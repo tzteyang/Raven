@@ -68,7 +68,7 @@ async def _extract(owner, event, *, capabilities=(), contract_ids=(), expected_v
             for phase in ("diagnose", "select", "design", "implement", "repair"):
                 query = GuidanceQuery(
                     access_scope=owner.access.access_scope,
-                    situation=event.view.situation[:2400],
+                    situation=event.view.situation,
                     phase=phase,
                     scope_kind=event.view.scope_kind,
                     mechanism_states=(event.view.mechanism_state,) if event.view.mechanism_state else (),

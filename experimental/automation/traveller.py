@@ -12,6 +12,7 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Protocol
 
+from ..allowance import excerpt, reading_budget
 from ..iteration.exchange import ExchangeError, messages
 from .channel import said
 from .files import read_delivered
@@ -20,7 +21,6 @@ LEAVE = "LEAVE"
 TRAILING = re.compile(r"\s+\W*LEAVE\W*$")
 # A line that opens a speaker's turn with a role label, as a model writing the whole dialogue marks each side.
 TURN = re.compile(r"^\W*(?:user|assistant|customer|human|system)\W{0,2}[:\uff1a][\s*_]*", re.IGNORECASE)
-OPENED_LIMIT = 8_000
 _PROMPT = Path(__file__).resolve().parent / "prompts" / "traveller.md"
 
 
@@ -44,13 +44,15 @@ def transcript(exchanges, speaker: str = "customer") -> list[dict]:
     return rows
 
 
-def opened(exchanges) -> dict[str, str]:
-    """What a person sees on opening each file handed over so far, latest version of each."""
+def opened(exchanges, *, tokens: int | None = None) -> dict[str, str]:
+    """What a person sees on opening each file handed over so far, latest version of each, cut to `tokens` with a
+    note of what is left out (`experimental.allowance.reading_budget` by default)."""
+    tokens = reading_budget() if tokens is None else tokens
     files = {}
     for exchange in exchanges:
         for path in exchange.execution.deliverables:
             if Path(path).is_file():
-                files[Path(path).name] = read_delivered(path)[:OPENED_LIMIT]
+                files[Path(path).name] = excerpt(read_delivered(path), tokens)
     return files
 
 
@@ -126,6 +128,12 @@ class Traveller:
         value = (getattr(self.persona, "values", None) or {}).get("wait_seconds", 0)
         return float(value) if isinstance(value, (int, float)) else 0.0
 
+    @property
+    def reading(self) -> int:
+        """Tokens one opened file may take in what the person reads: a share of the model's window."""
+        default = getattr(self.provider, "get_default_model", None)
+        return reading_budget(self.model or (default() if default else None))
+
     async def speak(self, exchanges) -> str | None:
         if not exchanges or self.card is None:
             self.card = self.persona.play(random.Random(f"{self.seed}:{self.name}:{self.played}"))
@@ -133,7 +141,11 @@ class Traveller:
             self.leaving = False
         if self.leaving:
             return None
-        packet = {"persona": self.card.text, "conversation": transcript(exchanges), "opened": opened(exchanges)}
+        packet = {
+            "persona": self.card.text,
+            "conversation": transcript(exchanges),
+            "opened": opened(exchanges, tokens=self.reading),
+        }
         partner = [tuple(said(exchange) for exchange in exchanges), *packet["opened"].values()]
         scope = nullcontext() if self.boundaries is None else self.boundaries.compartment("conversant", spoken=partner)
         with scope as entered:
