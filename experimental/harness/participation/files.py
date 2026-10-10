@@ -1,6 +1,6 @@
 """How a person reads a delivered file: a web page as its visible text, a deck slide by slide.
 
-A traveller reads what the file says; the owner, reviewing against the agency's design norms, also reads
+A conversant reads what the file says; the counterpart, reviewing against its design norms, also reads
 how each slide is laid out and styled, and looks at every page as rendered.
 """
 

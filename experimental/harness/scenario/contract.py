@@ -31,7 +31,7 @@ ROLES: tuple[Role, ...] = ("partner", "conversant", "counterpart", "analyst", "c
 Kind = Literal["norm", "fact", "exemplar", "counterexample"]
 KINDS: tuple[Kind, ...] = ("norm", "fact", "exemplar", "counterexample")
 
-# What the counterpart may observe of the partner's work beyond the conversation, as the agency's review names them.
+# What the counterpart may observe of the partner's work beyond the conversation, as the counterpart's review names them.
 VIEWS = ("conversations", "deliverables", "research", "colleague_reports", "filed", "back_office")
 
 SKILL_FILE = "SKILL.md"

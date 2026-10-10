@@ -203,7 +203,7 @@ async def main(args):
         )
     )
     provider = model_roles.provider(employee.baseline.config, roles)
-    travellers, placed = {}, {}
+    conversants, placed = {}, {}
     analyst_limits = AnalystLimits(call_timeout=args.timeout, max_calls=8)
     agency = OWNERS.get(scenario.root.name, Agency)(
         scenario,
@@ -214,7 +214,7 @@ async def main(args):
         deliver=args.deliver,
         uploads=employee.baseline.config.workspace_path / "uploads",
         shared=employee.baseline.workdir / "uploads",
-        cards=lambda: {name: traveller.card for name, traveller in travellers.items() if traveller.card},
+        cards=lambda: {name: conversant.card for name, conversant in conversants.items() if conversant.card},
         records=root,
         workdirs=placed,
         model=counterpart.model,
@@ -225,7 +225,7 @@ async def main(args):
     agency.prepare()
     cards, held = drills(scenario.personas, args.cards, args.holdout)
 
-    travellers.update(
+    conversants.update(
         enlist(
             cards,
             provider,
@@ -284,7 +284,7 @@ async def main(args):
             scope=fingerprint({"task": employee.baseline.task.text}),
         )
         assessors.append(standard)
-    trials = grouped(travellers, spawn, size=args.concurrent_drills, turns=args.turns, placed=placed)
+    trials = grouped(conversants, spawn, size=args.concurrent_drills, turns=args.turns, placed=placed)
     holdout = None
     if held:
         holdout_assessor = Assessor(

@@ -9,7 +9,7 @@ class PlanningInitialization(BaseModel):
     """Establish one session owner from its mission and restored checkpoint.
 
     Task text is the worker's business objective, not Curator construction
-    instructions. Current customer input arrives through runtime observations.
+    instructions. Current user input arrives through runtime observations.
     Initialization must work during candidate validation without inference.
     """
 

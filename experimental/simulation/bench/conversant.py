@@ -1,7 +1,7 @@
 """The customer: a model plays one persona, reads the conversation so far, then says the next thing or leaves.
 
 In a cultivation round each persona is one of the counterpart's drill cards, played as the customer it describes; the
-module keeps its first scenario's name, a travel agency's traveller. A card is anything with a `name` whose `play`
+module keeps its first scenario's name, a travel agency's conversant. A card is anything with a `name` whose `play`
 draws one playing of it with the persona's `text` (see `experimental.simulation.bench.scenario.Persona`).
 """
 
@@ -12,48 +12,22 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Protocol
 
-from experimental.cultivation.channel import said
-from experimental.harness.participation.allowance import excerpt, reading_budget
+from experimental.harness.participation.allowance import reading_budget
+from experimental.harness.participation.channel import said
 from experimental.harness.participation.exchange import ExchangeError, messages
-from experimental.harness.participation.files import read_delivered
+from experimental.harness.participation.views import opened, transcript
 
 LEAVE = "LEAVE"
 TRAILING = re.compile(r"\s+\W*LEAVE\W*$")
 # A line that opens a speaker's turn with a role label, as a model writing the whole dialogue marks each side.
 TURN = re.compile(r"^\W*(?:user|assistant|customer|human|system)\W{0,2}[:\uff1a][\s*_]*", re.IGNORECASE)
-_PROMPT = Path(__file__).resolve().parent / "prompts" / "traveller.md"
+_PROMPT = Path(__file__).resolve().parent / "prompts" / "conversant.md"
 
 
 class Card(Protocol):
     name: str
 
     def play(self, rng: random.Random): ...
-
-
-def transcript(exchanges, speaker: str = "customer") -> list[dict]:
-    """What the speaker saw: each message, the names of any files handed over with it, and why the reply never
-    came, if it did not."""
-    rows = []
-    for exchange in exchanges:
-        row = {speaker: exchange.user, "assistant": said(exchange)}
-        if exchange.execution.deliverables:
-            row["delivered"] = [Path(path).name for path in exchange.execution.deliverables]
-        if exchange.stopped:
-            row["stopped"] = exchange.stopped
-        rows.append(row)
-    return rows
-
-
-def opened(exchanges, *, tokens: int | None = None) -> dict[str, str]:
-    """What a person sees on opening each file handed over so far, latest version of each, cut to `tokens` with a
-    note of what is left out (`experimental.harness.participation.allowance.reading_budget` by default)."""
-    tokens = reading_budget() if tokens is None else tokens
-    files = {}
-    for exchange in exchanges:
-        for path in exchange.execution.deliverables:
-            if Path(path).is_file():
-                files[Path(path).name] = excerpt(read_delivered(path), tokens)
-    return files
 
 
 def own_turn(text: str) -> str:
@@ -99,11 +73,11 @@ async def say(provider, prompt: Path, packet, *, label: str, model=None, effort=
     return (response.content or "").strip()
 
 
-class Traveller:
+class Conversant:
     """Speaks in plain text, the way a person types into a chat; the word LEAVE on a line of its own ends the
     conversation, after anything else written with it has been sent as a parting message.
 
-    Each conversation plays the card afresh: its values are drawn from `seed`, the traveller's name and how many
+    Each conversation plays the card afresh: its values are drawn from `seed`, the conversant's name and how many
     conversations it has had, so every round meets new dates, party, budget and phone, and two runs with one seed
     meet the same ones. `card` is the playing of the current conversation.
 
@@ -153,7 +127,7 @@ class Traveller:
                 self.provider if entered is None else entered.provider(self.provider),
                 _PROMPT,
                 packet,
-                label=f"traveller:{self.name}",
+                label=f"conversant:{self.name}",
                 model=self.model,
                 effort=self.effort,
                 timeout=self.timeout,

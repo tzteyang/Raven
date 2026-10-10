@@ -1,7 +1,7 @@
 """Drill cards with drawn values: each time a card is played, its trip facts are drawn afresh within the card's ranges.
 
 A card is a persona file whose frontmatter declares `values`. The trip keys carry meaning the agency's checks rely on:
-`address` (how the traveller is addressed), `origin`, `destination`, `start` (a `MM-DD` date), `nights`, `adults`
+`address` (how the conversant is addressed), `origin`, `destination`, `start` (a `MM-DD` date), `nights`, `adults`
 (seniors included), `children` and `seniors` (one age per person), `budget` (the party total) and `phone` (a list of
 prefixes; the remaining eight digits are drawn). Any other key is a free value for the text. A value is fixed, a list
 to choose from, or a `{from, to, step}` range (dates as `MM-DD`); `children` and `seniors` list one such value per
@@ -23,7 +23,7 @@ YEAR = 2026
 
 @dataclass(frozen=True)
 class Trip:
-    """The facts a drill card holds this time: what the traveller will say when asked, and what a quote must match."""
+    """The facts a drill card holds this time: what the conversant will say when asked, and what a quote must match."""
 
     address: str
     origin: str
@@ -59,7 +59,7 @@ class Trip:
 
 @dataclass(frozen=True)
 class Drawn:
-    """One playing of a card: the persona text the traveller reads, and its trip facts (None for a fixed card)."""
+    """One playing of a card: the persona text the conversant reads, and its trip facts (None for a fixed card)."""
 
     name: str
     text: str

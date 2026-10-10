@@ -5,6 +5,7 @@ from pathlib import Path
 
 from experimental.cultivation.collector.curator import collect_for_curator, handover_information
 from experimental.cultivation.collector.information import Request
+from experimental.cultivation.counterpart.owner import SOURCE
 from experimental.harness.participation.compartment import Guard
 from experimental.harness.participation.hearing import heard
 from experimental.harness.participation.protocols import Handover, Signal
@@ -71,7 +72,7 @@ def opening_feedback(scenario, released):
         files.extend(paths)
         attachments.append(Handover(name, material.kind, paths))
     text = scenario.exchange.onboarding.replace("{files}", "\n".join(f"- {path}" for path in files))
-    return {"signals": heard((Signal("agency", text, attachments=tuple(attachments)),))}
+    return {"signals": heard((Signal(SOURCE, text, attachments=tuple(attachments)),))}
 
 
 def scenario_request(

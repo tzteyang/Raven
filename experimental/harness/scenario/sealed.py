@@ -9,7 +9,7 @@ fingerprints from a loaded scenario; the compartments in `experimental.harness.p
 Text is read as units, a CJK character or a word of any other script, and a window is a run of units weighing
 `WINDOW`: a CJK character weighs one and a word two, so a window is about twenty characters of Chinese or ten
 words of English. Counting characters alike for both scripts would make an English window three words long, and
-any phrase a role says in its own words, such as "the itinerary template", would read as a leak. Scripts written
+any phrase a role says in its own words, such as "the pricing template", would read as a leak. Scripts written
 without spaces other than CJK (Thai) read as long words, and combining marks split words of scripts such as
 Devanagari; no scenario uses them yet, and their windows would be coarser.
 """

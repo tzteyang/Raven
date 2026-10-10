@@ -7,17 +7,17 @@ on a replica `spawn` makes. The same two steps serve the round's drills and the 
 
 from experimental.cultivation.conversation import Conversation
 from experimental.cultivation.employee import Together
-from experimental.simulation.bench.traveller import Traveller
+from experimental.simulation.bench.conversant import Conversant
 
 
 def enlist(
     cards, provider, *, repeats=1, prefix="", model=None, effort=None, timeout=120, seed=0, boundaries=None
-) -> dict[str, Traveller]:
+) -> dict[str, Conversant]:
     """A conversant per card and repeat, keyed by its name (`prefix` and a repeat suffix keep names apart)."""
     enlisted = {}
     for card in cards:
         for repeat in range(1, repeats + 1):
-            conversant = Traveller(
+            conversant = Conversant(
                 card,
                 provider,
                 name=f"{prefix}{card.name}" + (f"-{repeat}" if repeats > 1 else ""),

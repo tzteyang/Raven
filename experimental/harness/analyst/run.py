@@ -140,7 +140,7 @@ def vet(feedback: Feedback, signals, sessions, *, sealed: Sealed | None = None, 
     signal's words or a conversant's. A long reference text is left to `sealed`, the run's fingerprints, which know
     what the Curator may see: a requirement legitimately restates the norm a check restates, and only the
     differential sealing of the run can tell that wording from the check's own. `spoken` are the streams of words
-    the Curator's compartment spares (by default this round's conversants): a requirement may quote the customer."""
+    the Curator's compartment spares (by default this round's conversants): a requirement may quote the conversant."""
     if spoken is None:
         spoken = [tuple(exchange.user for exchange in exchanges) for exchanges in sessions.values()]
     hidden = [
