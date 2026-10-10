@@ -4,7 +4,7 @@ import asyncio
 import json
 import shutil
 from copy import deepcopy
-from dataclasses import dataclass
+from dataclasses import dataclass, replace
 from fnmatch import fnmatch
 from hashlib import sha256
 from pathlib import Path
@@ -235,13 +235,15 @@ class Exploration:
         return {
             name: {**entry, "snapshot_path": str(self._copy_path(Path(entry["path"])))}
             for name, entry in self.inspection.sources.items()
+            if Path(entry["path"]) in self.originals
         }
 
     def read_source(self, **kwargs):
-        result = self.inspection.read_source(**kwargs)
-        if "path" in result:
-            result["path"] = str(self._copy_path(Path(result["path"])))
-        return result
+        inspection = replace(
+            self.inspection,
+            sources={name: {**entry, "path": entry["snapshot_path"]} for name, entry in self.sources.items()},
+        )
+        return inspection.read_source(**kwargs)
 
     def _snapshot(self):
         for original in self._files():

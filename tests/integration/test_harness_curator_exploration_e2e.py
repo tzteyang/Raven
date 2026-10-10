@@ -1,6 +1,7 @@
 """Native exploration and draft preflight feed a generated revision of a real worker."""
 
 import json
+from copy import deepcopy
 from pathlib import Path
 
 import pytest
@@ -30,8 +31,19 @@ async def test_native_exploration_preflight_repair_and_worker_installation(basel
         def __init__(self):
             super().__init__([])
             self.workspace = None
+            self.validation_read = False
 
         async def chat(self, messages, **kwargs):
+            stage = json.loads(messages[3]["content"])
+            if "consistency_review" in stage:
+                if not self.validation_read:
+                    self.validation_read = True
+                    self.requests.append(deepcopy(messages))
+                    checked = next(row for row in stage["history"] if row["event"] == "validation")
+                    return response("read_observation", {"trace_index": checked["trace_index"], "index": 0})
+                viewed = json.loads(next(row for row in reversed(messages) if row["role"] == "tool")["content"])
+                assert viewed["total_characters"] > 0 and viewed["index"] == 0
+                return await super().chat(messages, **kwargs)
             step = len(self.requests)
             packet = json.loads(messages[1]["content"])
             if self.workspace is None:
@@ -103,10 +115,10 @@ async def test_real_worker_budget_pause_resumes_and_installs_without_reselection
         resumed = CuratorProvider(
             [response("submit_artifact", action(generation={"temperature": 0.2}).model_dump(mode="json"))]
         )
-        result = await improve(worker, resumed, limits=Limits(max_calls=3))
+        result = await improve(worker, resumed, limits=Limits(max_calls=4))
         assert result.validation.passed
         assert worker.prepared.config["agents"]["defaults"]["temperature"] == 0.2
-        assert len(resumed.requests) == 1
+        assert len(resumed.requests) == 2
         assert not pending_path.exists() and not workspace.exists()
 
 

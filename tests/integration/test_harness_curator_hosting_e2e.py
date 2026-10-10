@@ -249,7 +249,7 @@ async def test_full_four_strategies_run_in_the_responding_acp_process(baseline, 
             await pool.close_all()
         else:
             await client.close()
-    assert (state / "planning.json").exists() and (state / "memory.json").exists()
+    assert {"planning", "memory"} <= json.loads((state / "strategies.json").read_text())["owners"].keys()
 
 
 @pytest.mark.asyncio

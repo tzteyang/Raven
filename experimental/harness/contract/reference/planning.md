@@ -8,7 +8,7 @@ initialize(PlanningInitialization) creates or restores a session owner and retur
 
 A projection contains view and optional guidance. Named subclasses with the same concrete ViewT and these public fields are accepted; the host normalizes the published envelope. Put domain extensions in ViewT, not extra projection fields. Views may be empty, partial, hierarchical or graph-shaped; no checklist schema is prescribed. Keep candidate alternatives distinguishable from the active plan. Store everything necessary to reconstruct the projection in owned state or explicit stable resources. Queries and private caches must not silently change the published plan.
 
-The host publishes a projection only after a successful checkpoint. Other strategies read a detached committed view. guidance is this plan's contribution to model input; None withdraws it. Memory owns final message organization. Creating a plan or marking a step complete is not proof that external work succeeded.
+The host publishes a projection outside its peer chain only after a successful shared checkpoint. Sequential peers can read their chain's provisional projection; unrelated callers read a detached committed view. A failed chain restores the prior projection and managed state. guidance is this plan's contribution to model input; None withdraws it. Memory owns final message organization. Creating a plan or marking a step complete is not proof that external work succeeded.
 
 ## Information and planning interaction
 

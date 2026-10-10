@@ -58,6 +58,27 @@ def accepted():
     return {"accepted": True, "reason": "The description is supported within its stated limits.", "issues": []}
 
 
+async def test_every_collection_stage_uses_the_per_call_timeout(monkeypatch):
+    from experimental.cultivation.collector import collection
+
+    called = []
+    original = collection.exchange
+
+    async def exchange(*args, **options):
+        called.append((options["label"], options["timeout"]))
+        return await original(*args, **options)
+
+    monkeypatch.setattr(collection, "exchange", exchange)
+    provider = Provider(response(ASSESS, assessment()), response(SUBMIT, description()), response(REVIEW, accepted()))
+    result = await collect_information(
+        provider,
+        Request(objective="Describe the expert."),
+        limits=CollectionLimits(timeout=37.5, compose_timeout=173),
+    )
+    assert result.ready
+    assert called == [("assess", 37.5), ("compose", 37.5), ("information.review", 37.5)]
+
+
 def snapshot():
     return Snapshot(
         description=Description.model_validate(description()),

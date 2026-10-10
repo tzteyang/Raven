@@ -1,10 +1,11 @@
 """Bind Curator domain evidence to shared admission and frozen, stage-specific guidance usage."""
 
 from pathlib import Path
+from typing import get_args
 
 from experimental.harness.experience import render
 from experimental.harness.experience.admission import AdmissionPolicy
-from experimental.harness.experience.contracts import GuidanceBundle, GuidanceItem
+from experimental.harness.experience.contracts import GuidanceBundle, GuidanceItem, Phase
 from experimental.harness.experience.governance import Check, Decision, Experience, fingerprint
 from experimental.harness.experience.journal import GovernanceFile
 from experimental.harness.experience.records import RecordAccess
@@ -12,7 +13,7 @@ from experimental.harness.experience.retrieve import ExperienceRetriever, Guidan
 from experimental.harness.experience.state import CandidateRef
 from experimental.harness.experience.store import ExperienceStore, StoreError
 
-PHASES = ("diagnose", "select", "design", "implement", "repair")
+PHASES = tuple(phase for phase in get_args(Phase.__value__) if phase != "understand")
 
 
 class CuratorExperience:

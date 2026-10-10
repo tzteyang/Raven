@@ -18,6 +18,6 @@ Successful information changes use the same session owner that composes the next
 
 ## Collaboration and authoring value
 
-Use StrategyPeers for other owners' public operations or detached views. Do not copy a plan or capability registry. A failure in this owner does not roll back another owner's successful operation.
+Use StrategyPeers for other owners' public operations or detached views. Do not copy a plan or capability registry. One top-level operation and its sequential peer calls commit managed state together. A failed chain restores every owner's managed state; external effects, private attributes and inference costs are not rolled back.
 
 For first customization, connect supplied material to the initialization result, interaction behavior and real model input. For a revision, identify what changes, what information remains, and how old content leaves the current projection. Ordinary memory interaction cannot install or rewrite persistent Skills; Curator decides those resource changes.

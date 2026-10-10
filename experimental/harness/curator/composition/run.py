@@ -13,6 +13,7 @@ from experimental.harness.curator.attribution import AttributionInterruptedError
 from experimental.harness.curator.composition.context import child_observations, execution_turns, merge_sources
 from experimental.harness.curator.composition.requirements import feedback_for
 from experimental.harness.curator.composition.state import COMPOSITION, SCOPE, Progress
+from experimental.harness.curator.generation.models import effective_model, resume_model
 from experimental.harness.curator.generation.run import (
     GapReportedError,
     Generated,
@@ -26,6 +27,7 @@ from experimental.harness.raven_adapter.deployment import child_directory
 from experimental.harness.raven_adapter.inspection import Inspection, file_source, fingerprint
 from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import plain
+from experimental.harness.raven_adapter.probe import exercise_translations
 
 
 def _save(path, state):
@@ -193,6 +195,7 @@ async def improve(
         feedback = state.feedback if feedback is None else feedback
         model = state.model if model is None else model
         observations = state.observations if observations is None else observations
+    model = effective_model(provider, model)
     information_scope(worker, feedback)
     directory = Path(state.directory) if state is not None else worker.root / "curation/scopes" / uuid4().hex
     inputs, executions = {}, {}
@@ -215,7 +218,6 @@ async def improve(
             },
             "feedback": feedback,
             "observations": observations,
-            "model": model,
             **({"experience": experience.identity} if experience is not None else {}),
         }
     )
@@ -230,6 +232,13 @@ async def improve(
         model=model,
         observations=observations,
     )
+    if state.model != model:
+        transition = SimpleNamespace(trace=list(state.model_events), messages=[])
+        changed = resume_model(transition, model, previous=state.model)
+        if changed is not None and changed["previous_model"] != state.model:
+            raise ValueError("the failed model belongs to a separate attributor; replace that attributor's model")
+        state.model_events = transition.trace
+        state.model = model
     if state.error:
         raise GenerationError(f"previous composite curation failed: {state.error}; explicitly restart to replace it")
     for evidence, rows in inputs.items():
@@ -315,8 +324,8 @@ async def improve(
                         scope = f"child-{fingerprint(name)[:12]}-{uuid4().hex[:12]}"
                         state.scopes[name] = scope
                     state.inputs[name] = child_id
-                    directory = Path(state.directory) / scope
-                    evidence = directory / "execution.json"
+                    scope_directory = Path(state.directory) / scope
+                    evidence = scope_directory / "execution.json"
                     if not evidence.exists():
                         _write(evidence, json.dumps(actual["records"], ensure_ascii=False).encode())
                     observed = json.loads(evidence.read_text())
@@ -350,7 +359,7 @@ async def improve(
 
                     subject = SimpleNamespace(
                         baseline=child.baseline,
-                        root=directory,
+                        root=scope_directory,
                         artifact=child.artifact,
                         last_plan=child.plan,
                         commitments=child.commitments,
@@ -369,6 +378,7 @@ async def improve(
                             feedback=relevant,
                             model=model,
                             limits=state.limits_for(scope, limits),
+                            probe=exercise_translations,
                             **({"attributor": attributor} if attributor is not None else {}),
                             observations=(
                                 {
@@ -382,7 +392,7 @@ async def improve(
                             ),
                         )
                     finally:
-                        _surface_attributions(directory, worker.root)
+                        _surface_attributions(scope_directory, worker.root)
                     state.children[name] = result
                     state.inputs[name] = child_id
                     selected[name] = result.candidate
@@ -401,7 +411,9 @@ async def improve(
                 before = worker.revision_id
                 if experience is not None:
                     record["experience_scopes"] = []
-                    for checkpoint in directory.glob("**/curation/candidate.json"):
+                    scopes = ["root", *(state.scopes[name] for name, value in selected.items() if value is not None)]
+                    for scope in scopes:
+                        checkpoint = Path(state.directory) / scope / "curation" / CANDIDATE
                         saved = json.loads(checkpoint.read_text()).get("experience")
                         if saved is not None:
                             experience.validate(saved, inputs=saved["inputs"])
@@ -451,6 +463,7 @@ async def improve(
                         ],
                     ),
                     state.root.trace,
+                    state.root.consistency_review,
                 )
                 record["generated"] = plain(combined)
                 _cleanup(state.directory)
@@ -478,6 +491,10 @@ async def improve(
                 )
                 _save(path, state)
     except GenerationInterruptedError as exc:
+        recent = [row for row in exc.state.trace if row.get("event") in {"model.call", "model.error"}][-2:]
+        state.model_events.extend(recent)
+        if not recent or recent[-1]["event"] != "model.error":
+            state.model_events.append({"event": "model.paused", "model": model, "reason": str(exc)})
         record["paused"] = {
             "stage": "diagnose" if isinstance(exc, AttributionInterruptedError) else exc.state.stage,
             "scope": generating,

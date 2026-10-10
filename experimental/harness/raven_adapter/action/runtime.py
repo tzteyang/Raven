@@ -23,6 +23,7 @@ from experimental.harness.contract.inference import InferenceError
 from experimental.harness.contract.interaction import InteractionScope
 from experimental.harness.contract.preparation import StrategyPreparation
 from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.raven_adapter.calls import transactional
 from experimental.harness.raven_adapter.interaction_tools import interaction_tool
 from experimental.harness.raven_adapter.observe import plain
 from experimental.harness.raven_adapter.strategy import SESSION, BoundStrategy, concrete
@@ -111,6 +112,13 @@ class BoundAction(BoundStrategy):
     def bind(self, runtime):
         self.runtime = runtime
 
+    def snapshot(self):
+        return {**super().snapshot(), "pending": {key: list(items) for key, items in self.pending.items()}}
+
+    def restore_snapshot(self, snapshot):
+        super().restore_snapshot(snapshot)
+        self.pending = snapshot["pending"]
+
     def _key(self):
         scope = self.scope()
         return scope.session_key, scope.turn_id
@@ -166,6 +174,7 @@ class BoundAction(BoundStrategy):
             validate=lambda result: self._validate(result, event.allowed_controls, event.can_guide, event.event_id),
         )
 
+    @transactional
     async def request(self, command, *, origin="agent"):
         if self.request_type is None:
             raise ValueError("this Action has no declared request operation")

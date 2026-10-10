@@ -1,20 +1,21 @@
-"""Exercise a candidate's synchronous translations and its capability selection with synthetic host input before it
-is installed.
+"""Exercise declared strategy operations and the actual Memory input path on copied state.
 
-The host refuses a planning observation translation that changes state, but only when the translation runs; a
-candidate whose `_observe` keeps bookkeeping in its state passes assembly and then stops the worker on its first
-turn. The same holds for a capability selection that names a skill the host does not list as named (a provenance
-string given as the skill's source, say) or a tool it does not offer. This probe runs inside the validation copy
-(`worker.check(candidate, probe=...)`): it drives every declared observation phase once with a synthetic observation
-built from the task, and the capability selection once on the installed catalogue and the runtime's tools, so such a
-candidate fails validation and reaches repair instead of the worker. It leaves no state behind and calls no model
-beyond what the candidate's own selection calls: a translation that returns a command runs that command through the
-candidate's own `interact`, as the runtime would, on the copied state.
+The probe assembles native context for a synthetic task message, initializes Memory,
+checks observation translations, Planning interactions, Action events and Capability
+selection, then uses ModelInput.prepare to run the same projection checks as a real
+model call. It does not request a worker answer; strategy inference may still run.
+Coverage is recorded per operation and does not establish full business correctness.
 """
+
+from uuid import uuid4
 
 from experimental.harness.contract.action import FailureEvent, InputEvent, OutcomeEvent, ProgressEvent, ProposalEvent
 from experimental.harness.raven_adapter.memory.contracts import MemoryObservation
+from experimental.harness.raven_adapter.model_input import ModelInput
 from experimental.harness.raven_adapter.planning.contracts import PlanningObservation
+from experimental.harness.raven_adapter.strategy import SESSION
+from raven.contracts.context import TurnContext
+from raven.contracts.harness import ActionRequest
 
 PROBE = "validation.translation"
 ALL_CONTROLS = ("continue", "reject", "revise", "finish")
@@ -23,10 +24,35 @@ ALL_CONTROLS = ("continue", "reject", "revise", "finish")
 async def exercise_translations(bound) -> None:
     task = getattr(getattr(bound, "baseline", None), "task", None)
     text = getattr(task, "text", "") or "probe"
-    await _planning(bound, text)
-    await _memory(bound, text)
-    await _action(bound, text)
-    await _capability(bound, text)
+    turn_id = f"validation:{uuid4().hex}"
+    token = SESSION.set(turn_id)
+    previous = bound.recorder.turn_id
+    bound.recorder.turn_id = turn_id
+    inference = getattr(bound, "inference", None)
+    try:
+        if inference is not None:
+            inference.observe_window(bound.runtime.loop.context_window_tokens)
+        await _planning(bound, text)
+        frame = await _memory(bound, text)
+        await _action(bound, text)
+        tools = await _capability(bound, text, messages=frame.messages if frame is not None else None)
+        if frame is not None:
+            await ModelInput(None, bound.capability, bound.context_sources, bound.strategies["memory"]).prepare(
+                ActionRequest(
+                    provider=bound.runtime.loop.provider,
+                    messages=frame.messages,
+                    tools=tools,
+                    model=bound.runtime.loop.model,
+                    fallback_models=[],
+                    stream_call=None,
+                )
+            )
+            bound.recorder.add(PROBE, strategy="memory", operation="compose", status="passed")
+    finally:
+        if inference is not None:
+            inference.release(turn_id)
+        bound.recorder.turn_id = previous
+        SESSION.reset(token)
 
 
 def _event(kind, scope, text):
@@ -67,23 +93,35 @@ async def _action(bound, text) -> None:
         bound.recorder.add(PROBE, strategy="action", event=kind, status="passed")
 
 
-async def _memory(bound, text) -> None:
-    """Memory's after-iteration observation translation, without the interaction it may propose: the copied
-    session has no initialized context for one, and the rule under test is the translation's."""
+async def _memory(bound, text):
+    """Initialize Memory from native context before checking its observation translation and final projection."""
     memory = (getattr(bound, "strategies", None) or {}).get("memory")
-    if memory is None or memory.observe is None:
-        bound.recorder.add(PROBE, strategy="memory", status="not_bound" if memory is None else "no_observation")
+    if memory is None:
+        bound.recorder.add(PROBE, strategy="memory", status="not_bound")
         return
-    await memory.prepare()
+    session = SESSION.get()
+    await bound.context_sources.assemble(
+        session,
+        [],
+        bound.runtime.loop.harness.memory.token_budget(),
+        turn=TurnContext(current_message=text, channel="validation", chat_id="strategies"),
+    )
+    frame = bound.context_sources.frame(session)
+    await memory.initialize_context(session, frame)
+    bound.recorder.add(PROBE, strategy="memory", operation="initialize", status="passed")
+    if memory.observe is None:
+        bound.recorder.add(PROBE, strategy="memory", operation="observe", status="not_selected")
+        return frame
     observation = MemoryObservation(
         scope=memory.scope(),
         event_id="validation-probe-after_iteration",
         iteration=0,
-        messages=[{"role": "user", "content": text}, {"role": "assistant", "content": ""}],
+        messages=[*frame.messages, {"role": "assistant", "content": ""}],
         proposal={"content": "", "tool_calls": []},
     )
     memory.translate("observe", memory.observe, observation, output=memory.command_type | None)
     bound.recorder.add(PROBE, strategy="memory", phase="after_iteration", status="passed")
+    return frame
 
 
 async def _planning(bound, text) -> None:
@@ -106,14 +144,20 @@ async def _planning(bound, text) -> None:
         bound.recorder.add(PROBE, strategy="planning", phase=phase, status="passed")
 
 
-async def _capability(bound, text) -> None:
+async def _capability(bound, text, *, messages=None):
     """The capability strategy's selection once, as a turn's first step would ask it; a native selection is not
     candidate code and is not exercised."""
     capability = getattr(bound, "capability", None)
-    if capability is None or capability.config is None:
-        bound.recorder.add(PROBE, strategy="capability", status="not_bound" if capability is None else "native")
-        return
-    await capability.prepare()
+    if capability is None:
+        bound.recorder.add(PROBE, strategy="capability", status="not_bound")
+        return []
     offered = capability.runtime.loop.tools.get_definitions()
-    await capability.select(capability.selection_request(offered, [{"role": "user", "content": text}]))
+    if capability.config is None:
+        bound.recorder.add(PROBE, strategy="capability", status="native")
+        return offered
+    await capability.prepare()
+    selected = await capability.select(
+        capability.selection_request(offered, messages or [{"role": "user", "content": text}])
+    )
     bound.recorder.add(PROBE, strategy="capability", operation="select", status="passed")
+    return offered if selected.tools is None else [row for row in offered if row["function"]["name"] in selected.tools]

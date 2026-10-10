@@ -48,7 +48,9 @@ SOURCES_CHARS = 240_000
 
 @dataclass(frozen=True)
 class CollectionLimits:
-    """Per-stage caps; `total_timeout` bounds the whole collection and `reserve` is kept for composing and review.
+    """`timeout` bounds individual collector model and native-tool calls; named stage caps include retries.
+
+    `total_timeout` bounds the whole collection and `reserve` is kept for composing and review.
 
     A stage's time cap covers its retried replies too: a planning call at high effort on a large evidence packet,
     retried once for malformed arguments, outlasted two minutes, and a planning stage that times out skips research.
@@ -663,7 +665,7 @@ class _Collection:
                 effort=self.effort,
                 max_calls=self.limits.compose_calls,
                 grace=self.limits.grace_calls,
-                timeout=self.limits.compose_timeout,
+                timeout=self.limits.timeout,
                 trace=self.trace,
                 label="compose",
             ),

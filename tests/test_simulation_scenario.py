@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -388,6 +389,79 @@ def test_a_silent_owner_is_refused_unless_every_material_is_handed_over_at_onboa
     assert "--owner-feedback silent needs every material at onboarding" in capsys.readouterr().err
 
 
+def test_simulation_timeout_reaches_the_information_preparer(tmp_path, monkeypatch):
+    from experimental.cultivation.counterpart import owner
+    from experimental.harness.contract import Task
+    from experimental.simulation import __main__ as simulation
+    from raven.config.loader import load_config
+
+    class Prepared(Exception):
+        pass
+
+    class Employee:
+        def __init__(self, contract, config, *, workdir, root, **options):
+            self.root = root
+            home = root / "home"
+            home.mkdir(parents=True)
+            configured = load_config(config)
+            configured.agents.defaults.workspace = str(home)
+            self.baseline = SimpleNamespace(
+                config=configured, workdir=workdir, task=Task(text=contract.situation.profile)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+    prepared = {}
+
+    def prepare(*args, **options):
+        prepared.update(options)
+        raise Prepared
+
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "agents": {"defaults": {"model": "deepseek/x", "provider": "deepseek", "reasoningEffort": "low"}},
+                "providers": {"deepseek": {"apiKey": "test-key"}},
+            }
+        )
+    )
+    monkeypatch.setattr(simulation, "hire", Employee)
+    monkeypatch.setattr(simulation.model_roles, "provider", lambda *_: Provider())
+    monkeypatch.setattr(simulation.caching, "install", lambda: None)
+    monkeypatch.setattr(owner, "warm_catalog_in_background", lambda: None)
+    monkeypatch.setattr(simulation, "scenario_preparer", prepare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "simulation",
+            "--config",
+            str(config),
+            "--state-dir",
+            str(tmp_path / "run"),
+            "--workdir",
+            str(tmp_path / "work"),
+            "--timeout",
+            "37.5",
+            "--information-reviews",
+            "3",
+            "--no-introspection",
+            "--information-research",
+            "none",
+        ],
+    )
+    with pytest.raises(Prepared):
+        cli()
+    limits = prepared["limits"]
+    assert limits.timeout == 37.5 and limits.reviews == 3
+    assert limits.total_timeout == 3600 and limits.compose_timeout == 600
+
+
 def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_credential(tmp_path):
     for chain in CHAINS.values():
         assert chain["deliver"] == "dialog" and chain["disclose"] in ("all", "staged", *Scenario.load(TRAVEL).plans)
@@ -667,11 +741,18 @@ def test_the_employees_curator_is_kept_from_the_simulation_its_judges_and_the_sc
     assert {path.name for path in (exploration.root / "source" / "tests").iterdir()} == {"test_raven_helper.py"}
 
 
-def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path):
+@pytest.mark.parametrize("deliver", ["dialog", "pool"])
+@pytest.mark.parametrize("without", [(), ("plan-deck-sample",)], ids=["complete", "excluded"])
+def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path, deliver, without):
     scenario = Scenario.load(TRAVEL)
+    contract = scenario.contract
+    scenario = scenario.without(without)
     home = tmp_path / "shared-home"
-    (home / "skills" / "brand-design-guide").mkdir(parents=True)
-    (home / "skills" / "brand-design-guide" / "personal.txt").write_text("mine")
+    for directory in ("skills", "uploads"):
+        for name in (*contract.materials, "personal-helper"):
+            folder = home / directory / name
+            folder.mkdir(parents=True)
+            (folder / "personal.txt").write_text("mine")
     (home / "sessions").mkdir()
     (home / "sessions" / "old.jsonl").write_text("{}")
     config = tmp_path / "config.json"
@@ -684,17 +765,70 @@ def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path):
         )
     )
     root = tmp_path / "run"
-    contract = scenario.contract
-    worker = hire(contract, config, workdir=tmp_path, root=root, home=home, guard=Guard("partner", Sealed.of(["x"])))
+    workdir = tmp_path / "work"
+    worker = hire(contract, config, workdir=workdir, root=root, home=home, guard=Guard("partner", Sealed.of(["x"])))
     assert worker.withheld == withheld(contract)
     assert isinstance(worker.provider_factory, GuardedFactory) and worker.provider_factory.guard.role == "partner"
     assert hire(contract, config, workdir=tmp_path, root=tmp_path / "plain", home=home).provider_factory is None
     pool = skills(worker)
     assert pool == root / AREA / HOME / "skills" and (pool / "brand-design-guide" / "personal.txt").is_file()
     assert not (root / AREA / HOME / "sessions").exists()
+    uploads, shared = root / AREA / HOME / "uploads", workdir / "uploads"
+    for name in (*contract.materials, "personal-helper"):
+        folder = shared / name
+        folder.mkdir(parents=True)
+        (folder / "personal.txt").write_text("mine")
+    agency = Agency(scenario, Provider(), pool, workdir=workdir, deliver=deliver, uploads=uploads, shared=shared)
+    agency.prepare()
+    assert agency.released == list(scenario.initial)
+    for place in (pool, uploads, shared):
+        expected = set(scenario.initial) if (place == pool) == (deliver == "pool") else set()
+        assert {name for name in contract.materials if (place / name).exists()} == expected
+        for name in expected:
+            assert (place / name / "SKILL.md").read_bytes() == (scenario.materials[name] / "SKILL.md").read_bytes()
+        assert not any((place / name / "personal.txt").exists() for name in contract.materials)
+        assert (place / "personal-helper" / "personal.txt").read_text() == "mine"
+    for directory in ("skills", "uploads"):
+        assert all((home / directory / name / "personal.txt").read_text() == "mine" for name in contract.materials)
+
+
+@pytest.mark.parametrize("kind", ["file", "symlink"])
+def test_excluded_material_paths_are_removed_without_following_links(tmp_path, kind):
+    scenario = Scenario.load(TRAVEL).without(["plan-deck-sample"])
+    pool = tmp_path / "skills"
+    pool.mkdir()
+    retained = tmp_path / "original-material"
+    retained.mkdir()
+    (retained / "sample.txt").write_text("keep this source")
+    stale = pool / "plan-deck-sample"
+    if kind == "symlink":
+        stale.symlink_to(retained, target_is_directory=True)
+    else:
+        stale.write_text("stale material")
     Agency(scenario, Provider(), pool, workdir=tmp_path, deliver="pool").prepare()
-    assert not (pool / "brand-design-guide").exists() and (pool / "service-sop" / "SKILL.md").is_file()
-    assert (home / "skills" / "brand-design-guide" / "personal.txt").read_text() == "mine"
+    assert not stale.exists() and not stale.is_symlink()
+    assert (retained / "sample.txt").read_text() == "keep this source"
+
+
+def test_initial_material_cleanup_failure_prevents_handover(tmp_path, monkeypatch):
+    scenario = Scenario.load(TRAVEL)
+    pool = tmp_path / "skills"
+    stale = pool / "service-sop" / "personal.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("stale material")
+    unlink = os.unlink
+
+    def refuse_stale_file(path, *args, **kwargs):
+        if Path(path).name == "personal.txt":
+            raise PermissionError("cannot remove stale material")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", refuse_stale_file)
+    agency = Agency(scenario, Provider(), pool, workdir=tmp_path, deliver="pool")
+    with pytest.raises(PermissionError):
+        agency.prepare()
+    assert not agency.released
+    assert not (pool / "service-sop" / "SKILL.md").exists()
 
 
 def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness(tmp_path, monkeypatch):
@@ -724,7 +858,9 @@ def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness
 
 def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_provider(tmp_path, monkeypatch):
     from experimental.cultivation import employee
+    from raven.config.loader import load_config
     from raven.config.schema import ThirdPartyAcpSubagentConfig
+    from raven.providers.endpoints import provider_endpoints
 
     def row(name):
         return ThirdPartyAcpSubagentConfig(name=name, kind="acp", command=f"py /agents/{name}/run.py", enabled=True)
@@ -732,20 +868,41 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
     folder = tmp_path / "product"
     folder.mkdir()
     shipped = {
-        "agents": {"defaults": {"model": "vendor/other", "provider": "ppt", "maxTokens": 9, "reasoningEffort": "max"}},
+        "agents": {
+            "defaults": {
+                "model": "vendor/other",
+                "provider": "ppt",
+                "maxTokens": 9,
+                "reasoningEffort": "max",
+                "temperature": 0.9,
+                "llmCallTimeout": 900,
+            }
+        },
         "providers": {"ppt": {"apiBase": "https://gateway.example/v1"}},
         "acp": {
-            "modes": {"medium": {"reasoningEffort": "low"}, "high": {"reasoningEffort": "high"}},
+            "modes": {
+                "medium": {"name": "Medium", "reasoningEffort": "low"},
+                "high": {"name": "High", "reasoningEffort": "high"},
+            },
             "defaultMode": "high",
         },
         "tools": {"disabledTools": ["spawn"]},
         "plugins": {"config": {"research-flow": {"verify": {"reasoningEffort": "low", "maxTokens": 16384}}}},
     }
     (folder / "config.json").write_text(json.dumps(shipped))
-    monkeypatch.setattr(employee, "discover_product_rows", lambda: [row("Raven-PPT"), row("Raven-Research")])
+    monkeypatch.setattr(
+        employee, "discover_product_rows", lambda: [row("Raven-PPT"), row("Raven-Research"), row("Raven-Oncall")]
+    )
     monkeypatch.setattr(employee, "product_folder", lambda name: folder)
+    connection = {
+        "apiKey": "ds-key",
+        "apiBase": "https://employee-gateway.example/v1",
+        "extraHeaders": {"X-Route": "employee"},
+        "protocol": "chat",
+        "modelProtocols": {"deepseek/deepseek-flash": "chat"},
+    }
     settings = {
-        "providers": {"deepseek": {"apiKey": "ds-key"}},
+        "providers": {"deepseek": connection},
         "permissions": {"mode": "full", "judgeTimeoutSeconds": 60},
         "acp": {"defaultMode": "medium"},
         "tools": {"restrictToWorkspace": True},
@@ -768,7 +925,11 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
         subagent_model="deepseek/deepseek-flash",
     )
     rows = {item.name: item for item in worker.baseline.config.subagents.agents}
-    for name, secret in (("Raven-PPT", "PPT_API_KEY"), ("Raven-Research", "RESEARCH_API_KEY")):
+    for name, secret in (
+        ("Raven-PPT", "PPT_API_KEY"),
+        ("Raven-Research", "RESEARCH_API_KEY"),
+        ("Raven-Oncall", "ONCALL_API_KEY"),
+    ):
         copy = tmp_path / "run" / AREA / "deployment" / f"{name.lower()}.json"
         written = json.loads(copy.read_text())
         assert rows[name].env[secret] == "ds-key" and rows[name].command.endswith(f"--config {copy}")
@@ -778,13 +939,24 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
             "maxTokens": 9,
             "reasoningEffort": "low",
             "contextWindowTokens": 1048576,
+            "temperature": 0.9,
+            "llmCallTimeout": 900,
         }
-        assert written["providers"]["deepseek"] == {"apiKey": "ds-key"} and copy.stat().st_mode & 0o777 == 0o600
+        assert written["providers"]["deepseek"] == {**connection, "models": ["deepseek/deepseek-flash"]}
+        assert copy.stat().st_mode & 0o777 == 0o600
+        restored = load_config(copy)
+        assert restored.get_api_base() == connection["apiBase"]
+        assert restored.get_provider().extra_headers == connection["extraHeaders"]
+        assert provider_endpoints(restored.get_provider()) == provider_endpoints(
+            worker.baseline.config.providers.deepseek
+        )
+        assert restored.agents.defaults.temperature == 0.9 and restored.agents.defaults.llm_call_timeout == 900
         assert written["permissions"] == {"mode": "full", "judgeTimeoutSeconds": 60.0}
         # The shipped high tier would run every deck call at high effort over the pinned low one.
         assert written["acp"]["defaultMode"] == "medium"
-        # A product's shell reaches past the run's bounds, so products run without one.
-        assert written["tools"]["disabledTools"] == ["spawn", "ask_user", "exec"]
+        assert written["tools"]["disabledTools"] == (
+            ["spawn", "ask_user"] if name == "Raven-Oncall" else ["spawn", "ask_user", "exec"]
+        )
         # The employee's workspace fence goes along: a product reads only its home and the session's workdir.
         assert written["tools"]["restrictToWorkspace"] is True
         # A thinking DeepSeek model refuses the verify gate's forced verdict call, and the gate then passes every draft.

@@ -27,6 +27,7 @@ from experimental.harness.curator.attribution import (
     subjects,
 )
 from experimental.harness.curator.generation.context.collect import collect
+from experimental.harness.curator.generation.models import resume_model
 from experimental.harness.curator.generation.run import GenerationError, GenerationInterruptedError, Limits, generate
 from experimental.harness.curator.generation.state import GenerationState
 from experimental.harness.raven_adapter.exploration import Exploration, Withheld
@@ -244,6 +245,16 @@ def _pending(worker, *, repair, resume, attribution_only):
         pending["state"]["validation"] = plain(repair)
         pending["state"]["stage"] = "repair"
         pending["state"]["messages"] = []
+        pending["state"]["consistency_review"] = None
+        pending["state"]["trace"].append(
+            {
+                "stage": "validate",
+                "event": "validation",
+                "source": "composition",
+                "errors": repair.errors,
+                "observations": repair.observations,
+            }
+        )
         pending["state"]["repairs"] += 1
     if pending is not None and not resume:
         shutil.rmtree(pending["workspace"], ignore_errors=True)
@@ -450,8 +461,12 @@ async def _generate_local(
             running = effective_model(provider, model)
             if state is not None:
                 state.check(context, limits)
+                transition = resume_model(state, running, previous=pending.get("model"), check=True)
+                identity = chosen.identity(running)
+                if transition and isinstance(chosen, ModelAttributor) and chosen.model is None and state.attribution:
+                    identity = {**identity, "model": state.attribution.identity.get("model")}
                 if (attribution is not None or attributor is not None) and (
-                    state.attribution is None or chosen.identity(running) != state.attribution.identity
+                    state.attribution is None or identity != state.attribution.identity
                 ):
                     raise ValueError(
                         "the attribution or its attributor changed; cannot resume this generation (resume=False "
@@ -532,7 +547,7 @@ async def _generate_local(
                             "workspace": str(workspace),
                             "feedback": feedback,
                             "observations": supplied_observations,
-                            "model": model,
+                            "model": running,
                             "limits": asdict(limits),
                             **_experience_fields(experience_snapshot, record),
                             **(
@@ -578,7 +593,7 @@ async def _generate_local(
                         "workspace": str(workspace),
                         "feedback": feedback,
                         "observations": supplied_observations,
-                        "model": model,
+                        "model": running,
                         **_experience_fields(experience_snapshot, record),
                         "state": completed.model_dump(mode="json"),
                     },

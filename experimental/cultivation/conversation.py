@@ -3,6 +3,7 @@
 from typing import Protocol
 from uuid import uuid4
 
+from experimental.harness.participation.compartment import Compartment
 from experimental.harness.participation.hearing import opaque
 from experimental.harness.participation.protocols import Exchange, Sessions
 from experimental.harness.raven_adapter.worker import TurnTimeoutError
@@ -27,7 +28,8 @@ class Conversation:
         """Each run is a fresh worker session, so rounds do not continue one another's history; its key carries the
         conversant's opaque label, not its name, since the worker's records reach the Curator. A turn that ran
         past the worker's timeout, or that the worker ended without answering, ends the conversation with that turn
-        kept as it got: the conversant had no answer, which is for the assessors to judge (`Exchange.stopped`)."""
+        kept as it got: the conversant had no answer, which is for the assessors to judge (`Exchange.stopped`).
+        Only this conversation's actual user exchanges authorize speech in the partner compartment."""
         exchanges, session_key = [], f"curator:{opaque(self.conversant.name)}:{uuid4().hex}"
         away = {"away": pause} if (pause := getattr(self.conversant, "pause", 0)) else {}
         for _ in range(self.max_turns):
@@ -35,7 +37,8 @@ class Conversation:
             if text is None:
                 break
             try:
-                execution = await worker.run(text, session_key=session_key, **away)
+                with Compartment("partner", spoken=[tuple([*(exchange.user for exchange in exchanges), text])]):
+                    execution = await worker.run(text, session_key=session_key, **away)
             except TurnTimeoutError as exc:
                 exchanges.append(Exchange(text, exc.execution))
                 break

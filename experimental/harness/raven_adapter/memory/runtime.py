@@ -9,7 +9,7 @@ from experimental.harness.contract.context import CompactionRequest, ContextRequ
 from experimental.harness.contract.declaration import typed
 from experimental.harness.contract.interaction import InteractionRequest, InteractionScope
 from experimental.harness.contract.strategies import MemoryStrategy
-from experimental.harness.raven_adapter.calls import interaction_mode, strategy_method
+from experimental.harness.raven_adapter.calls import interaction_mode, strategy_method, transactional
 from experimental.harness.raven_adapter.context_sources import message_text
 from experimental.harness.raven_adapter.inspection import fingerprint
 from experimental.harness.raven_adapter.interaction_tools import interaction_tool
@@ -33,6 +33,8 @@ class BoundMemory(BoundStrategy):
     cannot mutate either checkpoint. Initialization uses an actual source
     snapshot once per active owner, after resources and the session are known.
     """
+
+    transaction_fields = ("initialized",)
 
     def __init__(
         self, config, task, path, package, recorder, *, infer=None, plan=None, peers=None, scope=None, host=None
@@ -99,6 +101,7 @@ class BoundMemory(BoundStrategy):
         if self.config.require_sources and not sources.structured:
             raise ValueError("memory initialization requires a source-aware context engine")
 
+    @transactional
     async def initialize_context(self, session_key, frame):
         if self.config.require_sources and not frame.structured:
             raise ValueError("memory initialization requires actual context sources")

@@ -256,14 +256,15 @@ def sealed_for(scenario: Scenario, role: Role) -> Sealed:
         (visible if role in case.visibility else hidden).append(case.text)
         if role not in case.visibility:
             tokens.append(case.id)
-        if case.expected and not scenario.visible(f"case.expected:{case.id}", role):
-            hidden.append(case.expected)
+        if case.expected:
+            (visible if scenario.visible(f"case.expected:{case.id}", role) else hidden).append(case.expected)
     for material in scenario.materials.values():
         (visible if role in material.visibility else hidden).extend(contents(material.path)[0].values())
     if scenario.visible("profile", role):
         visible.append(scenario.situation.profile)
-    if not scenario.visible("aids", role):
-        hidden.extend(text for text in (scenario.aids.rulers, scenario.aids.labels) if text)
+    (visible if scenario.visible("aids", role) else hidden).extend(
+        text for text in (scenario.aids.rulers, scenario.aids.labels) if text
+    )
     visible.extend(text for text in (scenario.exchange.onboarding, scenario.exchange.handover) if text)
     return Sealed.of(hidden, visible=visible, tokens=tokens)
 

@@ -21,7 +21,7 @@ from experimental.harness.assessor.validation import evidence_fingerprint, finge
 from experimental.harness.curator.generation.run import GapReportedError, GenerationInterruptedError
 from experimental.harness.curator.generation.run import Limits as CuratorLimits
 from experimental.harness.curator.workflow import PENDING, improve
-from experimental.harness.loop.history import Entry, entry
+from experimental.harness.loop.history import Entry, entry, read_history
 from experimental.harness.loop.ledger import mark
 from experimental.harness.loop.records import Cultivation
 from experimental.harness.participation.audience import project
@@ -277,7 +277,9 @@ class Session:
         if record.get("experience") != session.record.get("experience"):
             raise ValueError("the session must resume with its original experience scope and policy")
         session.rounds.extend(_round(item) for item in record["rounds"])
-        session.history.extend(Entry.model_validate(row) for row in record.get("history", ()))
+        session.history.extend(
+            read_history({**record, "history": record.get("history", ())}, measuring=session.measuring)
+        )
         session.external_requirements.extend(
             ExternalRequirement.model_validate(row) for row in record.get("external_requirements", ())
         )
@@ -887,7 +889,7 @@ class Session:
         self.history.append(
             entry(
                 len(self.rounds),
-                self.rounds[-1].signals,
+                self._acted(self.rounds[-1].signals),
                 self.rounds[-1].feedback,
                 plan,
                 self.review.activity,

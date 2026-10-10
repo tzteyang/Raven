@@ -199,7 +199,7 @@ async def test_unavailable_optional_memory_stays_disabled_for_the_frozen_curatio
         path = worker.root / "curation/pending.json"
         assert "experience_unavailable" in json.loads(path.read_text())
         resumed = Provider(response("submit_selection", selection()))
-        await improve(worker, resumed, experience=owner, limits=Limits(max_calls=2))
+        await improve(worker, resumed, experience=owner, limits=Limits(max_calls=3))
         assert not any(
             "Experience usage" in str(row["content"]) for request in resumed.requests for row in request["messages"]
         )

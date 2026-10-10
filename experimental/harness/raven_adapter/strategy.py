@@ -1,7 +1,6 @@
 """Shared typed calls and checkpoints kept per session or per task; strategy behavior stays in its owner."""
 
 import asyncio
-import json
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
@@ -14,9 +13,9 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from experimental.harness.contract.declaration import parse_as, schema_for, typed
 from experimental.harness.contract.preparation import PreparationRequest
-from experimental.harness.raven_adapter.calls import OperationGroup, owner_operation
+from experimental.harness.raven_adapter.calls import OperationGroup, owner_operation, transactional
+from experimental.harness.raven_adapter.checkpoints import Checkpoints
 from experimental.harness.raven_adapter.inference import strategy_factory
-from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import _copy_observation
 from experimental.harness.raven_adapter.targets import EntryPoint
 from raven.permissions.turn import current_turn
@@ -90,20 +89,21 @@ class Scope:
 
 
 class Scopes:
-    """One owner's JSON state per session, or one for the task, saved together in a single checkpoint file.
+    """One owner's partition of the Harness checkpoint, separated by session or task.
 
     Outside any session (binding, inspection, tests) the default scope is used. A session's scope is opened
     on first use with its own owner instance, so conversations never read or change each other's state.
     """
 
-    def __init__(self, name, task, path: Path, open_owner, *, per_session: bool):
-        self.task, self.path, self.open_owner, self.per_session = task, path, open_owner, per_session
-        saved = json.loads(path.read_text()) if path.exists() else {"task_id": task.id, "data": {}}
-        if saved["task_id"] != task.id:
-            raise ValueError(f"{name} checkpoint belongs to another task")
+    def __init__(self, name, task, path: Path, open_owner, *, per_session: bool, checkpoints=None):
+        self.name, self.task, self.open_owner, self.per_session = name, task, open_owner, per_session
+        self.checkpoints = checkpoints or Checkpoints(path.parent, task.id)
+        self.path = self.checkpoints.path
+        loaded = self.checkpoints.read(name)
+        saved = loaded if loaded is not None else {"data": {}}
         self.saved = dict(saved.get("sessions", {}))
         self.shared = parse_as(dict[str, JsonValue], saved.get("shared", {}), strict=True)
-        if path.exists():
+        if loaded is not None:
             self.saved[None] = saved["data"]
         self.open: dict[str | None, Scope] = {}
 
@@ -125,27 +125,48 @@ class Scopes:
             key: deepcopy(data) for key, data in self.saved.items() if key is not None and key not in self.open
         }
 
-    def save(self):
+    def record(self):
+        saved = deepcopy(self.saved)
         for key, scope in self.open.items():
-            self.saved[key] = parse_as(dict[str, JsonValue], scope.state, strict=True)
-        record = {"task_id": self.task.id, "data": self.saved.get(None, {})}
+            saved[key] = parse_as(dict[str, JsonValue], scope.state, strict=True)
+        record = {"data": saved.get(None, {})}
         if self.shared:
             record["shared"] = parse_as(dict[str, JsonValue], self.shared, strict=True)
-        if sessions := {key: data for key, data in self.saved.items() if key is not None}:
+        if sessions := {key: data for key, data in saved.items() if key is not None}:
             record["sessions"] = sessions
-        content = json.dumps(record, sort_keys=True, ensure_ascii=False).encode()
-        if not self.path.exists() or self.path.read_bytes() != content:
-            _write(self.path, content)
+        return record
+
+    def save(self):
+        self.checkpoints.save({self.name: self.record()})
+
+    def snapshot(self):
+        return {
+            "shared": deepcopy(self.shared),
+            "open": {
+                key: (scope, deepcopy(scope.state), scope.owner, scope.resuming) for key, scope in self.open.items()
+            },
+        }
+
+    def restore_snapshot(self, snapshot):
+        self.shared.clear()
+        self.shared.update(snapshot["shared"])
+        self.open = {key: scope for key, (scope, _, _, _) in snapshot["open"].items()}
+        for scope, state, owner, resuming in snapshot["open"].values():
+            scope.state.clear()
+            scope.state.update(state)
+            scope.resuming = resuming
+            scope.owner = owner
 
 
 class BoundStrategy:
     """Validate operations, detach arguments and checkpoint one strategy's state.
 
-    This is a call boundary, not a scheduler or a dependency container. A failed
-    operation restores only its owned JSON mapping; external effects cannot be
-    rolled back. The live owner stays in place so installed delegates retain
-    their identity. Concrete adapters select which operations are read-only.
+    A failed peer chain restores every participating managed state partition;
+    external effects and private owner attributes are not checkpointed. Live
+    owners stay in place so installed delegates retain their identity.
     """
+
+    transaction_fields = ()
 
     def __init__(
         self,
@@ -189,7 +210,10 @@ class BoundStrategy:
                 shared=self.scopes.shared if shared_state else None,
             ),
             per_session=per_session,
+            checkpoints=self.operations.storage(path, task.id),
         )
+        self.path = self.scopes.path
+        self.operations.owners.append(self)
         self.types = {}
         for operation in (*protocol.__abstractmethods__, *optional):
             expected = getattr(protocol, operation)
@@ -231,8 +255,21 @@ class BoundStrategy:
             self.scopes.shared.update(deepcopy(shared))
 
     def save(self):
-        self.scopes.save()
+        if self.operations.snapshots is None:
+            self.operations.save()
 
+    def snapshot(self):
+        return {
+            "scopes": self.scopes.snapshot(),
+            **{name: deepcopy(getattr(self, name)) for name in self.transaction_fields},
+        }
+
+    def restore_snapshot(self, snapshot):
+        self.scopes.restore_snapshot(snapshot["scopes"])
+        for name in self.transaction_fields:
+            setattr(self, name, snapshot[name])
+
+    @transactional
     async def prepare(self):
         self.save()
 
@@ -287,7 +324,6 @@ class BoundStrategy:
                     validate(result)
                 if readonly and (self.state != before or self.scopes.shared != shared):
                     raise ValueError(f"read-only {self.name}.{operation} changed retained state")
-                self.save()
             except BaseException as exc:
                 self.restore(before, shared)
                 self.recorder.add(

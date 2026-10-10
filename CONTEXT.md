@@ -128,13 +128,17 @@ materials satisfy, and a case is what the bench plays.
 Experimental generation of a worker's Harness from its task, the materials handed to it and
 feedback. The `contract/` package supplies one host-owned `Declaration` for model schemas, grants
 and artifact checks; a `Candidate` carries both baseline and contract identity. `generation/`
-runs bounded understand, select, design, implement and repair stages with read-only source
+runs bounded select, design, implement, consistency_review and repair stages with read-only source
 queries; `Limits.stage_queries`, when set, caps what one stage may spend of the query pool, and the
 budget note, kept in the conversation so each request begins with the previous one, asks for a
-submission once half of it is spent. Validation of a candidate runs `raven_adapter/probe.py`'s
+submission once half of it is spent. Every host-validated candidate receives a version-bound
+Harness consistency review. Blocking findings re-enter the same bounded repair loop;
+repaired candidates require fresh validation and consistency review.
+Validation of a candidate runs `raven_adapter/probe.py`'s
 `exercise_translations` inside the validation copy: every declared planning observation phase is driven
-once with a synthetic observation, so a translation that keeps state fails validation and reaches repair
-instead of the worker. `raven_adapter/` inspects actual
+once with a synthetic observation. It also assembles native context, initializes Memory
+and runs the same `ModelInput.prepare` projection path used before provider calls,
+so lost protected input fails validation before installation. `raven_adapter/` inspects actual
 assembly, binds generated code through native sockets and records execution in a persistent
 worker process; its `targets/` owns native authoring entries. A `Target` carries `knowledge`
 (protocol, binding, host class, its reference pages and known pitfalls, sent in full with the
@@ -151,6 +155,22 @@ root's node requirements, checked and activated together. Children run through
 `raven_adapter/hosting/acp.py` on the native ACP/RPC turn pipeline; a `Child` in
 `raven_adapter/deployment.py` holds a host-provided baseline, its active artifact, authoring
 grants and prior plan.
+After a recorded provider failure, explicit model replacement can resume attribution,
+generation or composition at a fresh request boundary without replaying accepted work.
+Input, source and contract identities and consumed budgets still apply. The trace records
+each actual model and the reason for a replacement; accepted attribution keeps its original
+identity. Budget pauses alone do not authorize reusing progress with another model.
+
+**Harness consistency review** (`experimental/harness/curator/generation/stages/consistency_review.py`):
+The `consistency_review` stage examines one scope's complete effective Harness for conflicts
+across strategies and shared dependencies, incompatibilities between new and retained behavior,
+and contradictions between executable paths and the current plan or Harness commitments.
+`ConsistencyReview` binds its report to the current candidate and covers every listed surface,
+including unchanged strategies and native behavior. `submit_consistency_review` records evidence,
+corrections and blocking decisions; implementation changes remain the repair stage's responsibility.
+Limitations are separate from blockers, and incomplete business improvement alone does not block
+delivery. This review does not establish consistency of the final root-and-children composition.
+_Avoid_: generic code-quality review, or a global review of all Harness scopes.
 
 **Strategy interaction** (`experimental/harness/contract/interaction.py`):
 A concrete domain command inside an `InteractionRequest`, whose `InteractionScope`
@@ -158,10 +178,17 @@ identifies the host Harness, task, revision, session and turn. Model tools expos
 the command schema and query/command mode; the adapter supplies identity and provenance. `StrategyPeers`
 provides named cross-owner operations and detached views. Read-only operations cannot
 request peer writes, and awaited owner cycles are rejected before acquiring a lock.
+One top-level operation and its sequential peers commit their managed JSON state together
+to `strategies.json`; exceptions, cancellation, invalid results and failed persistence
+restore the chain's state, initialization and pending projections or controls. Existing
+per-owner checkpoints are imported when the aggregate checkpoint is first created.
+The chain can read its provisional projections; other callers see the prior committed
+view. Private owner attributes, external effects, audit records and inference usage
+are outside this rollback boundary.
 
 **Planning projection** (`experimental/harness/contract/planning.py`):
 The concrete plan view and optional model guidance returned by Planning initialization
-and interactions. A command publishes it only after its checkpoint succeeds; a query
+and interactions. A command publishes it outside its peer chain only after the shared checkpoint succeeds; a query
 cannot change it. Consumers read a detached committed view, and restored session owners
 reconstruct the projection through initialization. Business replies are separate from
 the projection; rejecting a proposal can legitimately record a blocker. A partial plan
@@ -286,10 +313,11 @@ to a customer.
 
 **Mechanism attribution** (`experimental/harness/curator/attribution/`):
 The Curator's diagnosis, before it changes anything, of where each input stands in the current
-Harness: the responsible mechanism and its state from a closed set (`absent`, `not_exposed`,
+Harness: the responsible mechanism and its state from a closed set (`adequate`, `absent`, `not_exposed`,
 `not_triggered`, `not_consumed`, `wrong_logic`, `blocked`, `model_ignored`, `uncovered`), with the
 evidence. It is its own step with its own budget, resumable state and record; `ModelAttributor`, the
-default, runs on the Curator's model, and any `Attributor` may replace it.
+default, runs on the Curator's model, and any `Attributor` may replace it. `adequate` records evidence that
+the current mechanism already handles the input adequately; it does not require a code change.
 
 **Typed history** (`experimental/harness/loop/history.py`, `ledger.py`):
 Per round, the behavior requirements raised, the Curator's diagnoses and changes with the scope they

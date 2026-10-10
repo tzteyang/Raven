@@ -401,7 +401,9 @@ def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]
             **({"contextWindowTokens": defaults.context_window_tokens} if defaults.context_window_tokens else {}),
         }
     )
-    product.setdefault("providers", {})[provider] = {"apiKey": key}
+    product.setdefault("providers", {})[provider] = settings.model_dump(
+        mode="json", by_alias=True, exclude_defaults=True
+    )
     tier = config.acp.default_mode
     if tier and tier in ((product.get("acp") or {}).get("modes") or {}):
         product["acp"]["defaultMode"] = tier

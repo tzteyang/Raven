@@ -120,12 +120,23 @@ def shape(record):
 
 @pytest.mark.asyncio
 async def test_measurement_only_signals_stay_out_of_analysis_curation_history_and_stop(tmp_path, curations, analyses):
-    analyses.scripted.extend([CURATE, CONTINUE])
+    from experimental.harness.loop.records import cultivation
+    from experimental.harness.participation.protocols import Item
+
+    analyses.scripted.extend([CURATE, CURATE, CONTINUE])
     worker = FakeWorker(tmp_path)
     session = Session.open(worker, object(), measuring={"agency"})
     assert await session.onboard()
     await session.trial(student("Plan a trip", "Cheap please"))
-    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    session.signal(
+        Signal(
+            "agency",
+            "PRIVATE_MEASUREMENT_ONLY",
+            satisfied=False,
+            authority="external",
+            items=(Item("private-check", "fail", "private-session"),),
+        )
+    )
     await session.assess(Verifier(failing("Ask the budget.")))
     assert (await session.analyse()).next == "curate"
     assert all(signal.source != "agency" for signal in analyses.calls[-1]["signals"])
@@ -133,14 +144,31 @@ async def test_measurement_only_signals_stay_out_of_analysis_curation_history_an
     assert any(signal.source == "agency" for signal in session.rounds[-1].signals)
     assert await session.curate()
     assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(curations[-1]["feedback"])
+    assert all("agency" not in item.satisfied for item in session.history)
+    assert all("agency" not in item.results and "agency" not in item.failed_in for item in session.history)
     await session.trial(student("Plan again", "Cheap please"))
     session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(failing("Ask again.")))
+    assert await session.analyse() == Outcome("curate")
+    assert all("agency" not in item.satisfied for item in analyses.calls[-1]["history"])
+    assert await session.curate()
+    assert all("agency" not in item["satisfied"] for item in curations[-1]["feedback"]["history"])
+    await session.trial(student("Final plan"))
     await session.assess(Verifier(passing()))
     assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    record = json.loads(session.path.read_text())
+    record["history"][0]["satisfied"]["agency"] = False
+    record["history"][0]["results"]["agency"] = {"private-check": "fail"}
+    record["history"][0]["failed_in"]["agency"] = {"private-check": "private-session"}
+    session.path.write_text(json.dumps(record))
     restored = Session.resume(worker, object(), session.path)
     assert restored.measuring == frozenset({"agency"})
     assert all(signal.source != "agency" for signal in restored.previous_signals)
     assert not restored.external_requirements
+    prior = cultivation(session.path)
+    for item in (*restored.history, *prior.history):
+        assert "agency" not in item.satisfied and "agency" not in item.results and "agency" not in item.failed_in
+    assert json.loads(session.path.read_text())["rounds"][0]["signals"][0]["source"] == "agency"
 
 
 @pytest.mark.asyncio

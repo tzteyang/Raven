@@ -22,6 +22,10 @@ class ReplayProvider(LLMProvider):
         self.responses = list(deepcopy(responses))
 
     async def chat(self, messages, tools=None, model=None, **kwargs):
+        from tests.test_harness_curator_generation import consistency_review_response
+
+        if (reviewed := consistency_review_response(messages)) is not None:
+            return reviewed
         return self.responses.pop(0) if self.responses else LLMResponse(content="done")
 
     def get_default_model(self):
@@ -170,6 +174,42 @@ async def test_worker_inspection_and_conversation_survive_multiple_turns(baselin
         requests = [row for row in second.records if row["kind"] == "provider.request"]
         assert "cobalt" in str(requests[0])
     assert worker._process is None
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restart", [False, True])
+async def test_conversant_speech_reaches_the_guard_in_the_worker_process(baseline, tmp_path, restart):
+    from experimental.cultivation.conversation import Conversation
+    from experimental.harness.participation.compartment import Guard, GuardedFactory
+    from experimental.harness.scenario.sealed import Sealed
+
+    spoken = (
+        "We are a family of two adults and one child with a budget of eight thousand.",
+        "We want a quiet hotel near the central station with a swimming pool for the child.",
+    )
+    guard = Guard("partner", Sealed.of(spoken), log=tmp_path / "boundaries.jsonl")
+    worker = Worker(baseline, tmp_path / "runtime", provider_factory=GuardedFactory(replay_provider, guard), timeout=30)
+
+    class Customer:
+        name = "customer"
+
+        async def speak(self, exchanges):
+            if len(exchanges) == len(spoken):
+                return None
+            if exchanges and restart:
+                await worker.close()
+                await worker.start()
+            return spoken[len(exchanges)]
+
+    async with worker:
+        sessions = await Conversation(Customer()).run(worker)
+    exchanges = sessions["customer"]
+    assert len(exchanges) == 2
+    assert all(not exchange.execution.errors and exchange.execution.text == "done" for exchange in exchanges)
+    requests = [row for row in exchanges[-1].execution.records if row["kind"] == "provider.request"]
+    assert all(text in str(requests) for text in spoken)
+    assert not guard.log.exists()
 
 
 COMPOSED_CODE = """

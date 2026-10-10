@@ -5,6 +5,7 @@ import json
 import pickle
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
@@ -256,6 +257,39 @@ def test_a_sealed_text_written_over_several_lines_is_found_inside_a_packet_sent_
     assert guard.scan([{"role": "user", "content": "{not json at all"}]) == []
 
 
+@pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("payload", [{"case-7": "fail"}, {"rows": [{"case-7": {"result": "fail"}}]}])
+async def test_restricted_mapping_keys_are_stopped_before_the_provider(encoded, payload):
+    inner = make_provider()
+    provider = Guard("curator", Sealed.of([], tokens=["case-7"])).provider(inner)
+    with pytest.raises(BoundaryError, match="case-7"):
+        await provider.chat([{"role": "user", "content": json.dumps(payload) if encoded else payload}])
+    assert inner.calls == []
+
+
+@pytest.mark.parametrize("kind", ["text", "input_text", "output_text"])
+@pytest.mark.parametrize("encoded", [False, True])
+async def test_contiguous_text_parts_are_checked_as_the_complete_message(kind, encoded):
+    hidden = "The hidden customer only reveals the available budget after the employee asks twice about the trip."
+    parts = [{"type": kind, "text": word + " "} for word in hidden.split()]
+    inner = make_provider()
+    provider = Guard("curator", Sealed.of([hidden])).provider(inner)
+    with pytest.raises(BoundaryError, match="sealed text"):
+        await provider.chat([{"role": "user", "content": json.dumps(parts) if encoded else parts}])
+    assert inner.calls == []
+
+
+def test_text_parts_join_split_words_but_fields_and_speakers_stay_separate():
+    hidden = "The hidden customer only reveals the available budget after the employee asks twice about the trip."
+    guard = Guard("curator", Sealed.of([hidden], tokens=["case-7"]))
+    assert guard.scan([{"type": "text", "text": "case-"}, {"type": "text", "text": "7"}]) == ["case-7"]
+    words = hidden.split()
+    parts = [" ".join(words[:8]), " ".join(words[8:])]
+    assert guard.scan([{"type": "text", "text": part} for part in parts]) == ["<sealed text>"]
+    assert guard.scan({"first": parts[0], "second": parts[1]}) == []
+    assert guard.scan([{"role": "user", "content": part} for part in parts]) == []
+
+
 def test_a_window_weighs_as_much_in_chinese_as_in_english():
     check = "Every day follows the itinerary template with morning, afternoon and evening blocks and a backup."
     assert Sealed.of([check]).hits("The plan should use the itinerary template for every day.") == []
@@ -287,6 +321,44 @@ def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_w
     assert counterpart.tokens == frozenset({"travel_agency"})
     with pytest.raises(ValueError, match="unknown role"):
         sealed_for(scenario, "owner")
+
+
+def test_visible_expected_answers_participate_in_the_visibility_difference():
+    from experimental.harness.scenario.contract import Case, Exchange, Scenario, Situation, Statements
+
+    shared = "The answer must name every passenger and quote the complete cost before confirming the reservation."
+    hidden = "Only if asked twice reveal the private reason for cancelling the earlier journey with this agency."
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(
+            profile="Help the customer.", cases=(Case(id="sample", text=f"{shared} {hidden}", expected=shared),)
+        ),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+    )
+    assert scenario.visible("case.expected:sample", "analyst")
+    assert sealed_for(scenario, "analyst").hits(shared) == []
+    assert sealed_for(scenario, "analyst").hits(hidden) == ["<sealed text>"]
+    assert sealed_for(scenario, "partner").hits(shared) == ["<sealed text>"]
+
+
+def test_visible_aids_participate_in_the_visibility_difference():
+    from experimental.harness.scenario.contract import Aids, Case, Exchange, Scenario, Situation, Statements
+
+    shared = "The answer must name every passenger and quote the complete cost before confirming the reservation."
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(
+            profile="Help the customer.", cases=(Case(id="sample", text=shared, visibility=frozenset()),)
+        ),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+        aids=Aids(rulers=shared),
+    )
+    assert sealed_for(scenario, "counterpart").hits(shared) == []
+    assert sealed_for(scenario, "analyst").hits(shared) == ["<sealed text>"]
 
 
 @pytest.mark.asyncio
@@ -380,22 +452,77 @@ async def test_the_partners_guard_lets_the_conversants_words_through_but_not_a_l
     inner = make_provider()
     partner = Guard("partner", sealed, "abort", tmp_path / "boundaries.jsonl").provider(inner)
     spoken = "We are a family of two adults and one child with a budget of 8000."
-    await partner.chat(
-        [
-            {"role": "system", "content": "You are a travel consultant."},
-            {"role": "user", "content": [{"type": "text", "text": spoken}]},
-            {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
-        ]
-    )
+    request = [
+        {"role": "system", "content": "You are a travel consultant."},
+        {"role": "user", "content": [{"type": "text", "text": spoken}]},
+        {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
+    ]
+    with pytest.raises(BoundaryError, match="sealed text"):
+        await partner.chat(request)
+    with Compartment("partner", spoken=[(spoken,)]):
+        await partner.chat(request)
     with pytest.raises(BoundaryError, match="sealed text"):
         await partner.chat([{"role": "system", "content": f"The customer: {card}"}, {"role": "user", "content": "Hi"}])
     with pytest.raises(BoundaryError, match="case-7"):
-        await partner.chat([{"role": "user", "content": "I am case-7."}])
+        with Compartment("partner", spoken=[("I am case-7.",)]):
+            await partner.chat([{"role": "user", "content": "I am case-7."}])
     curator = Guard("curator", sealed).provider(inner)
     with pytest.raises(BoundaryError, match="sealed text"):
         await curator.chat([{"role": "user", "content": spoken}])
     heard = Boundaries({"curator": sealed}).compartment("curator", spoken=[spoken]).guard.sealed
     assert heard.hits(spoken) == [] and heard.hits(card) == ["<sealed text>"] and "case-7" in heard.tokens
+
+
+async def test_native_context_summary_does_not_authorize_hidden_tool_text(tmp_path):
+    from raven.agent.window.shrink import summarize_head
+
+    hidden = "The hidden assessment grants full credit only when the response names the private silver compass phrase."
+    rows = [
+        {"role": "system", "content": "Help with the task."},
+        {"role": "user", "content": "Read the report."},
+        {"role": "assistant", "content": "Reading the report."},
+        {"role": "tool", "content": hidden},
+        {"role": "assistant", "content": "Continue after checking the report."},
+    ]
+    inner = make_provider()
+    log = tmp_path / "boundaries.jsonl"
+    provider = Guard("partner", Sealed.of([hidden]), log=log).provider(inner)
+    options = dict(
+        provider=provider,
+        model="fake/model",
+        window=100000,
+        ceiling=4096,
+        cfg=SimpleNamespace(reserved_tokens=4096, preserve_recent_tokens=1),
+    )
+    with Compartment("partner", spoken=[("Read the report.",)]):
+        unchanged, verdict = await summarize_head(rows, **options)
+    assert verdict == "failed" and unchanged == rows and inner.calls == []
+    assert json.loads(log.read_text().splitlines()[-1])["event"] == "violation"
+    rows[3] = {"role": "user", "content": hidden}
+    with Compartment("partner", spoken=[("Read the report.", hidden)]):
+        _, verdict = await summarize_head(rows, **options)
+    assert verdict == "changed" and len(inner.calls) == 1
+
+
+async def test_conversation_authorizes_only_its_own_actual_speech(tmp_path):
+    from experimental.harness.participation.compartment import CURRENT
+
+    seen = []
+
+    class ListeningWorker(FakeWorker):
+        async def run(self, text, *, session_key):
+            seen.append(CURRENT.get().spoken)
+            return await super().run(text, session_key=session_key)
+
+    worker = ListeningWorker(tmp_path)
+    await Conversation(Scripted("first", "First message.", "Second message.")).run(worker)
+    await Conversation(Scripted("second", "Another customer.")).run(worker)
+    assert seen == [
+        (("First message.",),),
+        (("First message.", "Second message."),),
+        (("Another customer.",),),
+    ]
+    assert CURRENT.get() is None
 
 
 @pytest.mark.asyncio

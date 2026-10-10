@@ -34,6 +34,7 @@ from experimental.harness.curator.attribution.subjects import subjects
 from experimental.harness.curator.generation.context import query
 from experimental.harness.curator.generation.context.collect import Context
 from experimental.harness.curator.generation.context.render import prompt_files, tool
+from experimental.harness.curator.generation.models import effective_model, resume_model
 from experimental.harness.curator.generation.run import (
     GapReportedError,
     GenerationInterruptedError,
@@ -76,14 +77,6 @@ def _budget(path: Path, state, limits) -> str:
         .substitute(calls=limits.max_calls - state.calls, queries=limits.max_queries - state.queries)
         .strip()
     )
-
-
-def effective_model(provider, model: str | None) -> str | None:
-    """The model a request with `model` runs on: the one named, else the provider's default when it says."""
-    if model:
-        return model
-    default = getattr(provider, "get_default_model", None)
-    return default() if default else None
 
 
 def input_id(context: Context, required, identity) -> str:
@@ -168,7 +161,13 @@ class ModelAttributor:
         }
 
     def check(self, state: AttributionState, context: Context, *, model: str | None = None) -> None:
-        state.check(input_id(context, subjects(context.feedback), self.identity(model)), self.limits)
+        identity = self.identity(model)
+        state.check(input_id(context, subjects(context.feedback), state.identity), self.limits)
+        if {key: value for key, value in identity.items() if key != "model"} != {
+            key: value for key, value in state.identity.items() if key != "model"
+        }:
+            raise ValueError("attribution inputs or attributor changed; cannot resume this attribution")
+        resume_model(state, identity["model"], previous=state.identity.get("model"), check=True)
 
     async def attribute(
         self, context: Context, provider, *, model=None, tool_registry=None, resume=None, progress=None
@@ -177,7 +176,10 @@ class ModelAttributor:
         identity = self.identity(effective_model(provider, self.model or model))
         if resume is not None:
             state = resume.model_copy(deep=True)
-            state.check(input_id(context, required, identity), self.limits)
+            self.check(state, context, model=identity["model"])
+            resume_model(state, identity["model"], previous=state.identity.get("model"))
+            state.identity = identity
+            state.input_id = input_id(context, required, identity)
         else:
             state = AttributionState(
                 input_id=input_id(context, required, identity), identity=identity, subjects=required

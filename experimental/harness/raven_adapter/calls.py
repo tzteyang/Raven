@@ -4,8 +4,11 @@ import asyncio
 from contextlib import asynccontextmanager, contextmanager
 from contextvars import ContextVar
 from dataclasses import dataclass
+from functools import wraps
 from inspect import iscoroutinefunction, signature
 from uuid import uuid4
+
+from experimental.harness.raven_adapter.checkpoints import Checkpoints
 
 _OWNERS: ContextVar[tuple[str, ...]] = ContextVar("curator_operation_owners", default=())
 _READ_ONLY: ContextVar[bool] = ContextVar("curator_read_only_operation", default=False)
@@ -52,10 +55,31 @@ def operation_scope(owner, name, source_id):
 
 
 class OperationGroup:
-    """Serialize a Harness's complete peer call chain to avoid cross-task lock cycles."""
+    """Serialize and atomically checkpoint one Harness's complete peer call chain."""
 
     def __init__(self):
         self.lock = asyncio.Lock()
+        self.owners = []
+        self.checkpoints = None
+        self.snapshots = None
+        self.task = None
+        self.failure = None
+
+    def storage(self, path, task_id):
+        if self.checkpoints is None:
+            self.checkpoints = Checkpoints(path.parent, task_id)
+        if self.checkpoints.path.parent != path.parent or self.checkpoints.task_id != task_id:
+            raise ValueError("peer strategies must share one Harness checkpoint directory and task")
+        return self.checkpoints
+
+    def save(self):
+        if self.checkpoints is not None:
+            self.checkpoints.save({owner.scopes.name: owner.scopes.record() for owner in self.owners})
+
+    def visible(self, owner, name):
+        if self.snapshots is not None and self.task is not asyncio.current_task():
+            return self.snapshots[owner][name]
+        return getattr(owner, name)
 
     @asynccontextmanager
     async def enter(self):
@@ -64,14 +88,41 @@ class OperationGroup:
             if group is self:
                 if task is not asyncio.current_task():
                     raise RuntimeError("parallel strategy requests within an ownership chain are unsupported")
-                yield
+                if self.failure is not None:
+                    raise RuntimeError("a failed strategy operation invalidated the peer chain") from self.failure
+                try:
+                    yield
+                except BaseException as exc:
+                    self.failure = exc
+                    raise
                 return
         async with self.lock:
             token = _GROUPS.set((*active, (self, asyncio.current_task())))
+            self.task = asyncio.current_task()
             try:
+                self.snapshots = {owner: owner.snapshot() for owner in self.owners}
                 yield
+                if self.failure is not None:
+                    raise RuntimeError("a failed strategy operation invalidated the peer chain") from self.failure
+                self.save()
+            except BaseException:
+                for owner, snapshot in reversed((self.snapshots or {}).items()):
+                    owner.restore_snapshot(snapshot)
+                raise
             finally:
+                self.snapshots = None
+                self.task = None
+                self.failure = None
                 _GROUPS.reset(token)
+
+
+def transactional(function):
+    @wraps(function)
+    async def wrapped(self, *args, **kwargs):
+        async with self.operations.enter():
+            return await function(self, *args, **kwargs)
+
+    return wrapped
 
 
 def require_writable():

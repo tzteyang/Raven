@@ -374,7 +374,7 @@ async def main(args):
                         research_model=getattr(args, "information_research_model", None),
                         research_effort=getattr(args, "information_research_effort", None),
                         research_budget=getattr(args, "information_research_budget", None),
-                        limits=CollectionLimits(reviews=getattr(args, "information_reviews", 2)),
+                        limits=CollectionLimits(timeout=args.timeout, reviews=getattr(args, "information_reviews", 2)),
                         replay=InformationResult.model_validate_json(args.information.read_text())
                         if getattr(args, "information", None)
                         else None,

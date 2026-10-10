@@ -17,13 +17,182 @@ from raven.contracts.tool import RAW_ARGUMENTS_KEY
 
 
 class Provider:
-    def __init__(self, *responses):
+    def __init__(self, *responses, auto_consistency_review=True):
         self.responses = list(responses)
         self.requests = []
+        self.auto_consistency_review = auto_consistency_review
 
     async def chat_with_retry(self, **kwargs):
         self.requests.append(kwargs)
-        return self.responses.pop(0)
+        if self.auto_consistency_review and (reviewed := consistency_review_response(kwargs["messages"])) is not None:
+            return reviewed
+        value = self.responses.pop(0)
+        return value(kwargs) if callable(value) else value
+
+
+def consistency_review_response(
+    messages, *, issues=(), limitations=("Replay validates mechanics, not model consistency judgment.",)
+):
+    """Supply a consistency review response to replay tests that do not test consistency judgment."""
+    if len(messages) < 4:
+        return None
+    content = messages[3].get("content")
+    if not isinstance(content, str) or not content.startswith("{"):
+        return None
+    materials = json.loads(content).get("consistency_review")
+    if materials is None:
+        return None
+    return response(
+        "submit_consistency_review",
+        {
+            "candidate_id": materials["candidate_id"],
+            "surfaces": {
+                name: "The supplied replay scenario retains compatible behavior." for name in materials["surfaces"]
+            },
+            "interactions": "No additional conflict is specified by this replay scenario.",
+            "issues": list(issues),
+            "limitations": list(limitations),
+        },
+    )
+
+
+@pytest.mark.asyncio
+async def test_consistency_review_covers_retained_consumers_and_rechecks_repaired_candidate(context):
+    from dataclasses import replace
+
+    authored = {
+        "values": {"memory.strategy": {"factory": "memory:create"}},
+        "files": {
+            "memory.py": "from .shared import read\n",
+            "shared.py": "def read(): return 'kept'\n",
+            "rules.py": "",
+        },
+    }
+    context = replace(context, facts={**context.facts, "authored": authored})
+    draft = {
+        "values": {"action.strategy": {"factory": "rules:create"}},
+        "files": {"shared.py": "def read(): return None\n"},
+    }
+    identifiers = []
+
+    def inspect_candidate(request):
+        whole = packet(request)["consistency_review"]
+        identifiers.append(whole["candidate_id"])
+        assert whole["effective_artifact"]["values"]["memory.strategy"] == authored["values"]["memory.strategy"]
+        assert whole["effective_artifact"]["files"]["memory.py"] == authored["files"]["memory.py"]
+        assert set(whole["surfaces"]) == {target.name for target in context.declaration.targets}
+        assert "None" in whole["effective_artifact"]["files"]["shared.py"]
+        return consistency_review_response(
+            request["messages"],
+            issues=[
+                {
+                    "surfaces": ["memory.strategy", "action.strategy"],
+                    "evidence": "shared.read now returns None to the retained Memory consumer.",
+                    "correction": "Preserve the existing string result for retained consumers.",
+                    "blocking": True,
+                }
+            ],
+        )
+
+    def inspect_repair(request):
+        whole = packet(request)["consistency_review"]
+        identifiers.append(whole["candidate_id"])
+        assert "'kept'" in whole["effective_artifact"]["files"]["shared.py"]
+        return consistency_review_response(request["messages"])
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", draft),
+        inspect_candidate,
+        response("submit_artifact", {**draft, "files": {"shared.py": authored["files"]["shared.py"]}}),
+        inspect_repair,
+        auto_consistency_review=False,
+    )
+    validate = AsyncMock(return_value=Validation([], [{"kind": "runtime.bound"}]))
+    result = await generate(context, provider, validate=validate)
+    assert validate.await_count == 2 and len(set(identifiers)) == 2
+    assert result.consistency_review.candidate_id == identifiers[-1]
+    assert "shared.read now returns None" in str(packet(provider.requests[4])["validation_errors"])
+    assert [row["stage"] for row in result.trace if row["event"] == "model.call"] == [
+        "select",
+        "design",
+        "implement",
+        "consistency_review",
+        "repair",
+        "consistency_review",
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("fault", ["identity", "coverage", "edit"])
+async def test_consistency_review_rejects_stale_or_incomplete_reports_and_cannot_edit(context, fault):
+    def invalid(request):
+        value = consistency_review_response(request["messages"])
+        if fault == "edit":
+            return response("stage_file", {"path": "bypass.py", "content": "BYPASS = True\n"})
+        arguments = value.tool_calls[0].arguments
+        if fault == "identity":
+            arguments["candidate_id"] = "another-version"
+        else:
+            arguments["surfaces"].pop("memory.strategy")
+        return value
+
+    provider = Provider(
+        response("submit_selection", selection()),
+        invalid,
+        lambda request: consistency_review_response(request["messages"]),
+        auto_consistency_review=False,
+    )
+    validate = AsyncMock(return_value=Validation([], []))
+    result = await generate(context, provider, validate=validate)
+    assert result.consistency_review and "bypass.py" not in result.candidate.artifact.files
+    event = "action.unavailable" if fault == "edit" else "output.rejected"
+    assert any(row["stage"] == "consistency_review" and row["event"] == event for row in result.trace)
+    assert validate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_pending_consistency_review_resumes_without_replaying_implementation_or_validation(context):
+    from experimental.harness.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.state import GenerationState
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:create"}}}),
+    )
+    validate = AsyncMock(return_value=Validation([], []))
+    with pytest.raises(GenerationPausedError) as paused:
+        await generate(context, provider, validate=validate, limits=Limits(max_calls=3))
+    assert paused.value.state.stage == "consistency_review"
+    state = GenerationState.model_validate_json(paused.value.state.model_dump_json())
+    resumed = Provider()
+    result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=4), resume=state)
+    assert result.consistency_review and len(resumed.requests) == 1 and validate.await_count == 1
+
+
+@pytest.mark.asyncio
+async def test_blocking_consistency_review_cannot_bypass_the_repair_budget(context):
+    provider = Provider(
+        response("submit_selection", selection()),
+        lambda request: consistency_review_response(
+            request["messages"],
+            issues=[
+                {
+                    "surfaces": ["memory.strategy"],
+                    "evidence": "A retained consumer loses required input.",
+                    "correction": "Preserve the input.",
+                    "blocking": True,
+                }
+            ],
+        ),
+        auto_consistency_review=False,
+    )
+    with pytest.raises(GenerationError, match="repair budget exhausted: consistency review"):
+        await generate(
+            context, provider, validate=AsyncMock(return_value=Validation([], [])), limits=Limits(max_repairs=0)
+        )
 
 
 def packet(request):
@@ -235,6 +404,7 @@ async def test_failed_unchanged_candidate_enters_repair_and_can_reselect(context
         "repair",
         "design",
         "implement",
+        "consistency_review",
     ]
 
 
@@ -250,6 +420,53 @@ async def test_failed_unchanged_candidate_cannot_bypass_repair_budget(context):
             validate=validate,
             limits=Limits(max_repairs=0),
         )
+
+
+@pytest.mark.asyncio
+async def test_native_commitments_are_explicit_surfaces_in_consistency_review(context):
+    from dataclasses import replace
+
+    from experimental.harness.contract import Commitment
+
+    native = Commitment(
+        id="H1", surface="native", statement="Preserve native execution authorization.", serves=("task",)
+    )
+    context = replace(context, commitments=(native,))
+    provider = Provider(response("submit_selection", selection()))
+    result = await generate(context, provider, validate=AsyncMock(return_value=Validation([], [])))
+    assert "native" in result.consistency_review.surfaces
+    assert packet(provider.requests[-1])["consistency_review"]["commitments_after"][0]["surface"] == "native"
+
+
+@pytest.mark.asyncio
+async def test_review_indexes_large_validation_evidence_and_can_read_its_complete_tail(context):
+    payload = "x" * 1_000_000 + "VALIDATION_TAIL"
+
+    def read_tail(request):
+        data = packet(request)
+        assert len(json.dumps(request["messages"])) < len(payload)
+        validated = next(row for row in data["history"] if row["event"] == "validation")
+        assert validated["observations"][0]["bytes"] > 1_000_000
+        return response(
+            "read_observation",
+            {
+                "trace_index": validated["trace_index"],
+                "index": 0,
+                "path": ["payload"],
+                "offset": 1_000_000,
+                "length": 40,
+            },
+        )
+
+    def approve(request):
+        result = next(row for row in reversed(request["messages"]) if row["role"] == "tool")
+        assert "VALIDATION_TAIL" in result["content"]
+        return consistency_review_response(request["messages"])
+
+    provider = Provider(response("submit_selection", selection()), read_tail, approve, auto_consistency_review=False)
+    validation = Validation([], [{"kind": "model.input", "payload": payload}])
+    result = await generate(context, provider, validate=AsyncMock(return_value=validation))
+    assert result.consistency_review and result.validation.observations[0]["payload"] == payload
 
 
 @pytest.mark.asyncio
@@ -384,7 +601,12 @@ async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(
         data = packet(request)
         read = next(row for row in data["history"] if row["event"] == "query")
         assert read["result"] == {"indexed": True, "chars": len("native protocol"), "reread": REREAD}
-        assert [item["target"] for item in data["selected_contracts"]] == ["planning.strategy"]
+        if "consistency_review" in data:
+            assert {item["target"] for item in data["consistency_review"]["contracts"]} == {
+                target.name for target in context.declaration.targets
+            }
+        else:
+            assert [item["target"] for item in data["selected_contracts"]] == ["planning.strategy"]
     assert packet(provider.requests[4])["validation_errors"]
 
 
@@ -555,6 +777,7 @@ async def test_three_stages_preserve_diagnosis_queries_failures_and_concrete_des
         "design",
         "design",
         "implement",
+        "consistency_review",
     ]
     initial, design_request, implementation = (provider.requests[i] for i in (0, 2, 4))
     assert initial["tools"] == design_request["tools"] == implementation["tools"]
@@ -676,7 +899,13 @@ async def test_redesign_retains_failed_candidate_evidence_but_clears_active_draf
         row["event"] == "submit_artifact" and row["output"]["artifact"] == {**old, "remove": [], "remove_files": []}
         for row in history
     )
-    assert any(row["event"] == "validation" and row["observations"] == [probe_evidence] for row in history)
+    from experimental.harness.curator.generation.context import query
+
+    evidence = next(row for row in history if row["event"] == "validation")
+    recovered = query.execute(
+        context, "read_observation", {"trace_index": evidence["trace_index"], "index": 0}, trace=result.trace
+    )
+    assert json.loads(recovered["text"]) == probe_evidence
     assert any(row["event"] == "preflight" and row["arguments"] == old for row in history)
     assert history[-1]["event"] == "revise_plan"
     assert result.validation.passed and checks == 3
@@ -882,7 +1111,8 @@ def test_history_indexes_repeatable_reads_and_keeps_everything_else():
     assert rows[3]["result"] == {"error": "unknown source"}
     assert rows[4]["result"] == {"text": "a.py", "failed": False}
     assert rows[5]["result"]["indexed"] and rows[5]["result"]["chars"] > 0
-    assert rows[6:] == trace[7:]
+    assert rows[6] == {**trace[7], "trace_index": 7}
+    assert rows[7:] == trace[8:]
 
 
 @pytest.mark.asyncio
@@ -909,7 +1139,7 @@ async def test_invalid_arguments_preserve_stage_and_context_before_resubmission(
         checked.append(candidate)
         return Validation([], [])
 
-    result = await generate(context, provider, validate=validate, limits=Limits(max_calls=4))
+    result = await generate(context, provider, validate=validate, limits=Limits(max_calls=5))
     assert len(checked) == 1 and result.candidate is checked[0]
     events = [event for event in result.trace if event["event"] == "output.rejected"]
     assert len(events) == 1
@@ -921,7 +1151,7 @@ async def test_invalid_arguments_preserve_stage_and_context_before_resubmission(
     feedback = next(m for m in messages if m.get("tool_call_id") == "invalid")
     assert "Parser:" in feedback["content"] and "No tools" in feedback["content"]
     assert context.task in messages[1]["content"]
-    assert len(provider.requests) == 4
+    assert len(provider.requests) == 5
 
 
 def test_provider_reasoning_and_tool_metadata_survive_native_message_building():
@@ -1070,15 +1300,15 @@ async def test_serialized_resume_preserves_every_stage_and_does_not_replay_work(
         assert state.repairs == 1 and state.validation.errors == ["Adjust temperature"]
     saved_messages = state.model_copy(deep=True).messages
     resumed = Provider(*provider.responses)
-    result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=7), resume=state)
+    result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=8), resume=state)
     assert result.candidate.artifact.values["action.strategy"] == {"factory": "rules:policy_0_4"}
     assert len(checks) == 3
-    assert len(provider.requests) + len(resumed.requests) == 7
+    assert len(provider.requests) + len(resumed.requests) == 8
     assert state.calls == pause_after and state.messages == saved_messages
     sent = resumed.requests[0]["messages"]
     assert sent[:-1] == saved_messages and "# Remaining generation budget" in sent[-1]["content"]
     assert len([event for event in result.trace if event["event"] == "query"]) == 2
-    assert [event["call"] for event in result.trace if event["event"] == "model.call"] == list(range(1, 8))
+    assert [event["call"] for event in result.trace if event["event"] == "model.call"] == list(range(1, 9))
 
 
 @pytest.mark.asyncio
@@ -1096,7 +1326,7 @@ async def test_resumption_does_not_implicitly_refill_any_budget(context):
         context,
         resumed,
         validate=AsyncMock(return_value=Validation([], [])),
-        limits=Limits(max_calls=3, max_queries=1),
+        limits=Limits(max_calls=4, max_queries=1),
         resume=state,
     )
     assert len([event for event in result.trace if event["event"] == "query"]) == 1
@@ -1156,7 +1386,7 @@ async def test_pause_after_backtracking_resumes_design_without_a_stale_plan(cont
     async def validate(candidate):
         return Validation([], [])
 
-    result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=5), resume=state)
+    result = await generate(context, resumed, validate=validate, limits=Limits(max_calls=6), resume=state)
     assert result.candidate.artifact.values == values
 
 
@@ -1280,7 +1510,7 @@ async def test_a_call_that_spent_its_output_thinking_is_followed_by_a_short_thin
         return Validation([], [])
 
     result = await generate(context, provider, validate=validate, limits=Limits(max_calls=6, max_output=65536))
-    assert result.validation.passed and len(provider.requests) == 4
+    assert result.validation.passed and len(provider.requests) == 5
     assert all(request["max_tokens"] == 65536 for request in provider.requests)
     efforts = [request.get("reasoning_effort") for request in provider.requests[:4]]
     assert efforts == [None, "low", "none", "none"]
@@ -1308,9 +1538,9 @@ async def test_a_curator_call_on_a_model_that_needs_breakpoints_marks_the_tail_s
         provider,
         validate=validate,
         model="openrouter/anthropic/claude-opus-5.5",
-        limits=Limits(max_calls=3),
+        limits=Limits(max_calls=4),
     )
-    assert result.validation.passed and len(provider.requests) == 3
+    assert result.validation.passed and len(provider.requests) == 4
     for request in provider.requests:
         messages = request["messages"]
         marked = [index for index, message in enumerate(messages) if "cache_control" in json.dumps(message)]
@@ -1342,7 +1572,8 @@ async def test_design_records_commitment_changes_with_host_ids_and_each_stage_se
     assert "carry no commitment change: ['action.strategy']" in refused["error"]
     (added,) = result.candidate.plan.commitments
     assert (added.id, added.surface, added.serves) == ("H1", "action.strategy", ("task",))
-    choosing, designing, _, implementing = (packet(request) for request in provider.requests)
+    choosing, designing, _, implementing, reviewing = (packet(request) for request in provider.requests)
+    assert reviewing["consistency_review"]["commitments_after"] == implementing["commitments_after"]
     assert choosing["commitments"] == [] and implementing["commitments"] == []
     assert (
         choosing["commitment_coverage"]
@@ -1530,7 +1761,7 @@ async def test_a_paused_implementation_keeps_its_edits_and_a_revised_plan_drops_
     state = GenerationState.model_validate_json(paused.value.state.model_dump_json())
     assert state.edited == ["rules.py"] and sorted(state.staged) == ["extra.py", "rules.py"]
     resumed = Provider(*provider.responses)
-    result = await generate(authored, resumed, validate=validate, limits=Limits(max_calls=9), resume=state)
+    result = await generate(authored, resumed, validate=validate, limits=Limits(max_calls=10), resume=state)
     refused = next(event for event in result.trace if event["event"] == "output.rejected")
     assert "changed with edit_file" in refused["error"]
     assert sorted(checked[0].artifact.files) == ["extra.py", "rules.py"]

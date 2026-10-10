@@ -106,6 +106,21 @@ class Entry(BaseModel):
     attributor: dict[str, JsonValue] | None = None
 
 
+def read_history(record, *, measuring=None) -> tuple[Entry, ...]:
+    """Keep measurement-only sources out of historical feedback, including older saved records."""
+    excluded = set(record.get("measuring", ()) if measuring is None else measuring)
+    entries = tuple(Entry.model_validate(row) for row in record["history"])
+    return tuple(
+        item.model_copy(
+            update={
+                name: {source: value for source, value in getattr(item, name).items() if source not in excluded}
+                for name in ("satisfied", "results", "failed_in")
+            }
+        )
+        for item in entries
+    )
+
+
 def _revised(scope, plan, selection) -> tuple[Revised, ...]:
     grounds = selection.grounds if selection is not None else {}
     return tuple(

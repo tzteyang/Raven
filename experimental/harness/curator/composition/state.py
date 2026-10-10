@@ -28,6 +28,7 @@ class Progress(BaseModel):
     directory: str
     feedback: object = None
     model: str | None = None
+    model_events: list[dict] = Field(default_factory=list)
     observations: list[dict] | None = None
     root: Generated | None = None
     children: dict[str, Generated] = Field(default_factory=dict)

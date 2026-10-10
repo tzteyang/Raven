@@ -14,7 +14,7 @@ A valid decision is an intention. Read the host receipt before claiming a contro
 
 handle_request receives a concrete command in ActionInteraction and returns ActionResponse with a domain reply and optional control intention. The host binds identity, provenance and allowed effects; tool arguments cannot choose them. A request tool's control is queued for the post-batch boundary, so it does not by itself prevent sibling tool calls already in that batch. Use a dispatch rule when that ordering matters.
 
-Use StrategyPeers to read a plan or effective capability view, request a plan revision, or submit an information command to Memory. Each target owns its own state and validates its request. Do not duplicate another owner's state or imply an atomic rollback across owners and external effects.
+Use StrategyPeers to read a plan or effective capability view, request a plan revision, or submit an information command to Memory. Each target owns its own state and validates its request. One top-level operation and its sequential peers commit managed state together; failure discards their state changes and queued controls. External effects, private attributes, audit records and inference costs are outside this rollback boundary.
 
 ## Initial behavior and revision
 

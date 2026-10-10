@@ -6,7 +6,7 @@ from experimental.harness.contract import Candidate
 from experimental.harness.contract.artifact import Selection
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.collect import Context
-from experimental.harness.curator.generation.context.render import tool
+from experimental.harness.curator.generation.context.render import observations, tool
 from experimental.harness.curator.generation.stages import implement
 
 NAME = "revise_plan"
@@ -31,5 +31,5 @@ def materials(context: Context, selection: Selection, candidate: Candidate, vali
         **implement.materials(context, selection, candidate.plan),
         "candidate": candidate.artifact.model_dump(mode="json"),
         "validation_errors": validation.errors,
-        "validation_observations": validation.observations,
+        "validation_observations": observations(validation.observations),
     }

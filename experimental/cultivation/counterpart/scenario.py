@@ -44,7 +44,7 @@ class Scenario:
     handover: str = ""
     plans: dict[str, tuple[tuple[str, ...], ...]] = field(default_factory=dict)
     kinds: dict[str, str] = field(default_factory=dict)
-    contract: Contract | None = field(default=None, compare=False, repr=False)
+    contract: Contract = field(compare=False, repr=False, kw_only=True)
     handed: tuple[str, ...] = ()
 
     @classmethod
@@ -65,8 +65,8 @@ class Scenario:
             read.exchange.handover,
             dict(read.exchange.plans),
             {name: material.kind for name, material in held.items()},
-            read,
-            tuple(name for name in read.handed if name in held),
+            handed=tuple(name for name in read.handed if name in held),
+            contract=read,
         )
 
     def without(self, names) -> "Scenario":
@@ -98,7 +98,7 @@ class Scenario:
     def stands_behind(self, material: str) -> bool:
         """Whether the owner adopts this material; an unconfirmed reference may be handed over but does not
         supply an evaluation norm (`experimental.harness.scenario.contract.Scenario.confirmed`)."""
-        return self.contract is None or self.contract.confirmed(material)
+        return self.contract.confirmed(material)
 
     def standing_norms(self, names) -> dict[str, str]:
         """The norms among `names` the evaluation side may draw criteria from, by name to text: those the owner
@@ -106,19 +106,22 @@ class Scenario:
         return {
             name: self.text(name)
             for name in names
-            if self.kinds.get(name) == "norm"
-            and self.stands_behind(name)
-            and (self.contract is None or self.contract.visible(name, "analyst"))
+            if self.kinds.get(name) == "norm" and self.stands_behind(name) and self.contract.visible(name, "analyst")
         }
 
     def release(self, names, skills: Path) -> None:
         for name in names:
             shutil.copytree(self.materials[name], Path(skills) / name, dirs_exist_ok=True)
 
-    def withdraw(self, skills: Path) -> None:
-        """Remove every scenario-owned skill from the pool, so a run starts from the plan it declares."""
-        for name in self.materials:
-            shutil.rmtree(Path(skills) / name, ignore_errors=True)
+    def withdraw(self, *places: Path) -> None:
+        """Reset every contract-owned material path, including materials excluded from this run."""
+        for place in places:
+            for name in self.contract.materials:
+                path = Path(place) / name
+                if path.is_symlink() or path.is_file():
+                    path.unlink()
+                elif path.exists():
+                    shutil.rmtree(path)
 
     def document(self, material: str) -> str:
         """A material as the owner's own document: its text without the skill frontmatter."""
@@ -144,8 +147,3 @@ class Scenario:
             paths = written
         base = Path(shared if shared is not None else uploads).parent
         return [path.relative_to(base).as_posix() for path in paths]
-
-    def withdraw_uploads(self, *places: Path) -> None:
-        for place in places:
-            for name in self.materials:
-                shutil.rmtree(Path(place) / name, ignore_errors=True)

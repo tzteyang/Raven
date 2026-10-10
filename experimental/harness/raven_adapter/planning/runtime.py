@@ -17,13 +17,14 @@ from experimental.harness.raven_adapter.calls import (
     owner_operation,
     read_only_operation,
     strategy_method,
+    transactional,
 )
 from experimental.harness.raven_adapter.inference import strategy_factory
 from experimental.harness.raven_adapter.inspection import fingerprint
 from experimental.harness.raven_adapter.interaction_tools import interaction_tool
 from experimental.harness.raven_adapter.observe import plain
 from experimental.harness.raven_adapter.planning.contracts import PlanningObservation
-from experimental.harness.raven_adapter.strategy import Scopes, concrete, method_types
+from experimental.harness.raven_adapter.strategy import BoundStrategy, Scopes, concrete, method_types
 from raven.agent.hook.participant import ParticipantHook
 from raven.contracts.loop_hooks import HookDecision
 from raven.contracts.participant import AgentParticipant, Intake
@@ -31,6 +32,10 @@ from raven.contracts.participant import AgentParticipant, Intake
 
 class BoundPlanning:
     """One state owner per session, publishing projections only after valid checkpoints."""
+
+    transaction_fields = ("projections", "initialized", "latest_projection")
+    snapshot = BoundStrategy.snapshot
+    restore_snapshot = BoundStrategy.restore_snapshot
 
     def __init__(self, config, task, path, package, recorder, *, infer=None, peers=None, host=None, scope=None):
         self.config, self.task, self.path, self.recorder = config, task, path, recorder
@@ -49,7 +54,16 @@ class BoundPlanning:
             peers=peers,
             host=host,
         )
-        self.scopes = Scopes("planning", task, path, self.factory, per_session=True)
+        self.scopes = Scopes(
+            "planning",
+            task,
+            path,
+            self.factory,
+            per_session=True,
+            checkpoints=self.operations.storage(path, task.id),
+        )
+        self.path = self.scopes.path
+        self.operations.owners.append(self)
         self.scope = scope or (
             lambda: InteractionScope(
                 harness_id=str(path.parent),
@@ -105,7 +119,8 @@ class BoundPlanning:
 
     @property
     def current_view(self):
-        return plain(deepcopy(self.latest_projection.view)) if self.latest_projection is not None else None
+        projection = self.operations.visible(self, "latest_projection")
+        return plain(deepcopy(projection.view)) if projection is not None else None
 
     def _restore(self, before):
         scope = self.scopes.current()
@@ -157,7 +172,7 @@ class BoundPlanning:
         return self.projection_type(view=deepcopy(value.view), guidance=value.guidance)
 
     async def prepare(self):
-        if self.scopes.key() in self.initialized:
+        if self.scopes.key() in self.operations.visible(self, "initialized"):
             return
         async with owner_operation("planning", self.lock, group=self.operations, operation="initialize"):
             if self.scopes.key() in self.initialized:
@@ -175,9 +190,7 @@ class BoundPlanning:
                     raise ValueError("a planning view cannot be None")
                 if scope.resuming and self.state != before:
                     raise ValueError("planning initialize changed existing state")
-                self.scopes.save()
             except BaseException as exc:
-                self._restore(before)
                 self.recorder.add(
                     "planning.error",
                     operation="initialize",
@@ -193,9 +206,10 @@ class BoundPlanning:
             self.recorder.add("planning.result", operation="initialize", source="task", result=projection)
 
     def read(self):
-        projection = self.projections.get(self.scopes.key())
+        projection = self.operations.visible(self, "projections").get(self.scopes.key())
         return plain(deepcopy(projection.view)) if projection is not None else None
 
+    @transactional
     async def interact(self, command, *, origin="agent", mode="command", request_id=None):
         if origin == "agent" and self.config.tool is None:
             raise ValueError("planning has no selected Agent interaction")
@@ -228,10 +242,7 @@ class BoundPlanning:
                     raise ValueError("a planning view cannot be None")
                 if mode == "query" and (self.state != before or plain(published) != plain(projection)):
                     raise ValueError("planning query changed retained state or the published projection")
-                if mode == "command":
-                    self.scopes.save()
             except BaseException as exc:
-                self._restore(before)
                 self.recorder.add(
                     "planning.error",
                     operation="interact",
@@ -254,6 +265,7 @@ class BoundPlanning:
             raise ValueError("planning has no selected model interaction")
         return interaction_tool(self.config.tool, self.command_type, self.tool_call, modes=True)
 
+    @transactional
     async def addendum(self):
         if not self.config.context:
             return None
@@ -262,6 +274,7 @@ class BoundPlanning:
         self.recorder.add("planning.context", scope=self.scope(), content=content)
         return content
 
+    @transactional
     async def observe(self, observation):
         if observation.phase not in self.config.observe:
             return
@@ -326,7 +339,7 @@ class BoundPlanning:
         return PlanningHook("curator-planning", PlanningParticipant, rolls_back=False)
 
     def facts(self):
-        projection = self.latest_projection
+        projection = self.operations.visible(self, "latest_projection")
         return dict(
             task_id=self.task.id,
             view=self.current_view,

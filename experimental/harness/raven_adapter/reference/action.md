@@ -30,6 +30,6 @@ failed calls included, and `each` makes several judgments of the operation at
 once. A judgment that failed may be asked again within the allowance; there is
 no hidden retry.
 
-StrategyPeers reads detached views and invokes typed operations of the real owner. Cycle and read-only checks occur before peer writes. One owner's failure does not roll back another owner's success. Tool interaction, event rules and the gate share one active Action owner; no second policy instance or duplicate plan is created.
+StrategyPeers reads detached views and invokes typed operations of the real owner. Cycle and read-only checks occur before peer writes. The top-level operation and sequential peers share one managed-state commit. Failure, cancellation, invalid output or checkpoint failure restores their managed state and discards queued controls. Catching a failed peer call does not make that chain committable. External effects and inference costs are not rolled back. Tool interaction, event rules and the gate share one active Action owner; no second policy instance or duplicate plan is created.
 
 Verify mandatory refusal without a voluntary self-check, permitted execution, real correction input, truthful terminal replies, exhausted budgets, model-request controls, streaming visibility and revision preservation. A method result alone is not proof of behavior.

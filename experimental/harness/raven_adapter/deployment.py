@@ -169,13 +169,9 @@ async def activate(worker, candidate, children=None):
             saved.setdefault(baseline.config.workspace_path, {}).update(
                 snapshot(baseline.config.workspace_path, old_prepared.files().keys() | next_prepared.files().keys())
             )
-            for name in (
-                "assembly/content-state.json",
-                "memory.json",
-                "planning.json",
-                "capability.json",
-                "action.json",
-            ):
+            from experimental.harness.raven_adapter.checkpoints import CHECKPOINT_FILES
+
+            for name in ("assembly/content-state.json", *CHECKPOINT_FILES):
                 path = directory / name
                 files[path] = path.read_bytes() if path.exists() else None
         old_artifact, old_prepared = worker.artifact, worker.prepared
@@ -184,7 +180,7 @@ async def activate(worker, candidate, children=None):
                 await worker._close()
             finally:
                 for _, _, _, directory in owners:
-                    for name in ("memory.json", "planning.json", "capability.json", "action.json"):
+                    for name in CHECKPOINT_FILES:
                         path = directory / name
                         files[path] = path.read_bytes() if path.exists() else None
             worker.artifact, worker.children = proposed, revised

@@ -327,9 +327,8 @@ class Owner:
         return [name for name in self.scenario.handed if name not in self.released]
 
     def prepare(self) -> None:
-        self.scenario.withdraw(self.skills)
-        if self.uploads:
-            self.scenario.withdraw_uploads(self.uploads, *([self.shared] if self.shared else []))
+        places = (self.skills, self.uploads, self.shared)
+        self.scenario.withdraw(*(place for place in places if place is not None))
         self.released, self.reviews, self.uploaded, self.judged = [], [], [], 0
         opening = list(self.disclosure.opening)
         if self.deliver == "dialog":

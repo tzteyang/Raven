@@ -1,4 +1,4 @@
-"""Coordinate source queries, planning, implementation and bounded validation repair.
+"""Coordinate planning, implementation, consistency review and bounded repair.
 
 A generation starts from an attribution made before it (`experimental.harness.curator.attribution`): selection grounds
 every target on its diagnoses. The stage tool loop here (`ask`) is shared infrastructure: the attribution runs its
@@ -16,7 +16,9 @@ from experimental.harness.contract import Attributed, Candidate, Plan, Validatio
 from experimental.harness.contract.commitments import coverage
 from experimental.harness.curator.generation.context import query, render
 from experimental.harness.curator.generation.context.collect import Context
-from experimental.harness.curator.generation.stages import design, implement, repair, select, shared
+from experimental.harness.curator.generation.models import effective_model, resume_model
+from experimental.harness.curator.generation.stages import consistency_review, design, implement, repair, select, shared
+from experimental.harness.curator.generation.stages.consistency_review import ConsistencyReview
 from experimental.harness.curator.generation.state import GenerationState
 from experimental.harness.participation.model_calls import argument_errors
 from experimental.harness.raven_adapter.observe import plain
@@ -71,6 +73,7 @@ class Generated:
     candidate: Candidate
     validation: Validation
     trace: tuple[dict, ...]
+    consistency_review: ConsistencyReview | None = None
 
 
 class GenerationError(RuntimeError):
@@ -156,6 +159,7 @@ def _shared_tools(context, tool_registry) -> list[dict]:
         design.output(declaration),
         implement.output(),
         repair.reopen(),
+        consistency_review.output(),
         check,
         implement.stage_tool(),
         implement.edit_tool(),
@@ -174,6 +178,7 @@ STAGED_ACTIONS = frozenset(
         design.NAME,
         implement.NAME,
         repair.NAME,
+        consistency_review.NAME,
         CHECK,
         implement.STAGE_FILE,
         implement.EDIT_FILE,
@@ -263,7 +268,9 @@ async def ask(
         messages.append({"role": "user", "content": budget(state, shown)})
         request_messages = list(messages)
         state.calls += 1
-        trace.append({"stage": stage, "event": "model.call", "call": state.calls})
+        trace.append(
+            {"stage": stage, "event": "model.call", "call": state.calls, "model": effective_model(provider, model)}
+        )
         default = getattr(provider, "get_default_model", None)
         marked, marked_tools = cached(request_messages, tools, model or (default() if default else ""))
         try:
@@ -282,8 +289,17 @@ async def ask(
             # A failure that says it is not resumable, such as a boundary violation, would fail again on resume.
             if getattr(exc, "resumable", True) is False:
                 raise
+            trace.append({"stage": stage, "event": "model.error", "call": state.calls, "error": str(exc)})
             raise GenerationInterruptedError(f"{stage}: model call failed: {exc}", state) from exc
         if response.finish_reason == "error":
+            trace.append(
+                {
+                    "stage": stage,
+                    "event": "model.error",
+                    "call": state.calls,
+                    "error": response.content or "provider error",
+                }
+            )
             raise GenerationInterruptedError(f"{stage}: provider error: {response.content}", state)
         if response.content:
             note = {"stage": stage, "event": "model.note", "content": render.echoed_text(response.content)}
@@ -495,7 +511,7 @@ async def ask(
                     break
                 continue
             try:
-                result = query.execute(context, call.name, call.arguments)
+                result = query.execute(context, call.name, call.arguments, trace=trace)
             except (ValueError, TypeError, KeyError, IndexError) as exc:
                 result = {"error": str(exc)[:4000]}
             messages.append(
@@ -533,7 +549,9 @@ async def generate(
     progress=None,
     investigation: Sequence[dict] = (),
 ) -> Generated:
-    """Select, design, implement and repair from `attribution`; stage_candidate(None) clears a superseded draft.
+    """Select, design, implement, review consistency and repair from `attribution`.
+
+    stage_candidate(None) clears a superseded draft.
 
     `investigation` is what the attribution read, as its trace events: a new generation starts its trace with them,
     so later stages see that evidence as their own history. `progress(state)` is called before every model call and
@@ -546,6 +564,8 @@ async def generate(
     else:
         state = GenerationState(input_id=identity, attribution=attribution, trace=list(investigation))
     state.check(context, limits)
+    if resume is not None:
+        resume_model(state, effective_model(provider, model))
     run_stage = partial(
         ask,
         context=context,
@@ -560,6 +580,17 @@ async def generate(
         progress=progress,
     )
     trace = state.trace
+
+    def repair_candidate(candidate, validation):
+        if state.repairs >= limits.max_repairs:
+            raise GenerationError("repair budget exhausted: " + "; ".join(validation.errors), trace)
+        state.repairs += 1
+        state.plan = candidate.plan
+        state.candidate, state.validation, state.consistency_review = candidate, validation, None
+        files = candidate.artifact.files
+        state.staged = {path: files[path] for path in state.staged if path in files}
+        state.edited = []
+        state.advance("repair")
 
     async def checked(candidate):
         candidate = replace(candidate, attribution=state.attribution, selection=state.selection)
@@ -577,22 +608,14 @@ async def generate(
                 "changes": implement.changes(context.facts.get("authored") or {}, candidate),
             }
         )
+        if validation.passed:
+            state.plan = candidate.plan
+            state.candidate, state.validation, state.consistency_review = candidate, validation, None
+            state.advance("consistency_review")
+        else:
+            repair_candidate(candidate, validation)
         if progress:
             progress(state)
-        if validation.passed:
-            return Generated(candidate, validation, tuple(trace))
-        if state.repairs >= limits.max_repairs:
-            raise GenerationError("repair budget exhausted: " + "; ".join(validation.errors), trace)
-        state.repairs += 1
-        state.plan = candidate.plan
-        state.candidate, state.validation = candidate, validation
-        # Repair starts from the checked candidate: a staged file the submission replaced holds the submitted copy,
-        # and the edits made before the check are part of that candidate.
-        files = candidate.artifact.files
-        state.staged = {path: files[path] for path in state.staged if path in files}
-        state.edited = []
-        state.advance("repair")
-        return None
 
     def parse_selection(value):
         return context.declaration.parse_selection(value, attribution.attribution)
@@ -602,6 +625,42 @@ async def generate(
     open_inputs = coverage(context.commitments, [diagnosis.about for diagnosis in attribution.attribution.diagnoses])
 
     while True:
+        if state.stage == "consistency_review":
+            if state.candidate is None or state.validation is None or state.selection is None:
+                raise ValueError("consistency review state is missing its candidate, validation or selection")
+            if stage_candidate:
+                stage_candidate(state.candidate)
+            materials = consistency_review.materials(context, state.selection, state.candidate, state.validation)
+            _, reviewed = await run_stage(
+                "consistency_review",
+                ("consistency_review",),
+                {"consistency_review": materials},
+                {consistency_review.NAME: consistency_review.schema(materials)},
+                {consistency_review.NAME: lambda value: consistency_review.parse(value, materials)},
+            )
+            state.consistency_review = reviewed
+            errors = [
+                f"consistency review: {issue.evidence}; correction: {issue.correction}"
+                for issue in reviewed.issues
+                if issue.blocking
+            ]
+            if not errors:
+                if progress:
+                    progress(state)
+                return Generated(state.candidate, state.validation, tuple(trace), reviewed)
+            repair_candidate(
+                state.candidate,
+                Validation(
+                    errors,
+                    [
+                        *state.validation.observations,
+                        {"kind": "curator.consistency_review", **reviewed.model_dump(mode="json")},
+                    ],
+                ),
+            )
+            if progress:
+                progress(state)
+            continue
         if state.stage == "select":
             _, state.selection = await run_stage(
                 "select",
@@ -616,8 +675,7 @@ async def generate(
             raise ValueError("generation state is missing its selection")
         if state.stage == "design" and not selection.targets and context.facts.get("scope", {}).get("kind") != "root":
             candidate = context.declaration.accept(Plan(understanding=selection.understanding), {"values": {}})
-            if result := await checked(candidate):
-                return result
+            await checked(candidate)
             continue
         if state.stage == "design":
             name, proposal = await run_stage(
@@ -678,8 +736,7 @@ async def generate(
                 stage_candidate(None)
             if name == select.REVISE:
                 state.selection = proposal
-            state.plan = state.candidate = state.validation = None
+            state.plan = state.candidate = state.validation = state.consistency_review = None
             state.advance("design")
             continue
-        if result := await checked(proposal):
-            return result
+        await checked(proposal)

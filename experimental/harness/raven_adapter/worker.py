@@ -19,6 +19,7 @@ from pydantic import TypeAdapter
 
 from experimental.harness.contract import Artifact, Candidate, Validation
 from experimental.harness.participation.audience import HEARD
+from experimental.harness.participation.compartment import CURRENT, Compartment
 from experimental.harness.raven_adapter.deployment import Child, bind_children, child_directory
 from experimental.harness.raven_adapter.exploration import Withheld
 from experimental.harness.raven_adapter.inspection import (
@@ -38,7 +39,6 @@ from experimental.harness.raven_adapter.materialize import (
 )
 from experimental.harness.raven_adapter.observe import Recorder, delivered_files, observed_errors, plain
 from experimental.harness.raven_adapter.preparation import PreparedHarness
-from experimental.harness.raven_adapter.targets import catalogue
 from raven.spine.message import ChatType, Source
 from raven.spine.scheduler import conversation_id
 from raven.spine.turn import AnswerlessTurnError, TurnRequest
@@ -169,6 +169,7 @@ def _serve(
                 await bound.start()
             _send(connection, {"ok": True, "data": {"records": recorder.rows, "prepared": bound.prepared}})
             ready = True
+            spoken = {}
             while True:
                 request = await asyncio.to_thread(_receive, connection)
                 offset = len(recorder.rows)
@@ -237,6 +238,7 @@ def _serve(
                         turn = TypeAdapter(TurnRequest).validate_python(request["turn"])
                         if turn.origin != baseline.origin:
                             raise ValueError("turn origin differs from the inspected worker origin")
+                        spoken[conversation_id(turn)] = request.get("spoken", ())
                         if baseline.mode is not None:
                             from raven.config.mode_catalogue import build_mode_catalogue
 
@@ -257,9 +259,10 @@ def _serve(
                             events.append(plain(event))
 
                         async def run_turn(request_turn):
-                            return await run_scoped_turn(
-                                bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
-                            )
+                            with Compartment("partner", spoken=spoken.get(conversation_id(request_turn), ())):
+                                return await run_scoped_turn(
+                                    bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
+                                )
 
                         from experimental.harness.raven_adapter.hosting.evidence import record_children, snapshots
 
@@ -584,7 +587,8 @@ class Worker:
     ) -> Execution:
         """One turn and the follow-up turns of the background work it started (see `follow_up`): by default the
         exchange lasts until that work is done; with `away`, the conversant is gone that many seconds and the exchange
-        ends then, the work still in flight announcing itself in a later exchange."""
+        ends then, the work still in flight announcing itself in a later exchange. An explicit partner compartment
+        supplies entitled speech across the process boundary; runtime message roles grant no such permission."""
         if isinstance(request, str):
             channel, _, chat_id = session_key.partition(":")
             request = TurnRequest(
@@ -598,6 +602,7 @@ class Worker:
             request = replace(request, turn_id=uuid4().hex)
         async with self._lock:
             artifact_id = self.revision_id
+            scope = CURRENT.get()
             try:
                 data = await self._exchange(
                     {
@@ -605,6 +610,7 @@ class Worker:
                         "turn": TypeAdapter(TurnRequest).dump_python(request, mode="json"),
                         "stream": stream,
                         "away": away,
+                        "spoken": scope.spoken if scope is not None and scope.role == "partner" else (),
                     }
                 )
             except WorkerTimeoutError as exc:
@@ -833,22 +839,16 @@ class Worker:
                 viewed = Inspection.restore(report["inspection"])
                 effective = child_artifact(child, submitted, viewed, restoring=submitted is None)
                 child.artifact = effective
-            for name in self.children:
-                old_root, new_root = child_directory(self.area, name), child_directory(trial.area, name)
-                for target in catalogue():
-                    if target.binding.endswith(".strategy"):
-                        saved = old_root / f"{target.name.split('.')[0]}.json"
-                        if saved.is_file() and not saved.is_symlink():
-                            _write(new_root / saved.name, saved.read_bytes())
-            for target in catalogue():
-                if target.binding.endswith(".strategy"):
-                    checkpoint = self.area / f"{target.name.split('.')[0]}.json"
-                    if checkpoint.is_file() and not checkpoint.is_symlink():
-                        _write(trial.area / checkpoint.name, checkpoint.read_bytes())
+            from experimental.harness.raven_adapter.checkpoints import CHECKPOINT_FILES
+
             for original, copied in (
                 (self.area, trial.area),
                 *((child_directory(self.area, name), child_directory(trial.area, name)) for name in self.children),
             ):
+                for name in CHECKPOINT_FILES:
+                    checkpoint = original / name
+                    if checkpoint.is_file() and not checkpoint.is_symlink():
+                        _write(copied / name, checkpoint.read_bytes())
                 source = original / "assembly"
                 destination = copied / "assembly"
                 ledger = source / "content-state.json"

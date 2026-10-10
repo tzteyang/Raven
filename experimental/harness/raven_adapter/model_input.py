@@ -20,6 +20,18 @@ class ModelInput:
         self.action = action
 
     async def decide(self, request):
+        try:
+            prepared = await self.prepare(request)
+        except ProjectionOverflowError as exc:
+            return LLMResponse(
+                content=str(exc),
+                finish_reason="error",
+                error_classification=ErrorClassification("context_overflow", should_compress=True),
+            )
+        return await self.native.decide(prepared)
+
+    async def prepare(self, request):
+        """Build the exact model input without invoking the provider."""
         view = self.capability.effective(request.tools)
         frame = self.sources.frame(view.scope.session_key)
         messages = deepcopy(request.messages)
@@ -66,13 +78,9 @@ class ModelInput:
                     estimated_tokens=exc.size,
                     allowance=exc.allowance,
                 )
-                return LLMResponse(
-                    content=str(exc),
-                    finish_reason="error",
-                    error_classification=ErrorClassification("context_overflow", should_compress=True),
-                )
+                raise
         self.capability.recorder.add("model.input", scope=view.scope, messages=messages, tools=view.tools)
-        return await self.native.decide(replace(request, messages=messages))
+        return replace(request, messages=messages)
 
     def ask_judge(self, *args, **kwargs):
         return self.native.ask_judge(*args, **kwargs)

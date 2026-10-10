@@ -123,8 +123,8 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
     ) as worker:
         original = worker.revision_id
         with pytest.raises(GenerationPausedError) as stopped:
-            await improve(worker, Provider(*turns[:6]), limits=Limits(max_calls=4))
-        assert stopped.value.state.calls == 4
+            await improve(worker, Provider(*turns[:6]), model="curator-primary", limits=Limits(max_calls=5))
+        assert stopped.value.state.calls == 5
         assert worker.revision_id == original
         pending = json.loads((worker.root / "curation/composition.json").read_text())
         assert pending["root"] is not None
@@ -138,9 +138,9 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
                 await improve(
                     worker,
                     Provider(LLMResponse(content="Provider unavailable", finish_reason="error")),
-                    limits=Limits(max_calls=7),
+                    limits=Limits(max_calls=8),
                 )
-            assert interrupted.value.state.calls == 5
+            assert interrupted.value.state.calls == 6
             assert interrupted.value.state.stage == "design"
             held = json.loads((worker.root / "curation/composition.json").read_text())
             assert held["error"] is None and held["repair"] is None
@@ -161,9 +161,15 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             ]
         continuation = Provider(*remaining)
         result = await improve(
-            worker, continuation, limits=Limits(max_calls=4 + len(remaining) + int(transport_failure))
+            worker,
+            continuation,
+            model="curator-replacement" if transport_failure else None,
+            limits=Limits(max_calls=6 + len(remaining) + int(transport_failure)),
         )
-        assert result.validation.passed and len(continuation.requests) == len(remaining)
+        assert result.validation.passed and len(continuation.requests) == len(remaining) + 1 + int(report_gap)
+        if transport_failure:
+            assert all(request["model"] == "curator-replacement" for request in continuation.requests)
+            assert result.candidate.attribution.identity["model"] == "curator-primary"
         assert {f"{role}.strategy" for role in ("planning", "memory", "capability", "action")} <= worker.children[
             "Hosted"
         ].artifact.values.keys()
@@ -204,7 +210,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
                     root_artifact([]),
                 ),
             ),
-            limits=Limits(max_calls=3),
+            limits=Limits(max_calls=4),
         )
         assert withdrawn.validation.passed
         assert not requirement.exists()

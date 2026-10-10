@@ -163,7 +163,10 @@ async def test_preflight_stages_readable_draft_and_final_submission_is_checked_a
             definitions = {row["function"]["name"]: row["function"]["parameters"] for row in request["tools"]}
             assert definitions["check_candidate"] == definitions["submit_artifact"]
             schemas = json.loads(request["messages"][3]["content"])["submission_schemas"]
-            assert schemas["check_candidate"] == schemas["submit_artifact"]
+            if "submit_consistency_review" in schemas:
+                assert set(schemas) == {"submit_consistency_review"}
+            else:
+                assert schemas["check_candidate"] == schemas["submit_artifact"]
 
 
 @pytest.mark.asyncio
@@ -483,6 +486,66 @@ def test_the_evaluation_side_the_caller_withholds_never_enters_the_snapshot(tmp_
         exploration.temporary.cleanup()
     assert copies["open"] == {"test_raven_helper.py", "test_simulation_reference.py", "test_cards.py"}
     assert copies["withheld"] == {"test_raven_helper.py"}
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("restriction", ["path", "marker"])
+async def test_registered_source_queries_cannot_read_withheld_files(tmp_path, restriction):
+    from experimental.harness.curator.generation.context import query
+    from experimental.harness.raven_adapter.inspection import file_source
+
+    repository = tmp_path / "repo"
+    repository.mkdir()
+    private = repository / "private.py"
+    private.write_text("PRIVATE_EVALUATION = 'hidden'\n")
+    public = repository / "public.py"
+    public.write_text("PUBLIC_CONTRACT = True\n")
+    inspection = Inspection(
+        Declaration("baseline", ()), {}, {"private": file_source(private), "public": file_source(public)}
+    )
+    withheld = Withheld(paths=("private.py",)) if restriction == "path" else Withheld(markers=(b"PRIVATE_EVALUATION",))
+    async with Exploration(
+        Config(), inspection, repository=repository, source_paths=("private.py", "public.py"), withheld=withheld
+    ) as exploration:
+        current = collect(
+            "Inspect",
+            inspection.declaration,
+            facts={},
+            sources=exploration.sources,
+            read_source=exploration.read_source,
+        )
+        assert set(exploration.sources) == {"public"}
+        assert not (exploration.root / "source/private.py").exists()
+        assert query.tools(current)[0]["function"]["parameters"]["properties"]["name"]["enum"] == ["public"]
+        with pytest.raises(ValueError, match="unknown registered source"):
+            query.execute(current, "read_source", {"name": "private"})
+        with pytest.raises(ValueError, match="unknown source"):
+            exploration.read_source(name="private")
+        assert query.execute(current, "read_source", {"name": "public"})["text"] == "PUBLIC_CONTRACT = True"
+
+
+@pytest.mark.asyncio
+async def test_registered_reference_reads_and_searches_use_the_verified_snapshot(tmp_path):
+    from experimental.harness.raven_adapter.inspection import file_source
+
+    repository = tmp_path / "repo"
+    (repository / "docs").mkdir(parents=True)
+    original = repository / "docs/reference.md"
+    original.write_text("First contract line.\nSecond contract line.\n")
+    inspection = Inspection(Declaration("baseline", ()), {}, {"reference": file_source(original)})
+    async with Exploration(Config(), inspection, repository=repository, source_paths=("docs",)) as exploration:
+        copied = exploration.root / "source/docs/reference.md"
+        original.write_text("Changed reference on the host.\n")
+        exploration.verify()
+        first = exploration.read_source(name="reference", length=6)
+        rest = exploration.read_source(name="reference", offset=first["next_offset"])
+        assert first["text"] + rest["text"] == "First contract line.\nSecond contract line."
+        assert first["path"] == str(copied)
+        assert exploration.read_source(name="reference", find="Second")["matches"][0]["line"] == 2
+        assert not exploration.read_source(name="reference", find="Changed")["matches"]
+        copied.write_text("Corrupted snapshot.\n")
+        with pytest.raises(ValueError, match="source changed"):
+            exploration.read_source(name="reference")
 
 
 def test_a_component_root_above_the_declared_source_paths_does_not_widen_the_snapshot(tmp_path):

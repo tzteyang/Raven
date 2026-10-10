@@ -81,7 +81,8 @@ def test_feedback_location_routes_requirements_without_discarding_original_signa
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("cleanup_fails", [False, True])
-async def test_failed_activation_restores_the_checkpoint_flushed_by_shutdown(tmp_path, cleanup_fails):
+@pytest.mark.parametrize("checkpoint", ["planning.json", "strategies.json"])
+async def test_failed_activation_restores_the_checkpoint_flushed_by_shutdown(tmp_path, cleanup_fails, checkpoint):
     import asyncio
     from unittest.mock import AsyncMock
 
@@ -93,7 +94,7 @@ async def test_failed_activation_restores_the_checkpoint_flushed_by_shutdown(tmp
 
     root = tmp_path / "runtime"
     root.mkdir()
-    state = root / "planning.json"
+    state = root / checkpoint
     state.write_text('{"version": "before shutdown"}')
     declaration = Declaration("old", catalogue())
     candidate = declaration.accept(assigned(declaration, "action.strategy"), action(generation={"temperature": 0.2}))
@@ -135,7 +136,10 @@ async def test_failed_activation_restores_the_checkpoint_flushed_by_shutdown(tmp
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("failure", [None, "root_start", "child_revision"])
-async def test_root_and_child_activation_is_one_boundary_that_restores_every_home_and_checkpoint(tmp_path, failure):
+@pytest.mark.parametrize("checkpoint_name", ["planning.json", "strategies.json"])
+async def test_root_and_child_activation_is_one_boundary_that_restores_every_home_and_checkpoint(
+    tmp_path, failure, checkpoint_name
+):
     """A root revision and a child revision activate together. When the restarted root fails, or a child reports a
     revision other than the one submitted, both homes' content, both artifacts and the flushed checkpoints return to
     what the shutdown left."""
@@ -164,7 +168,7 @@ async def test_root_and_child_activation_is_one_boundary_that_restores_every_hom
         assigned(root_declaration, "memory.strategy", current=before), profile({"TOOLS.md": "root after"})
     )
     runtime = tmp_path / "runtime"
-    checkpoint = child_directory(runtime, "Hosted") / "planning.json"
+    checkpoint = child_directory(runtime, "Hosted") / checkpoint_name
     checkpoint.parent.mkdir(parents=True)
     checkpoint.write_text('{"version": "before"}')
     payload = {

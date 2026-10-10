@@ -10,6 +10,7 @@ from experimental.harness.experience.contracts import (
     RecordOrigin,
     digest,
 )
+from experimental.harness.experience.curator import PHASES
 from experimental.harness.experience.records import RecordRejectedError, _check_text, normalize
 from experimental.harness.experience.retrieve import GuidanceQuery
 from experimental.harness.experience.verification import VALIDATING
@@ -71,7 +72,7 @@ async def _extract(owner, event, *, capabilities=(), contract_ids=(), expected_v
                 raise ValueError("host facts changed during experience learning recovery")
         else:
             related = []
-            for phase in ("diagnose", "select", "design", "implement", "repair"):
+            for phase in PHASES:
                 query = GuidanceQuery(
                     access_scope=owner.access.access_scope,
                     situation=event.view.situation,

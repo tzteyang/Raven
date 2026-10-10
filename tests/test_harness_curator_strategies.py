@@ -1,5 +1,6 @@
 """Semantic strategy boundaries, checkpoint ownership and validated resource decisions."""
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -383,6 +384,18 @@ def test_session_working_state_and_explicit_shared_knowledge_survive_reconstruct
         assert reopened.current().state == {"seen": "traveller:b"} and reopened.current().resuming
     finally:
         SESSION.reset(token)
+
+
+def test_legacy_owner_checkpoints_migrate_together_and_never_override_new_state(tmp_path):
+    from experimental.harness.raven_adapter.checkpoints import Checkpoints
+
+    for name in ("memory", "planning"):
+        (tmp_path / f"{name}.json").write_text(json.dumps({"task_id": "task", "data": {"value": name}}))
+    store = Checkpoints(tmp_path, "task")
+    store.save({"memory": {"data": {"value": "updated"}}})
+    restored = Checkpoints(tmp_path, "task")
+    assert restored.read("memory")["data"]["value"] == "updated"
+    assert restored.read("planning")["data"]["value"] == "planning"
 
 
 @pytest.mark.parametrize("inheritance", ["missing", "lookalike", "indirect"])

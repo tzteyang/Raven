@@ -5,7 +5,7 @@ import json
 from dataclasses import dataclass
 from pathlib import Path
 
-from experimental.harness.loop.history import Entry
+from experimental.harness.loop.history import Entry, read_history
 from experimental.harness.loop.ledger import held_out, rows, summary
 
 
@@ -31,7 +31,7 @@ class Cultivation:
     @classmethod
     def of(cls, value: dict) -> "Cultivation":
         return cls(
-            tuple(Entry.model_validate(row) for row in value["history"]),
+            read_history(value),
             tuple(tuple(stream) for stream in value.get("spoken", ())),
         )
 
@@ -53,7 +53,7 @@ def cultivation(path: Path) -> Cultivation:
         for item in record.get("rounds", ())
         for exchanges in item.get("sessions", {}).values()
     ]
-    return Cultivation(tuple(Entry.model_validate(row) for row in record["history"]), tuple(spoken))
+    return Cultivation(read_history(record), tuple(spoken))
 
 
 def load(path: Path) -> dict:

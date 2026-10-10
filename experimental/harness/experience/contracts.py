@@ -6,11 +6,11 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, model_validator
 
+from experimental.harness.contract.attribution import State
+
 type ModelRole = Literal["builder", "critic", "curator"]
-type Phase = Literal["understand", "diagnose", "select", "design", "implement", "repair"]
-type MechanismState = Literal[
-    "absent", "not_exposed", "not_triggered", "not_consumed", "wrong_logic", "blocked", "model_ignored", "uncovered"
-]
+type Phase = Literal["understand", "diagnose", "select", "design", "implement", "consistency_review", "repair"]
+type MechanismState = State
 type EvidenceBasis = Literal["observation", "indirect", "unknown"]
 type Activation = Literal["applied", "not_applied", "unknown"]
 type Comparability = Literal["comparable", "changed", "unknown"]

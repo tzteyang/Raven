@@ -47,6 +47,15 @@ def condition():
     )
 
 
+def test_experience_can_retain_an_adequately_handled_mechanism(event):
+    view = EvidenceView.model_validate({**event.view.model_dump(mode="json"), "mechanism_state": "adequate"})
+    selected = ExperienceCondition.model_validate(
+        {**condition().model_dump(mode="json"), "mechanism_states": ["adequate"]}
+    )
+    assert for_model(view, "builder")["mechanism_state"] == "adequate"
+    assert for_model(selected, "curator")["mechanism_states"] == ["adequate"]
+
+
 def proposal(event):
     return ExperienceProposal(
         condition=condition(),

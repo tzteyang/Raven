@@ -75,8 +75,11 @@ def history(trace) -> list[dict]:
     same call returns the same text; carrying the body forward would send it again on every later call of every
     later stage. A failed read, an error and a command's output stay as recorded: they cannot be reproduced."""
     rows = []
-    for event in trace:
+    for index, event in enumerate(trace):
         if event.get("event") == "model.call":
+            continue
+        if "observations" in event:
+            rows.append({**event, "observations": observation_index(event["observations"]), "trace_index": index})
             continue
         result = event.get("result")
         repeatable = (

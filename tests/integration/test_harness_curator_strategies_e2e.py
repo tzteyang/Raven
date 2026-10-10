@@ -29,6 +29,58 @@ def artifact():
 
 @pytest.mark.integration
 @pytest.mark.asyncio
+@pytest.mark.parametrize("empty,inferred", [(False, False), (True, False), (False, True)])
+async def test_default_probe_exercises_actual_memory_input_before_installation(baseline, tmp_path, empty, inferred):
+    from experimental.harness.raven_adapter.probe import exercise_translations
+
+    setup(baseline)
+    proposed = artifact()
+    proposed["values"] = {"memory.strategy": proposed["values"]["memory.strategy"]}
+    if inferred:
+        proposed["files"]["task_memory.py"] = (
+            proposed["files"]["task_memory.py"]
+            .replace(
+                "class Layout(BaseModel):", "class Layout(BaseModel):\n    model_config = ConfigDict(extra='forbid')"
+            )
+            .replace(
+                "def __init__(self, state, shared):",
+                "def __init__(self, state, shared, infer):\n        self.infer = infer",
+            )
+            .replace(
+                'return Layout(prefix="MEMORY_CONTEXT:")',
+                'return await self.infer(instruction="Initialize the context layout.", data={"task": initial.task}, output_type=Layout)',
+            )
+            .replace("def create(state, task, *, shared):", "def create(state, task, *, shared, infer):")
+            .replace("return Memory(state, shared)", "return Memory(state, shared, infer)")
+        )
+    if empty:
+        proposed["files"]["task_memory.py"] = proposed["files"]["task_memory.py"].replace(
+            'messages=[request.messages[0], {"role": "system", "content": content}, *request.messages[1:]]',
+            "messages=[]",
+        )
+    provider = (
+        partial(replay_provider, responses=[LLMResponse(content='{"prefix":"MEMORY_CONTEXT:"}')])
+        if inferred
+        else replay_provider
+    )
+    async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=30) as worker:
+        inspection = await worker.inspect()
+        candidate = inspection.declaration.accept(plan_for("memory.strategy"), proposed)
+        checked = await worker.check(candidate, probe=exercise_translations)
+        assert checked.passed is not empty, checked.errors
+        assert any(row["kind"] == "memory.result" and row["operation"] == "initialize" for row in checked.observations)
+        assert any(row["kind"] == "memory.result" and row["operation"] == "compose" for row in checked.observations)
+        if empty:
+            assert "protected" in str(checked.errors)
+        else:
+            assert any(row["kind"] == "model.input" for row in checked.observations)
+        assert len([row for row in checked.observations if row["kind"] == "provider.request"]) == int(inferred)
+        assert any(row["kind"] == "strategy.inference.result" for row in checked.observations) is inferred
+        assert worker.artifact.values == {} and not (worker.area / "strategies.json").exists()
+
+
+@pytest.mark.integration
+@pytest.mark.asyncio
 async def test_generation_feedback_and_actual_three_strategy_execution(baseline, tmp_path):
     setup(baseline)
     actions = [
@@ -55,10 +107,21 @@ async def test_generation_feedback_and_actual_three_strategy_execution(baseline,
         materials = packet({"messages": curator.requests[2]})
         for role in ("memory", "capability", "action"):
             contract = next(row for row in materials["selected_contracts"] if row["target"] == f"{role}.strategy")
-            knowledge = str(contract["knowledge"])
+            knowledge = str(
+                [
+                    *contract["knowledge"],
+                    *(item for item in materials["shared_knowledge"] if item["source"] in contract["shared_knowledge"]),
+                ]
+            )
             assert f"class {role.title()}Strategy" in knowledge
             assert f"# {role.title()} strategy on Raven" in knowledge
-            assert "class TaskBinding" in knowledge and "class StepView" in knowledge
+        sources = {
+            item["source"]
+            for contract in materials["selected_contracts"]
+            for item in (*contract["knowledge"], *contract["references"])
+        } | {item["source"] for item in (*materials["shared_knowledge"], *materials["shared_references"])}
+        assert any(name.endswith(":TaskBinding") for name in sources)
+        assert any(name.endswith(":StepView") for name in sources)
         first = await worker.run("Make a factual claim.", session_key="curator:strategies")
         assert not first.errors
         assert not any(row["kind"] == "memory.result" and row["operation"] == "interact" for row in first.records)
@@ -72,7 +135,7 @@ async def test_generation_feedback_and_actual_three_strategy_execution(baseline,
         assert inspected.facts["memory"]["shared"]["facts"] == {"evidence_probe": "cobalt"}
         assert inspected.facts["capability"]["tools"][0]["function"]["name"] == "evidence_probe"
         assert "evidence" in inspected.facts["capability"]["skills"]
-        before = (worker.root / "memory.json").read_bytes()
+        before = json.loads((worker.area / "strategies.json").read_text())["owners"]["memory"]
         revised = artifact()
         revised["values"] = {"action.strategy": revised["values"]["action.strategy"]}
         feedback = CuratorProvider(
@@ -84,7 +147,7 @@ async def test_generation_feedback_and_actual_three_strategy_execution(baseline,
             ]
         )
         await improve(worker, feedback, feedback={"source": "human", "text": "Require actual evidence in each turn."})
-        assert (worker.root / "memory.json").read_bytes() == before
+        assert json.loads((worker.area / "strategies.json").read_text())["owners"]["memory"] == before
         materials = json.loads(feedback.requests[1][1]["content"])
         assert materials["worker"]["memory"]["shared"]["facts"]
         assert "capability.strategy" in materials["current_authored"]["values"]
@@ -113,7 +176,8 @@ async def test_all_strategy_checkpoints_are_isolated_and_restored_on_failed_acti
         inspected = await worker.inspect()
         await worker.install(inspected.declaration.accept(plan_for(*proposed["values"]), proposed))
         roles = ("planning", "memory", "capability", "action")
-        before = {role: (worker.root / f"{role}.json").read_bytes() for role in roles}
+        before = json.loads((worker.area / "strategies.json").read_text())["owners"]
+        assert set(before) == set(roles)
         bad = deepcopy(proposed)
         for role in before:
             bad["files"][f"task_{role}.py"] = bad["files"][f"task_{role}.py"].replace(
@@ -149,10 +213,10 @@ def create(context):
             row["kind"] == "component.constructed" and row.get("name") == "failed_activation"
             for row in report.observations
         )
-        assert all((worker.root / f"{role}.json").read_bytes() == value for role, value in before.items())
+        assert json.loads((worker.area / "strategies.json").read_text())["owners"] == before
         with pytest.raises(WorkerError, match="service did not start"):
             await worker.install(candidate)
-        assert all((worker.root / f"{role}.json").read_bytes() == value for role, value in before.items())
+        assert json.loads((worker.area / "strategies.json").read_text())["owners"] == before
         assert worker.artifact.values == proposed["values"]
         assert "migration" not in (await worker.inspect()).facts["planning"]["state"]
 
@@ -208,7 +272,7 @@ async def test_four_strategy_composition_preserves_planning_and_rejects_stale_ca
         assert after.facts["planning"]["view"]["items"] == {baseline.task.text: True}
         for role in ("planning", "memory", "capability", "action"):
             assert any(row["kind"] == f"{role}.call" for row in execution.records)
-            assert (worker.root / f"{role}.json").is_file()
+            assert role in json.loads((worker.area / "strategies.json").read_text())["owners"]
         with pytest.raises(ValueError, match="baseline"):
             await worker.install(stale)
 

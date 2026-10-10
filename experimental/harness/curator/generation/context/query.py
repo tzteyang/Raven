@@ -28,6 +28,11 @@ class FactQuery(BaseModel):
 class ObservationQuery(BaseModel):
     model_config = ConfigDict(extra="forbid")
     index: int = Field(ge=0)
+    trace_index: int | None = Field(
+        default=None,
+        ge=0,
+        description="For validation evidence, the trace_index shown by that validation in history. Omit for execution observations.",
+    )
     path: tuple[str | int, ...] = ()
     offset: int = Field(default=0, ge=0)
     length: int = Field(default=12000, ge=1, le=24000)
@@ -48,13 +53,14 @@ def tools(context: Context) -> list[dict]:
         tool(
             "read_observation",
             "Read one execution observation listed in `observations` by its index, optionally at a path inside it; "
-            "long rows can be read in bounded slices.",
+            "long rows can be read in bounded slices. To read validation observations instead, provide the "
+            "validation's trace_index from history and the observation's index within it.",
             schema_for(ObservationQuery),
         ),
     ]
 
 
-def execute(context: Context, name: str, arguments: dict) -> dict:
+def execute(context: Context, name: str, arguments: dict, *, trace=()) -> dict:
     if name == "read_source":
         request = SourceQuery.model_validate(arguments)
         if request.name not in context.sources:
@@ -79,9 +85,14 @@ def execute(context: Context, name: str, arguments: dict) -> dict:
         }
     if name == "read_observation":
         request = ObservationQuery.model_validate(arguments)
-        if request.index >= len(context.observations):
-            raise ValueError(f"no observation has the index {request.index}; there are {len(context.observations)}")
-        value = context.observations[request.index]
+        rows = context.observations
+        if request.trace_index is not None:
+            if request.trace_index >= len(trace) or "observations" not in trace[request.trace_index]:
+                raise ValueError("trace_index must identify recorded validation observations")
+            rows = trace[request.trace_index]["observations"]
+        if request.index >= len(rows):
+            raise ValueError(f"no observation has the index {request.index}; there are {len(rows)}")
+        value = rows[request.index]
         for key in request.path:
             value = value[key]
         text = json.dumps(value, ensure_ascii=False, indent=2, default=str)

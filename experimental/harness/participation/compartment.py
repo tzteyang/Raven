@@ -17,6 +17,7 @@ import time
 from collections.abc import AsyncIterator, Callable
 from contextvars import ContextVar
 from dataclasses import dataclass
+from itertools import groupby
 from pathlib import Path
 from typing import Any, Literal
 
@@ -44,7 +45,8 @@ def texts_of(value) -> list[str]:
     """Every string inside a value, however nested: message contents, tool results, arguments. A string that is a
     JSON object or array, such as the packet a role is sent as its message, is read as the value it encodes: in its
     encoded form a line break is the two characters of an escape, which would join the words around it and hide a
-    sealed text written over several lines."""
+    restricted text written over several lines. Mapping keys are model-visible too. Consecutive text parts of a
+    message are also scanned together; unrelated fields and separate messages remain separate."""
     if isinstance(value, str):
         if value.lstrip()[:1] in ("{", "["):
             try:
@@ -55,9 +57,22 @@ def texts_of(value) -> list[str]:
                 return texts_of(decoded)
         return [value]
     if isinstance(value, dict):
-        return [text for item in value.values() for text in texts_of(item)]
+        return [text for pair in value.items() for item in pair for text in texts_of(item)]
     if isinstance(value, (list, tuple)):
-        return [text for item in value for text in texts_of(item)]
+        texts = [text for item in value for text in texts_of(item)]
+        for is_text, parts in groupby(
+            value,
+            key=lambda item: (
+                isinstance(item, dict)
+                and item.get("type") in ("text", "input_text", "output_text")
+                and isinstance(item.get("text"), str)
+            ),
+        ):
+            if is_text:
+                run = [part["text"] for part in parts]
+                if len(run) > 1:
+                    texts.extend(("".join(run), "\n".join(run)))
+        return texts
     return []
 
 
@@ -86,14 +101,9 @@ class Guard:
         return found
 
     def check_request(self, messages, tools, kwargs, where: str, *, spared=()) -> list[str]:
-        """A provider request. `spared` are streams of words said by someone entitled to say them (see
-        `Sealed.without`). For the partner, the user messages are the conversant's own words: what it says of its
-        situation is not sealed against the partner, so those texts are subtracted before the scan (the identifiers
-        stay). A leak in the system prompt, a tool result or the partner's own words is still caught."""
+        """Check a request using only explicitly supplied, entitled speech (see `Sealed.without`). API message
+        roles carry no such authority: summaries and internal instructions also use the user role."""
         sealed = self.sealed.without(spared) if spared else self.sealed
-        if self.role == "partner":
-            spoken = texts_of([row for row in messages if isinstance(row, dict) and row.get("role") == "user"])
-            sealed = sealed.without([spoken])
         return self.check({"messages": messages, "tools": tools, **kwargs}, where, sealed=sealed)
 
     def record(self, event: str, where: str, hits: list[str] = ()) -> None:

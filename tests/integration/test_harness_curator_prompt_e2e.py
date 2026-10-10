@@ -270,7 +270,7 @@ async def test_semantic_result_resamples_the_main_loop_with_one_attempt_per_prop
         "invalid judgment JSON",
     ],
 )
-async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_tool(baseline, tmp_path, judgment):
+async def test_semantic_dispatch_distinguishes_refusal_from_an_unverified_check(baseline, tmp_path, judgment):
     destination = baseline.workdir / "unapproved.txt"
     baseline.task = Task(text="Write only to an established destination.")
     baseline.config.permissions.tools["write_file"] = "allow"
@@ -279,7 +279,7 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
         responses=[
             response("write_file", {"path": str(destination), "content": "must not be written"}),
             LLMResponse(content=judgment),
-            LLMResponse(content="No file was written."),
+            LLMResponse(content="The tool result is recorded."),
         ],
     )
     async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=45) as worker:
@@ -287,9 +287,9 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
         inspection = await worker.inspect()
         await worker.install(inspection.declaration.accept(plan_for(*proposed["values"]), proposed))
         execution = await worker.run("Prepare the requested output.")
-        assert not destination.exists()
         assert len([row for row in execution.records if row["kind"] == "strategy.inference"]) == 1
         if judgment.startswith("{"):
+            assert not destination.exists()
             assert any(
                 row["kind"] == "action.control"
                 and row["receipt"]["control"] == "reject"
@@ -297,6 +297,8 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
                 for row in execution.records
             )
         else:
+            assert destination.read_text() == "must not be written"
+            assert any(row["kind"] == "action.unverified" for row in execution.records)
             assert any(
                 row["kind"] == "strategy.inference.error" and row["error_kind"] == "result" for row in execution.records
             )

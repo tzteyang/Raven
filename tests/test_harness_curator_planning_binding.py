@@ -288,10 +288,10 @@ async def test_failed_checkpoint_does_not_publish_a_new_plan(tmp_path, monkeypat
     await planning.prepare()
     before = planning.path.read_bytes()
 
-    def fail():
+    def fail(records):
         raise OSError("checkpoint unavailable")
 
-    monkeypatch.setattr(planning.scopes, "save", fail)
+    monkeypatch.setattr(planning.scopes.checkpoints, "save", fail)
     with pytest.raises(OSError, match="checkpoint unavailable"):
         await planning.interact({"operation": "complete", "item": "Verify"})
     assert planning.path.read_bytes() == before
@@ -378,6 +378,7 @@ async def test_planning_factory_reader_is_session_scoped_and_only_reads_committe
 @pytest.mark.asyncio
 async def test_the_validation_probe_refuses_an_observation_translation_that_keeps_state(tmp_path):
     from types import SimpleNamespace
+    from unittest.mock import AsyncMock
 
     from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
 
@@ -422,6 +423,7 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
     class Memory:
         observe = staticmethod(lambda observation: None)
         command_type = dict
+        initialize_context = AsyncMock()
 
         async def prepare(self):
             return None
@@ -434,9 +436,18 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
             return function(observation)
 
     with_memory = SimpleNamespace(
-        planning=None, strategies={"memory": Memory()}, recorder=clean.recorder, baseline=None
+        planning=None,
+        strategies={"memory": Memory()},
+        recorder=clean.recorder,
+        baseline=None,
+        context_sources=SimpleNamespace(assemble=AsyncMock(), frame=lambda session: SimpleNamespace(messages=[])),
+        runtime=SimpleNamespace(
+            loop=SimpleNamespace(harness=SimpleNamespace(memory=SimpleNamespace(token_budget=lambda: None)))
+        ),
     )
-    await exercise_translations(with_memory)
+    from experimental.harness.raven_adapter.probe import _memory
+
+    await _memory(with_memory, "probe")
     assert seen == [("observe", "validation-probe-after_iteration", 0)]
     memory_rows = [row for row in clean.recorder.rows if row.get("strategy") == "memory"]
     assert memory_rows[-1]["status"] == "passed"

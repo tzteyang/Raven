@@ -8,6 +8,7 @@ from experimental.harness.contract import Candidate, Plan, Validation
 from experimental.harness.contract.artifact import Selection
 from experimental.harness.contract.attribution import Attributed
 from experimental.harness.curator.generation.context.collect import Context
+from experimental.harness.curator.generation.stages.consistency_review import ConsistencyReview
 from experimental.harness.raven_adapter.inspection import fingerprint
 
 
@@ -15,12 +16,13 @@ class GenerationState(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     input_id: str
-    stage: Literal["select", "design", "implement", "repair"] = "select"
+    stage: Literal["select", "design", "implement", "consistency_review", "repair"] = "select"
     attribution: Attributed | None = None
     selection: Selection | None = None
     plan: Plan | None = None
     candidate: Candidate | None = None
     validation: Validation | None = None
+    consistency_review: ConsistencyReview | None = None
     messages: list[dict] = Field(default_factory=list)
     staged: dict[str, str] = Field(default_factory=dict)
     edited: list[str] = Field(default_factory=list)

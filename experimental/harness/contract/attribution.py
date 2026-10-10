@@ -14,7 +14,15 @@ from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 from experimental.harness.participation.audience import CURATOR
 
 State = Literal[
-    "absent", "not_exposed", "not_triggered", "not_consumed", "wrong_logic", "blocked", "model_ignored", "uncovered"
+    "adequate",
+    "absent",
+    "not_exposed",
+    "not_triggered",
+    "not_consumed",
+    "wrong_logic",
+    "blocked",
+    "model_ignored",
+    "uncovered",
 ]
 
 
@@ -34,7 +42,8 @@ class Diagnosis(BaseModel):
         "routed node requirement, or task for the task itself.",
     )
     state: State = Field(
-        description="absent: no mechanism covers it. not_exposed: one exists but the model never sees it. "
+        description="adequate: the evidence shows that the current mechanism already handles this input adequately. "
+        "absent: no mechanism covers it. not_exposed: one exists but the model never sees it. "
         "not_triggered: it exists but its trigger did not fire. not_consumed: it fired but its result was not used. "
         "wrong_logic: it ran and decided wrongly, including stopping or rewriting an action the requirement wants. "
         "blocked: the host or a permission stopped it. model_ignored: the "
