@@ -41,3 +41,5 @@ Submit in `commitments` the changes this design makes to the Harness commitments
 ## Completion check
 
 Could an implementer follow the proposal without inventing an invocation path, essential type, state owner or permission? Can the host check the intended behavior? Resolve missing dependencies before submission; keep unverified benefits explicitly framed as expectations.
+
+Use the ordered change policy. State the successful behavior that must survive, and how partial delivery continues after an ordinary quality-check failure. Never claim a behavioral test that the available host did not run.

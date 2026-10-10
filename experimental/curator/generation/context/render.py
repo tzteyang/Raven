@@ -10,12 +10,15 @@ from raven.utils.messages import build_assistant_message
 
 _PROMPTS = Path(__file__).resolve().parents[1] / "prompts"
 _COMMON = ("common/background", "common/contracts", "common/materials", "common/interaction")
+# How to choose and carry out a change, read by every stage after the shared rules.
+_SKILL = Path(__file__).resolve().parents[2] / "skills" / "harness-change.md"
 
 
 def prompt_files() -> tuple[Path, ...]:
     """The prompt files every Curator request draws on besides its stages' own: the shared rules, the rules of a
     composition's root and child scopes, and the request frame."""
-    return tuple(_PROMPTS / f"{name}.md" for name in (*_COMMON, "composition/root", "composition/child", "request"))
+    shared = tuple(_PROMPTS / f"{name}.md" for name in (*_COMMON, "composition/root", "composition/child", "request"))
+    return (*shared, _SKILL)
 
 
 def tool(name: str, description: str, parameters: dict) -> dict:
@@ -51,7 +54,7 @@ def messages(
     experience = materials.pop("experience", None)
     guidance = (experience or {}).get("stages", {}).get(_stage(stages[-1]))
     return [
-        {"role": "system", "content": "\n\n".join(_prompt(name) for name in (*_COMMON, *local))},
+        {"role": "system", "content": "\n\n".join(_prompt(name) for name in (*_COMMON, *local, _SKILL))},
         {"role": "user", "content": json.dumps(materials, ensure_ascii=False, indent=2)},
         {"role": "user", "content": "\n\n".join((*(_prompt(name) for name in stages), request))},
         {"role": "user", "content": json.dumps(stage_materials, ensure_ascii=False, indent=2)},
