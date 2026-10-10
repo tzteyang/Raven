@@ -14,15 +14,15 @@
 4. WebUI 能呈现该运行；逻辑错位处修 WebUI。
 
 非目标：
-- 不改 `raven/`（见记忆规则）；Oncall 的接入只在运行配置与 `experimental/automation` 层。
+- 不改 `raven/`（见记忆规则）；Oncall 的接入只在运行配置与 `experimental/simulation/bench` 层。
 - 不重写旅行社实现；只抽取共用部分，旅行社继续通过同一协议运行。
 - 不做真实投放；守望任务只读、动作为写文件（无 webhook）。
 
 ## 2. 现状（已核实）
 
 - 回路协议已存在：`iteration.protocols.Trial`（`run(worker) -> Sessions`）、`assessor.role.Assessor`
-  （`evaluate(sessions) -> Signal | None`）、`iteration.conversation.Conversant`；受众投影 `experimental/audience.py`；
-  听证 `iteration/hearing.py`；Analyst 反馈契约 `analyst/feedback.py`；通用入口 `iteration.run`。
+  （`evaluate(sessions) -> Signal | None`）、`iteration.conversation.Conversant`；受众投影 `experimental/harness/participation/audience.py`；
+  听证 `harness/participation/hearing.py`；Analyst 反馈契约 `analyst/feedback.py`；通用入口 `iteration.run`。
 - 已有评审者：`assessor.human`、`assessor.dataset`（试验 + 评分一体）、`assessor.standard`（声明/推导/沉淀）、
   `simulation.agency.Agency`（旅行社老板，也负责分步交付资料）。
 - 案例绑定处：`simulation/__main__.py` 的装配、`automation/traveller.py`（人物卡扮演，已基本通用）、
@@ -39,8 +39,8 @@
 | 方案 | 做法 | 复杂度 | 可理解性 | 风险 |
 |---|---|---|---|---|
 | A 不新增协议，品牌案例复制 `simulation/__main__.py` 一份装配 | 最快 | 低 | 两份装配各自演化，老板评审契约重复维护（违反 AGENTS §3） | 债务 |
-| B 新包 `experimental/counterpart/`：`Case` 装配协议 + 通用 `Owner` 评审者，`Agency` 迁为其旅行社实现 | 中 | 高：案例层一目了然 | 需改 `Agency` 内部结构，有测试覆盖 | 回归 |
-| C 把一切塞进 `experimental/scenario`（合同、披露）扩展 | 中 | 低：场景包与角色实现混在一起 | 边界模糊 | |
+| B 新包 `experimental/cultivation/counterpart/`：`Case` 装配协议 + 通用 `Owner` 评审者，`Agency` 迁为其旅行社实现 | 中 | 高：案例层一目了然 | 需改 `Agency` 内部结构，有测试覆盖 | 回归 |
+| C 把一切塞进 `experimental/harness/scenario`（合同、披露）扩展 | 中 | 低：场景包与角色实现混在一起 | 边界模糊 | |
 
 采用 **B**。关键假设：`Agency._judge` 的评审包里旅行社专有的键（deck_pages、back_office、research、colleague_reports、
 references）能作为"额外视图"钩子注入，老板提示词与计分卡契约不变。若钩子不足以表达，退回为 `Owner` 与 `Agency`
@@ -108,14 +108,14 @@ references）能作为"额外视图"钩子注入，老板提示词与计分卡�
 
 | # | 工作 | 状态 |
 |---|---|---|
-| P1 | `experimental/counterpart/`：通用 `Owner`（评审骨架抽自 `Agency`，`facts`/`pictures` 钩子）、`drills`（`enlist`/`grouped`）、`case`（成案谓词）、`Agency` 迁为旅行社实现、测试 | 已完成 |
+| P1 | `experimental/cultivation/counterpart/`：通用 `Owner`（评审骨架抽自 `Agency`，`facts`/`pictures` 钩子）、`drills`（`enlist`/`grouped`）、`case`（成案谓词）、`Agency` 迁为旅行社实现、测试 | 已完成 |
 | P2 | `simulation/__main__.py` 按场景名选 `Owner`（`OWNERS` 表），演练与留出经 `counterpart.drills` 装配；`value.judge` 的成案谓词经 `counterpart.case.delivered_for` 取 | 已完成（`Case` 协议未单设：装配只差 Owner 与谓词两处，表查找更短） |
 | P3 | `assessor/introspect.py` 自评评审者（`source=self`，副本上逐单自检，记录到 `analysis/`）+ Analyst 提示补充 + `tests/test_assessor_introspect.py` | 已完成 |
 | P4 | Oncall 收编（`HOUSED`/`pin`/`KEEPS_SHELL`，`RAVEN_CONNECTIONS` 与 `PYTHONTZPATH` 转发）、机器注册表 | 已完成；冒烟并入 P6 的 run-1 |
 | P5 | 品牌案例场景包 `scenarios/brand_strategist/`（合同、9 条判据、3 张请求卡、3 份资料含读数脚本、`simulation/brand.py` 事实计算器与 `BrandOwner`；词表在场景的 `reference.md`，代码不含中文，与旅行社的价目词表同法） | 已完成；测试 `tests/test_simulation_brand.py`、`test_party_case.py`、`test_party_drills.py` |
 | P6 | DeepSeek 多轮运行（≥2 轮 Curator 修订），记录 | 进行中：run-1（10:49–11:22）在入职 curation 的 Oncall 子作用域被 Curator 隔间拦下——Curator 写的英文 docstring 与我的英文检查项有 10 个词逐字相同（两边都是同一句中文规范的英译，差分封印认不出翻译）；判据改写为评价者自己的指令（指向规范章节与算出的事实，不再翻译规范原句），run-2（11:41–12:24）跑到第 1 轮演练：三张卡都交了文件，守望卡走通了全链路（委派 housed 的 Raven-Oncall → 读基线 → `ops_declare` 守望 campaign → 三次 `ops_check_later` → 报告写进工作目录 → `ops_finish`）；但守望说明第 2 轮才交，带 shell 的 Oncall 子进程找脚本时翻到了运行记录（`settings.json`）和仓库里的场景目录，回话带回场景名，被伙伴隔间拦下，同时也是 BRIEF §11.5 的隔离越界，不作证据。修：机器注册表的路径改为只放读数脚本的 `oncall/`，`software` 写绝对路径；run-3（12:27–13:13）同类越界再次发生：雇员让 Oncall 子进程去核查尚未交出的守望说明，子进程列了注册路径的上级（运行目录）读到 NOTES.md 里的场景名。改两处：注册路径移到任何运行目录之外的 `raven-rsi-runs/oncall-lab/`；守望说明随入职一次交齐（`--chain documents`），多轮价值由反馈驱动的 Curator 修订体现。run-4 于 13:17 重启。带 shell 的子进程要真正关在自己区域里仍需 `--isolate-as raven-worker`（目录封闭由用户操作）。记录在 `raven-rsi-runs/brand-oncall-20261007/NOTES.md`；run-3（12:27–13:13）在第 1 轮再次被伙伴隔间拦下：带 shell 的 Oncall 子进程读了记录目录里的 `NOTES.md` 并执行 `find ... -iname '*brand_strategist*'`，结果回流进员工会话。三次运行均未完成第 1 轮，阻塞在两件事：带 shell 子进程的进程隔离（`--isolate-as raven-worker`，目录封闭需用户操作）；DeepSeek 余额已用完，换 OpenRouter 后内置通用子 harness 报 `deepseek needs an API key`，未解决 |
 | P7 | WebUI：索引与页面读新案例运行；缺失处修 | 进行中：已修两处错位——(1) 页面原按服务器唯一的 `--scenario` 标红线，现按每个运行 `settings.json` 记的 `scenario_dir` 取判据（`/api/scenario?run=`）；(2) `--runs` 目录里用符号链接汇集多处运行时，索引列得出、详情接口全部 404（包含检查把链接解析到真实路径后判为根外），现按运行 id 的纯名字校验与工作根的真实位置判断。两处都有服务端测试；本地起服务核对过记录、实时与判据三个接口。待 run-2 出首轮数据后核对自评信号与守望记录的呈现 |
-| P8 | 文档：`cultivation-loop-design.md`、`CONTEXT.md` 术语、本文归档 | 部分完成：两份文档已写入交互方层与自评信号；交互方角色由 party 改名 counterpart（目录 `experimental/counterpart/`、角色字面量、类名 `CounterpartAnswers`、测试与 WebUI 文案同步，`CONTEXT.md` 写明旧名为 _Avoid_）；本文归档待 P6 完成 |
+| P8 | 文档：`cultivation-loop-design.md`、`CONTEXT.md` 术语、本文归档 | 部分完成：两份文档已写入交互方层与自评信号；交互方角色由 party 改名 counterpart（目录 `experimental/cultivation/counterpart/`、角色字面量、类名 `CounterpartAnswers`、测试与 WebUI 文案同步，`CONTEXT.md` 写明旧名为 _Avoid_）；本文归档待 P6 完成 |
 | P9 | critic：`assessor/critic.py` 逐轮修订派生条目（3.5），`StandardAssessor` 注入，模拟入口与 WebUI 会话宿主接线，`derive` 删除，测试 `tests/test_assessor_critic.py` | 已完成（783 条 experimental 测试通过） |（2026-10-09 合并后由 rubric 构建者与元评审者取代，`assessor/critic.py` 已删除）
 | P10 | 守望模拟数据源（3.6）；品牌案例在 OpenRouter `deepseek/deepseek-v4-flash` 上多轮运行，带 `--standard derived` | 进行中 |
 

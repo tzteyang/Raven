@@ -1,6 +1,6 @@
 # 增量策展与语义判断：实施计划
 
-状态：v2 已实现，未提交。计划评审见第 12 节；实现评审与处置见 13.3；离线转写与 DeepSeek 流程验证见 13.2 与 13.4（只有“一个决定内多次推断”这一项还没验证到）。日期：2026-10-09。范围：`experimental/curator/` 的生成流程、安装与策略推断宿主；评价分支、`raven/`、模拟场景与材料不在本计划内修改。
+状态：v2 已实现，未提交。计划评审见第 12 节；实现评审与处置见 13.3；离线转写与 DeepSeek 流程验证见 13.2 与 13.4（只有“一个决定内多次推断”这一项还没验证到）。日期：2026-10-09。范围：`experimental/harness/curator/` 的生成流程、安装与策略推断宿主；评价分支、`raven/`、模拟场景与材料不在本计划内修改。
 
 ## 1. 要解决的问题
 
@@ -85,7 +85,7 @@
 
 ### 3.4 数据结构
 
-`experimental/curator/harness/commitments.py`：
+`experimental/harness/contract/commitments.py`：
 
 ```python
 class Commitment(BaseModel):

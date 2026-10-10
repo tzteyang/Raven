@@ -22,12 +22,12 @@ Only initial construction is wired now. The collection API accepts an existing i
 
 ## Implementation boundaries
 
-- `experimental/research/`: expert information contracts, collection and review prompts, a bounded collection/review runner, and a Curator handoff adapter. The offline entry and Scenario onboarding now share collection; no material-presence gap classifier remains.
+- `experimental/cultivation/collector/`: expert information contracts, collection and review prompts, a bounded collection/review runner, and a Curator handoff adapter. The offline entry and Scenario onboarding now share collection; no material-presence gap classifier remains.
 - Existing Raven `Exploration`: owned source snapshots, native file tools and shell where the configured executor supports it. No new shell implementation or relaxation of its visibility rules.
 - Existing research delegation: explicit questions, source-backed findings and unresolved questions; its raw source checks are supplemented by semantic review of the complete expert description.
 - User interaction: an injected question callback; unavailable answers remain explicit unresolved questions instead of invented business content.
-- `experimental/research/guidance.py`: bounded abstraction of research-only references into questions linked to dimensions. It is invoked lazily and shared across research groups; it never supplies factual evidence to the expert description.
-- `experimental/simulation/experts.py`: accept the business task and optional interaction materials, plus separately declared research references or prepared guidance. Only the initial collection and review are connected to Curator.
+- `experimental/cultivation/collector/guidance.py`: bounded abstraction of research-only references into questions linked to dimensions. It is invoked lazily and shared across research groups; it never supplies factual evidence to the expert description.
+- `experimental/simulation/bench/experts.py`: accept the business task and optional interaction materials, plus separately declared research references or prepared guidance. Only the initial collection and review are connected to Curator.
 - `CONTEXT.md` and current design documentation: describe the distinction between information coverage and mechanism attribution, and the initial-only integration.
 
 ## Acceptance

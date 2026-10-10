@@ -226,7 +226,7 @@ sequenceDiagram
 ## 6. 代码位置
 
 ```text
-experimental/curator/
+experimental/harness/curator/
   workflow.py            # 入口 improve / propose：单层生成或组合流程
   composition/           # 两层组合：根候选 → 子候选 → 整体校验与生效
   generation/            # 分阶段生成：stages/、提示词 prompts/、材料组装 context/

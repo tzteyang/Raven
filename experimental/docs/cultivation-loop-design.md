@@ -21,11 +21,11 @@
 
 自动化分支只是把工作对象与交互方换成模型扮演；真人模式下由人充当这两个角色，管线不感知差别。
 
-交互方的通用实现在 `experimental/counterpart/`：`Owner` 是评审骨架（读会话与交付物、按案例注入的事实与画面评审、按披露日程交材料），`drills` 把题卡装成模拟对话人与并行分组的试炼，`case` 给成案判定提供交付谓词。一个案例（`simulation/agency.py` 的旅行社、`simulation/brand.py` 的品牌策略师）只注入自己的事实计算器，不复制装配。
+交互方的通用实现在 `experimental/cultivation/counterpart/`：`Owner` 是评审骨架（读会话与交付物、按案例注入的事实与画面评审、按披露日程交材料），`drills` 把题卡装成模拟对话人与并行分组的试炼，`case` 给成案判定提供交付谓词。一个案例（`simulation/agency.py` 的旅行社、`simulation/brand.py` 的品牌策略师）只注入自己的事实计算器，不复制装配。
 
 ## 3. 输入类别（封闭）
 
-从闭环的参与者推出，场景输入只能描述参与者及其关系。加载器（`experimental/scenario/`）要求场景目录里每个文件都属于一个类别。
+从闭环的参与者推出，场景输入只能描述参与者及其关系。加载器（`experimental/harness/scenario/`）要求场景目录里每个文件都属于一个类别。
 
 | 类别 | 内容 |
 |---|---|
@@ -53,7 +53,7 @@
 
 边界不靠提示词，也不靠在一处逐字段删除，而是三件事：
 
-1. **字段受众声明。** 闭环上每个类型的每个字段声明它的受众（partner、conversant、counterpart、analyst、curator 的子集），契约里每一项声明可见性。比较过三种表达：每个角色一个视图类型（矩阵散在多处）、评价侧的值包成封印类型（挡不了嵌套字段）、字段级声明加通用投影（矩阵就在类型定义里）。采用第三种，角色、受众常量与投影在 `experimental/audience.py`，闭环与 Curator 的类型共用。`project(value, role)` 递归保留受众含该角色的字段；未声明受众的字段是错误。`hearing.heard` 即 `project(signal, "curator")`，`Remark` 类型退掉；Analyst 的材料是 `project(..., "analyst")`；交互方模拟器拿 `project(scenario, "counterpart")`。
+1. **字段受众声明。** 闭环上每个类型的每个字段声明它的受众（partner、conversant、counterpart、analyst、curator 的子集），契约里每一项声明可见性。比较过三种表达：每个角色一个视图类型（矩阵散在多处）、评价侧的值包成封印类型（挡不了嵌套字段）、字段级声明加通用投影（矩阵就在类型定义里）。采用第三种，角色、受众常量与投影在 `experimental/harness/participation/audience.py`，闭环与 Curator 的类型共用。`project(value, role)` 递归保留受众含该角色的字段；未声明受众的字段是错误。`hearing.heard` 即 `project(signal, "curator")`，`Remark` 类型退掉；Analyst 的材料是 `project(..., "analyst")`；交互方模拟器拿 `project(scenario, "counterpart")`。
 2. **隔间。** 闭环按角色划成隔间（准备、装配、试炼、评审、分析、改造、记录），每一步在其隔间里执行。隔间是上下文管理器：设定当前角色与策略，`admit` 做投影并核验，`guard` 返回守卫后的 provider，进入与违规写进 `records/boundaries.jsonl`。
 3. **守卫。** 信息进入一个模型角色只有三个咽喉：模型请求、文件访问、记录写入。守卫装在咽喉上，与内部代码路径无关。模型请求的守卫是 provider 代理，包住 `LLMProvider` 的全部抽象方法，请求发出前扫描消息与工具结果；文件访问的守卫是 `Withheld` 与 `confined`；记录写入带出处与受众。
 
@@ -189,7 +189,7 @@ Change
 | 方案 | 做法 | 代价与风险 |
 |---|---|---|
 | A. 阶段参数化 | 归因留在生成阶段机里，版本由参数与提示词摘要表达 | 改动最小；不满足需求 1、4 |
-| B. 独立组件 | `experimental/curator/attribution/` 自成一包：`Attributor` 协议、自己的一次对话、预算、检查点与记录；生成从 select 开始，只接收 `Attributed` | 多一份对话前缀，归因的工具表与生成不同，提示词缓存前缀不共用 |
+| B. 独立组件 | `experimental/harness/curator/attribution/` 自成一包：`Attributor` 协议、自己的一次对话、预算、检查点与记录；生成从 select 开始，只接收 `Attributed` | 多一份对话前缀，归因的工具表与生成不同，提示词缓存前缀不共用 |
 | C. 独立角色 | 与 Analyst 同级的第六个角色，自己的 provider 与隔间 | 违反需求 2；归因要读 Harness 源码、用原生探索工具，这些只在 Curator 侧，复制过去就是复制半个 Curator |
 
 采用 B。成立的前提是：归因读的与生成读的是同一份上下文（任务、要求、引用回合、Harness 声明与源码），分开的只是它的对话与产物。若将来归因需要 Curator 看不到的信息，这个前提就不成立，那时要重新评估 C。
@@ -229,10 +229,10 @@ Change
 
 叠加规则：交互方优先，派生的只填空缺；关闭即不装该 Assessor。派生标准只从规范抽，不从范例、不从伙伴自己的输出抽；它是评测装置，不给 Curator。派生标准的满意不能单独终止运行。沉淀的来源价值最高：交互方沉默时 loop 至少在守已确认过的东西。
 
-实现在 `experimental/assessor/standard.py`：
+实现在 `experimental/harness/assessor/standard.py`：
 
 - `Criterion` 带 id、文本、来源、强度、出处，以及适用情境与验收；`Standard` 按来源组合，id 跨来源唯一。`Standard.declared` 取场景检查项；`sedimented(history)` 把历史里每条要求（按 Analyst 的投影读）变成回归检查，同一 id 取最新措辞；`confirmed(ids)` 是交互方确认后把派生条目升为 must_hold。派生条目另带 `quote`，即它所依据的规范原文。
-- 派生条目由 rubric 构建者（`experimental/assessor/builder.py`）从规范写出、由元评审者（`experimental/assessor/reviewer.py`）在宿主授权的范围内逐轮修订；此前的标准评审者（critic）已被这一机制取代（2026-10-09 合并）。
+- 派生条目由 rubric 构建者（`experimental/harness/assessor/builder.py`）从规范写出、由元评审者（`experimental/harness/assessor/reviewer.py`）在宿主授权的范围内逐轮修订；此前的标准评审者（critic）已被这一机制取代（2026-10-09 合并）。
 - 引文核对比的是字，不是写法（`critic.py` 的 `_flat`）：两边都先做 NFKC，把所有引号（单双、直弯、直角）当作同一个，并去掉 Markdown 标记（加粗与斜体的星号、行内代码、表格竖线，行首的列表、标题、引用标记与复选框）；漏抄的文字仍拒。模型抄规范时常换引号写法、丢掉加粗与复选框，逐字符比对会拒掉正确的引文并计次。给 critic 看的规范把每行的直双引号换成成对弯引号（`_shown`）：引文要抄进 JSON 字符串，直双引号得转义，模型漏了转义时每次提交都在引号处断开；弯引号不用转义，核对又把所有引号当作同一个，有据校验不变。前提是断开只因要抄进 JSON 的直双引号；模型若在别的字符上也这样断，这个做法不够。
 - `StandardAssessor` 按标准逐条判定一轮的会话（对话原文加交付的文本文件），结果作为 `Signal` 的条目交给 Analyst 翻译，自己不说话。满意只看被演练到的 must_hold 条目，没有就不下结论，所以派生条目的满意不会单独终止运行。
 - 闭环在每次评价前把历史交给带标准的 Assessor（`sediment`，`iteration.session.assess` 按有无这个方法调用），不改 Assessor 协议。它的模型调用在 Analyst 的隔间里跑，豁免本轮用户的话与它持有的沉淀、派生条目；声明条目是检查项，契约可能对 Analyst 封住它，所以模拟入口只取对 Analyst 可见的检查项，隔间也从不豁免声明条目。它与模拟老板同属评价侧，模型与推理强度取 `--simulation-model` 与 `--simulation-effort`：推理模型在高强度下可能把整个输出预算花在思考上、交不出评分卡，`exchange` 的 trace 在缺输出时记下结束原因与用量，以便看出这一点。
@@ -240,7 +240,7 @@ Change
 
 ### 5.2.1 反馈的内部来源：伙伴自评（source = self）
 
-外部信号（交互方的话、Standard 的判定）看到的是交付物与最终回复；还有一个来源是伙伴自己对同一批产出的复查，它衡量的是 Harness 的自知：哪些缺陷它自己看得出、哪些看不出。实现在 `experimental/assessor/introspect.py`：
+外部信号（交互方的话、Standard 的判定）看到的是交付物与最终回复；还有一个来源是伙伴自己对同一批产出的复查，它衡量的是 Harness 的自知：哪些缺陷它自己看得出、哪些看不出。实现在 `experimental/harness/assessor/introspect.py`：
 
 - 每轮演练结束后，在伙伴的**副本**上（与留出集同法，不在本体留状态）为每单开一个新会话，给它看这单的对话原文与交付的文件，要它逐单给出判定（`VERDICT`）、缺陷清单（`DEFECTS`）与一句说明（`NOTE`）。它只看自己的产出，不看任何标准、检查项或交互方的话，所以没有标准泄露。
 - 结果是一个 `Signal`，`source` 为 `self`：`text` 是伙伴自己的话（按 `HEARD` 投影可达 Curator，会话以不透明标签指代），逐单 `Item`（`self-review:<标签>`，`actual` 为缺陷清单）按 `EVALUATION` 只到 Analyst；`satisfied` 恒为 None，自评永不终止运行。原始复查记进运行目录 `analysis/<id>.json`。

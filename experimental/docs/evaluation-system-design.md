@@ -18,7 +18,7 @@ local records; and a separate evaluation platform with services, a verifier regi
 Choose the second. A single prompt cannot enforce source authority, unknown handling or independent adoption.
 A separate platform adds deployment and consistency costs without helping the current cultivation loop.
 
-Retain `experimental/assessor/` and the existing `Signal -> Analyst -> Feedback -> Curator` interface. The roles are
+Retain `experimental/harness/assessor/` and the existing `Signal -> Analyst -> Feedback -> Curator` interface. The roles are
 Rubric Builder (construct/revise), Assessor (measure) and Meta Reviewer (audit and propose corrections/principles).
 They are responsibilities, not three new services. Session owns execution budgets, records and adoption decisions.
 `Standard` remains the rubric data type; `Criterion` is one requirement. Verifier and Promotion Gate describe
