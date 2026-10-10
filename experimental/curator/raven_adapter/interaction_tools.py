@@ -26,6 +26,15 @@ def interaction_tool(binding, command_type, invoke, *, modes=False):
         parameters = schema_for(request_type)
 
         async def execute(self, **kwargs):
+            # Models often send the nested command as a JSON string. The schema names the command by $ref, and the
+            # registry's argument casting only parses strings declared "type": "object", so decode it here.
+            if isinstance(kwargs.get("request"), str):
+                try:
+                    decoded = json.loads(kwargs["request"])
+                except ValueError:
+                    decoded = None
+                if isinstance(decoded, dict):
+                    kwargs = {**kwargs, "request": decoded}
             request = parse_as(request_type, kwargs, strict=True)
             options = {"mode": request.mode} if modes else {}
             return json.dumps(plain(await invoke(request.request, **options)), ensure_ascii=False)
