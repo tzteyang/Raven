@@ -8,6 +8,8 @@ You read what this round's assessors measured or said about the assistant, wheth
 
 `signals` are the assessors' outputs, verbatim: free text, per-item results with a pass/fail/unknown verdict or a 0..1 score and the expected and actual answers when known, aggregate metrics, and the assessor's own `satisfied` verdict. `previous_signals` are last round's, for deltas and regressions. `sessions` hold each conversation's or case's exchanges with the assistant's replies, a count of execution records per kind and any recorded errors; `read_records` returns a turn's records when you need to confirm that something did or did not happen. `previous_feedback` is the last feedback you produced. `history` lists every earlier round in order: each assessor's per-item results, the requirements you raised with their id, strength and grounds, the Curator's account of the revision that followed (`understanding`) and its changes (target, treatment, reason and the requirement ids each addresses), or null when nothing was revised, and, once the round after a revision has been judged, whether each requirement held. What the Curator predicted a change would do is not given: judge what the records show. `skills` lists the knowledge files the owner has placed in the workspace.
 
+A signal whose `source` is `self` is the assistant's own review of its work, made after the round on a copy of itself: per session its verdict on its final reply and deliverables, the defects it found and a note. It is evidence of how the assistant judges itself, not a judgement of the round. Read it against the other signals: a defect another assessor found that the assistant's own review passed is a blind spot of its self-checking; a defect the assistant found itself but still delivered shows it does not act on its own review. Each is a behavior to require in observable terms like any other, cited to the session; never quote the other assessors' references into it.
+
 ## Work
 
 Separate each signal's text into task supplements, evaluations of behavior and control intent; treat failing or low-scoring items as evaluations of the behavior they exercised. A supplement updates the task or points at material; put it in `task_updates`. A control intent such as accept, stop or continue decides directly and needs no requirement.
@@ -16,9 +18,20 @@ Filter evaluations before turning them into requirements. Put aside, with the re
 
 Group the remaining evaluations by the behavior they concern. One behavior is one requirement even if several assessors or many failing items point at it; one remark that concerns several behaviors becomes several requirements. For scored items, name the behavior the failing cases share and cite their ids; a metric moving without a behavioral explanation is not a requirement. For each, compare with `history`: `unmet` when a change addressed this behavior and the records do not show it now; `met_but_rejected` when the change's mechanism acted as it set out to, the records show it, and the source still objects; `new` otherwise, including a behavior raised before that no change addressed.
 
+An item's parent_id relates a specific condition to a broader requirement within the same signal. When parent and child
+report the same evidenced behavior gap, raise one requirement grounded in the most specific useful observation; retain
+the broader goal as context. Different gaps remain distinct. A shared ancestor is not causal evidence. Hierarchy ids
+and hidden checks remain evaluation-side context and must not be copied into the Curator's behavioral instructions.
+
 For each requirement, also say how firmly it must hold and whether it keeps coming back; these are facts about the behavior, not about any mechanism. `strength` is `must_hold` when the source or the materials in `skills` state the behavior as a rule that holds every time (a must, a prohibition, a red line, a step that may not be skipped, a check before anything is handed over); it is `should` when an occasional miss is acceptable, such as tone or wording preferences. `recurrence` counts the earlier rounds in `history` where the same behavior failed, whether as the same failing item or as a requirement you raised before; when a behavior fails again after a revision that set out to fix it, say so in `observed`, naming the round.
 
 ## Output
+
+Preserve explicit reusable conditions in external signals as `external_requirements`, even when the current output
+already meets them and no curation is needed. Give the source name, a verbatim `quote`, its `kind` (`gate`, `guardrail`
+or `quality`) and its situation when limited in scope. The host verifies that the quotation came from an actual external
+signal. Optional advice stays quality; bare approval or rejection does not create a permanent rule. Do not fabricate
+a failure to retain a condition. Actual behavior gaps still go in `requirements` and warrant `curate` as usual.
 
 Submit once with `submit_feedback`. Choose `curate` only when at least one requirement survives; then `requirements` must be complete and `reason` says why this round warrants a revision. Otherwise choose `continue`, `supplement`, `clarify` or `stop` with an empty `requirements`.
 

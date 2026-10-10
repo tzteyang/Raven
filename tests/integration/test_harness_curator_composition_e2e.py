@@ -15,7 +15,7 @@ from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
 from tests.fixtures.harness_curator.authoring import planning as prepare_planning
 from tests.integration.test_harness_curator_deployment_e2e import authored
 from tests.integration.test_harness_curator_e2e import baseline as baseline
-from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
+from tests.integration.test_harness_curator_e2e import plan_for, replay_provider, submitted
 from tests.integration.test_harness_curator_planning_e2e import artifact as planning_artifact
 from tests.test_harness_curator_generation import Provider, diagnosis, packet, response, selection
 from tests.test_harness_curator_strategies import files, values
@@ -92,7 +92,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             ]
         ).model_dump(mode="json")
 
-    root_plan = plan_for("planning.strategy").model_dump(mode="json")
+    root_plan = submitted(plan_for("planning.strategy"))
     root_plan["node_reasons"] = {
         "work/step": "Keep this responsibility in the existing child; let it realize the requirement"
     }
@@ -106,7 +106,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
         ),
         response("submit_diagnosis", diagnosis("node:work/step#1")),
         response("submit_selection", selection(*artifact["values"], grounds=("node:work/step#1",))),
-        response("submit_plan", plan_for(*artifact["values"]).model_dump(mode="json")),
+        response("submit_plan", submitted(plan_for(*artifact["values"]), serves=("node:work/step#1",))),
         response("submit_artifact", artifact),
     ]
     replies = [
@@ -191,7 +191,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
         assert not (worker.root / "curation/composition.json").exists()
         if not restart:
             return
-        withdrawal = plan_for("planning.strategy").model_dump(mode="json")
+        withdrawal = submitted(plan_for("planning.strategy"))
         withdrawal["node_reasons"] = {"work/step": "Keep the node but withdraw its authored Harness changes"}
         withdrawn = await improve(
             worker,

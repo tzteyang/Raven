@@ -2,7 +2,8 @@
 
 from .artifact import Artifact, Candidate, Change, Plan, Validation
 from .attribution import Attributed, Attribution, Diagnosis
-from .declaration import Declaration, Target
+from .commitments import Commitment, CommitmentChange
+from .declaration import Declaration, Reference, Target
 from .state import StateUse, Task
 
 __all__ = [
@@ -11,11 +12,14 @@ __all__ = [
     "Attribution",
     "Candidate",
     "Change",
+    "Commitment",
+    "CommitmentChange",
     "Declaration",
     "Diagnosis",
     "Plan",
     "StateUse",
     "Task",
+    "Reference",
     "Target",
     "Validation",
 ]

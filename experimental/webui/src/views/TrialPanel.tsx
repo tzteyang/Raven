@@ -149,7 +149,7 @@ export function TrialPanel({
             {picked ? (
               <div className="thread">
                 {current.sessions[picked].length === 0 ? <p className="quiet">No messages.</p> : null}
-                {current.sessions[picked].map((exchange, i) => <Turn key={i} exchange={exchange} drill={picked} version={version} over={!live} />)}
+                {current.sessions[picked].map((exchange, i) => <Turn key={i} exchange={exchange} drill={picked} version={version} over={!live} runId={runId} />)}
               </div>
             ) : <p className="quiet">No drill ran in this trial.</p>}
           </div>

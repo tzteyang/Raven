@@ -1,17 +1,17 @@
 """The categories of a cultivation scenario, their items' visibility, and the reading of a scenario directory.
 
 Roles: the partner (the worker being cultivated), the conversant (whoever the partner works with in a trial), the
-party (whoever holds the materials and the standard and speaks to the Curator), the analyst and the curator. Each
+counterpart (whoever holds the materials and the standard and speaks to the Curator), the analyst and the curator. Each
 kind of item has a default visibility, the set of roles that may receive it; a scenario may narrow or widen it per
 item in `contract.json`. Visibility is a declaration the assembly, the hearing and the exploration enforce; nothing
 here reads a file into a role.
 
 The directory layout is the one `experimental/simulation/scenarios/<name>/` uses: `profile.md`, `materials/<name>/`
 packages (a skill with its SKILL.md, or a folder whose one top-level markdown file is its document),
-`personas/*.md` drill cards, `scenario.json` with the checks and the disclosure plans, the party's `onboarding.md`
+`personas/*.md` drill cards, `scenario.json` with the checks and the disclosure plans, the counterpart's `onboarding.md`
 and `handover.md`, the evaluation-side `reference.md` and `record.md`, `contract.json` for what this module adds
-(each material's kind, each check's derivation, and the party's observation views), and `provenance.json`, which a
-research stage writes (`experimental.research`) to say where each material came from and whether the party stands
+(each material's kind, each check's derivation, and the counterpart's observation views), and `provenance.json`, which a
+research stage writes (`experimental.research`) to say where each material came from and whether the counterpart stands
 behind it.
 """
 
@@ -25,13 +25,13 @@ from pydantic import BaseModel, ConfigDict, Field, model_validator
 
 from .disclosure import partition
 
-Role = Literal["partner", "conversant", "party", "analyst", "curator"]
-ROLES: tuple[Role, ...] = ("partner", "conversant", "party", "analyst", "curator")
+Role = Literal["partner", "conversant", "counterpart", "analyst", "curator"]
+ROLES: tuple[Role, ...] = ("partner", "conversant", "counterpart", "analyst", "curator")
 
 Kind = Literal["norm", "fact", "exemplar", "counterexample"]
 KINDS: tuple[Kind, ...] = ("norm", "fact", "exemplar", "counterexample")
 
-# What the party may observe of the partner's work beyond the conversation, as the agency's review names them.
+# What the counterpart may observe of the partner's work beyond the conversation, as the agency's review names them.
 VIEWS = ("conversations", "deliverables", "research", "colleague_reports", "filed", "back_office")
 
 SKILL_FILE = "SKILL.md"
@@ -50,20 +50,20 @@ CLAIMED = (
 TEXT_SUFFIXES = frozenset({".md", ".txt", ".csv", ".tsv", ".json", ".yaml", ".yml", ".html", ".xml"})
 
 _EVERYONE = frozenset(ROLES)
-_HANDED = frozenset({"partner", "party", "analyst", "curator"})
-_EVALUATION = frozenset({"party", "analyst"})
+_HANDED = frozenset({"partner", "counterpart", "analyst", "curator"})
+_EVALUATION = frozenset({"counterpart", "analyst"})
 _DEFAULTS: dict[str, frozenset[str]] = {
     "profile": _EVERYONE,
-    "case": frozenset({"conversant", "party"}),
+    "case": frozenset({"conversant", "counterpart"}),
     "case.expected": _EVALUATION,
     "check": _EVALUATION,
     "norm": _HANDED,
     "fact": _HANDED,
     "exemplar": _HANDED,
     "counterexample": _HANDED,
-    "exchange": frozenset({"party"}),
+    "exchange": frozenset({"counterpart"}),
     "prior": _EVALUATION,
-    "aids": frozenset({"party"}),
+    "aids": frozenset({"counterpart"}),
 }
 
 
@@ -113,7 +113,7 @@ RESERVED = re.compile(r"^(R\d+|derived-\d+)$")
 
 
 class Check(_Model):
-    """One item of the party's standard, derived from the norms it holds the partner to; evaluation-side only. Its
+    """One item of the counterpart's standard, derived from the norms it holds the partner to; evaluation-side only. Its
     id may not take the form the loop gives a requirement or a drawn criterion, whose regression items would then be
     read as this check's."""
 
@@ -145,7 +145,7 @@ class _Spec(_Model):
 
 
 class Statements(_Model):
-    """What the party states: the norms it hands over as documents, and the checks it keeps to judge by."""
+    """What the counterpart states: the norms it hands over as documents, and the checks it keeps to judge by."""
 
     norms: tuple[str, ...] = ()
     checks: tuple[Check, ...] = ()
@@ -163,7 +163,7 @@ class Statements(_Model):
 
 
 class Material(_Model):
-    """One package the party holds and may hand over: a norm, a fact, an exemplar or a counterexample."""
+    """One package the counterpart holds and may hand over: a norm, a fact, an exemplar or a counterexample."""
 
     name: str = Field(min_length=1)
     kind: Kind
@@ -173,8 +173,8 @@ class Material(_Model):
 
 
 class Exchange(_Model):
-    """How the exchange is conducted: what is handed over when, what the party observes, and its wording. The
-    schedule and the observability are the party's alone; the wording is what the party says, so whoever it is said
+    """How the exchange is conducted: what is handed over when, what the counterpart observes, and its wording. The
+    schedule and the observability are the counterpart's alone; the wording is what the counterpart says, so whoever it is said
     to hears it once it is said."""
 
     initial: tuple[str, ...] = ()
@@ -192,23 +192,23 @@ class Exchange(_Model):
 
 
 class Prior(_Model):
-    """Records of earlier cultivations the party brings, each an iteration record or a run's worker root; a relative
+    """Records of earlier cultivations the counterpart brings, each an iteration record or a run's worker root; a relative
     path in `contract.json` is read from the scenario directory. Nothing by default."""
 
     records: tuple[Path, ...] = ()
 
 
 class Aids(_Model):
-    """Evaluation-side helpers the party alone uses: the rulers' declaration and the record's labels."""
+    """Evaluation-side helpers the counterpart alone uses: the rulers' declaration and the record's labels."""
 
     rulers: str | None = None
     labels: str | None = None
 
 
 class Origin(_Model):
-    """Where one material came from: given by the party, or induced or researched before the cultivation, with the
-    ids of the rules or findings it holds. `confirmed` says the party stands behind it, as it always does behind what
-    it gave; a material written by the research stage must say so, since standing is what the evaluation side draws on."""
+    """Where one material came from: given by the counterpart, or induced or researched before the cultivation, with the
+    ids of the rules or findings it holds. `confirmed` records adoption independently of who supplied the material;
+    generated materials must declare it explicitly."""
 
     origin: Literal["given", "induced", "researched"] = "given"
     confirmed: bool | None = None
@@ -217,16 +217,15 @@ class Origin(_Model):
     @model_validator(mode="after")
     def standing_is_stated(self) -> "Origin":
         if self.origin == "given":
-            if self.confirmed is False:
-                raise ValueError("a material the party gave is one it stands behind")
-            return self.model_copy(update={"confirmed": True})
+            object.__setattr__(self, "confirmed", True if self.confirmed is None else self.confirmed)
+            return self
         if self.confirmed is None:
-            raise ValueError(f"say whether the party confirmed this {self.origin} material")
+            raise ValueError(f"say whether the counterpart confirmed this {self.origin} material")
         return self
 
 
 class Provenance(_Model):
-    """`provenance.json`: each material's origin (a material it does not name was given by the party) and, in
+    """`provenance.json`: each material's origin (a material it does not name was given by the counterpart) and, in
     `record`, the file as the research stage wrote it, for a run's settings."""
 
     materials: dict[str, Origin] = Field(default_factory=dict)
@@ -268,7 +267,7 @@ class Scenario(_Model):
 
     @property
     def handed(self) -> tuple[str, ...]:
-        """The materials the party may hand over, those the partner may receive; the others only the party holds."""
+        """The materials the counterpart may hand over, those the partner may receive; the others only the counterpart holds."""
         return tuple(name for name, material in self.materials.items() if "partner" in material.visibility)
 
     def visible(self, item: str, role: Role) -> bool:
@@ -298,8 +297,9 @@ class Scenario(_Model):
         raise KeyError(item)
 
     def confirmed(self, material: str) -> bool:
-        """Whether the party stands behind a material: it gave it, or confirmed what a research stage made of its
-        materials. Only such a material may be held against the partner (`experimental.simulation.scenario`)."""
+        """Whether the counterpart adopts this material; supplied references may explicitly remain unconfirmed.
+
+        Only adopted material may be held against the partner (`experimental.simulation.scenario`)."""
         if material not in self.materials:
             raise KeyError(material)
         origin = self.provenance.materials.get(material)

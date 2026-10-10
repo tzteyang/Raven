@@ -72,8 +72,10 @@ import shlex
 import shutil
 from collections import Counter
 from datetime import UTC, datetime
+from itertools import islice
 from pathlib import Path
 
+from .. import model_roles
 from ..analyst.activity import INTERVENTIONS
 from ..analyst.activity import classify as _classify
 from ..analyst.activity import cut as _cut
@@ -85,7 +87,7 @@ from ..automation.employee import AREA, REPLICAS
 from ..automation.isolation import RESULT as ISOLATION
 from ..curator.raven_adapter.targets import catalogue
 from ..iteration import records
-from ..research.package import digest
+from ..scenario.digest import digest
 from .agency import REFERENCES
 from .attribution import RESULT as ATTRIBUTION
 from .scenario import BUNDLED
@@ -98,6 +100,7 @@ BASELINE_ROWS = 300
 DEFAULT_SCENARIO = "travel_agency"
 SUMMARY = "suite-summary.json"
 SETTINGS = "settings.json"
+SCENARIO_COPY = "scenario"
 REASONS = 12
 COMMAND = ("uv", "run", "python", "-m", "experimental.simulation")
 PLACEHOLDERS = {
@@ -107,7 +110,6 @@ PLACEHOLDERS = {
     "--workdir": "<a new empty directory>",
 }
 # Each model role falls back to this one's model when the run named none of its own (see `__main__.settings`).
-MODEL_FALLBACKS = {"curator": "employee", "analyst": "curator", "simulation": "curator", "traveller": "simulation"}
 HANDED_OVER = "\n\n---\n\n"
 REDACTED = "<redacted>"
 SECRETS = (
@@ -306,14 +308,31 @@ def _history(run: dict) -> dict[int, dict]:
     return {entry["round"]: entry for entry in _dicts(run.get("history")) if isinstance(entry.get("round"), int)}
 
 
-def _scenario_root(scenario_dir, settings: dict) -> Path:
-    """The run's own scenario directory: the one given, else the one the run recorded, else the `--scenario` of its
-    command line, else the bundled scenario it names. One that cannot be found, or whose files changed since the run,
-    fails: another scenario's files read in its place would describe a run that never happened."""
+def keep_scenario(root: Path, source: Path) -> bool:
+    """Copy the scenario a run used into its records (`SCENARIO_COPY`) once the run has ended, so the run stays
+    readable after the scenario evolves; only when `source` still holds what the run recorded, and never while the
+    employee runs, because its records are within the reach of the employee's tools. True when the copy is there."""
+    root, copy = Path(root), Path(root) / SCENARIO_COPY
+    if copy.is_dir():
+        return True
+    settings = _json(root / SETTINGS)
+    recorded = settings.get("scenario_digest") if isinstance(settings, dict) else None
+    if not recorded or recorded != digest(source):
+        return False
+    shutil.copytree(source, copy)
+    return digest(copy) == recorded
+
+
+def _scenario_root(scenario_dir, settings: dict, run_root: Path | None = None) -> Path:
+    """The run's own scenario directory: the copy kept in its records, else the one given, else the one the run
+    recorded, else the `--scenario` of its command line, else the bundled scenario it names. One that cannot be
+    found, or whose files changed since the run, fails: another scenario's files read in its place would describe a
+    run that never happened."""
     argv = settings.get("argv") or []
     given = argv[argv.index("--scenario") + 1] if "--scenario" in argv[:-1] else None
     named = str(settings.get("scenario") or DEFAULT_SCENARIO)
-    candidates = [scenario_dir, settings.get("scenario_dir"), given]
+    kept = Path(run_root) / SCENARIO_COPY if run_root is not None else None
+    candidates = [kept, scenario_dir, settings.get("scenario_dir"), given]
     root = next((Path(path) for path in candidates if path and Path(path).is_dir()), BUNDLED / named)
     if not root.is_dir():
         raise FileNotFoundError(f"the run's scenario {named} is not at {root}; give its directory")
@@ -323,9 +342,9 @@ def _scenario_root(scenario_dir, settings: dict) -> Path:
     return root
 
 
-def _scenario(scenario_dir, settings: dict) -> dict:
+def _scenario(scenario_dir, settings: dict, run_root: Path | None = None) -> dict:
     """The scenario's files as plain data; an older scenario without some of them leaves those parts empty."""
-    root = _scenario_root(scenario_dir, settings)
+    root = _scenario_root(scenario_dir, settings, run_root)
     spec = _json(root / "scenario.json")
     spec = spec if isinstance(spec, dict) else {}
     without = set(settings.get("without") or ())
@@ -759,7 +778,7 @@ def _exchange(index: int, customer: str, rows: list[dict], delivered: list[dict]
     return {
         "turn": index,
         "customer": customer,
-        "assistant": seen(rows, [file["name"] for file in delivered if file.get("name")]),
+        "assistant": seen(rows),
         "delivered": delivered,
         "playbook_runs": _playbooks(rows, root),
         "errors": [
@@ -1135,7 +1154,47 @@ def _cost(root: Path, state_root) -> dict | None:
 
     parts = spend(Path(state_root) / root.name if state_root else root / "traces" / "absent", root)
     total = parts.pop("total")
-    return {"total": total, "by_part": parts, "source": "audit spans (children included)"} if total else None
+    billed, quota = _research_spend(root)
+    if billed:
+        parts["research"], total = billed, total + billed
+    source = "audit spans (children included)" + (", research agents' own reports" if billed or quota else "")
+    if not total and not quota:
+        return None
+    return {"total": total, "by_part": parts, "source": source, **({"quota": {"research": quota}} if quota else {})}
+
+
+def _research_spend(root: Path) -> tuple[float, float]:
+    """What the research stage's agent calls cost as each reported it in its own `run.json`, split by who pays: a call
+    on an API key is spend, while a call under a subscription login (`apiKeySource` `none` in the init event of its
+    `events.jsonl`) uses quota, its dollar figure only an API-equivalent price. A corrected call's figure includes its
+    correction's, which keeps a record of its own, so the call counts only its first figure."""
+    billed = quota = 0.0
+    for path in Path(root).glob("information/**/run.json"):
+        value = _json(path)
+        cost = value.get("initial_cost_usd", value.get("cost_usd")) if isinstance(value, dict) else None
+        if not isinstance(cost, int | float):
+            continue
+        if _key_source(path.parent / "events.jsonl") == "none":
+            quota += float(cost)
+        else:
+            billed += float(cost)
+    return billed, quota
+
+
+def _key_source(events: Path) -> str | None:
+    """Which key a Claude Code call ran on, from the init event at the head of its event stream."""
+    try:
+        with events.open(encoding="utf-8") as stream:
+            for line in islice(stream, 20):
+                try:
+                    item = json.loads(line)
+                except ValueError:
+                    continue
+                if isinstance(item, dict) and item.get("type") == "system" and item.get("subtype") == "init":
+                    return item.get("apiKeySource")
+    except OSError:
+        return None
+    return None
 
 
 def _times(root: Path, path: Path, settings: dict) -> tuple[str | None, str | None]:
@@ -1153,6 +1212,11 @@ def _steps(run: dict, curations: list[dict], rounds: list[dict], root: Path) -> 
         for curation in curations
         if curation["round"] == 0
     ]
+    if preparation := run.get("information"):
+        steps.insert(
+            0,
+            {"step": "information", "round": 0, "state": preparation["status"], "version": preparation.get("version")},
+        )
     for item in rounds:
         number = item["number"]
         steps.append({"step": "trial", "round": number, "state": "unfinished" if item["partial"] else "done"})
@@ -1202,8 +1266,8 @@ def _command(settings: dict) -> str | None:
 
     A run that stored its command line (`argv`) gets it back, with its seed added when it left it to the draw: a later
     default must not change what the command reproduces. An older run's command is rebuilt from its settings as far as
-    they go: a partition is given as `--partition`, and a model is named only where it differs from the one its role
-    falls back to.
+    they go: a partition is given as `--partition`, and a role's model or effort is named only where it differs from
+    the partner's; a run recorded before the role map (no `partner` entry) names none.
     """
     if not settings:
         return None
@@ -1237,19 +1301,14 @@ def _command(settings: dict) -> str | None:
         if budget.get(key) is not None
         for item in (f"--curator-{key}", str(budget[key]))
     ]
-    models = settings.get("models") if isinstance(settings.get("models"), dict) else {}
-    for role, fallback in MODEL_FALLBACKS.items():
-        if models.get(role) and models[role] != models.get(fallback):
-            argv += [f"--{role}-model", str(models[role])]
-    if models.get("subagents"):
-        argv += ["--subagent-model", str(models["subagents"])]
-    efforts = settings.get("efforts") if isinstance(settings.get("efforts"), dict) else {}
-    argv += [
-        item
-        for role in ("curator", "traveller")
-        if efforts.get(role)
-        for item in (f"--{role}-effort", str(efforts[role]))
-    ]
+    for flag in ("model", "effort"):
+        chosen = settings.get(f"{flag}s") if isinstance(settings.get(f"{flag}s"), dict) else {}
+        argv += [
+            item
+            for role in model_roles.ROLES
+            if model_roles.PARTNER in chosen and chosen.get(role) and chosen[role] != chosen[model_roles.PARTNER]
+            for item in (f"--{flag}", f"{role}={chosen[role]}")
+        ]
     if settings.get("cards"):
         argv += ["--cards", *map(str, settings["cards"])]
     if (settings.get("concurrent_drills") or 1) > 1:
@@ -1398,7 +1457,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     root = path.parents[1]
     settings = _json(root / SETTINGS)
     settings = settings if isinstance(settings, dict) else {}
-    scenario = _scenario(scenario_dir, settings)
+    scenario = _scenario(scenario_dir, settings, root)
     run = _joined(path)
     history = _history(run)
     attribution = _json(root / ATTRIBUTION)
@@ -1953,6 +2012,11 @@ def _cost_md(record: dict, labels: dict) -> list[str]:
     if cost:
         lines += [f"Total ${cost['total']:.4f} (from {cost['source']}).", ""]
         lines += _table(["Part", "USD"], [[part, f"{value:.4f}"] for part, value in cost["by_part"].items()])
+        for part, value in (cost.get("quota") or {}).items():
+            lines += [
+                f"Not in the total: {part} ran under a subscription login, using quota priced at ${value:.4f}.",
+                "",
+            ]
     else:
         lines += ["No spend record was found for this run.", ""]
     if run["reproduce"]:

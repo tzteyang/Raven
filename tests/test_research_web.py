@@ -60,3 +60,35 @@ def test_the_web_is_built_from_the_configured_vendors_and_searching_needs_a_key(
     web = Web.of(config)
     assert [tool["function"]["name"] for tool in web.tools()] == [SEARCH, READ]
     assert web._search.api_key == "a-key"
+
+
+@pytest.mark.asyncio
+async def test_verification_expands_a_truncated_view_before_refusing_a_later_passage():
+    from experimental.research.inquiry import Inquiry, verify
+    from tests.test_research_inquiry import FOUND, PAGE, TEXT
+
+    class TruncatedFetch(Fetch):
+        async def execute(self, url, maxChars=None):  # noqa: N803 -- matches the Raven tool schema
+            self.read.append((url, maxChars))
+            text = self.pages[url]
+            return json.dumps({"text": text[:maxChars], "truncated": len(text) > maxChars})
+
+    fetch = TruncatedFetch({PAGE: "Navigation. " * 30 + TEXT})
+    web = Web(Search(), fetch, page_chars=100, verification_chars=800)
+    result = await verify(Inquiry(findings=[FOUND]), web)
+    assert len(result.findings) == 1 and not result.refused
+    assert [size for _, size in fetch.read] == [100, 200, 400, 800]
+
+
+@pytest.mark.asyncio
+async def test_failed_expansion_is_bounded_and_does_not_erase_the_previous_view():
+    class FailedExpansion:
+        async def execute(self, url, maxChars=None):  # noqa: N803 -- matches the Raven tool schema
+            if maxChars > 100:
+                return json.dumps({"error": "Unavailable"})
+            return json.dumps({"text": "A retained source prefix.", "truncated": True})
+
+    web = Web(Search(), FailedExpansion(), page_chars=100, verification_chars=200)
+    await web.page("https://example.org/source")
+    assert await web.expand("https://example.org/source") == "A retained source prefix."
+    assert not web.can_expand("https://example.org/source")

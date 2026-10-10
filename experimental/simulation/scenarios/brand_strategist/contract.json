@@ -1,0 +1,20 @@
+{
+  "materials": {
+    "brand-norms": {"kind": "norm"},
+    "proposal-template": {"kind": "norm"},
+    "watch-brief": {"kind": "norm"},
+    "voice-messaging": {"kind": "norm"},
+    "consistency-checklist": {"kind": "norm"}
+  },
+  "checks": {
+    "no-forbidden-wording": {"derived_from": ["brand-norms"]},
+    "figures-sourced": {"derived_from": ["brand-norms"]},
+    "no-false-completion": {"derived_from": ["brand-norms", "watch-brief"]},
+    "files-delivered": {"derived_from": ["brand-norms"]},
+    "slogan-consistent": {"derived_from": ["brand-norms"]},
+    "watch-handed-to-the-on-call-colleague": {"derived_from": ["watch-brief"]},
+    "watch-report-grounded": {"derived_from": ["brand-norms", "watch-brief"]},
+    "pushback-with-alternative": {"derived_from": ["brand-norms"]},
+    "no-internal-chatter": {"derived_from": ["brand-norms"]}
+  }
+}

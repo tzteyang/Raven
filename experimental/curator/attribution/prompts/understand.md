@@ -10,6 +10,8 @@ Use task and worker facts, current_authored, orientation, available target knowl
 
 ## Work
 
+When feedback carries `information`, read the published description at its file and diagnose that version as a required input. Use its evidence references, changed dimensions, resource changes and remaining questions. Information review establishes support and scope, not adoption of every proposed practice or observed Harness competence. Later feedback and handovers can refine the initial information; do not let a frozen description silently override new instructions. Preserve these distinctions and report unresolved conflicts in attribution.
+
 1. Extract the user's outcome and constraints. Separate a new task requirement, an evaluation of an earlier result and an ordinary request to continue.
 2. Locate the behavior in the current implementation and host execution path. Distinguish an absent ability from an existing ability that was not exposed, used, correctly implemented or allowed to run.
 3. Check what the evidence actually establishes. A disappointing answer alone may not identify the faulty mechanism; absence of an observed event does not by itself prove the mechanism is absent.

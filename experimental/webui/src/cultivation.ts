@@ -212,7 +212,9 @@ export function timeline(run: Run, all: Revision[]): Entry[] {
       round: null,
       text: run.curator === 'untouched'
         ? 'Control arm: no Curator takes part, so the employee works on its baseline (v0) with the materials alone.'
-        : 'No onboarding revision was recorded; the employee starts on its baseline (v0).',
+        : run.research && run.research.status !== 'ready'
+          ? 'The research stage handed over no information, so onboarding stopped before the Curator was called and no round ran.'
+          : 'No onboarding revision was recorded; the employee starts on its baseline (v0).',
     })
   }
   run.rounds.forEach((round, i) => {

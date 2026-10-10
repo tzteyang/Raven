@@ -19,7 +19,7 @@ Initialization and result projection annotations must have the same concrete Vie
 
 Before-model synchronization runs in the adapter hook before native participant capability selection. It can incorporate the first customer input, not just the long-lived expert mission. Capability therefore sees the committed current plan. Before-model observations carry offered tool schemas, not a promise that they will remain visible or executable. Effective capability feedback is consumed by subsequent interactions; Planning and Capability do not recursively select each other.
 
-Planning callback failure stops the current native path with an explicit failure rather than letting native callback isolation treat a required update as no opinion. Observations can repeat during recovery; preserve their event identity and make evidence updates idempotent. No callback adds another model loop. Optional infer uses the existing one-attempt operation-chain allowance.
+Planning callback failure stops the current native path with an explicit failure rather than letting native callback isolation treat a required update as no opinion. Observations can repeat during recovery; preserve their event identity and make evidence updates idempotent. No callback adds another model loop. Optional infer spends from the operation chain's shared allowance of calls and time.
 
 Query constraints propagate through Memory/Planning peers, including a nested call that asks for command mode. The receiving owner validates its own retained state. Action requests that can apply controls remain forbidden in a read-only operation. Cyclic owner calls and parallel children within a single ownership chain are rejected.
 

@@ -1,17 +1,21 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
 import { NO_SCENARIO, listRuns, loadRun, loadScenario } from './api'
+import { timeline } from './cultivation'
 import { revisions, roundVersions, trialsOf } from './derive'
-import { VERDICT_LABEL, modelLine } from './record'
+import { loopOf } from './loop'
+import { VERDICT_LABEL, modelLine, roleChoices } from './record'
 import { Compare } from './views/Compare'
 import { Cultivation } from './views/Cultivation'
 import { HarnessView } from './views/Harness'
 import { Live } from './views/Live'
+import { usePhase } from './views/LoopMap'
 import { RecordView } from './views/Record'
 import { RevisionRail } from './views/RevisionRail'
 import { TrialPanel } from './views/TrialPanel'
 
 import type { Revision } from './derive'
+import type { RoleChoice } from './record'
 import type { Run, RunEntry, RunStatus, Scenario } from './model'
 import type { CSSProperties, JSX, PointerEvent as ReactPointerEvent } from 'react'
 
@@ -19,8 +23,11 @@ const STATUS_LABEL: Record<RunStatus, string> = {
   running: 'running',
   finished: 'finished',
   paused: 'paused on the Curator budget',
+  stopped: 'stopped from outside before it ended',
   error: 'ended with an error',
   stalled: 'stalled or stopped',
+  incomplete: 'stopped before onboarding: the research stage did not finish',
+  needs_input: 'stopped before onboarding: the research stage needs answers',
 }
 
 export type View = 'live' | 'cultivation' | 'harness' | 'record'
@@ -105,6 +112,10 @@ export function App(): JSX.Element {
   const [dragging, setDragging] = useState(false)
   /* Set once the reader picks a run themselves; until then the page follows the newest running run. */
   const picked = useRef(false)
+  /* The run on the page now: a read of another run that answers late, such as a running run's poll still on the
+     wire when the reader switched, is dropped rather than drawn under the new run's name. */
+  const current = useRef<string | null>(null)
+  current.current = selected
 
   useEffect(() => {
     listRuns()
@@ -113,11 +124,16 @@ export function App(): JSX.Element {
         if (rows.length && !selected) setSelected(rows[0].id)
       })
       .catch((e: Error) => setError(e.message))
-    loadScenario().then(setScenario)
     const follow = () => setPlace(parseHash(window.location.hash))
     window.addEventListener('hashchange', follow)
     return () => window.removeEventListener('hashchange', follow)
   }, [])
+
+  /* Each run is read against the scenario it was cultivated in, so runs of two
+     scenarios listed together each get their own red lines. */
+  useEffect(() => {
+    loadScenario(selected ?? undefined).then((loaded) => current.current === selected && setScenario(loaded))
+  }, [selected])
 
   useEffect(() => {
     if (!selected) return
@@ -125,10 +141,11 @@ export function App(): JSX.Element {
     setShown(null)
     loadRun(selected)
       .then((loaded) => {
+        if (current.current !== selected) return
         setRun(loaded)
         setRefreshed(Date.now())
       })
-      .catch((e: Error) => setError(e.message))
+      .catch((e: Error) => current.current === selected && setError(e.message))
   }, [selected])
 
   /* A run that is still going is re-read every few seconds, so the views grow
@@ -141,6 +158,7 @@ export function App(): JSX.Element {
     const timer = setInterval(() => {
       loadRun(selected)
         .then((loaded) => {
+          if (current.current !== selected) return
           setRun(loaded)
           setRefreshed(Date.now())
         })
@@ -177,6 +195,11 @@ export function App(): JSX.Element {
 
   const revs = useMemo(() => (run ? revisions(run) : []), [run])
   const versions = useMemo(() => (run ? roundVersions(run, revs) : []), [run, revs])
+  /* The conversation, the loop map and the station panel read one timeline of the run. */
+  const red = useMemo(() => new Set(scenario.criteria.filter((row) => row.severity === 'red_line').map((row) => row.id)), [scenario])
+  const conversation = useMemo(() => (run ? timeline(run, revs) : []), [run, revs])
+  const phase = usePhase(selected, status === 'running')
+  const laps = useMemo(() => (run ? loopOf(run, revs, versions, red, phase, conversation) : []), [run, revs, versions, red, phase, conversation])
   const active = [...revs].reverse().find((rev) => rev.deployed)?.label ?? 'v0'
   /* A running run opens on the live view unless the address names another. */
   const view: View = place.chosen ? place.view : status === 'running' ? 'live' : 'cultivation'
@@ -244,6 +267,10 @@ export function App(): JSX.Element {
   const remark = (round: number): void => {
     go('cultivation')
     requestAnimationFrame(() => requestAnimationFrame(() => document.getElementById(`remark-${round}`)?.scrollIntoView({ block: 'start', behavior: 'smooth' })))
+  }
+  const choicesOf = (id: string | null): RoleChoice[] => {
+    const entry = entries?.find((row) => row.id === id)
+    return roleChoices(entry?.models, entry?.efforts)
   }
   const compare = (id: string): void => {
     setAgainst(id)
@@ -332,7 +359,7 @@ export function App(): JSX.Element {
       <main className="page">
         {selected && !run && !error ? <p className="quiet pad">Loading run...</p> : null}
         {run && selected && view === 'live' ? <Live runId={selected} running={status === 'running'} /> : null}
-        {run && view === 'cultivation' ? <Cultivation run={run} runId={selected ?? ''} name={name} revisions={revs} scenario={scenario} trial={panel ? place.round : null} onTrial={trial} /> : null}
+        {run && view === 'cultivation' ? <Cultivation run={run} runId={selected ?? ''} name={name} scenario={scenario} trial={panel ? place.round : null} versions={versions} entries={conversation} laps={laps} onTrial={trial} /> : null}
         {run && selected && view === 'record' ? (
           <RecordView
             runId={selected}
@@ -348,7 +375,7 @@ export function App(): JSX.Element {
         ) : null}
         {run && view === 'harness' ? (
           <div className="harness-wrap">
-            {other ? <Compare left={other} right={run} /> : null}
+            {other ? <Compare left={other} right={run} roles={[choicesOf(against), choicesOf(selected)]} /> : null}
             <HarnessView run={run} runId={selected ?? undefined} revisions={revs} scenario={scenario} />
           </div>
         ) : null}

@@ -28,6 +28,8 @@ async def run_turn(bound, request, emit, drain, *, stream=False, usage_sink=None
     try:
         if bound.planning is not None:
             await bound.planning.prepare()
+        if bound.inference is not None:
+            bound.inference.observe_window(bound.runtime.loop.context_window_tokens)
         outcome = await bound.runtime.loop.run_turn(
             request, observed, drain, stream=stream, usage_sink=usage_sink, text_sink=text_sink
         )

@@ -74,12 +74,12 @@ class Scenario:
 
     @classmethod
     def of(cls, read: Contract) -> "Scenario":
-        """The agency's view of a loaded contract: the materials and checks the party may receive. The agency judges
+        """The agency's view of a loaded contract: the materials and checks the counterpart may receive. The agency judges
         by checks, so a scenario without any it may read is refused."""
-        checks = [check for check in read.statements.checks if "party" in check.visibility]
+        checks = [check for check in read.statements.checks if "counterpart" in check.visibility]
         if not checks:
             raise ValueError(f"the scenario has no checks for the agency to judge by: {read.root}")
-        held = {name: material for name, material in read.materials.items() if "party" in material.visibility}
+        held = {name: material for name, material in read.materials.items() if "counterpart" in material.visibility}
         return cls(
             read.root,
             read.situation.profile,
@@ -122,9 +122,8 @@ class Scenario:
         return document(self.materials[material]).read_text()
 
     def stands_behind(self, material: str) -> bool:
-        """Whether the owner holds the partner to this material: it gave it, or confirmed it after a research stage
-        induced it (`experimental.scenario.contract.Scenario.confirmed`); an unconfirmed one is handed over as a
-        candidate and judged by no one."""
+        """Whether the owner adopts this material; an unconfirmed reference may be handed over but does not
+        supply an evaluation norm (`experimental.scenario.contract.Scenario.confirmed`)."""
         return self.contract is None or self.contract.confirmed(material)
 
     def standing_norms(self, names) -> dict[str, str]:

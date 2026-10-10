@@ -2,7 +2,7 @@
 
 Memory also supports code-owned candidate prepare through an optional keyword-only MemoryHost dependency. This precedes session initialization; see [candidate preparation](preparation.md). The observe flag selects the same class's _observe method. Optional intake/archive flags select its async _intake and _archive host methods, with actual lifecycle inputs from memory/contracts.py.
 
-Generate memory.strategy with MemoryBinding. The factory receives session state and Task; optional keyword-only shared holds task-wide JSON knowledge, infer supplies a typed single-step judgment during an active turn, plan reads the current plan, and peers provides named cross-strategy operations. Do not store live Python objects in checkpoints. Read the supplied StrategyInference contract before choosing a model-backed operation; it shares one attempt with its sequential peer chain.
+Generate memory.strategy with MemoryBinding. The factory receives session state and Task; optional keyword-only shared holds task-wide JSON knowledge, infer supplies a typed single-step judgment during an active turn, plan reads the current plan, and peers provides named cross-strategy operations. Do not store live Python objects in checkpoints. Read the supplied StrategyInference contract before choosing a model-backed operation; it shares an allowance of calls and time with its sequential peer chain, and `each` makes several judgments at once.
 
 ## Real input lifecycle
 

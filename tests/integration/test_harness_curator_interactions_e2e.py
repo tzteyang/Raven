@@ -11,7 +11,7 @@ from experimental.curator.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse
 from tests.fixtures.harness_curator.authoring import capability
 from tests.integration.test_harness_curator_e2e import baseline as baseline
-from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
+from tests.integration.test_harness_curator_e2e import plan_for, replay_provider, submitted
 from tests.integration.test_harness_curator_planning_e2e import response
 
 pytestmark = pytest.mark.integration
@@ -436,7 +436,7 @@ async def test_uploaded_skill_is_inspectable_before_curator_adoption_and_assets_
             [
                 response("submit_diagnosis", diagnosis()),
                 response("submit_selection", selection("capability.strategy")),
-                response("submit_plan", plan_for("capability.strategy").model_dump(mode="json")),
+                response("submit_plan", submitted(plan_for("capability.strategy"))),
                 response("submit_artifact", proposed),
             ]
         )

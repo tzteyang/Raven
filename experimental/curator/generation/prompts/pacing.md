@@ -1,0 +1,1 @@
+More than half of this stage's exploration allowance is spent. Make the next call the submission, unless one named unknown still blocks it: then say which it is, read only what settles it, and submit after that. Reading more of what is already supplied, or auditing mechanisms the plan does not depend on, is not a reason to continue.

@@ -32,7 +32,7 @@ def contract(root, **sections):
 
 
 def held_back(root, *names):
-    """Take materials out of what the party hands over, as the contract requires of one the partner may not receive."""
+    """Take materials out of what the counterpart hands over, as the contract requires of one the partner may not receive."""
     path = root / "scenario.json"
     spec = json.loads(path.read_text())
     spec["initial"] = [name for name in spec.get("initial", []) if name not in names]
@@ -88,14 +88,14 @@ def test_the_travel_agency_reads_into_the_categories_with_every_file_claimed():
     "item,expected",
     [
         ("profile", set(ROLES)),
-        ("service-sop", {"partner", "party", "analyst", "curator"}),
-        ("plan-deck-sample", {"partner", "party", "analyst", "curator"}),
-        ("case:family", {"conversant", "party"}),
-        ("case.expected:family", {"party", "analyst"}),
-        ("check:quote-sheet-correct", {"party", "analyst"}),
-        ("exchange", {"party"}),
-        ("prior", {"party", "analyst"}),
-        ("aids", {"party"}),
+        ("service-sop", {"partner", "counterpart", "analyst", "curator"}),
+        ("plan-deck-sample", {"partner", "counterpart", "analyst", "curator"}),
+        ("case:family", {"conversant", "counterpart"}),
+        ("case.expected:family", {"counterpart", "analyst"}),
+        ("check:quote-sheet-correct", {"counterpart", "analyst"}),
+        ("exchange", {"counterpart"}),
+        ("prior", {"counterpart", "analyst"}),
+        ("aids", {"counterpart"}),
     ],
 )
 def test_default_visibility_keeps_the_standard_and_the_cases_from_the_partner_and_the_curator(item, expected):
@@ -104,7 +104,7 @@ def test_default_visibility_keeps_the_standard_and_the_cases_from_the_partner_an
     assert not scenario.visible("check:quote-sheet-correct", "curator")
     assert not scenario.visible("case:family", "partner")
     with pytest.raises(KeyError):
-        scenario.visible("check:missing", "party")
+        scenario.visible("check:missing", "counterpart")
     with pytest.raises(ValueError, match="unknown role"):
         scenario.visible("profile", "owner")
 
@@ -113,21 +113,31 @@ def test_the_contract_narrows_or_widens_visibility_per_item(tmp_path):
     root = copy(tmp_path)
     contract(
         root,
-        materials={"price-list": {"kind": "fact", "visibility": ["party"]}, "plan-deck-sample": {"kind": "exemplar"}},
-        checks={"deck-structure": {"derived_from": ["plan-deck-spec"], "visibility": ["party", "analyst", "curator"]}},
-        cases={"student": {"expected": "A quote within the budget.", "visibility": ["conversant", "party", "analyst"]}},
+        materials={
+            "price-list": {"kind": "fact", "visibility": ["counterpart"]},
+            "plan-deck-sample": {"kind": "exemplar"},
+        },
+        checks={
+            "deck-structure": {"derived_from": ["plan-deck-spec"], "visibility": ["counterpart", "analyst", "curator"]}
+        },
+        cases={
+            "student": {
+                "expected": "A quote within the budget.",
+                "visibility": ["conversant", "counterpart", "analyst"],
+            }
+        },
         observability=["conversations", "deliverables"],
     )
     held_back(root, "price-list")
     scenario = load(root)
-    assert not scenario.visible("price-list", "partner") and scenario.visible("price-list", "party")
+    assert not scenario.visible("price-list", "partner") and scenario.visible("price-list", "counterpart")
     assert "price-list" in scenario.materials and "price-list" not in scenario.handed
     assert scenario.visible("check:deck-structure", "curator")
     student = next(case for case in scenario.situation.cases if case.id == "student")
     assert student.expected == "A quote within the budget." and scenario.visible("case:student", "analyst")
     assert scenario.exchange.observability == ("conversations", "deliverables")
     assert scenario.statements.norms == ("booking-policy", "brand-design-guide", "plan-deck-spec", "service-sop")
-    assert default_visibility("check") == frozenset({"party", "analyst"})
+    assert default_visibility("check") == frozenset({"counterpart", "analyst"})
 
 
 @pytest.mark.parametrize(
@@ -244,7 +254,7 @@ def test_a_hidden_package_seals_its_data_files_too(tmp_path):
     root = copy(tmp_path)
     table = "season,price\nwinter family package for two adults and one child,26800 yuan per person all inclusive\n"
     (root / "materials" / "price-list" / "rates.csv").write_text(table)
-    contract(root, materials={"price-list": {"kind": "fact", "visibility": ["party", "analyst"]}})
+    contract(root, materials={"price-list": {"kind": "fact", "visibility": ["counterpart", "analyst"]}})
     held_back(root, "price-list")
     sealed = sealed_for(load(root), "curator")
     assert sealed.hits("Quote: winter family package for two adults and one child, 26800 yuan per person.")
@@ -252,7 +262,7 @@ def test_a_hidden_package_seals_its_data_files_too(tmp_path):
 
 def test_what_the_partner_may_not_receive_is_never_scheduled_to_be_handed_over(tmp_path):
     root = copy(tmp_path)
-    contract(root, materials={"price-list": {"kind": "fact", "visibility": ["party"]}})
+    contract(root, materials={"price-list": {"kind": "fact", "visibility": ["counterpart"]}})
     with pytest.raises(ValueError, match="partner may not receive"):
         load(root)
     spec = json.loads((root / "scenario.json").read_text())

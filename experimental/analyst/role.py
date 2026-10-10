@@ -28,8 +28,8 @@ class Analyst:
     Curator can check its own revision against what its mechanisms actually did.
     """
 
-    def __init__(self, provider=None, *, model=None, limits=Limits(), sealed=None):
-        self.provider, self.model, self.limits, self.sealed = provider, model, limits, sealed
+    def __init__(self, provider=None, *, model=None, effort=None, limits=Limits(), sealed=None):
+        self.provider, self.model, self.effort, self.limits, self.sealed = provider, model, effort, limits, sealed
 
     async def review(
         self, worker, sessions, signals, *, previous_signals=(), previous_feedback=None, history=(), spoken=None
@@ -44,6 +44,7 @@ class Analyst:
             previous_feedback=previous_feedback,
             history=history,
             model=self.model,
+            effort=self.effort,
             limits=self.limits,
             sealed=self.sealed,
             spoken=spoken,

@@ -180,6 +180,23 @@ def test_the_probe_is_asked_to_close_the_records_the_runs_beside_and_what_the_ow
     }
 
 
+def test_a_closed_path_the_user_cannot_even_look_up_counts_as_closed(tmp_path, monkeypatch):
+    from experimental.curator.raven_adapter import confinement as module
+
+    hidden, open_file = tmp_path / "closed" / "runs", tmp_path / "open.txt"
+    open_file.write_text("")
+    looked_up = Path.is_dir
+
+    def is_dir(path):
+        if path == hidden:
+            raise PermissionError(13, "Permission denied", str(path))
+        return looked_up(path)
+
+    monkeypatch.setattr(Path, "is_dir", is_dir)
+    request = {"writable": [], "unlisted": [], "closed": [str(hidden), str(open_file)]}
+    assert module._probe(request) == [f"can read {open_file}"]
+
+
 def test_a_worker_whose_process_cannot_start_is_left_unstarted(tmp_path, monkeypatch):
     config = Config()
     config.agents.defaults.workspace = str(tmp_path / "home")
@@ -211,10 +228,11 @@ def test_only_a_delivered_file_inside_the_workdir_or_the_area_is_kept(tmp_path):
     records.write_text("{}")
     (work / "deck.pptx").write_bytes(b"deck")
     (work / "notes.md").symlink_to(records)
-    delivered = ["deck.pptx", "notes.md", str(records)]
-    row = {
-        "kind": "runner.event",
-        "event": {"name": "deliver_files", "phase": "start", "arguments": {"files": [{"path": p} for p in delivered]}},
-    }
+    delivered = [work / "deck.pptx", work / "notes.md", records]
+    manifest = {"raven_delivery": {"files": [{"path": str(path)} for path in delivered]}}
+    row = {"kind": "runner.event", "event": {"name": "", "phase": "complete", "ok": True, "metadata": manifest}}
     kept = worker._keep_deliverables("t1", [row])
     assert [Path(path).name for path in kept] == ["deck.pptx"]
+    malformed = {"raven_delivery": {"files": ["deck.pptx", {}, None]}}
+    row = {"kind": "runner.event", "event": {"name": "", "phase": "complete", "ok": True, "metadata": malformed}}
+    assert worker._keep_deliverables("t2", [row]) == ()

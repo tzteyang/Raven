@@ -1,5 +1,5 @@
 import { cleanup, fireEvent, render, screen, within } from '@testing-library/react'
-import { afterEach, beforeEach, describe, expect, it, test, vi } from 'vitest'
+import { afterEach, beforeEach, describe, expect, it, onTestFinished, test, vi } from 'vitest'
 
 import { App, entryLabel, entryTitle, groups, parseHash } from './App'
 import { progress, roundVersions, revisions } from './derive'
@@ -79,6 +79,19 @@ const run: Run = {
   history: [
     { round: 1, requirements: [{ id: 'R1', behavior: 'Ask for the budget first.', strength: 'must_hold', acceptance: 'Budget asked before any itinerary.', held: true }], revision: [{ target: 'planning.strategy', treatment: 'add', addresses: ['R1'] }], diagnoses: [diagnosis], attributor: { model: 'deepseek/deepseek-flash' } },
   ],
+  standard: {
+    criteria: [{ id: 'derived-1', text: 'Name the source of every price.', source: 'derived', strength: 'should', provenance: 'material:sop Step 4', quote: 'name the source of every price' }],
+    derived_from: ['sop'],
+    calls: { rubric_builder: 1, assessor: 2 },
+    revisions: [
+      {
+        version: 1,
+        new_norms: ['sop'],
+        changes: [{ id: 'derived-1', op: 'add', reason: 'new_norm', explanation: 'Step 4 states it.', before: '', text: 'Name the source of every price.', material: 'sop', quote: 'name the source of every price' }],
+        unchecked: [{ material: 'sop', section: 'Step 9', reason: 'happens after the conversation' }],
+      },
+    ],
+  },
 }
 
 const entries: RunEntry[] = [
@@ -107,14 +120,14 @@ beforeEach(() => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
     ok: true,
     status: 200,
-    json: async () => (path === '/api/runs' ? entries : path === '/api/scenario' ? scenario : path.startsWith('/api/live') ? liveReply : run),
+    json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/live') ? liveReply : run),
   })))
 })
 
 test('the cultivation view is the owner and the Curator in conversation, round by round', async () => {
   render(<App />)
   expect(await screen.findByText("Serve the agency's travellers")).toBeTruthy()
-  expect(screen.getByText('travel agency · onboarding')).toBeTruthy()
+  expect(screen.getByText('owner · onboarding')).toBeTruthy()
   expect(screen.getByText('price-list')).toBeTruthy()
   expect(screen.getByText('This revision failed, so the employee stays on v0.')).toBeTruthy()
   expect(screen.getByText('Never asked the budget.')).toBeTruthy()
@@ -142,15 +155,100 @@ test('the cultivation view is the owner and the Curator in conversation, round b
   expect(await screen.findByText('Track intake in planning.')).toBeTruthy()
   expect(screen.getByText('plan.py', { selector: '.asm code.ref' })).toBeTruthy()
   fireEvent.click(screen.getByText('plan.py', { selector: 'summary code' }))
-  expect(await screen.findByText('print(1)')).toBeTruthy()
+  expect(await screen.findByText((_, node) => !!node?.classList.contains('cb-code') && node.textContent === 'print(1)')).toBeTruthy()
   const reply = document.querySelector<HTMLElement>('.say.curator:not(:has(.failed))')!
-  fireEvent.click(within(reply).getByText('raw'))
-  expect(within(reply).getByText('generated candidate in c2.json')).toBeTruthy()
-  expect(within(reply).getByText(/"understanding": "Intake is missing\."/)).toBeTruthy()
-  expect(within(reply).getByText(/"plan\.py": "print\(1\)"/)).toBeTruthy()
-  expect(within(reply).queryByText(/Generated code and bindings/)).toBeNull()
-  fireEvent.click(within(reply).getByText('rendered'))
-  expect(within(reply).getByText('Intake is missing.')).toBeTruthy()
+  expect(within(reply.querySelector<HTMLElement>(':scope > .who')!).queryByRole('button', { name: 'raw' })).toBeNull()
+  const change = reply.querySelector<HTMLElement>('.changes .change')!
+  fireEvent.click(within(change).getByRole('button', { name: 'raw' }))
+  const panel = reply.querySelector<HTMLElement>('.changes .change[data-raw] .rawpanel')!
+  expect([...panel.querySelectorAll('.rp-path')].map((path) => path.textContent)).toEqual([
+    'generated.candidate.plan.changes[0]',
+    'generated.candidate.artifact.values["planning.strategy"]',
+    'generated.candidate.artifact.files["plan.py"]',
+    'generated.candidate.selection.grounds["planning.strategy"]',
+  ])
+  expect(within(panel).getByText('c2.json')).toBeTruthy()
+  const implementation = panel.querySelector<HTMLElement>('.codeblock[data-language="python"]')!
+  expect(implementation.querySelector('.cb-code')!.textContent).toBe('print(1)')
+  expect(implementation.querySelector('.hljs-built_in')!.textContent).toBe('print')
+  expect(within(reply).getByText('Intake is missing.', { selector: '.under p' })).toBeTruthy()
+  const understanding = reply.querySelector<HTMLElement>('.part')!
+  fireEvent.click(within(understanding).getByRole('button', { name: 'raw' }))
+  expect(understanding.querySelector('.codeblock[data-prose] .cb-code')!.textContent).toBe('Intake is missing.')
+  expect(within(understanding).getByText('generated.candidate.plan.understanding')).toBeTruthy()
+  fireEvent.click(within(understanding).getByRole('button', { name: 'rendered' }))
+  expect(within(reply).getByText('Intake is missing.', { selector: '.under p' })).toBeTruthy()
+  fireEvent.click(within(reply.querySelector<HTMLElement>('.changes .change')!).getByRole('button', { name: 'rendered' }))
+  expect(reply.querySelector('.changes details.change')).toBeTruthy()
+  const standard = document.querySelector<HTMLElement>('.standard-block')!
+  expect(within(standard).getByText('1 written by the rubric builder from sop')).toBeTruthy()
+  fireEvent.click(within(standard).getByText('Revision 1: 1 added · new: sop'))
+  expect(await within(standard).findByText('Step 4 states it.')).toBeTruthy()
+  expect(within(standard).getByText('sop: name the source of every price')).toBeTruthy()
+  expect(within(standard).getByText('not checkable: sop Step 9, happens after the conversation')).toBeTruthy()
+})
+
+test("a silent owner's remark says it only measured the round", async () => {
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
+    ok: true,
+    status: 200,
+    json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/live') ? liveReply : { ...run, measuring: ['agency'] }),
+  })))
+  render(<App />)
+  expect(await screen.findByText("Serve the agency's travellers")).toBeTruthy()
+  const marks = document.querySelectorAll('.say.owner .who .silent')
+  expect(marks.length).toBe(run.rounds.length)
+  expect(marks[0].textContent).toBe('silent · measurement only')
+})
+
+test('the loop line above the conversation sends it to a station, and marks the station pointed at in it', async () => {
+  const sent: string[] = []
+  const scroll = vi.fn(function (this: HTMLElement) {
+    sent.push(this.dataset.station ?? this.dataset.reply ?? '')
+  })
+  const kept = Element.prototype.scrollIntoView
+  Element.prototype.scrollIntoView = scroll as unknown as Element['scrollIntoView']
+  onTestFinished(() => {
+    Element.prototype.scrollIntoView = kept
+  })
+  render(<App />)
+  const line = await screen.findByRole('group', { name: 'The cultivation loop' })
+  expect(screen.getByText("Serve the agency's travellers")).toBeTruthy()
+  fireEvent.click(within(line).getByRole('button', { name: /^round 1, Analyse/ }))
+  expect(sent).toEqual(['1:analyse'])
+  const requirements = document.querySelector<HTMLElement>('[data-station="1:analyse"]')!
+  expect(requirements.classList.contains('flash')).toBe(true)
+  expect(within(requirements).getByText('Ask for the budget first.')).toBeTruthy()
+  fireEvent.click(within(line).getByRole('button', { name: /^round 1, Diagnose/ }))
+  fireEvent.click(within(line).getByRole('button', { name: /^round 2, Diagnose/ }))
+  expect(sent.slice(1)).toEqual(['1:diagnose', '2:diagnose'])
+  expect(document.querySelector('[data-station="2:diagnose"]')!.textContent).toBe('No revision: the Analyst kept the employee as it is and ran another trial.')
+  fireEvent.mouseOver(screen.getByText('Never asked the budget.'))
+  expect(within(line).getByRole('button', { name: /^round 1, Assess/ }).hasAttribute('data-on')).toBe(true)
+  expect(within(line).getByRole('button', { name: /^round 1, Assess/ }).getAttribute('aria-current')).toBe('location')
+})
+
+test('a read of the previous run that answers late is not drawn under the run picked since', async () => {
+  let late: (value: unknown) => void = () => undefined
+  const second = { ...run, task: 'Serve the second agency' }
+  const listed = [...entries, { ...entries[0], id: 'x/s', name: 'x', task: second.task }]
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => {
+    if (path === '/api/runs/w/r') await new Promise((resolve) => { late = resolve })
+    return {
+      ok: true,
+      status: 200,
+      json: async () => (path === '/api/runs' ? listed : path.startsWith('/api/scenario') ? scenario : path === '/api/runs/x/s' ? second : run),
+    }
+  }))
+  render(<App />)
+  const picker = await screen.findByLabelText('Run')
+  await screen.findByRole('option', { name: /^x/ })
+  fireEvent.change(picker, { target: { value: 'x/s' } })
+  expect(await screen.findByText('Serve the second agency')).toBeTruthy()
+  late(undefined)
+  await new Promise((resolve) => setTimeout(resolve, 20))
+  expect(screen.queryByText("Serve the agency's travellers")).toBeNull()
+  expect(screen.getByText('Serve the second agency')).toBeTruthy()
 })
 
 test('a trial opens beside the conversation from its card, with drills, interceptions and verdicts, red lines marked', async () => {
@@ -239,10 +337,10 @@ describe('run labels', () => {
     expect(entryLabel({ ...entries[0], status: 'stalled' })).toBe('w · Curator · 1/2 → 2/2 · stalled or stopped')
     const suite: RunEntry = {
       ...entries[0], status: 'error', chain: 'staged', stopped: 'spend passed the $40 budget',
-      models: { employee: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', subagents: 'z-ai/glm-5.3' },
+      models: { partner: 'deepseek/deepseek-flash', curator: 'deepseek/deepseek-flash', 'sub-harness': 'z-ai/glm-5.3' },
     }
-    expect(entryLabel(suite)).toBe('w · staged · Curator · 1/2 → 2/2 · employee & curator deepseek-flash · sub-harness glm-5.3 · stopped by the suite')
-    expect(entryTitle(suite)).toBe('employee & curator deepseek/deepseek-flash · sub-harness z-ai/glm-5.3\nStopped: spend passed the $40 budget')
+    expect(entryLabel(suite)).toBe('w · staged · Curator · 1/2 → 2/2 · deepseek-flash · sub-harness glm-5.3 · stopped by the suite')
+    expect(entryTitle(suite)).toBe('partner, curator deepseek/deepseek-flash · sub-harness z-ai/glm-5.3\nStopped: spend passed the $40 budget')
     expect(groups([control, entries[0]]).map(([group, rows]) => [group, rows.map((row) => row.name)])).toEqual([
       ['Runs', ['w']],
       ['Archive', ['archive-c']],
@@ -258,6 +356,61 @@ describe('markdown', () => {
     expect(container.querySelector('table td')?.textContent).toBe('Party total')
     expect(container.querySelector('script')).toBeNull()
   })
+})
+
+test('a run whose research stage stopped shows why, and that no round ran', async () => {
+  const stopped: Run = {
+    ...run,
+    status: 'incomplete',
+    initial_curation: [],
+    rounds: [],
+    history: [],
+    research: {
+      status: 'incomplete',
+      stop_reason: 'error',
+      seconds: 276,
+      review: { accepted: false, reason: 'assess: submission budget exhausted', issues: ['Complete collection and review before handoff.'] },
+      title: 'Unfinished expert information',
+      sections: [{ dimension: 'role', coverage: 'missing', text: '', reason: 'Not assessed before execution ended.', evidence: 0 }],
+      resources: [],
+      unresolved: [],
+      stages: [{ stage: 'assess', calls: 4, queries: 6, submitted: false }],
+      trouble: [{ stage: 'assess', event: 'output.rejected', error: 'This is the last call', tools: ['read_file'], charged: false }],
+      channels: { tool: 13, research: 1, user: 2, request: 2 },
+      evidence: [
+        { id: 'evidence-14', channel: 'research', kind: 'finding', question: 'Which articles govern superlatives?', attempt: 'research-3', text: 'Article 9 bans superlatives.', sources: ['https://example.org/law'], dimensions: ['knowledge'] },
+        { id: 'evidence-15', channel: 'user', kind: 'answer', question: 'When is the launch?', attempt: '', text: 'The launch is on 12 December.', sources: [], dimensions: [] },
+        { id: 'evidence-16', channel: 'user', kind: '', question: 'What is the budget?', attempt: '', text: '', sources: [], dimensions: [] },
+      ],
+      groups: [{ wave: '1', group: 3, status: 'accepted', dimensions: ['knowledge'], questions: ['Which articles govern superlatives?'], error: '', admitted: 1, refused: 0, withheld: 0, unanswered: 0 }],
+      errors: [],
+    },
+  }
+  vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
+    ok: true,
+    status: 200,
+    json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : stopped),
+  })))
+  render(<App />)
+  const block = await screen.findByText('Curator side · research stage', { exact: false })
+  const research = block.closest<HTMLElement>('.research-block')!
+  expect(within(research).getByText('The collection stopped (error) before a review accepted it.')).toBeTruthy()
+  expect(within(research).getByText('assess: submission budget exhausted')).toBeTruthy()
+  expect(within(research).getByText('5 min')).toBeTruthy()
+  expect(within(research).getByText('role missing')).toBeTruthy()
+  fireEvent.click(within(research).getByText('Missing, rejected or failed replies (1)'))
+  expect(await within(research).findByText('· called read_file', { exact: false })).toBeTruthy()
+  expect(screen.getByText('The research stage handed over no information, so onboarding stopped before the Curator was called and no round ran.')).toBeTruthy()
+  expect(within(research).getByText('research 1')).toBeTruthy()
+  expect(within(research).getByText("owner's answers 2")).toBeTruthy()
+  fireEvent.click(within(research).getByText('Research groups (1)'))
+  expect(await within(research).findByText('Which articles govern superlatives?')).toBeTruthy()
+  fireEvent.click(within(research).getByText('Research findings (1)'))
+  expect(await within(research).findByText('https://example.org/law')).toBeTruthy()
+  fireEvent.click(within(research).getByText("The owner's answers (2)"))
+  expect(await within(research).findByText('The launch is on 12 December.')).toBeTruthy()
+  expect(within(research).getByText('What is the budget?')).toBeTruthy()
+  expect(within(research).getByText('Not answered.')).toBeTruthy()
 })
 
 test('an opening leads the conversation with its uploads, and pasted materials fold under the remark', async () => {
@@ -290,7 +443,7 @@ test('an opening leads the conversation with its uploads, and pasted materials f
   const urls: string[] = []
   vi.stubGlobal('fetch', vi.fn(async (path: string) => {
     urls.push(path)
-    const body = path === '/api/runs' ? entries : path === '/api/scenario' ? scenario : path.startsWith('/api/thumbs') ? { pages: ['/c/page-01.png', '/c/page-02.png'] } : opened
+    const body = path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/thumbs') ? { pages: ['/c/page-01.png', '/c/page-02.png'] } : opened
     return { ok: true, status: 200, json: async () => body, text: async () => '# Service SOP\n\nConfirm before quoting.' }
   }))
   render(<App />)
@@ -301,6 +454,7 @@ test('an opening leads the conversation with its uploads, and pasted materials f
   expect(screen.getByText('norm', { selector: '.att .att-kind' })).toBeTruthy()
   fireEvent.click(screen.getByText('service-sop.md', { selector: '.att-chip' }))
   expect(await screen.findByText('Confirm before quoting.')).toBeTruthy()
+  expect(urls).toContain('/api/scenario?run=w%2Fr')
   expect(urls).toContain('/api/upload?run=w%2Fr&path=uploads%2Fservice-sop%2Fservice-sop.md')
   fireEvent.click(screen.getByText('plan-deck-template.pptx', { selector: '.att-chip' }))
   expect(await screen.findByAltText('plan-deck-template.pptx page 2')).toBeTruthy()
@@ -334,7 +488,7 @@ test('a running run opens on the live view, grouped by turn with interceptions h
   vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
     ok: true,
     status: 200,
-    json: async () => (path === '/api/runs' ? entries : path === '/api/scenario' ? scenario : path.startsWith('/api/live') ? liveReply : running),
+    json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/live') ? liveReply : running),
   })))
   render(<App />)
   expect(await screen.findByText('Is it cheaper in March?')).toBeTruthy()
@@ -370,7 +524,7 @@ test('while the Curator revises, the live view shows its progress instead of an 
   vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
     ok: true,
     status: 200,
-    json: async () => (path === '/api/runs' ? entries : path === '/api/scenario' ? scenario : path.startsWith('/api/live') ? curating : onboarding),
+    json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/live') ? curating : onboarding),
   })))
   render(<App />)
   expect(await screen.findByText('Gate delivery until the ticket exists.')).toBeTruthy()
@@ -388,7 +542,7 @@ test('a run the list reads as stalled is not treated as running', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => ({
     ok: true,
     status: 200,
-    json: async () => (path === '/api/runs' ? [{ ...entries[0], status: 'stalled' }] : path === '/api/scenario' ? scenario : path.startsWith('/api/live') ? liveReply : { ...run, status: 'running' }),
+    json: async () => (path === '/api/runs' ? [{ ...entries[0], status: 'stalled' }] : path.startsWith('/api/scenario') ? scenario : path.startsWith('/api/live') ? liveReply : { ...run, status: 'running' }),
   })))
   render(<App />)
   expect(await screen.findByText('stalled or stopped · on v1')).toBeTruthy()
@@ -401,7 +555,7 @@ test('the record tab asks the server for the run\'s cultivation record', async (
     urls.push(path)
     if (path.startsWith('/api/record/export')) return { ok: true, status: 200, json: async () => ({ folder: '/w/record', bundle: null }) }
     if (path.startsWith('/api/record')) return { ok: false, status: 503, json: async () => ({ error: 'record builder not available', detail: 'ModuleNotFoundError' }) }
-    return { ok: true, status: 200, json: async () => (path === '/api/runs' ? entries : path === '/api/scenario' ? scenario : run) }
+    return { ok: true, status: 200, json: async () => (path === '/api/runs' ? entries : path.startsWith('/api/scenario') ? scenario : run) }
   }))
   render(<App />)
   await screen.findByText("Serve the agency's travellers")

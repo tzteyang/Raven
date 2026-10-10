@@ -1,6 +1,6 @@
 """What a live session borrows from the automation and simulation packages: hiring the employee on the person's task,
 setting up the session's process the way an automated run sets up its own, handing the scenario's materials over the
-way a party uploads them, and the norms an automatic assessor may draw criteria from. This is the one module of the
+way a counterpart uploads them, and the norms an automatic assessor may draw criteria from. This is the one module of the
 Studio that imports those packages; the session's process (`experimental.webui.session_host`) reaches them only
 through it, and the server not at all.
 
@@ -60,8 +60,8 @@ def rehire(*_args, **_kwargs):
 
 
 def hand_over(contract, names, *, uploads: Path, shared: Path) -> tuple[Handover, ...]:
-    """Upload the named materials the way the party uploads files, into the employee's `uploads` folder and the
-    working directory's (`shared`), and name them as a signal's handovers; only the materials the party may hand over
+    """Upload the named materials the way the counterpart uploads files, into the employee's `uploads` folder and the
+    working directory's (`shared`), and name them as a signal's handovers; only the materials the counterpart may hand over
     (`handed`) are."""
     scenario = Scenario.of(contract)
     unknown = sorted(set(names) - set(scenario.handed))

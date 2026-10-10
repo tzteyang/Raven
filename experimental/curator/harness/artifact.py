@@ -8,6 +8,7 @@ from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, mo
 
 from ...audience import CURATOR, INTERNAL, RECORD_ONLY
 from .attribution import Attributed
+from .commitments import CommitmentChange
 from .state import StateUse
 
 
@@ -28,7 +29,8 @@ ArtifactPath = Annotated[str, AfterValidator(relative_path)]
 # Who may receive each field of the plan types (experimental.audience). A plan's understanding is the Curator's
 # answer to the feedback, which the Analyst reads back next round; the design, the state, the grounds and the node
 # reasons are the Curator's own; a change's expected behavior and verification go to the record only, where their
-# accuracy can be measured before any role is shown them.
+# accuracy can be measured before any role is shown them. A plan's commitment changes go to the record only as well:
+# the commitment list they produce is what later curations read.
 
 
 class Change(BaseModel):
@@ -92,6 +94,7 @@ class Plan(BaseModel):
         "changes": INTERNAL,
         "state": CURATOR,
         "node_reasons": CURATOR,
+        "commitments": RECORD_ONLY,
     }
 
     understanding: str = Field(min_length=1)
@@ -107,6 +110,11 @@ class Plan(BaseModel):
         "prepared Playbooks. Use an empty mapping when both node sets are empty, even if child Harnesses exist. "
         "Child Harness names belong in the design narrative, not these keys. Nonempty node requirements request "
         "child customization; runtime invocation is a separate decision. Reasons explain decisions, not another switch.",
+    )
+    commitments: tuple[CommitmentChange, ...] = Field(
+        default=(),
+        description="Changes to the Harness commitments: add, modify or retire entries of the current list; "
+        "omitted commitments stay as they are.",
     )
 
     @model_validator(mode="after")

@@ -12,7 +12,7 @@ from experimental.curator.workflow import improve
 from raven.contracts.llm_provider import LLMResponse
 from tests.fixtures.harness_curator.authoring import add_method, capability
 from tests.integration.test_harness_curator_e2e import baseline as baseline
-from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
+from tests.integration.test_harness_curator_e2e import plan_for, replay_provider, submitted
 from tests.integration.test_harness_curator_planning_e2e import CuratorProvider, response
 from tests.test_harness_curator_generation import diagnosis, packet, selection
 from tests.test_harness_curator_strategies import files, values
@@ -44,7 +44,7 @@ async def test_generation_feedback_and_actual_three_strategy_execution(baseline,
         [
             response("submit_diagnosis", diagnosis()),
             response("submit_selection", selection(*proposed["values"])),
-            response("submit_plan", plan_for(*proposed["values"]).model_dump(mode="json")),
+            response("submit_plan", submitted(plan_for(*proposed["values"]))),
             response("submit_artifact", proposed),
         ]
     )
@@ -79,7 +79,7 @@ async def test_generation_feedback_and_actual_three_strategy_execution(baseline,
             [
                 response("submit_diagnosis", diagnosis()),
                 response("submit_selection", selection("action.strategy")),
-                response("submit_plan", plan_for("action.strategy").model_dump(mode="json")),
+                response("submit_plan", submitted(plan_for("action.strategy"))),
                 response("submit_artifact", revised),
             ]
         )
@@ -265,7 +265,7 @@ async def test_semantic_translation_failure_reaches_repair_through_native_execut
     curator = CuratorProvider(
         [
             response("submit_selection", selection(*proposed["values"])),
-            response("submit_plan", plan.model_dump(mode="json")),
+            response("submit_plan", submitted(plan)),
             response("submit_artifact", broken),
             response("submit_artifact", proposed),
         ]

@@ -8,6 +8,7 @@ from types import SimpleNamespace
 import pytest
 
 from experimental.automation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
+from experimental.counterpart.owner import handles
 from experimental.curator.raven_adapter.deployment import child_directory
 from experimental.curator.raven_adapter.hosting.prepare import prepare_children
 from experimental.curator.raven_adapter.strategy import Scopes
@@ -191,7 +192,7 @@ async def test_the_owner_reads_what_each_drill_filed_on_its_replica_and_nothing_
         records = [{"kind": "runner.event", "event_type": "Text", "event": {"content": reply}}]
         return [Exchange("Book it", Execution("t1", [], records, {}, "a"))]
 
-    rows = [{"id": criterion.id, "result": "pass"} for criterion in scenario.criteria]
+    rows = [{"id": handle, "result": "pass"} for handle in handles(scenario.criteria).values()]
     verdict = LLMResponse(
         content=None, tool_calls=[ToolCallRequest(REVIEW, REVIEW, {"verdicts": rows, "remark": "Fine."})]
     )

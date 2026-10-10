@@ -13,6 +13,7 @@ from experimental.analyst.feedback import Feedback
 from experimental.audience import ROLES, UndeclaredAudienceError, audience, audiences_of, project
 from experimental.curator.harness.artifact import Change, Plan, Selection
 from experimental.curator.harness.attribution import Attributed, Attribution, Diagnosis
+from experimental.curator.harness.commitments import Commitment, CommitmentChange
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.compartment import (
     Boundaries,
@@ -45,6 +46,8 @@ LOOP_TYPES = (
     Feedback,
     Change,
     Plan,
+    Commitment,
+    CommitmentChange,
     Diagnosis,
     Attribution,
     Attributed,
@@ -135,6 +138,9 @@ def test_projection_keeps_only_the_fields_a_role_may_receive():
         "actual": "",
         "note": "Reply to Plan",
         "basis": "",
+        "authority": "model",
+        "strength": None,
+        "parent_id": None,
     }
     assert for_analyst["metrics"] == {"pass_rate": 0.0}
     assert project(signal(), "partner") == {} and project((signal(),), "curator") == [for_curator]
@@ -199,11 +205,11 @@ def test_undeclared_types_and_bare_mappings_are_refused():
 
 
 def test_sealing_is_differential_between_what_a_role_may_and_may_not_see():
-    norm = "Ask for the budget before recommending any product, and restate the party in one sentence."
+    norm = "Ask for the budget before recommending any product, and restate the counterpart in one sentence."
     check = f"S2.1: {norm} The assistant fails this check when the budget question comes after a product name."
     sealed = Sealed.of([check], visible=[norm], tokens=["quote-sheet-correct", "family", "abc"])
     assert sealed.tokens == frozenset({"quote-sheet-correct"})
-    assert sealed.hits("Please ask for the budget before recommending any product, and restate the party.") == []
+    assert sealed.hits("Please ask for the budget before recommending any product, and restate the counterpart.") == []
     assert sealed.hits("It fails this check when the budget question comes after a product name.") == ["<sealed text>"]
     assert sealed.hits("Fails this check when the budget question comes.") == []
     assert sealed.hits("The verdict on quote-sheet-correct was fail.") == ["quote-sheet-correct"]
@@ -214,6 +220,32 @@ def test_sealing_is_differential_between_what_a_role_may_and_may_not_see():
     assert not Sealed.of(["short phrase"], visible=["a short phrase here"])
     assert Sealed.of(["short phrase"]).hits("A SHORT-phrase, hidden") == ["<sealed text>"]
     assert Sealed.of(["short phrase"]).hits("shortphrase or short phrases") == []
+
+
+def test_a_spoken_line_quoted_with_the_words_that_introduce_it_in_the_card_is_not_a_leak():
+    line = "From now on keep an eye on the six rivals in the store and file the watch report when done."
+    card = f"You run the marketing team. Open with: {line} Only when asked: the six rivals are the ones in the brief."
+    sealed = Sealed.of([card]).without([(line,)])
+    assert sealed.hits(f"The customer opened with: {line}") == []
+    assert sealed.hits("Only when asked: the six rivals are the ones in the brief.") == ["<sealed text>"]
+    assert Sealed.of([card]).hits(f"Open with: {line}") == ["<sealed text>"]
+
+
+def test_a_text_sealed_against_copying_is_found_only_as_a_copied_run():
+    held = "The handover form is filed for holds, planning calls, complaints, groups and checks."
+    later = (
+        "The handover form template: holds, planning calls, complaints, groups and checks each have their fields, "
+        "folder and naming rule. A hold is filed before any seat is promised to the guest and names the quote, the "
+        "dates and the party it rests on."
+    )
+    sealed = Sealed.of([], tokens=["case-7"]).copying([later, "Never promise a seat."], visible=[held])
+    assert sealed.passages and sealed.span == 10
+    assert sealed.hits("The handover form template: holds, planning calls and complaints are filed with it.") == []
+    copied = "A hold is filed before any seat is promised to the guest and names the quote, the dates and the party."
+    assert sealed.hits(f"Note: {copied}") == ["<sealed text>"]
+    assert sealed.hits("We never promise a seat.") == ["<sealed text>"]
+    assert sealed.hits("case-7 is open") == ["case-7"]
+    assert not sealed.without([copied, "Never promise a seat."]).hits(f"Note: {copied} We never promise a seat.")
 
 
 def test_a_sealed_text_written_over_several_lines_is_found_inside_a_packet_sent_as_json():
@@ -237,7 +269,7 @@ def test_a_window_weighs_as_much_in_chinese_as_in_english():
     assert windows("\uff15\uff0e\uff15\u4e07 " * 8) == windows("5.5\u4e07 " * 8)
 
 
-def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_what_the_party_says():
+def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_what_the_counterpart_says():
     scenario = load(TRAVEL)
     curator = sealed_for(scenario, "curator")
     assert "quote-sheet-correct" in curator.tokens and "travel_agency" in curator.tokens and curator.windows
@@ -250,9 +282,9 @@ def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_w
     handover = scenario.exchange.handover.replace("{files}", "- uploads/price-list/SKILL.md")
     for role in ("curator", "analyst", "partner"):
         assert sealed_for(scenario, role).hits(opening) == [] and sealed_for(scenario, role).hits(handover) == []
-    party = sealed_for(scenario, "party")
-    assert party.hits(check.check) == [] and party.hits(scenario.situation.cases[0].text) == []
-    assert party.tokens == frozenset({"travel_agency"})
+    counterpart = sealed_for(scenario, "counterpart")
+    assert counterpart.hits(check.check) == [] and counterpart.hits(scenario.situation.cases[0].text) == []
+    assert counterpart.tokens == frozenset({"travel_agency"})
     with pytest.raises(ValueError, match="unknown role"):
         sealed_for(scenario, "owner")
 
@@ -295,7 +327,7 @@ async def test_the_guarded_provider_stops_sealed_requests_before_they_leave(tmp_
         assert (await guarded.chat_with_retry([{"role": "user", "content": persona}])).content == "ok"
         with pytest.raises(BoundaryError, match="case-7"):
             await guarded.chat_with_retry([{"role": "user", "content": f"{persona} case-7"}])
-    warning = Guard("party", sealed, "warn", log).provider(make_provider())
+    warning = Guard("counterpart", sealed, "warn", log).provider(make_provider())
     assert (await warning.chat_with_retry([{"role": "user", "content": "case-7"}])).content == "ok"
     assert json.loads(log.read_text().splitlines()[-1])["event"] == "violation"
     with pytest.raises(ValueError, match="unknown policy"):

@@ -4,7 +4,7 @@ ActionBinding selects event kinds, optional requests and an optional model tool.
 
 ## Event consumers
 
-progress runs before an iteration and supports continuation, guidance and a terminal reply. proposal at a batch or reply supports native bounded resampling and completion. With dispatch=true, the native ToolGate sends a single dispatch proposal, supporting continue/reject; gate errors refuse the call. Native permissions remain independent.
+progress runs before an iteration and supports continuation, guidance and a terminal reply. proposal at a batch or reply supports native bounded resampling and completion. With dispatch=true, the native ToolGate sends a single dispatch proposal, supporting continue/reject; a decision with unverified, or an InferenceError escaping the strategy, lets the call through recorded as unverified, while any other gate error refuses the call. A refusal repeated for the same call and arguments within one turn is counted, and past the host's limit the refusal tells the model to stop resubmitting it unchanged. Native permissions remain independent.
 
 outcome receives actual transcript evidence after a tool iteration. failure at terminal_answerless supports only the terminal choices stated in the event; native synthesis, early exit or scheduled rerun can make that point unreachable. control reports application receipts. An unselected kind has no implied call or state change.
 
@@ -25,8 +25,10 @@ judgment inside the current operation. Curator authors its prompt, selected
 evidence and result-to-control mapping. Inspect worker.inference for the actual
 limits and read the supplied StrategyInference guide. Inference results carry
 no independent control authority; the current event still limits their effect.
-An operation and its sequential peer calls share one attempt, including failed
-attempts. Do not repair an invalid judgment by invoking the model again.
+An operation and its sequential peer calls share one allowance of calls and time,
+failed calls included, and `each` makes several judgments of the operation at
+once. A judgment that failed may be asked again within the allowance; there is
+no hidden retry.
 
 StrategyPeers reads detached views and invokes typed operations of the real owner. Cycle and read-only checks occur before peer writes. One owner's failure does not roll back another owner's success. Tool interaction, event rules and the gate share one active Action owner; no second policy instance or duplicate plan is created.
 

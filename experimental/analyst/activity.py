@@ -14,6 +14,8 @@ import json
 import re
 from collections import defaultdict
 
+from ..curator.raven_adapter.observe import delivered_files
+
 STRATEGY_ROWS = {
     "planning": "planning.strategy",
     "action": "action.strategy",
@@ -209,12 +211,7 @@ def _visible(row: dict) -> bool:
         return False
     if row.get("event_type") == "Text":
         return bool(str(event.get("content") or "").strip())
-    return (
-        row.get("event_type") == "ToolEvent"
-        and event.get("phase") == "complete"
-        and event.get("ok") is not False
-        and bool((event.get("metadata") or {}).get("raven_delivery"))
-    )
+    return bool(delivered_files(row))
 
 
 def _failed_tool(row: dict, tools: dict) -> tuple[str, str] | None:

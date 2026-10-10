@@ -42,6 +42,12 @@ class ActionDecision(BaseModel):
     current dispatch; revise requests a bounded native resample; finish supplies
     a truthful terminal reply. The event/request states which are supported.
     A valid decision is still not evidence that the host applied it.
+
+    unverified goes with continue: the strategy could not obtain the judgment
+    this boundary needed (an exhausted or failed inference, named in the text),
+    so it neither refuses nor vouches; the host lets the proposal through and
+    records the reason where reviewers read it. An unavailable judgment is not
+    a violation, and a strategy must not turn it into a refusal.
     """
 
     model_config = ConfigDict(extra="forbid", frozen=True)
@@ -52,11 +58,14 @@ class ActionDecision(BaseModel):
     reply: str | None = None
     guidance: str | None = None
     generation: GenerationOverrides | None = None
+    unverified: str | None = None
 
     @model_validator(mode="after")
     def meaningful_effect(self):
         if self.generation is not None and self.control != "revise":
             raise ValueError("generation overrides belong only to a native resample")
+        if self.unverified is not None and (self.control != "continue" or not self.unverified.strip()):
+            raise ValueError("unverified names why no judgment was obtained and belongs only to continue")
         if self.control in {"reject", "revise"} and not (self.feedback and self.feedback.strip()):
             raise ValueError("reject and revise require model-visible feedback")
         if self.control == "finish" and not (self.reply and self.reply.strip()):

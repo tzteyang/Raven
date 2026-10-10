@@ -35,4 +35,4 @@ class Human:
         text = await self._prompt("feedback> ")
         if not text or not text.strip():
             return None
-        return Signal("human", text.strip())
+        return Signal("human", text.strip(), authority="external")

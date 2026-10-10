@@ -195,15 +195,8 @@ def make_run(tmp_path: Path, **overrides) -> tuple[Path, Path]:
             "curator_budget": {"calls": None, "queries": None},
             "seed": None,
             "without": [],
-            "models": {
-                "employee": "m-e",
-                "curator": "m-c",
-                "analyst": "m-a",
-                "simulation": "m-s",
-                "traveller": "m-s",
-                "subagents": None,
-            },
-            "efforts": {"employee": None, "employee_tier": None, "curator": None, "traveller": None},
+            "models": {"partner": "m-e", "curator": "m-c", "analyst": "m-a", "counterpart": "m-s", "conversant": "m-s"},
+            "efforts": {"partner": "low", "curator": "high"},
             "baseline": {"skills/x/SKILL.md": "ab" * 32},
             "started": 1790000000.0,
         },
@@ -589,28 +582,31 @@ def test_an_older_runs_command_is_rebuilt_from_its_settings_as_it_ran():
         "curator": "improve",
         "judge": "round",
         "models": {
-            "employee": "e",
+            "partner": "e",
             "curator": "c",
             "analyst": "c",
-            "simulation": "c",
-            "traveller": "e",
-            "subagents": "e",
+            "counterpart": "c",
+            "conversant": "e",
+            "sub-harness": "s",
         },
-        "efforts": {"curator": "high", "traveller": "low"},
+        "efforts": {"partner": "low", "curator": "high", "conversant": "low"},
         "curator_budget": {"calls": 96, "queries": None},
         "seed": 11,
     }
     argv = shlex.split(record._command(old))
     assert "--chain" not in argv and argv[argv.index("--partition") + 1] == json.dumps([["sop"], ["price-list"]])
     assert "--analysis" not in argv and "--judge" not in argv
-    assert [flag for flag in argv if flag.endswith("-model")] == [
-        "--curator-model",
-        "--traveller-model",
-        "--subagent-model",
+    assert [argv[index + 1] for index, flag in enumerate(argv) if flag == "--model"] == [
+        "curator=c",
+        "analyst=c",
+        "counterpart=c",
+        "sub-harness=s",
     ]
+    assert [argv[index + 1] for index, flag in enumerate(argv) if flag == "--effort"] == ["curator=high"]
     assert argv[argv.index("--curator-calls") + 1] == "96" and "--curator-queries" not in argv
-    assert argv[argv.index("--curator-effort") + 1] == "high" and argv[argv.index("--seed") + 1] == "11"
+    assert argv[argv.index("--seed") + 1] == "11"
     assert "--chain documents" in record._command({**old, "chain": "documents", "disclose": "all"})
+    assert "--model" not in record._command({**old, "models": {"employee": "e", "curator": "c"}})
 
 
 def test_links_come_only_from_the_grounds_and_addresses_the_loop_recorded(tmp_path):
@@ -968,11 +964,25 @@ def test_cost_prefers_the_suite_summary_then_audit_spans(tmp_path):
     )
     write(run / "traces" / "audit-spans.log", f"{span}\n{employee}\nnot json\n")
     child = json.dumps({"name": "llm.call", "attributes": {"session.id": "x", "llm.usage.cost_total": "1.0"}})
-    write(run / "replicas" / "1-family" / "children" / "c1" / "native" / "traces" / "logs" / "audit-spans.log", child)
+    logs = run / "replicas" / "1-family" / "employee" / "children" / "c1" / "native" / "traces" / "logs"
+    write(logs / "audit-spans.log", child)
     local = build_record(run, scenario)["cost"]
     assert (local["total"], local["by_part"]) == (1.75, {"simulation": 0.5, "employee": 0.25, "subagents": 1.0})
+    write(run / "information" / "research-1" / "acquisition" / "run.json", {"cost_usd": 0.3, "turns": 4})
+    write(run / "information" / "research-1" / "result.json", {"acquisition": {"cost_usd": 0.3}})
+    researched = build_record(run, scenario)["cost"]
+    assert researched["total"] == 2.05 and researched["by_part"]["research"] == 0.3
+    assert researched["source"].endswith("research agents' own reports") and "quota" not in researched
+    review = run / "information" / "research-1" / "review"
+    write(review / "run.json", {"cost_usd": 2.5, "initial_cost_usd": 2.0})
+    write(review / "correction" / "run.json", {"cost_usd": 0.5})
+    init = {"type": "system", "subtype": "init", "apiKeySource": "none", "model": "claude-sonnet-5-5"}
+    for folder in (review, review / "correction"):
+        (folder / "events.jsonl").write_text("not json\n" + json.dumps(init) + "\n")
+    subscribed = build_record(run, scenario)["cost"]
+    assert subscribed["total"] == 2.05 and subscribed["quota"] == {"research": 2.5}
     write(tmp_path / "state" / run.name / "traces" / "logs" / "audit-spans.log", span + "\n")
-    assert build_record(run, scenario, state_root=tmp_path / "state")["cost"]["total"] == 1.5
+    assert build_record(run, scenario, state_root=tmp_path / "state")["cost"]["total"] == 1.8
     write(
         run / "suite-summary.json",
         {"spend": {"simulation": 1.0, "employee": 2.0, "subagents": 3.0, "total": 6.0}, "exit": 0},
@@ -1071,9 +1081,9 @@ def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_c
 
 
 def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_place(tmp_path):
-    from experimental.research.package import digest
+    from experimental.scenario.digest import digest
     from experimental.simulation.scenario import BUNDLED
-    from tests.test_research_induction import make_scenario
+    from tests.research_helpers import make_scenario
 
     shop = make_scenario(tmp_path / "shop")
     settings = {"scenario": "shop", "scenario_dir": str(shop), "scenario_digest": digest(shop)}
@@ -1082,6 +1092,15 @@ def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_pla
     assert record._scenario_root(None, {"scenario": "travel_agency"}) == BUNDLED / "travel_agency"
     with pytest.raises(FileNotFoundError, match="give its directory"):
         record._scenario_root(None, {"scenario": "shop"})
+    run = tmp_path / "run"
+    run.mkdir()
+    (run / "settings.json").write_text(json.dumps(settings))
+    assert record.keep_scenario(run, shop) and digest(run / "scenario") == settings["scenario_digest"]
     (shop / "profile.md").write_text("You answer the tea shop's customers, and now its suppliers too.\n")
     with pytest.raises(ValueError, match="changed since the run"):
         record._scenario_root(None, settings)
+    assert record._scenario_root(None, settings, run) == run / "scenario"
+    later = tmp_path / "later"
+    later.mkdir()
+    (later / "settings.json").write_text(json.dumps(settings))
+    assert not record.keep_scenario(later, shop) and not (later / "scenario").exists()

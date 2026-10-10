@@ -278,7 +278,12 @@ async def test_native_read_keeps_its_trust_boundary_across_both_stage_handoffs(e
     assert recorded["result"]["text"] == original_tool_text
     for request in provider.requests[2:]:
         stage_data = json.loads(request["messages"][3]["content"])
-        assert next(row for row in stage_data["history"] if row["event"] == "query") == recorded
+        carried = next(row for row in stage_data["history"] if row["event"] == "query")
+        assert {key: value for key, value in carried.items() if key != "result"} == {
+            key: value for key, value in recorded.items() if key != "result"
+        }
+        assert carried["result"]["indexed"] and carried["result"]["chars"] == len(original_tool_text)
+        assert "UNREGISTERED_EVIDENCE" not in json.dumps(stage_data["history"])
 
 
 @pytest.mark.asyncio

@@ -40,12 +40,16 @@ HOME = "home"
 WORKDIR = "workdir"
 REPLICAS = "replicas"
 SUBAGENTS = "subagents"
-HOUSED = {"Raven-Research": "RESEARCH_NG_ACP_HOME", "Raven-PPT": "PPT_ACP_HOME"}
-FORWARDED = ("PYTHONTZPATH",)
+HOUSED = {"Raven-Research": "RESEARCH_NG_ACP_HOME", "Raven-PPT": "PPT_ACP_HOME", "Raven-Oncall": "ONCALL_ACP_HOME"}
+# The machine registry (`RAVEN_CONNECTIONS`) goes along so an on-call product reads the run's machines, not the host's.
+FORWARDED = ("PYTHONTZPATH", "RAVEN_CONNECTIONS")
 UNATTENDED = ("ask_user",)
-# A product's shell reaches whatever its process can: the employee's is confined to its workspace, a product's is not,
-# and its file tools must still reach the drill's workdir, so products run without a shell.
+# A product runs under the employee's workspace fence (see `pin`): its file tools and shell reach its own home and the
+# working directory of the session it serves, the drill's workdir. Products still run without a shell, except the
+# on-call product, whose work is looking at a registered machine and running a reading there. Raven does not fence a
+# command run on a registered machine (`exec` with `machine`), so that lane reaches whatever the process can.
 SHELLS = ("exec",)
+KEEPS_SHELL = frozenset({"Raven-Oncall"})
 
 
 EVALUATION_PATHS = (
@@ -123,7 +127,7 @@ def hire(
     everything else.
 
     The employee works from its own copy of the agent home in its area under `root` (without past sessions), so the
-    materials the party hands over never touch the caller's home and two runs never share a skill pool.
+    materials the counterpart hands over never touch the caller's home and two runs never share a skill pool.
     The Curator may author every declared Harness target.
     `subagent_model` runs the housed subagents on that model, through the employee's provider, instead of its own.
     """
@@ -215,7 +219,8 @@ def replicate(
     if children.keys() != employee.children.keys():
         raise ValueError(f"a replica has child harnesses {sorted(children)}, the employee {sorted(employee.children)}")
     for name, child in children.items():
-        child.artifact, child.plan = employee.children[name].artifact, employee.children[name].plan
+        installed = employee.children[name]
+        child.artifact, child.plan, child.commitments = installed.artifact, installed.plan, installed.commitments
     replica = Replica(
         employee.revision_id,
         baseline,
@@ -229,7 +234,11 @@ def replicate(
     )
     if employee.confinement is not None:
         root.chmod(0o711)
-    replica.artifact, replica.last_plan = employee.artifact, employee.last_plan
+    replica.artifact, replica.last_plan, replica.commitments = (
+        employee.artifact,
+        employee.last_plan,
+        employee.commitments,
+    )
     saved = {f"{target.name.split('.')[0]}.json" for target in catalogue() if target.binding.endswith(".strategy")}
     folders = [
         (employee.area, area),
@@ -302,7 +311,9 @@ def house(baseline, housed=HOUSED, *, model=None, deployment=None) -> list[str]:
     Subagents the configuration disables or that no product folder provides are left alone. Tools that need a
     person on the other end (`UNATTENDED`) are switched off: nobody answers them in a drill.
     With `model`, each housed subagent launches on the employee's provider and key with that model (see `pin`).
+    The employee's model and `model` are listed under the employee's provider (see `listed`).
     """
+    listed(baseline.config, baseline.config.agents.defaults.model, model)
     tools = baseline.config.tools
     tools.disabled_tools = [*tools.disabled_tools, *(name for name in UNATTENDED if name not in tools.disabled_tools)]
     rows = baseline.config.subagents.agents
@@ -332,6 +343,19 @@ def house(baseline, housed=HOUSED, *, model=None, deployment=None) -> list[str]:
     return done
 
 
+def listed(config, *models) -> None:
+    """List each model under the employee's own provider block, the config its raven children read as the host's.
+
+    A raven child launched over ACP is told the parent's model but, when the parent's provider cannot name itself,
+    not its provider; Raven then takes the block whose `models` lists that model, and only failing that the block the
+    model id's head names. For a `vendor/model` id served through a gateway the head names a block without a key, and
+    the child refuses to start."""
+    settings = getattr(config.providers, config.agents.defaults.provider or "", None)
+    if settings is None:
+        return
+    settings.models.extend(model for model in dict.fromkeys(models) if model and model not in settings.models)
+
+
 def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]:
     """Environment and command that launch a product on `model` through the employee's own provider and key.
 
@@ -341,7 +365,8 @@ def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]
     the employee's tier instead when the catalogue has one of that name: a tier carries its own effort, which would
     otherwise override the pinned one (a shipped `high` default tier runs every call at high effort). The copy also
     carries the employee's permission settings: an unattended subagent has no one to answer an approval prompt, so it
-    works under the same rules as the employee. Products run without a shell (`SHELLS`), and Raven-Research's
+    works under the same rules as the employee; and its workspace fence (`tools.restrictToWorkspace`), so a product's
+    file tools and shell reach only its home and the working directory of the session it serves. Products run without a shell (`SHELLS`), and Raven-Research's
     end-of-turn verify gate runs without thinking: it asks for its verdict as a forced tool call, which a thinking
     DeepSeek model refuses (HTTP 400), and the gate then lets every draft through unreviewed.
     """
@@ -354,7 +379,9 @@ def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]
     if not defaults.reasoning_effort:
         raise ValueError("pinning a subagent model needs the employee's reasoning effort set explicitly")
     permissions = config.permissions.model_dump(mode="json", by_alias=True, exclude_defaults=True)
-    secret = {"Raven-PPT": "PPT_API_KEY", "Raven-Research": "RESEARCH_API_KEY"}.get(row.name)
+    secret = {"Raven-PPT": "PPT_API_KEY", "Raven-Research": "RESEARCH_API_KEY", "Raven-Oncall": "ONCALL_API_KEY"}.get(
+        row.name
+    )
     if secret is None:
         raise ValueError(f"no known way to pin the model of {row.name}")
     product = json.loads((product_folder(row.name) / "config.json").read_text())
@@ -371,7 +398,10 @@ def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]
     if tier and tier in ((product.get("acp") or {}).get("modes") or {}):
         product["acp"]["defaultMode"] = tier
     disabled = product.setdefault("tools", {}).setdefault("disabledTools", [])
-    disabled.extend(name for name in (*UNATTENDED, *SHELLS) if name not in disabled)
+    shells = () if row.name in KEEPS_SHELL else SHELLS
+    disabled.extend(name for name in (*UNATTENDED, *shells) if name not in disabled)
+    if config.tools.restrict_to_workspace:
+        product["tools"]["restrictToWorkspace"] = True
     verify = (((product.get("plugins") or {}).get("config") or {}).get("research-flow") or {}).get("verify")
     if isinstance(verify, dict) and str(model).startswith("deepseek/"):
         verify["reasoningEffort"] = "none"
@@ -484,7 +514,7 @@ def unseal(root: Path) -> None:
 
 
 def skills(worker: Worker) -> Path:
-    """The employee's skill pool: materials the party puts here become sources it can read."""
+    """The employee's skill pool: materials the counterpart puts here become sources it can read."""
     return worker.baseline.config.workspace_path / "skills"
 
 

@@ -13,7 +13,7 @@ from experimental.curator.raven_adapter.worker import Worker
 from experimental.curator.workflow import improve
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.fixtures.harness_curator.authoring import capability, combine
-from tests.integration.test_harness_curator_e2e import ReplayProvider, plan_for, replay_provider
+from tests.integration.test_harness_curator_e2e import ReplayProvider, plan_for, replay_provider, submitted
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.test_harness_curator_generation import diagnosis, packet, selection
 
@@ -89,7 +89,7 @@ async def test_curator_runs_and_revises_a_real_planning_strategy(baseline, tmp_p
             response("read_source", {"name": TARGET, "find": "initialize"}),
             response("submit_diagnosis", diagnosis()),
             response("submit_selection", selection(*proposed["values"])),
-            response("submit_plan", plan_for(*proposed["values"]).model_dump(mode="json")),
+            response("submit_plan", submitted(plan_for(*proposed["values"]))),
             response("submit_artifact", proposed),
         ]
     )
@@ -131,7 +131,7 @@ async def test_curator_runs_and_revises_a_real_planning_strategy(baseline, tmp_p
             [
                 response("submit_diagnosis", diagnosis()),
                 response("submit_selection", selection(TARGET)),
-                response("submit_plan", plan_for(TARGET).model_dump(mode="json")),
+                response("submit_plan", submitted(plan_for(TARGET))),
                 response("submit_artifact", revised),
             ]
         )

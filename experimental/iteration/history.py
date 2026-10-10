@@ -12,6 +12,7 @@ from typing import ClassVar
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
 from ..audience import ANALYST, CURATOR, INTERNAL, RECORD_ONLY
+from ..requirements import Authority
 
 
 class Raised(BaseModel):
@@ -24,6 +25,7 @@ class Raised(BaseModel):
             for name in ("id", "situation", "behavior", "strength", "acceptance", "repeats", "materials", "held")
         },
         "grounds": ANALYST,
+        "authority": ANALYST,
     }
 
     id: str
@@ -35,6 +37,7 @@ class Raised(BaseModel):
     materials: tuple[str, ...] = ()
     grounds: tuple[str, ...] = ()
     held: bool | None = None
+    authority: Authority = "model"
 
 
 class Diagnosed(BaseModel):
@@ -157,6 +160,7 @@ def entry(number, signals, feedback, plan, activity=(), attribution=None, select
                 repeats=requirement.repeats,
                 materials=requirement.materials,
                 grounds=requirement.grounds,
+                authority=requirement.authority,
             )
             for requirement in (feedback.requirements if feedback else ())
         ),

@@ -1,5 +1,6 @@
 """Generate local strategy candidates for a root and its assigned children before one activation."""
 
+import asyncio
 import json
 import shutil
 from collections import Counter
@@ -8,24 +9,27 @@ from types import SimpleNamespace
 from uuid import uuid4
 
 from ..attribution import AttributionInterruptedError
-from ..generation.run import Generated, GenerationError, GenerationInterruptedError, GenerationPausedError
+from ..generation.run import (
+    GapReportedError,
+    Generated,
+    GenerationError,
+    GenerationInterruptedError,
+    GenerationPausedError,
+)
 from ..harness import Validation
 from ..raven_adapter.deployment import child_directory
 from ..raven_adapter.inspection import Inspection, file_source, fingerprint
 from ..raven_adapter.materialize import _write
 from ..raven_adapter.observe import plain
-from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, propose
+from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, information_scope, propose
 from ..workflow import attribute as attribute_local
 from .context import child_observations, execution_turns, merge_sources
 from .requirements import feedback_for
-from .state import Progress
+from .state import COMPOSITION, SCOPE, Progress
 
 
 def _save(path, state):
     _write(path, state.model_dump_json(indent=2).encode())
-
-
-SCOPE = "attribution-scope"
 
 
 def _surface_attributions(scope_root, worker_root):
@@ -125,6 +129,7 @@ def _root_scope(worker, inspection, actual_children, directory):
         artifact=worker.artifact,
         root=Path(directory) / "root",
         last_plan=worker.last_plan,
+        commitments=worker.commitments,
         last_execution=worker.last_execution,
         inspect=root_inspection,
         check=root_check,
@@ -133,7 +138,9 @@ def _root_scope(worker, inspection, actual_children, directory):
     return root, inspection, current_nodes
 
 
-async def attribute(worker, provider, *, feedback=None, model=None, observations=None, attributor=None):
+async def attribute(
+    worker, provider, *, feedback=None, model=None, observations=None, attributor=None, experience=None
+):
     """Attribute the root scope's inputs as a composite curation sees them, record it beside the worker's own
     attribution records and return it; nothing is generated. Its scope lives under the worker's curation folder, so
     a paused attribution is continued by the next call and never touches a composite curation in progress."""
@@ -141,14 +148,31 @@ async def attribute(worker, provider, *, feedback=None, model=None, observations
     root, _, _ = _root_scope(worker, await worker.inspect(), actual_children, worker.root / "curation" / SCOPE)
     try:
         return await attribute_local(
-            root, provider, feedback=feedback, model=model, observations=observations, attributor=attributor
+            root,
+            provider,
+            feedback=feedback,
+            model=model,
+            observations=observations,
+            attributor=attributor,
+            **({"experience": experience} if experience is not None else {}),
         )
     finally:
         _surface_attributions(root.root, worker.root)
 
 
 async def improve(
-    worker, provider, *, feedback, model, limits, probe, resume, observations=None, attributor=None, attribution=None
+    worker,
+    provider,
+    *,
+    feedback,
+    model,
+    limits,
+    probe,
+    resume,
+    observations=None,
+    attributor=None,
+    attribution=None,
+    experience=None,
 ):
     """Propose the root, then every child a root node assigns work to, then activate them once.
 
@@ -160,7 +184,7 @@ async def improve(
 
     actual_children = {name: await worker.agent_state(name) for name in worker.children}
     inspection = await worker.inspect()
-    path = worker.root / "curation/composition.json"
+    path = worker.root / "curation" / COMPOSITION
     state = Progress.model_validate_json(path.read_text()) if path.exists() else None
     if state is not None and not resume:
         _cleanup(state.directory)
@@ -169,6 +193,7 @@ async def improve(
         feedback = state.feedback if feedback is None else feedback
         model = state.model if model is None else model
         observations = state.observations if observations is None else observations
+    information_scope(worker, feedback)
     directory = Path(state.directory) if state is not None else worker.root / "curation/scopes" / uuid4().hex
     inputs, executions = {}, {}
     for name, actual in actual_children.items():
@@ -191,6 +216,7 @@ async def improve(
             "feedback": feedback,
             "observations": observations,
             "model": model,
+            **({"experience": experience.identity} if experience is not None else {}),
         }
     )
     if state is not None and state.input_id != identity:
@@ -215,6 +241,7 @@ async def improve(
         "task_id": worker.baseline.task.id,
         "feedback": feedback,
         "turn_id": worker.last_execution.turn_id if worker.last_execution else None,
+        **({"revision_before": worker.revision_id} if experience is not None else {}),
     }
     generating = "root"
     try:
@@ -225,6 +252,7 @@ async def improve(
                     result = await propose(
                         root,
                         provider,
+                        **({"experience": experience} if experience is not None else {}),
                         feedback=feedback,
                         model=model,
                         limits=state.limits_for("root", limits),
@@ -325,6 +353,7 @@ async def improve(
                         root=directory,
                         artifact=child.artifact,
                         last_plan=child.plan,
+                        commitments=child.commitments,
                         last_execution=None,
                         inspect=inspect,
                         check=check,
@@ -336,6 +365,7 @@ async def improve(
                         result = await propose(
                             subject,
                             provider,
+                            **({"experience": experience} if experience is not None else {}),
                             feedback=relevant,
                             model=model,
                             limits=state.limits_for(scope, limits),
@@ -369,6 +399,13 @@ async def improve(
                 if not checked.passed:
                     raise GenerationError("composite validation failed: " + "; ".join(checked.errors))
                 before = worker.revision_id
+                if experience is not None:
+                    record["experience_scopes"] = []
+                    for checkpoint in directory.glob("**/curation/candidate.json"):
+                        saved = json.loads(checkpoint.read_text()).get("experience")
+                        if saved is not None:
+                            experience.validate(saved, inputs=saved["inputs"])
+                            record["experience_scopes"].append(saved)
                 await worker.install(state.root.candidate, children=selected)
                 record.update(
                     generated=plain(state.root),
@@ -381,10 +418,12 @@ async def improve(
                     withdrawn_children=withdrawn,
                     revision={
                         "root": worker.artifact.model_dump(mode="json"),
+                        "commitments": [item.model_dump(mode="json") for item in worker.commitments],
                         "children": {
                             name: {
                                 "artifact": child.artifact.model_dump(mode="json"),
                                 "plan": child.plan.model_dump(mode="json") if child.plan else None,
+                                "commitments": [item.model_dump(mode="json") for item in child.commitments],
                             }
                             for name, child in worker.children.items()
                         },
@@ -454,6 +493,13 @@ async def improve(
         if isinstance(exc, GenerationPausedError):
             raise interrupted
         raise GenerationInterruptedError(str(exc), interrupted.state) from exc
+    except GapReportedError as exc:
+        # The root reported a gap it cannot close with what it was given: nothing was generated, the
+        # question waits for whoever can answer it, and the next curation starts from new inputs.
+        record["gap"] = {"stage": exc.stage, "reason": exc.reason}
+        _cleanup(state.directory)
+        path.unlink(missing_ok=True)
+        raise
     except Exception as exc:
         state.error = record["error"] = str(exc)
         _save(path, state)
@@ -464,4 +510,32 @@ async def improve(
             record["attribution"], record["attributor"] = attributed.record, attributed.identity
         record["budget"] = {"generation": state.totals(), "attribution": state.attribution_totals()}
         record["active_artifact_id"] = worker.revision_id
-        _write(worker.root / "curation" / f"{uuid4().hex}.json", json.dumps(record, ensure_ascii=False).encode())
+        record_path = worker.root / "curation" / f"{uuid4().hex}.json"
+        _write(record_path, json.dumps(record, ensure_ascii=False).encode())
+        await _learn_composition(experience, record, record_path, worker, inspection)
+
+
+async def _learn_composition(experience, record, path, worker, inspection):
+    if experience is None or not record.get("changed") or record.get("error") or record.get("paused"):
+        return
+    from ...experience.contracts import RecordOrigin
+
+    try:
+        origin = RecordOrigin(
+            access_scope=experience.access.access_scope,
+            run_id=fingerprint(str(worker.root.resolve())),
+            lineage_id=fingerprint(worker.baseline.task.text),
+            record_id=path.name,
+            scope="root",
+            revision_before=record["revision_before"],
+        )
+        record["experience_learning"] = await experience.learn(
+            record, origin=origin, contract_ids=(inspection.declaration.contract_id,)
+        )
+    except asyncio.CancelledError:
+        record["experience_learning"] = {"status": "interrupted", "reason": "Post-install learning was cancelled."}
+        raise
+    except Exception as exc:
+        record["experience_error"] = str(exc)
+    finally:
+        _write(path, json.dumps(record, ensure_ascii=False).encode())

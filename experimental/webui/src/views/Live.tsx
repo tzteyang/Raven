@@ -14,7 +14,7 @@ import { Deliverables } from './Deliverables'
 import { Markdown } from './Markdown'
 import { DeckHead, Graph, InterceptionRow, useThumbs } from './Trials'
 
-import type { CuratorEvent, CuratorProgress, Delivered, KeptFile, LiveItem, LiveLog, LiveTurn, PanelItem, Phase } from '../live'
+import type { CuratorEvent, CuratorProgress, Delivered, KeptFile, LiveItem, LiveLog, LiveTurn, PanelItem, Phase, ResearchProgress } from '../live'
 import type { RecordRow } from '../model'
 import type { JSX } from 'react'
 
@@ -185,6 +185,47 @@ function CuratorPanel({ progress, events, now }: { progress: CuratorProgress; ev
   )
 }
 
+/* The research stage before onboarding, as its records grow: the step it is at
+   and each research agent call with its searches and page reads, the latest
+   last. A call's own event stream is written while it works. */
+function ResearchPanel({ research, now }: { research: ResearchProgress; now: number }): JSX.Element {
+  const running = research.calls.filter((call) => call.status === 'researching' || call.status === 'reviewing').length
+  return (
+    <section className="cpanel">
+      <div className="cpanel-hd">
+        <span className="cd" />
+        <span className="nm">Curator side · research stage</span>
+        <span>{research.step}</span>
+        <span className="quiet">started {ago(now / 1000 - research.started)} ago · updated {ago(now / 1000 - research.updated)} ago</span>
+      </div>
+      <p className="budget">
+        <span>{research.calls.length} research call{research.calls.length === 1 ? '' : 's'}</span>
+        <span>{running} running</span>
+        <span>{research.calls.reduce((sum, call) => sum + call.searches, 0)} searches</span>
+        <span>{research.calls.reduce((sum, call) => sum + call.reads, 0)} page reads</span>
+      </p>
+      <div className="cstream">
+        {research.calls.length === 0 ? <p className="quiet">No research call yet.</p> : null}
+        {research.calls.map((call) => (
+          <div key={call.call} className="crow submit">
+            <p>
+              <span className="nm">research {call.call}</span>
+              <span className="st">{call.status}</span>
+              <span className="args">{call.searches} searches · {call.reads} reads · updated {ago(now / 1000 - call.updated)} ago</span>
+            </p>
+            {call.questions.map((question, i) => <p key={i} className="quiet small">{question}</p>)}
+            {call.recent.map((action, i) => (
+              <p key={i} className="crow query">
+                <span className="dot" /><span className="nm">{action.tool}</span><span className="args">{action.text}</span>
+              </p>
+            ))}
+          </div>
+        ))}
+      </div>
+    </section>
+  )
+}
+
 const kilobytes = (bytes: number): string => (bytes >= 1_000_000 ? megabytes(bytes) : `${Math.max(1, Math.round(bytes / 1000))} KB`)
 
 /* One delivered file: a deck as its pages, a page in a sandboxed frame, anything else as a link. */
@@ -255,6 +296,7 @@ function DeliveredPanel({ files, now }: { files: Delivered[]; now: number }): JS
 
 interface State {
   curator: CuratorProgress | null
+  research: ResearchProgress | null
   /** Copies of delivered files the worker has kept, newest first. */
   kept: KeptFile[]
   events: CuratorEvent[]
@@ -272,7 +314,7 @@ interface State {
   error: string
 }
 
-const EMPTY: State = { curator: null, kept: [], events: [], logs: null, starts: {}, rows: [], phase: null, lastEvent: null, skew: 0, names: {}, error: '' }
+const EMPTY: State = { curator: null, research: null, kept: [], events: [], logs: null, starts: {}, rows: [], phase: null, lastEvent: null, skew: 0, names: {}, error: '' }
 
 export function Live({ runId, running }: { runId: string; running: boolean }): JSX.Element {
   const [state, setState] = useState<State>(EMPTY)
@@ -301,6 +343,7 @@ export function Live({ runId, running }: { runId: string; running: boolean }): J
         const names = namesOf(reply.labels ?? {})
         const next: State = {
           curator: progress,
+          research: reply.research ?? null,
           kept: Array.isArray(reply.deliveries) ? reply.deliveries : before.kept,
           events: !progress ? [] : same ? mergeEvents(before.events, progress.events ?? []) : [...(progress.events ?? [])],
           logs: reply.logs,
@@ -361,7 +404,7 @@ export function Live({ runId, running }: { runId: string; running: boolean }): J
   const phase = state.phase
   const over = stopped(running, phase)
   const stoppedAt = state.lastEvent ? state.lastEvent * 1000 : null
-  const latest = Math.max(state.lastEvent ?? 0, state.curator?.updated ?? 0)
+  const latest = Math.max(state.lastEvent ?? 0, state.curator?.updated ?? 0, state.research?.updated ?? 0)
   const quiet = latest ? (now - latest * 1000) / 1000 : null
   /* The Curator's work never reaches the worker log, so while it is the latest activity it takes the page. */
   const curating = Boolean(state.curator) && (phase?.name === 'curating' || (state.curator!.updated > (state.lastEvent ?? 0) && phase?.name !== 'trial'))
@@ -407,7 +450,8 @@ export function Live({ runId, running }: { runId: string; running: boolean }): J
         </p>
       ) : null}
       <DeliveredPanel files={files} now={now} />
-      {turns.length === 0 && state.logs !== null && !curating ? <p className="quiet">No turn in the worker log yet.</p> : null}
+      {state.research ? <ResearchPanel research={state.research} now={now} /> : null}
+      {turns.length === 0 && state.logs !== null && !curating && !state.research ? <p className="quiet">No turn in the worker log yet.</p> : null}
       {state.error && state.logs === null ? (
         <p className="quiet">The server did not answer /api/live ({state.error}). A server started before the live view existed needs a restart of experimental.webui.serve.</p>
       ) : null}

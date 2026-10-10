@@ -214,7 +214,7 @@ describe('a stopped run', () => {
     expect(stopped(true, phase('trial'))).toBe(false)
     expect(stopped(true, null)).toBe(false)
     expect(stopped(false, phase('trial'))).toBe(true)
-    for (const name of ['error', 'finished', 'paused', 'stalled or stopped']) expect(stopped(true, phase(name))).toBe(true)
+    for (const name of ['error', 'finished', 'paused', 'stopped', 'stalled or stopped']) expect(stopped(true, phase(name))).toBe(true)
   })
 
   it('reads a tool call still open as interrupted once the run stopped', () => {

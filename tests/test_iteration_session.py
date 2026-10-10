@@ -37,6 +37,56 @@ def student(*messages):
     return Conversation(Scripted("student", *messages), max_turns=2)
 
 
+@pytest.mark.asyncio
+async def test_only_frozen_normal_task_verification_updates_experience(tmp_path, analyses):
+    from unittest.mock import AsyncMock
+
+    class Fixed:
+        def verification_policy(self):
+            return {"kind": "test_environment", "version": 1}
+
+        async def evaluate(self, sessions):
+            return Signal("fixed", satisfied=True, authority="external")
+
+    experience = SimpleNamespace(
+        identity="experience-policy",
+        access=SimpleNamespace(access_scope="project"),
+        outcome=AsyncMock(return_value={"status": "recorded"}),
+    )
+
+    async def curate(worker, provider, **kwargs):
+        assert kwargs["experience"] is experience
+        worker.artifact_id = "revision-1"
+        path = worker.root / "curation" / "completed.json"
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(
+            json.dumps(
+                {
+                    "active_artifact_id": worker.artifact_id,
+                    "experience_learning": {"event": "episode-1", "origin": {"scope": "root", "input_key": "curation"}},
+                }
+            )
+        )
+
+    fixed = Fixed()
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curate, experience=experience, assessors=(fixed,))
+    assert await session.onboard()
+    await session.trial(student("normal input"))
+    await session.holdout((Conversation(Scripted("held", "independent input"), max_turns=1),), (fixed,))
+    experience.outcome.assert_not_awaited()
+    await session.assess(fixed)
+    experience.outcome.assert_awaited_once()
+    args, kwargs = experience.outcome.call_args
+    assert args[0] == "episode-1" and args[1].comparability == "comparable" and kwargs["held_out"] is False
+    await session.assess(fixed)
+    experience.outcome.assert_awaited_once()
+    restored = Session.resume(worker, object(), session.path, curator=curate, experience=experience, assessors=(fixed,))
+    assert restored.record["experience_pending"][0]["observed"]
+    with pytest.raises(ValueError, match="original experience"):
+        Session.resume(worker, object(), session.path, curator=curate)
+
+
 OPENING = (
     Signal("agency", "Here are our materials.", attachments=(Handover("sop", "norm", ("uploads/sop/sop.md",)),)),
 )
@@ -66,6 +116,31 @@ def shape(record):
             for item in record["rounds"]
         ],
     }
+
+
+@pytest.mark.asyncio
+async def test_measurement_only_signals_stay_out_of_analysis_curation_history_and_stop(tmp_path, curations, analyses):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), measuring={"agency"})
+    assert await session.onboard()
+    await session.trial(student("Plan a trip", "Cheap please"))
+    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(failing("Ask the budget.")))
+    assert (await session.analyse()).next == "curate"
+    assert all(signal.source != "agency" for signal in analyses.calls[-1]["signals"])
+    assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(session.history)
+    assert any(signal.source == "agency" for signal in session.rounds[-1].signals)
+    assert await session.curate()
+    assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(curations[-1]["feedback"])
+    await session.trial(student("Plan again", "Cheap please"))
+    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(passing()))
+    assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    restored = Session.resume(worker, object(), session.path)
+    assert restored.measuring == frozenset({"agency"})
+    assert all(signal.source != "agency" for signal in restored.previous_signals)
+    assert not restored.external_requirements
 
 
 @pytest.mark.asyncio
@@ -276,6 +351,54 @@ async def test_an_analysis_failure_is_recorded_as_the_loop_records_it(tmp_path, 
 
 
 @pytest.mark.asyncio
+async def test_a_measuring_source_is_recorded_with_the_round_but_reaches_neither_the_analyst_the_stop_nor_the_curator(
+    tmp_path, curations, analyses
+):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    owner = Signal("agency", "All passed, well done.", satisfied=True)
+    session = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3), measuring={"agency"})
+    await session.onboard()
+    await session.trial(student("Plan a trip"))
+    await session.assess(Verifier(owner), Verifier(failing("Never asked the budget.")))
+    assert await session.analyse() == Outcome("curate")
+    assert [signal.source for signal in analyses.calls[0]["signals"]] == ["verifier"]
+    assert await session.curate()
+    assert [signal["source"] for signal in curations[-1]["feedback"]["signals"]] == ["verifier"]
+    await session.trial(student("Plan again"))
+    await session.assess(Verifier(owner), Verifier(passing()))
+    assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    assert [signal.source for signal in analyses.calls[1]["previous_signals"]] == ["verifier"]
+    record = json.loads(session.path.read_text())
+    assert record["measuring"] == ["agency"]
+    assert [[signal["source"] for signal in item["signals"]] for item in record["rounds"]] == [
+        ["agency", "verifier"]
+    ] * 2
+    resumed = Session.resume(FakeWorker(tmp_path), object(), session.path)
+    assert resumed.measuring == {"agency"} and [signal.source for signal in resumed.previous_signals] == ["verifier"]
+
+
+@pytest.mark.asyncio
+async def test_an_assessor_failing_after_another_spoke_ends_the_run_with_the_spoken_signal_kept_in_the_round(
+    tmp_path, curations, analyses
+):
+    class Broken:
+        async def evaluate(self, sessions):
+            raise FileNotFoundError("critic.md")
+
+    session = Session.open(FakeWorker(tmp_path), object())
+    await session.onboard()
+    await session.trial(student("Hi"))
+    with pytest.raises(FileNotFoundError):
+        await session.assess(Verifier(failing("Never asked the budget.")), Broken())
+    record = json.loads(session.path.read_text())
+    assert record["status"] == "error" and "critic.md" in record["error"]
+    assert [[signal["text"] for signal in item["signals"]] for item in record["rounds"]] == [
+        ["Never asked the budget."]
+    ]
+    assert "pending" not in record
+
+
+@pytest.mark.asyncio
 async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_analyst_nor_the_curator(
     tmp_path, curations, analyses
 ):
@@ -351,7 +474,9 @@ async def test_a_resumed_session_keeps_the_names_of_its_onboarding_attributions(
 
 
 @pytest.mark.asyncio
-async def test_every_curation_hears_the_prior_the_party_brings_and_a_resume_keeps_it(tmp_path, curations, analyses):
+async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resume_keeps_it(
+    tmp_path, curations, analyses
+):
     from experimental.iteration.compartment import Boundaries, BoundaryError
     from experimental.iteration.history import Entry, Raised
     from experimental.iteration.records import Cultivation, cultivation
@@ -406,3 +531,134 @@ async def test_every_curation_hears_the_prior_the_party_brings_and_a_resume_keep
     resumed = Session.resume(worker, object(), session.path)
     assert resumed.prior == (brought,)
     assert Session.open(FakeWorker(tmp_path / "alone"), object())._heard(None) is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("blocked", [False, True])
+async def test_unready_information_prevents_curation_and_trials(tmp_path, curations, analyses, blocked):
+    from experimental.research.information import Question, Result, Review, Snapshot
+    from tests.test_research_collection import accepted, snapshot
+
+    original = snapshot()
+    if blocked:
+        description = original.description.model_copy(
+            update={
+                "unresolved": (
+                    Question(
+                        id="q",
+                        dimension="role",
+                        question="Who owns the decision?",
+                        reason="Required authority is missing.",
+                        blocking=True,
+                    ),
+                )
+            }
+        )
+        original = Snapshot(description=description, evidence=original.evidence)
+    verdict = (
+        accepted()
+        if blocked
+        else {"accepted": False, "reason": "Insufficient evidence", "issues": ["Resolve the task scope."]}
+    )
+    result = Result(snapshot=original, review=Review.model_validate(verdict))
+
+    async def prepare(*args, **kwargs):
+        return result
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), prepare=prepare)
+    assert not await session.onboard(OPENING)
+    assert session.status == ("needs_input" if blocked else "incomplete")
+    assert not session.onboarded and not curations
+    with pytest.raises(StepError, match="after onboarding"):
+        await session.trial(student("Should not run"))
+    saved = json.loads(session.path.read_text())
+    assert saved["information"]["status"] == result.status
+
+
+@pytest.mark.asyncio
+async def test_information_is_prepared_once_and_its_version_reaches_later_curation(tmp_path, curations, analyses):
+    from experimental.research.information import Result, Review
+    from tests.test_research_collection import accepted, snapshot
+
+    preparations = []
+    result = Result(snapshot=snapshot(), review=Review.model_validate(accepted()))
+
+    async def prepare(worker, provider, **kwargs):
+        preparations.append(kwargs["feedback"])
+        return result
+
+    analyses.scripted.extend([CURATE, CONTINUE])
+    worker = FakeWorker(tmp_path)
+    await run(
+        worker,
+        object(),
+        [student("Plan a trip", "Plan again")],
+        [Verifier(failing("Ask the budget."), passing())],
+        prepare=prepare,
+        opening=OPENING,
+        limits=Limits(max_rounds=3),
+    )
+    assert len(preparations) == 1 and len(curations) == 2
+    assert all(call["feedback"]["information"]["version"] == result.snapshot.identity for call in curations)
+    assert "items" not in preparations[0]["signals"][0]
+
+
+async def test_a_conversant_who_comes_back_later_lets_the_worker_run_meanwhile():
+    class Paced:
+        name, pause = "lead", 150.0
+
+        def __init__(self):
+            self.said = ["Watch the six stores.", "How many looks so far?", None]
+
+        async def speak(self, exchanges):
+            return self.said.pop(0)
+
+    class Worker:
+        def __init__(self):
+            self.calls = []
+
+        async def run(self, text, *, session_key, **paced):
+            self.calls.append(paced)
+            return SimpleNamespace(outcome={}, records=[], deliverables=())
+
+    worker, waiting = Worker(), Worker()
+    await Conversation(Paced(), max_turns=3).run(worker)
+    await Conversation(Scripted("student", "Plan a trip"), max_turns=1).run(waiting)
+    assert worker.calls == [{"away": 150.0}, {"away": 150.0}] and waiting.calls == [{}]
+
+
+@pytest.mark.asyncio
+async def test_a_met_external_condition_survives_resume_and_guards_the_next_round(tmp_path, curations, analyses):
+    from experimental.assessor.standard import Assessor
+    from experimental.requirements import ExternalRequirement
+    from tests.test_assessor_standard import Provider, response, verdict
+
+    condition = ExternalRequirement(source="human", quote="Future quotes must include tax.", kind="gate")
+    analyses.scripted.append(
+        Feedback(
+            decision="continue", reason="The current quote already includes tax.", external_requirements=(condition,)
+        )
+    )
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), limits=Limits(max_rounds=4))
+    await session.onboard()
+    await session.trial(student("Tax is included in this quote."))
+    session.signal(Signal("human", condition.quote, authority="external"))
+    assert (await session.analyse()).next == "continue"
+    assert len(curations) == 1
+    resumed = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    assert resumed.external_requirements == [condition]
+    await resumed.trial(student("Quote again."))
+    assessor = Assessor(
+        Provider(
+            response(
+                "submit_verdicts",
+                {"verdicts": [verdict(condition.id, "fail", "student", "Subtotal only.", "Include tax.")]},
+            )
+        ),
+        sources=(),
+    )
+    [signal] = await resumed.assess(assessor)
+    assert signal.satisfied is False and assessor.standard.criteria[0].authority == "external"
+    assert assessor.standard.criteria[0].basis.references[0].quote == condition.quote

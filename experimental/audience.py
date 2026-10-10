@@ -13,12 +13,12 @@ from typing import Literal
 
 from pydantic import BaseModel
 
-Role = Literal["partner", "conversant", "party", "analyst", "curator"]
-ROLES: tuple[Role, ...] = ("partner", "conversant", "party", "analyst", "curator")
+Role = Literal["partner", "conversant", "counterpart", "analyst", "curator"]
+ROLES: tuple[Role, ...] = ("partner", "conversant", "counterpart", "analyst", "curator")
 
 EVERYONE = frozenset(ROLES)
-EVALUATION = frozenset({"party", "analyst"})
-HEARD = frozenset({"party", "analyst", "curator"})
+EVALUATION = frozenset({"counterpart", "analyst"})
+HEARD = frozenset({"counterpart", "analyst", "curator"})
 INTERNAL = frozenset({"analyst", "curator"})
 CURATOR = frozenset({"curator"})
 ANALYST = frozenset({"analyst"})

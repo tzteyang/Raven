@@ -12,11 +12,12 @@ import { useEffect, useMemo, useState } from 'react'
 import { RECORD_UNAVAILABLE, loadBundle, loadMining, loadRecord } from '../api'
 import {
   chainLabel, changesOf, completed, costLabel, diffLines, facetOf, groupCurations, handedAfter, inForce, isOnboarding,
-  isRoot, ledgerMatrix, mechanismOf, modelLine, quotesOf, requirementsOf, revisionLabel, roundAt, roundSummaries, scopeLabel,
+  isRoot, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, quotesOf, requirementsOf, revisionLabel, roundAt, roundSummaries, scopeLabel,
   VERDICT_LABEL,
 } from '../record'
 import { Clamp, Fold, HeldBadge, RedLine, TreatmentBadge } from './Badges'
 import { Markdown } from './Markdown'
+import { StandardBlock, PromotionStatus } from './Evaluation'
 
 import type { Bundle, MiningSession, RecordReply } from '../api'
 import type { RunEntry } from '../model'
@@ -104,6 +105,8 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
   const { run, cost } = record
   const chain = chainLabel(run.chain) || entry?.chain || ''
   const models = modelLine(run.settings.models) || modelLine(entry?.models)
+  const roles = roleChoices(run.settings.models, run.settings.efforts)
+  const research = researchLine(run.settings.research)
   const stopped = run.stopped || run.suite?.stopped || entry?.stopped || ''
   const revisions = run.revisions.map(revisionLabel).filter(Boolean)
   const [copied, setCopied] = useState(false)
@@ -111,6 +114,7 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
     copyText(path).then(setCopied, () => setCopied(false))
   }
   const parts = cost ? Object.entries(cost.by_part).filter(([, amount]) => typeof amount === 'number') : []
+  const quota = cost?.quota ? Object.entries(cost.quota).filter(([, amount]) => typeof amount === 'number') : []
   return (
     <div className="task">
       <span className="eyebrow">Record</span>
@@ -135,7 +139,31 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
         {run.record_id ? <div><dt>record</dt><dd><code>{run.record_id.slice(0, 12)}</code></dd></div> : null}
       </dl>
       {models ? <p className="rline"><span className="k">models</span>{models}</p> : null}
+      {research ? <p className="rline"><span className="k">research</span>{research}</p> : null}
+      {roles.length ? (
+        <Fold className="fold" summary={`Each model role's model and effort (${roles.length})`}>
+          {() => (
+            <table className="rroles">
+              <tbody>
+                {roles.map((choice) => (
+                  <tr key={choice.role}>
+                    <th>{choice.role}</th>
+                    <td><code>{choice.model}</code></td>
+                    <td className="dim">{choice.effort || (choice.role === 'sub-harness' ? 'its own configuration' : 'not recorded')}</td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          )}
+        </Fold>
+      ) : null}
       {parts.length ? <p className="rline"><span className="k">spend</span>{parts.map(([part, amount]) => `${part} ${costLabel(amount)}`).join(' · ')}</p> : null}
+      {quota.length ? (
+        <p className="rline">
+          <span className="k">quota</span>
+          {quota.map(([part, amount]) => `${part} ${costLabel(amount)}`).join(' · ')} at API prices, run under a subscription login: not billed, not in the cost
+        </p>
+      ) : null}
       {when(run.started) || when(run.updated) ? (
         <p className="rline"><span className="k">time</span>{[when(run.started) && `started ${when(run.started)}`, when(run.updated) && `updated ${when(run.updated)}`].filter(Boolean).join(' · ')}</p>
       ) : null}
@@ -547,7 +575,7 @@ function Inputs({ record }: { record: CultivationRecord }): JSX.Element {
         <p className="rline"><span className="k">cards</span>{inputs.cards.map((card) => <code key={card.name} title={card.sha256}>{card.name}</code>)}</p>
       ) : null}
       {inputs.onboarding ? <Fold className="fold" summary="The owner's onboarding message">{() => <Markdown text={inputs.onboarding!} />}</Fold> : null}
-      {inputs.profile ? <Fold className="fold" summary="The agency profile">{() => <Markdown text={inputs.profile!} />}</Fold> : null}
+      {inputs.profile ? <Fold className="fold" summary="The profile the scenario states">{() => <Markdown text={inputs.profile!} />}</Fold> : null}
       {run.reproduce ? <Fold className="fold" summary="Reproduce this run's setup">{() => <pre>{run.reproduce}</pre>}</Fold> : null}
       {settings.length ? (
         <Fold className="fold" summary="Run settings">
@@ -743,6 +771,8 @@ export function RecordView({
   return (
     <div className="record">
       <Header record={data} entry={entry} bundle={bundle} />
+      <PromotionStatus promotion={data.promotion} stable={data.stable_revision} />
+      {data.standard ? <StandardBlock standard={data.standard} /> : null}
       {data.value ? (
         <section className="sec">
           <h3>Value verdict</h3>

@@ -70,7 +70,10 @@ def test_factories_receive_only_declared_keyword_dependencies():
 
 def test_strategy_reading_path_includes_plan_access_and_preparation_consumers():
     for target in catalogue():
-        assert PlanReader in target.knowledge or target.name == "planning.strategy"
-        knowledge = target.describe()["knowledge"]
-        assert any("Role-owned setup" in row["content"] for row in knowledge)
-        assert any("PreparationRequest" in row["content"] for row in knowledge)
+        listed = [reference.item for reference in target.references]
+        assert PlanReader in listed or target.name == "planning.strategy"
+        described = target.describe()
+        assert any(row["source"].endswith(("Host",)) or "Host(" in row["content"] for row in described["knowledge"])
+        preparation = [row for row in described["references"] if row["source"].endswith("reference/preparation.md")]
+        assert preparation and "prepare" in preparation[0]["purpose"]
+        assert any(row["source"].endswith("preparation:PreparationRequest") for row in described["references"])

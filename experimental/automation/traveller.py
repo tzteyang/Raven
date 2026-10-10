@@ -1,6 +1,6 @@
 """The customer: a model plays one persona, reads the conversation so far, then says the next thing or leaves.
 
-In a cultivation round each persona is one of the party's drill cards, played as the customer it describes; the
+In a cultivation round each persona is one of the counterpart's drill cards, played as the customer it describes; the
 module keeps its first scenario's name, a travel agency's traveller. A card is anything with a `name` whose `play`
 draws one playing of it with the persona's `text` (see `experimental.simulation.scenario.Persona`).
 """
@@ -12,13 +12,15 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Protocol
 
+from ..allowance import excerpt, reading_budget
 from ..iteration.exchange import ExchangeError, messages
 from .channel import said
 from .files import read_delivered
 
 LEAVE = "LEAVE"
 TRAILING = re.compile(r"\s+\W*LEAVE\W*$")
-OPENED_LIMIT = 8_000
+# A line that opens a speaker's turn with a role label, as a model writing the whole dialogue marks each side.
+TURN = re.compile(r"^\W*(?:user|assistant|customer|human|system)\W{0,2}[:\uff1a][\s*_]*", re.IGNORECASE)
 _PROMPT = Path(__file__).resolve().parent / "prompts" / "traveller.md"
 
 
@@ -29,29 +31,40 @@ class Card(Protocol):
 
 
 def transcript(exchanges, speaker: str = "customer") -> list[dict]:
-    """What the speaker saw: each message, the names of any files handed over with it, and whether the reply
-    never came because the turn ran past the time limit."""
+    """What the speaker saw: each message, the names of any files handed over with it, and why the reply never
+    came, if it did not."""
     rows = []
     for exchange in exchanges:
         row = {speaker: exchange.user, "assistant": said(exchange)}
         if exchange.execution.deliverables:
             row["delivered"] = [Path(path).name for path in exchange.execution.deliverables]
-        if exchange.execution.outcome.get("timed_out"):
-            row["stopped"] = (
-                f"no reply within {exchange.execution.outcome.get('timeout')} seconds; the turn was stopped"
-            )
+        if exchange.stopped:
+            row["stopped"] = exchange.stopped
         rows.append(row)
     return rows
 
 
-def opened(exchanges) -> dict[str, str]:
-    """What a person sees on opening each file handed over so far, latest version of each."""
+def opened(exchanges, *, tokens: int | None = None) -> dict[str, str]:
+    """What a person sees on opening each file handed over so far, latest version of each, cut to `tokens` with a
+    note of what is left out (`experimental.allowance.reading_budget` by default)."""
+    tokens = reading_budget() if tokens is None else tokens
     files = {}
     for exchange in exchanges:
         for path in exchange.execution.deliverables:
             if Path(path).is_file():
-                files[Path(path).name] = read_delivered(path)[:OPENED_LIMIT]
+                files[Path(path).name] = excerpt(read_delivered(path), tokens)
     return files
+
+
+def own_turn(text: str) -> str:
+    """The speaker's own message out of a reply: a role-playing model sometimes goes on to write the dialogue, both
+    sides of it, under role labels; everything from the first labelled line after the message is dropped, and a label
+    in front of the message itself is taken off."""
+    lines = (text or "").strip().splitlines()
+    if lines and TURN.match(lines[0]):
+        lines[0] = TURN.sub("", lines[0], count=1)
+    cut = next((at for at, line in enumerate(lines) if at and TURN.match(line)), len(lines))
+    return "\n".join(lines[:cut]).strip()
 
 
 def parting(text: str) -> tuple[str | None, bool]:
@@ -107,6 +120,20 @@ class Traveller:
         self.name = name or persona.name
         self.boundaries = boundaries
 
+    @property
+    def pause(self) -> float:
+        """Seconds the person is away after each answer: a card whose `values` set `wait_seconds` plays someone who
+        comes back after a while, as a requester checking on work in progress does. The conversation spends them on
+        the worker's background work (see `experimental.iteration.conversation.Conversant`)."""
+        value = (getattr(self.persona, "values", None) or {}).get("wait_seconds", 0)
+        return float(value) if isinstance(value, (int, float)) else 0.0
+
+    @property
+    def reading(self) -> int:
+        """Tokens one opened file may take in what the person reads: a share of the model's window."""
+        default = getattr(self.provider, "get_default_model", None)
+        return reading_budget(self.model or (default() if default else None))
+
     async def speak(self, exchanges) -> str | None:
         if not exchanges or self.card is None:
             self.card = self.persona.play(random.Random(f"{self.seed}:{self.name}:{self.played}"))
@@ -114,7 +141,11 @@ class Traveller:
             self.leaving = False
         if self.leaving:
             return None
-        packet = {"persona": self.card.text, "conversation": transcript(exchanges), "opened": opened(exchanges)}
+        packet = {
+            "persona": self.card.text,
+            "conversation": transcript(exchanges),
+            "opened": opened(exchanges, tokens=self.reading),
+        }
         partner = [tuple(said(exchange) for exchange in exchanges), *packet["opened"].values()]
         scope = nullcontext() if self.boundaries is None else self.boundaries.compartment("conversant", spoken=partner)
         with scope as entered:
@@ -127,5 +158,5 @@ class Traveller:
                 effort=self.effort,
                 timeout=self.timeout,
             )
-        message, self.leaving = parting(text)
+        message, self.leaving = parting(own_turn(text))
         return message

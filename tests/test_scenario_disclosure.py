@@ -1,4 +1,4 @@
-"""The disclosure schedule is one rule over the contract's plans, whichever party follows it."""
+"""The disclosure schedule is one rule over the contract's plans, whichever counterpart follows it."""
 
 import json
 import shutil

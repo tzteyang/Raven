@@ -19,6 +19,11 @@ class AttributionLimits:
     call_timeout: float = 180
     max_output: int | None = None
 
+    @property
+    def stage_allowance(self) -> int:
+        """An attribution is one stage, so its stage allowance is its whole query budget."""
+        return self.max_queries
+
     def __post_init__(self):
         if (
             not isinstance(self.max_calls, int)
@@ -45,6 +50,7 @@ class AttributionState(BaseModel):
     trace: list[dict] = Field(default_factory=list)
     calls: int = Field(default=0, ge=0)
     queries: int = Field(default=0, ge=0)
+    stage_queries: int = Field(default=0, ge=0)
 
     def check(self, input_id: str, limits: AttributionLimits) -> None:
         if self.input_id != input_id:

@@ -3,15 +3,13 @@
 from pathlib import Path
 
 from raven.contracts.harness import ActionModule
-from raven.contracts.participant import StepView
 
 from ...harness.declaration import Target
-from ...harness.prompts import Prompt
 from ...harness.state import StateUse, Task
 from ...harness.strategies import ActionStrategy
 from ..action.contracts import TARGET, ActionBinding
-from ..planning.contracts import PlanReader
 from ..strategy import TaskBinding
+from .knowledge import INTERACTION, PEERS, PLAN_READER, PROMPT, PROMPT_RESOURCES, STEP_VIEW, STRATEGY_PROMPTS
 
 CONTRACT = ActionModule
 
@@ -39,20 +37,14 @@ TARGETS = (
             ),
         ),
         knowledge=(
-            Prompt,
-            Path(__file__).resolve().parents[2] / "harness/reference/prompt-resources.md",
             ActionStrategy,
             ActionBinding,
             Path(__file__).resolve().parents[2] / "harness/action.py",
-            Path(__file__).resolve().parents[2] / "harness/interaction.py",
-            Path(__file__).resolve().parents[2] / "harness/peers.py",
             TaskBinding,
             Task,
-            StepView,
-            PlanReader,
             Path(__file__).resolve().parents[2] / "harness/reference/action.md",
-            Path(__file__).resolve().parents[2] / "harness/reference/strategy-prompts.md",
             Path(__file__).resolve().parents[1] / "reference/action.md",
         ),
+        references=(PROMPT, PROMPT_RESOURCES, INTERACTION, PEERS, STEP_VIEW, PLAN_READER, STRATEGY_PROMPTS),
     ),
 )

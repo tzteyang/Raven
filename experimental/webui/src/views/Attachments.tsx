@@ -28,7 +28,7 @@ export const openable = (path: string): boolean => path.startsWith('uploads/') &
 const inside = (item: Handover, path: string): string => path.split(`uploads/${item.name}/`)[1] ?? fileName(path)
 
 const ORIGIN_HINT = (origin: MaterialOrigin): string =>
-  `${origin.origin === 'researched' ? 'Researched before the cultivation' : 'Induced before the cultivation from what the party handed over'}${origin.items.length ? ` (${origin.items.join(', ')})` : ''}; ${origin.confirmed ? 'the party confirmed it' : 'the party has not confirmed it, so no one judges by it'}`
+  `${origin.origin === 'researched' ? 'Researched before the cultivation' : 'Induced before the cultivation from what the counterpart handed over'}${origin.items.length ? ` (${origin.items.join(', ')})` : ''}; ${origin.confirmed ? 'the counterpart confirmed it' : 'the counterpart has not confirmed it, so no one judges by it'}`
 
 export function AttachmentChips({
   materials, open, onOpen, origins = {},

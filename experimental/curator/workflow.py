@@ -11,7 +11,7 @@ import json
 import shutil
 import tempfile
 import time
-from dataclasses import asdict
+from dataclasses import asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
@@ -32,7 +32,7 @@ from .generation.context.collect import collect
 from .generation.run import GenerationError, GenerationInterruptedError, Limits, generate
 from .generation.state import GenerationState
 from .harness.attribution import Attributed
-from .raven_adapter.exploration import Exploration
+from .raven_adapter.exploration import Exploration, Withheld
 from .raven_adapter.inspection import fingerprint
 from .raven_adapter.materialize import _write
 from .raven_adapter.observe import plain
@@ -40,6 +40,81 @@ from .raven_adapter.observe import plain
 PENDING = "pending.json"
 CANDIDATE = "candidate.json"
 ATTRIBUTION = "attribution"
+
+
+def _experience_fields(snapshot, record):
+    if snapshot is not None:
+        return {"experience": snapshot}
+    return {"experience_unavailable": record["experience_unavailable"]} if record.get("experience_unavailable") else {}
+
+
+def _resume_experience(pending, experience):
+    snapshot = (pending or {}).get("experience")
+    if snapshot is not None and experience is None:
+        raise ValueError("resuming this curation requires its original experience provider")
+    return snapshot
+
+
+def _experience_before(experience, worker):
+    if experience is None:
+        return {}
+    return {"revision_before": getattr(worker, "revision_id", fingerprint(worker.artifact.model_dump(mode="json")))}
+
+
+def _prepare_experience(experience, previous, context, provider, model, worker, pending, record, loaded):
+    import sqlite3
+
+    from ..experience.store import StoreError
+
+    if experience is None:
+        return context, None, None, provider
+    if (pending or {}).get("experience_unavailable"):
+        record["experience_unavailable"] = pending["experience_unavailable"]
+        return context, None, None, provider
+    inputs = fingerprint({"context": GenerationState.identity(context), "model": effective_model(provider, model)})
+    task = context.facts["task"]
+    try:
+        snapshot = experience.prepare(
+            task=task["id"],
+            situation=task["text"],
+            inputs=inputs,
+            scope_kind=context.facts.get("scope", {}).get("kind", "root"),
+            contract_ids=(context.declaration.contract_id,),
+            worker_root=worker.root,
+            workspace_root=worker.baseline.config.workspace_path,
+            previous=previous,
+        )
+    except (OSError, sqlite3.Error, StoreError) as exc:
+        if previous is not None:
+            raise
+        record["experience_unavailable"] = str(exc)
+        return context, None, None, provider
+    record["experience"] = snapshot
+    return replace(context, experience=snapshot), snapshot, inputs, experience.provider(provider, snapshot, loaded)
+
+
+def unfinished(worker) -> bool:
+    """Whether local, composite or attribution work still owns its frozen inputs."""
+    root = getattr(worker, "root", None)
+    if root is None:
+        return False
+    from .composition.state import pending
+
+    directory = Path(root) / "curation"
+    return (directory / PENDING).is_file() or pending(directory)
+
+
+def information_scope(worker, feedback) -> None:
+    """Restore research-only source exclusions from the curation's recorded information handoff."""
+    information = feedback.get("information", {}) if isinstance(feedback, dict) else {}
+    if not isinstance(information, dict):
+        return
+    excluded = information.get("excluded_sources", ())
+    if not isinstance(excluded, (tuple, list)) or any(not isinstance(path, str) for path in excluded):
+        raise ValueError("information source exclusions must be paths")
+    if excluded:
+        current = getattr(worker, "withheld", Withheld())
+        worker.withheld = Withheld(paths=tuple(dict.fromkeys((*current.paths, *excluded))), markers=current.markers)
 
 
 async def improve(
@@ -54,6 +129,7 @@ async def improve(
     observations=None,
     attributor=None,
     attribution=None,
+    experience=None,
 ):
     """Attribute, generate and activate one local Harness; composition uses propose before its single activation.
 
@@ -74,6 +150,7 @@ async def improve(
             observations=observations,
             attributor=attributor,
             attribution=attribution,
+            experience=experience,
         )
     return await _generate_local(
         worker,
@@ -86,10 +163,13 @@ async def improve(
         observations=observations,
         attributor=attributor,
         attribution=attribution,
+        experience=experience,
     )
 
 
-async def attribute(worker, provider, *, feedback=None, model=None, observations=None, attributor=None) -> Attributed:
+async def attribute(
+    worker, provider, *, feedback=None, model=None, observations=None, attributor=None, experience=None
+) -> Attributed:
     """Run only the attribution phase on the worker as it stands, record it and return it; nothing is generated or
     installed. For trying an attributor, or showing diagnoses before a curation that may take them as supplied. A
     paused attribution is continued by the next call; a composite worker attributes its root scope as `improve`
@@ -98,7 +178,13 @@ async def attribute(worker, provider, *, feedback=None, model=None, observations
         from .composition.run import attribute as attribute_composition
 
         return await attribute_composition(
-            worker, provider, feedback=feedback, model=model, observations=observations, attributor=attributor
+            worker,
+            provider,
+            feedback=feedback,
+            model=model,
+            observations=observations,
+            attributor=attributor,
+            experience=experience,
         )
     return await _generate_local(
         worker,
@@ -109,6 +195,7 @@ async def attribute(worker, provider, *, feedback=None, model=None, observations
         attributor=attributor,
         install=False,
         attribution_only=True,
+        experience=experience,
     )
 
 
@@ -124,6 +211,7 @@ async def propose(
     observations=None,
     attributor=None,
     attribution=None,
+    experience=None,
 ):
     """Keep a checked local candidate and its investigation for coordinated activation or repair."""
     return await _generate_local(
@@ -138,34 +226,13 @@ async def propose(
         observations=observations,
         attributor=attributor,
         attribution=attribution,
+        experience=experience,
     )
 
 
-async def _generate_local(
-    worker,
-    provider,
-    *,
-    feedback=None,
-    model=None,
-    limits=Limits(),
-    probe=None,
-    resume=True,
-    install=True,
-    repair=None,
-    observations=None,
-    attributor=None,
-    attribution=None,
-    attribution_only=False,
-):
-    """Attribute, generate, validate and install a revision; ordinary turns use Worker.run.
-
-    Calling this function explicitly requests curation. Feedback can be human
-    text or the Analyst's structured feedback; it is not inferred from every
-    worker message. The latest execution retains the artifact identity that
-    actually produced it. A paused generation resumes by default with cumulative
-    limits; resume=False explicitly discards it. Input changes refuse resumption
-    before any model call.
-    """
+def _pending(worker, *, repair, resume, attribution_only):
+    """The paused generation this call starts from, if any: the pending record as saved, a completed candidate
+    reopened at the repair stage when a repair is asked for, or nothing once resumption is declined."""
     pending_path = worker.root / "curation" / PENDING
     pending = json.loads(pending_path.read_text()) if pending_path.exists() else None
     candidate_path = pending_path.with_name(CANDIDATE)
@@ -183,6 +250,38 @@ async def _generate_local(
         shutil.rmtree(pending["workspace"], ignore_errors=True)
         pending_path.unlink()
         pending = None
+    return pending_path, candidate_path, pending
+
+
+async def _generate_local(
+    worker,
+    provider,
+    *,
+    feedback=None,
+    model=None,
+    limits=Limits(),
+    probe=None,
+    resume=True,
+    install=True,
+    repair=None,
+    observations=None,
+    attributor=None,
+    attribution=None,
+    attribution_only=False,
+    experience=None,
+):
+    """Attribute, generate, validate and install a revision; ordinary turns use Worker.run.
+
+    Calling this function explicitly requests curation. Feedback can be human
+    text or the Analyst's structured feedback; it is not inferred from every
+    worker message. The latest execution retains the artifact identity that
+    actually produced it. A paused generation resumes by default with cumulative
+    limits; resume=False explicitly discards it. Input changes refuse resumption
+    before any model call.
+    """
+    pending_path, candidate_path, pending = _pending(
+        worker, repair=repair, resume=resume, attribution_only=attribution_only
+    )
     state = GenerationState.model_validate(pending["state"]) if pending and pending.get("state") else None
     paused_attribution = (
         AttributionState.model_validate(pending["attribution_state"])
@@ -197,6 +296,9 @@ async def _generate_local(
             model = pending["model"]
         if observations is None and pending.get("observations") is not None:
             observations = pending["observations"]
+    experience_snapshot = _resume_experience(pending, experience)
+    experience_loaded = set()
+    information_scope(worker, feedback)
     inspection = await worker.inspect()
     task = inspection.facts.get("task")
     if task is None:
@@ -222,6 +324,7 @@ async def _generate_local(
         feedback=feedback,
         observations=observations,
         previous_plan=worker.last_plan,
+        commitments=worker.commitments,
     )
 
     async def validate(candidate):
@@ -287,6 +390,7 @@ async def _generate_local(
         body = {
             "task_id": task["id"],
             "identity": identity,
+            **_experience_fields(experience_snapshot, record),
             "feedback": feedback,
             "revision": getattr(worker, "revision_id", None) or fingerprint(worker.artifact.model_dump(mode="json")),
             "subjects": list(required),
@@ -316,6 +420,7 @@ async def _generate_local(
         "task_id": task["id"],
         "feedback": feedback,
         "turn_id": worker.last_execution.turn_id if worker.last_execution else None,
+        **_experience_before(experience, worker),
     }
     workspace = Path(pending["workspace"]) if pending else Path(tempfile.mkdtemp(prefix="raven-curator-explore-"))
     keep_workspace = pending is not None
@@ -337,6 +442,9 @@ async def _generate_local(
                 sources=exploration.sources,
                 read_source=exploration.read_source,
                 exploration=described,
+            )
+            context, experience_snapshot, experience_inputs, provider = _prepare_experience(
+                experience, experience_snapshot, context, provider, model, worker, pending, record, experience_loaded
             )
             record["exploration"] = described
             chosen = SuppliedAttributor.of(attribution) if attribution is not None else attributor or ModelAttributor()
@@ -427,6 +535,7 @@ async def _generate_local(
                             "observations": supplied_observations,
                             "model": model,
                             "limits": asdict(limits),
+                            **_experience_fields(experience_snapshot, record),
                             **(
                                 {"attribution_state": exc.state.model_dump(mode="json")}
                                 if attributing
@@ -453,8 +562,11 @@ async def _generate_local(
                 return attributed
             record["generated"] = plain(result)
             exploration.verify()
+            if experience_snapshot is not None:
+                experience.validate(experience_snapshot, inputs=experience_inputs)
         if install:
             await worker.install(result.candidate)
+            record["commitments"] = [item.model_dump(mode="json") for item in worker.commitments]
         else:
             completed = latest["state"]
             completed.candidate = result.candidate
@@ -468,6 +580,7 @@ async def _generate_local(
                         "feedback": feedback,
                         "observations": supplied_observations,
                         "model": model,
+                        **_experience_fields(experience_snapshot, record),
                         "state": completed.model_dump(mode="json"),
                     },
                     ensure_ascii=False,
@@ -491,9 +604,50 @@ async def _generate_local(
             record["active_artifact_id"] = getattr(
                 worker, "revision_id", fingerprint(worker.artifact.model_dump(mode="json"))
             )
-            _write(
-                worker.root / "curation" / f"{uuid4().hex}.json", json.dumps(plain(record), ensure_ascii=False).encode()
+            record_path = worker.root / "curation" / f"{uuid4().hex}.json"
+            _write(record_path, json.dumps(plain(record), ensure_ascii=False).encode())
+            await _finish_experience(
+                experience,
+                experience_snapshot,
+                experience_loaded,
+                record,
+                record_path,
+                worker,
+                inspection,
+                task,
+                installed=install and not keep_workspace,
             )
+
+
+async def _finish_experience(experience, snapshot, loaded, record, path, worker, inspection, task, *, installed):
+    if experience is None or snapshot is None:
+        return
+    try:
+        record["experience_loaded"] = sorted(loaded)
+        experience.observe(snapshot, record=str(path), loaded=loaded)
+        if installed and "generated" in record and not record.get("error"):
+            from ..experience.contracts import RecordOrigin
+
+            scope = inspection.facts.get("scope", {})
+            source_scope = "root" if scope.get("kind", "root") == "root" else "child/" + scope["name"]
+            origin = RecordOrigin(
+                access_scope=experience.access.access_scope,
+                run_id=fingerprint(str(worker.root.resolve())),
+                lineage_id=fingerprint(task["text"]),
+                record_id=path.name,
+                scope=source_scope,
+                revision_before=record["revision_before"],
+            )
+            record["experience_learning"] = await experience.learn(
+                record, origin=origin, contract_ids=(inspection.declaration.contract_id,)
+            )
+    except asyncio.CancelledError:
+        record["experience_learning"] = {"status": "interrupted", "reason": "Post-install learning was cancelled."}
+        raise
+    except Exception as exc:
+        record["experience_error"] = str(exc)
+    finally:
+        _write(path, json.dumps(plain(record), ensure_ascii=False).encode())
 
 
 def _brief(event: dict) -> dict:

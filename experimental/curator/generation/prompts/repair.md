@@ -18,7 +18,7 @@ Read a relevant source or fact when the failure reveals a missing dependency or 
 
 ## Choose the response
 
-- For a local defect, preserve the checked plan and submit a complete corrected artifact for its targets. Keep working parts and unrelated files intact.
+- For a local defect, preserve the checked plan and submit a complete corrected artifact for its targets. Edit the failing part of a file rather than rewriting it, and keep working parts and unrelated files intact.
 - For an incorrect interaction path or state design, request plan revision with its reason. The host reopens design before implementation. For incorrect or missing targets, revise selection and then design. Existing candidate files are discarded; old checks remain historical evidence. Do not smuggle new targets into the current artifact.
 - For a necessary unavailable capability, grant or unresolved fact, report the concrete gap and its consequence instead of concealing the failure.
 
