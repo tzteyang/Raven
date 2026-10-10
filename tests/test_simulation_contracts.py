@@ -412,6 +412,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         "history",
         "skills",
         "locations",
+        "available_materials",
     }
     (signal,) = materials["signals"]
     assert signal["text"] == remark and signal["items"] == [] and signal["satisfied"] is False
