@@ -238,7 +238,7 @@ uv run python -m experimental.simulation --config <config.json> --state-dir <新
   --scenario brand_strategist --chain documents --owner-feedback silent --standard derived sedimented
 
 # 真人 CLI：真人既是对话方也是评价者
-uv run python -m experimental.harness.loop --help
+uv run python -m experimental.cultivation --help
 
 # 从业务任务和交互材料开始；没有产品案例也能进行信息收集
 uv run python -m experimental.simulation.bench.experts --config <config.json> \

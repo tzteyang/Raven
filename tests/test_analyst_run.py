@@ -29,7 +29,7 @@ class Provider:
 
 class FakeWorker:
     def __init__(self, root, plan=None):
-        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's travellers"))
+        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's conversants"))
         self.root = root
         self.last_plan = plan
 

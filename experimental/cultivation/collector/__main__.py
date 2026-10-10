@@ -20,7 +20,9 @@ from experimental.harness.scenario import Disclosure, load
 from raven.providers.factory import make_lazy_provider, make_resolving_provider
 
 
-async def research(args):
+async def research(args, *, answerer_factory=None):
+    """Collect for `args`; `answerer_factory(provider, scenario, released, root)` supplies who answers the
+    collector's questions when the terminal does not (the bench's simulated counterpart)."""
     root = args.output.expanduser().resolve()
     inputs = [*args.material, *args.research_reference]
     if args.scenario:
@@ -102,20 +104,8 @@ async def research(args):
         provider = guard.provider(provider)
 
     answerer = terminal_answer if args.interactive else None
-    if getattr(args, "answer_material", None):
-        from experimental.simulation.bench.information import CounterpartAnswers
-
-        if scenario is None:
-            raise ValueError("simulated answers require a Scenario")
-        answerer = CounterpartAnswers(
-            native,
-            scenario,
-            args.answer_material,
-            released,
-            records=root / "counterpart-answers",
-            model=args.model,
-            timeout=args.timeout,
-        )
+    if answerer_factory is not None:
+        answerer = answerer_factory(native, scenario, released, root)
 
     async with worker:
         result = await collect_for_curator(
@@ -156,7 +146,7 @@ async def research(args):
     }
 
 
-def cli():
+def build_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description="Prepare expert information; output is a reviewed result, not a Scenario directory."
     )
@@ -208,16 +198,19 @@ def cli():
     parser.add_argument(
         "--wait-for-input", action="store_true", help="Stop with needs_input while asked user questions are unanswered"
     )
-    answers = parser.add_mutually_exclusive_group()
-    answers.add_argument("--interactive", action="store_true")
-    answers.add_argument(
-        "--answer-material", nargs="+", help="Scenario material the simulated counterpart may use to answer questions"
-    )
-    args = parser.parse_args()
+    parser.add_argument("--interactive", action="store_true")
+    return parser
+
+
+def check(parser: argparse.ArgumentParser, args: argparse.Namespace) -> None:
     if not args.scenario and args.release is not None:
         parser.error("--release requires --scenario")
-    if args.answer_material and not args.scenario:
-        parser.error("--answer-material requires --scenario")
+
+
+def cli():
+    parser = build_parser()
+    args = parser.parse_args()
+    check(parser, args)
     print(json.dumps(asyncio.run(research(args)), indent=2))
 
 

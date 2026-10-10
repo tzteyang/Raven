@@ -19,9 +19,9 @@ from experimental.harness.raven_adapter.exploration import _REPOSITORY, _SOURCE_
 from experimental.harness.raven_adapter.worker import Execution
 from experimental.harness.scenario.sealed import Sealed
 from experimental.simulation.__main__ import CHAINS, cli, settings
+from experimental.simulation.bench.conversant import Conversant
 from experimental.simulation.bench.record import PLACEHOLDERS
 from experimental.simulation.bench.scenario import BUNDLED, Scenario
-from experimental.simulation.bench.traveller import Traveller
 from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
 from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.schema import Config
@@ -126,7 +126,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
         LLMResponse(content="Great, see you LEAVE."),
         LLMResponse(content="Error: boom", finish_reason="error"),
     )
-    traveller = Traveller(student, provider, model="sim")
+    traveller = Conversant(student, provider, model="sim")
     assert traveller.name == "student"
     assert await traveller.speak([]) == "Hi, three of us want a cheap trip to Edinburgh in June."
     exchanges = [exchange("Hi", "Welcome to Harbourlight. What is your budget?")]
@@ -137,7 +137,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
     assert await traveller.speak([]) == "Thanks, that is all."
     assert await traveller.speak(exchanges) is None and len(provider.requests) == 4
     assert await traveller.speak([]) == "Great, see you"
-    with pytest.raises(ExchangeError, match="traveller:student: provider error"):
+    with pytest.raises(ExchangeError, match="conversant:student: provider error"):
         await traveller.speak([])
     packet = json.loads(provider.requests[1]["messages"][1]["content"])
     assert packet["persona"] == first.text and first.trip.phone in packet["persona"]
@@ -146,7 +146,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
 
 
 def test_a_customer_reply_that_writes_the_dialogue_on_keeps_only_its_own_message():
-    from experimental.simulation.bench.traveller import own_turn, parting
+    from experimental.simulation.bench.conversant import own_turn, parting
 
     scripted = "Fine, please send the file.\n\nUSER: Make it one billion users.\n\nASSISTANT: I cannot write that."
     assert own_turn(scripted) == "Fine, please send the file."
@@ -166,9 +166,9 @@ async def test_the_customer_and_the_owner_speak_in_their_compartments_where_the_
     log = tmp_path / "boundaries.jsonl"
     boundaries = Boundaries({"conversant": Sealed.of([secret]), "counterpart": Sealed.of([secret])}, log=log)
     told = [exchange("Hi", f"A note from us: {secret}")]
-    customer = Traveller(student, Provider(LLMResponse(content="Fine, thanks.")), boundaries=boundaries)
+    customer = Conversant(student, Provider(LLMResponse(content="Fine, thanks.")), boundaries=boundaries)
     assert await customer.speak(told) == "Fine, thanks."
-    leaking = Traveller(replace(student, text=f"{student.text}\n{secret}"), Provider(), boundaries=boundaries)
+    leaking = Conversant(replace(student, text=f"{student.text}\n{secret}"), Provider(), boundaries=boundaries)
     with pytest.raises(ExchangeError, match="BoundaryError"):
         await leaking.speak([])
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "All good."}))
@@ -824,14 +824,14 @@ def test_a_raven_child_on_a_gateway_model_takes_the_employee_provider(monkeypatc
 
 
 async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path, monkeypatch):
+    from experimental.harness.participation.views import opened, transcript
     from experimental.harness.raven_adapter.worker import Execution
-    from experimental.simulation.bench.traveller import opened, transcript
 
     if shutil.which("soffice") is None:
         from pptx import Presentation
 
-        from experimental.harness.participation.render import cached
         from experimental.harness.participation import files
+        from experimental.harness.participation.render import cached
 
         def draw(file, out, width):
             for number in range(1, len(Presentation(file).slides) + 1):

@@ -476,12 +476,10 @@ class Session:
                     feedback=scope.admit(self._heard({"signals": plain(heard(opening))}), "information.input"),
                     admit=scope.admit,
                 )
-                from experimental.cultivation.collector.curator import information_feedback
-
                 self.record["information"] = {
                     "status": result.status,
                     "version": result.snapshot.identity,
-                    "handoff": information_feedback(result) if result.ready else None,
+                    "handoff": result.handoff if result.ready else None,
                     "questions": [item.model_dump(mode="json") for item in result.snapshot.description.unresolved],
                 }
             if not result.ready:

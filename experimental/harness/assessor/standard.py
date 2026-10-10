@@ -28,7 +28,6 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from experimental.cultivation.counterpart.owner import actions, back_office, reports
 from experimental.harness.assessor.checks import VERIFIERS, Finding, combine, program
 from experimental.harness.assessor.rubric import (
     ORIGINS,
@@ -48,6 +47,7 @@ from experimental.harness.participation.audience import EVALUATION, audience
 from experimental.harness.participation.exchange import exchange, messages
 from experimental.harness.participation.protocols import Item, Sessions, Signal
 from experimental.harness.participation.requirements import ExternalRequirement
+from experimental.harness.participation.views import actions, back_office, reports
 from experimental.harness.raven_adapter.materialize import _write
 
 if TYPE_CHECKING:

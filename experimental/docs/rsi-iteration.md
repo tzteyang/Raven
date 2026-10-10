@@ -120,4 +120,4 @@ sequenceDiagram
 | `assessor.role.Assessor.evaluate(sessions) -> Signal` | 谁持有标准、怎样评价、怎样说话；交出的材料放在 `Signal.attachments`。通用实现在 `assessor/`（真人、数据集） |
 | 任务说明与材料 | 员工的岗位说明，以及何时交出哪些资料 |
 
-Analyst 是通用的，场景不必提供。真人入口是 `python -m experimental.harness.loop`：真人既是对话方也是 Assessor。旅行社模拟在 `experimental/simulation/`，见上一级 [README](../README.md)。
+Analyst 是通用的，场景不必提供。真人入口是 `python -m experimental.cultivation`：真人既是对话方也是 Assessor。旅行社模拟在 `experimental/simulation/`，见上一级 [README](../README.md)。

@@ -366,7 +366,7 @@ def test_removed_protocol_payloads_fail_explicitly():
 def test_session_working_state_and_explicit_shared_knowledge_survive_reconstruction(tmp_path):
     from experimental.harness.raven_adapter.strategy import SESSION, Scopes
 
-    task = Task(id="task", text="Serve travellers")
+    task = Task(id="task", text="Serve conversants")
     memory = Scopes("memory", task, tmp_path / "memory.json", lambda state: state, per_session=True)
     for key in ("traveller:a", "traveller:b"):
         token = SESSION.set(key)

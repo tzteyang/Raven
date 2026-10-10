@@ -20,9 +20,9 @@ from uuid import uuid4
 
 from experimental.harness.participation.hearing import opaque
 from experimental.harness.participation.protocols import Item, Signal
+from experimental.harness.participation.views import opened, transcript
 from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import plain
-from experimental.simulation.bench.traveller import opened, transcript
 
 SOURCE = "self"
 VERDICT = re.compile(r"^\s*VERDICT\s*:\s*(pass|fail|unknown)\b", re.I | re.M)

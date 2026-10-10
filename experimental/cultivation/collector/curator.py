@@ -10,7 +10,15 @@ from uuid import uuid4
 
 from experimental.cultivation.collector.collection import CollectionLimits, _Calls, collect_information
 from experimental.cultivation.collector.guidance import derive_guidance
-from experimental.cultivation.collector.information import Manifest, Request, ResearchReview, Result, Review, render
+from experimental.cultivation.collector.information import (
+    INFORMATION_FILE,
+    Manifest,
+    Request,
+    ResearchReview,
+    Result,
+    Review,
+    render,
+)
 from experimental.cultivation.collector.researchers import Agent, Exchange, ResearchError
 from experimental.cultivation.collector.review import review_research
 from experimental.cultivation.collector.voice import prompt
@@ -25,7 +33,6 @@ from experimental.harness.raven_adapter.materialize import _write
 from raven.config.live import hold_for_this_turn
 from raven.permissions.turn import start_permission_turn
 
-INFORMATION_FILE = "uploads/information/expert.md"
 MATERIAL_PREFIX = "information.material."
 GUIDANCE_PREFIX = "research.example."
 SOURCE_ROOT = Path(__file__).resolve().parents[2]
@@ -452,11 +459,4 @@ def handover_information(worker, result: Result) -> str:
 
 def information_feedback(result: Result) -> dict:
     """Describe this handoff as an attribution input, independently of material kinds."""
-    return {
-        "version": result.snapshot.identity,
-        "file": INFORMATION_FILE,
-        "excluded_sources": list(result.snapshot.manifest.excluded_sources) if result.snapshot.manifest else [],
-        "changed_dimensions": list(result.changed_dimensions),
-        "resources_changed": result.resources_changed,
-        "questions_changed": result.questions_changed,
-    }
+    return result.handoff

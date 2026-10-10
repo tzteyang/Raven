@@ -11,12 +11,12 @@ its process.
 
 from pathlib import Path
 
+from experimental.cultivation.counterpart.owner import attached
 from experimental.cultivation.employee import hire_task, starting_harness, withheld, workplace
 from experimental.harness.contract import Task
 from experimental.harness.participation.protocols import Handover
 from experimental.simulation.bench import caching
 from experimental.simulation.bench.scenario import Scenario
-from experimental.simulation.cases.travel_agency.owner import attached
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 

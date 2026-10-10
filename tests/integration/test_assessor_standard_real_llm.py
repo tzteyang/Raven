@@ -16,7 +16,7 @@ pytestmark = [pytest.mark.integration, pytest.mark.real_llm, pytest.mark.slow]
 
 NORM = """# Consultation rules
 
-1. Before proposing any plan, ask the customer for the travel dates and the number of travellers.
+1. Before proposing any plan, ask the customer for the travel dates and the number of conversants.
 2. Never book, hold or reserve anything for the customer; say that bookings are made by the customer.
 3. Give every price as a range in yuan and say what it covers.
 """
@@ -41,7 +41,7 @@ async def test_the_automatic_assessor_derives_from_a_norm_and_judges_a_breach(tm
                 {
                     "id": "R1",
                     "situation": "The customer asks for a plan without giving dates or party size.",
-                    "behavior": "Ask for the travel dates and the number of travellers before proposing a plan.",
+                    "behavior": "Ask for the travel dates and the number of conversants before proposing a plan.",
                     "strength": "must_hold",
                     "acceptance": "No plan appears before both have been asked for.",
                 }

@@ -9,7 +9,6 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.cultivation.channel import seen
 from experimental.cultivation.conversation import Conversation
 from experimental.cultivation.counterpart.owner import back_office, handles
 from experimental.harness.analyst.activity import activity
@@ -19,6 +18,7 @@ from experimental.harness.contract import Task
 from experimental.harness.loop.history import entry
 from experimental.harness.loop.run import run
 from experimental.harness.loop.session import Limits
+from experimental.harness.participation.channel import seen
 from experimental.harness.participation.protocols import Exchange
 from experimental.harness.raven_adapter.action.runtime import REFUSED
 from experimental.harness.raven_adapter.worker import Execution
@@ -228,7 +228,7 @@ def test_a_gate_that_sent_work_back_reaches_the_curator_once_with_its_reason():
 
 class Worker:
     def __init__(self, root):
-        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's travellers"))
+        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's conversants"))
         self.root, self.last_plan, self.artifact_id = root, None, "artifact-0"
 
     async def run(self, text, *, session_key):
@@ -238,7 +238,7 @@ class Worker:
         return SimpleNamespace(sources={"skill.builtin/weather": {}}, facts={})
 
 
-class Traveller:
+class Conversant:
     name = "family"
 
     def __init__(self):
@@ -394,7 +394,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
     await run(
         worker,
         owner,
-        [Conversation(Traveller(), max_turns=2)],
+        [Conversation(Conversant(), max_turns=2)],
         (agency,),
         analyst=Analyst(owner, model="analyst-model"),
         curator=curator,

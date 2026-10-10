@@ -75,7 +75,7 @@ from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
 
-from experimental.cultivation.channel import seen
+from experimental.cultivation.counterpart.owner import REFERENCES
 from experimental.cultivation.employee import AREA, REPLICAS
 from experimental.harness.analyst.activity import INTERVENTIONS
 from experimental.harness.analyst.activity import classify as _classify
@@ -85,13 +85,13 @@ from experimental.harness.analyst.activity import scope_of as _scope
 from experimental.harness.analyst.activity import scoped as _scoped
 from experimental.harness.loop import records
 from experimental.harness.participation import model_roles
+from experimental.harness.participation.channel import seen
 from experimental.harness.raven_adapter.targets import catalogue
 from experimental.harness.scenario.digest import digest
 from experimental.simulation.bench.attribution import RESULT as ATTRIBUTION
 from experimental.simulation.bench.isolation import RESULT as ISOLATION
 from experimental.simulation.bench.scenario import BUNDLED
 from experimental.simulation.bench.value import judge
-from experimental.simulation.cases.travel_agency.owner import REFERENCES
 
 SCHEMA = 1
 DIFF_LINES = 400

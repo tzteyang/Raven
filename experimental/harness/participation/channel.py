@@ -1,9 +1,9 @@
-"""What a customer on an online chat channel receives from one employee turn.
+"""What the other side of an online chat channel receives from one worker turn.
 
 A channel shows only finished output (`raven/gateway/outlet.py`): the text replies, each file delivery with the
 caption the employee wrote for it, and the short notice that an answer came without an organ. Progress lines, tool
 hints and reasoning are never sent to a channel, so they are not part of what the customer, the owner or the record
-treats as said to the customer.
+treats as said to the other side.
 """
 
 from experimental.harness.raven_adapter.observe import delivered_files
@@ -12,7 +12,7 @@ DEGRADED = "organ_degraded"
 
 
 def seen(records) -> str:
-    """The turn's customer-facing text in order; a delivery's caption counts once the delivery handed over a file.
+    """The turn's outgoing text in order; a delivery's caption counts once the delivery handed over a file.
 
     A delivery is read from its completed call, as the channel outlet reads it: a call refused before it ran, or one
     whose every file failed, carries no delivery and so sent nothing.
@@ -32,5 +32,5 @@ def seen(records) -> str:
 
 
 def said(exchange) -> str:
-    """What the customer received in reply to one message."""
+    """What the other side received in reply to one message."""
     return seen(exchange.execution.records)

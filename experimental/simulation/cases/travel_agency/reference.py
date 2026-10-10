@@ -18,7 +18,7 @@ from pathlib import Path
 
 from pptx import Presentation
 
-from experimental.cultivation.channel import said
+from experimental.harness.participation.channel import said
 from experimental.harness.participation.files import _MOTION, deck_slides
 from experimental.harness.scenario.contract import frontmatter
 from experimental.simulation.bench.cards import Trip

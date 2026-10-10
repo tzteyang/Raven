@@ -108,7 +108,7 @@ def spec(tmp_path, **values):
     config = LiveConfig.load(write_config(tmp_path))
     run_dir = config.root / "runs" / SESSION
     run_dir.mkdir(parents=True, exist_ok=True)
-    return {**config.spec(run_dir, config.root / "workdirs" / SESSION, "Serve the agency's travellers"), **values}
+    return {**config.spec(run_dir, config.root / "workdirs" / SESSION, "Serve the agency's conversants"), **values}
 
 
 async def until(check, timeout=10.0):
@@ -422,11 +422,11 @@ def test_the_server_relays_the_pages_steps_to_the_sessions_process_and_serves_it
     status, info = call(studio.base)
     assert status == 200 and info["enabled"] and info["sessions"] == [] and info["settings"]["rounds"] == 3
     assert info["task"].strip() and any(row["name"] == "service-sop" for row in info["materials"])
-    status, created = call(studio.base, {"title": "Agency", "task": "Serve the agency's travellers"})
+    status, created = call(studio.base, {"title": "Agency", "task": "Serve the agency's conversants"})
     assert status == 201 and created["title"] == "Agency" and created["attached"]
     session = f"{studio.base}/{created['id']}"
     body = poll(session, lambda body: body["state"] and body["state"]["step"] is None and "record" in body)
-    assert body["record"]["task"] == "Serve the agency's travellers" and body["run"].startswith(created["id"] + "/")
+    assert body["record"]["task"] == "Serve the agency's conversants" and body["run"].startswith(created["id"] + "/")
     assert body["progress"] == {"curation": None, "paused": None}
     status, again = call(f"{session}?stamp={body['stamp']}")
     assert status == 200 and "record" not in again and again["state"]["status"] == "running"

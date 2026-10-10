@@ -37,7 +37,7 @@ import argparse
 import json
 from pathlib import Path
 
-from experimental.cultivation.counterpart.case import delivered_for
+from experimental.cultivation.counterpart.case import deck_delivered, files_delivered
 
 MIN_ROUNDS = 2
 CULTIVATED = 2
@@ -54,6 +54,16 @@ def _completed(record: dict) -> list[dict]:
 
 def _delivered(record: dict, item: dict) -> bool:
     return delivered_for(record.get("run", {}).get("scenario"))(item)
+
+
+# Cases whose deliverables are documents rather than decks; the deck is the judge's historical default, so a record
+# without a case name (an older record, a synthetic one) is still judged as a deck case.
+DELIVERED = {"brand_strategist": files_delivered}
+
+
+def delivered_for(scenario: str | None):
+    """The delivery predicate a case is judged by: a file in every drill for a document case, else a deck."""
+    return DELIVERED.get(scenario or "", deck_delivered)
 
 
 def reason_key(scope: str, target: str, reason: str) -> str:

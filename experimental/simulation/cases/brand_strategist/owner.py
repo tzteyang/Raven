@@ -12,8 +12,8 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from experimental.cultivation.channel import said
 from experimental.cultivation.counterpart.owner import Owner
+from experimental.harness.participation.channel import said
 from experimental.harness.participation.files import read_delivered
 from experimental.simulation.cases.travel_agency.reference import CONFIG, words
 

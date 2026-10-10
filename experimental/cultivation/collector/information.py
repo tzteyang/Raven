@@ -339,6 +339,9 @@ class Request(_Model):
         return self
 
 
+INFORMATION_FILE = "uploads/information/expert.md"
+
+
 class Result(_Model):
     snapshot: Snapshot
     review: Review
@@ -348,6 +351,18 @@ class Result(_Model):
     questions_changed: bool = True
     reviewed_version: str = ""
     stop_reason: Literal["completed", "time_limit", "call_limit", "review_limit", "error", "cancelled"] = "completed"
+
+    @property
+    def handoff(self) -> dict:
+        """This result as the loop records the handoff: its version, file and what changed since the previous one."""
+        return {
+            "version": self.snapshot.identity,
+            "file": INFORMATION_FILE,
+            "excluded_sources": list(self.snapshot.manifest.excluded_sources) if self.snapshot.manifest else [],
+            "changed_dimensions": list(self.changed_dimensions),
+            "resources_changed": self.resources_changed,
+            "questions_changed": self.questions_changed,
+        }
 
     @model_validator(mode="after")
     def bind_review(self):

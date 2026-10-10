@@ -25,7 +25,7 @@ from experimental.harness.raven_adapter.worker import Execution, TurnTimeoutErro
 
 
 class FakeWorker:
-    def __init__(self, root, task=Task(text="Serve the agency's travellers")):
+    def __init__(self, root, task=Task(text="Serve the agency's conversants")):
         self.baseline = SimpleNamespace(task=task)
         self.root = root
         self.last_plan = None
@@ -178,7 +178,7 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     )
     assert earlier.diagnoses == (Diagnosed(about="task", state="absent"),)
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
-    assert record["task"] == "Serve the agency's travellers" and len(record["rounds"]) == 2
+    assert record["task"] == "Serve the agency's conversants" and len(record["rounds"]) == 2
     assert record["status"] == "finished"
     assert record["rounds"][0]["signals"][0]["items"][0]["result"] == "fail"
     joined = load(runs(tmp_path)[0])

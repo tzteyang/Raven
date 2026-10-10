@@ -23,7 +23,6 @@ Curator.
 """
 
 import json
-import re
 from contextlib import nullcontext
 from pathlib import Path
 from typing import TYPE_CHECKING, Literal
@@ -31,48 +30,32 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from experimental.cultivation.channel import said
 from experimental.cultivation.collector.curator import INFORMATION_FILE
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
-from experimental.harness.participation.allowance import excerpt, reading_budget
+from experimental.harness.participation.allowance import reading_budget
+from experimental.harness.participation.channel import said
 from experimental.harness.participation.compartment import texts_of
 from experimental.harness.participation.exchange import exchange, messages
 from experimental.harness.participation.files import read_delivered
 from experimental.harness.participation.protocols import Handover, Item, Signal
-from experimental.harness.raven_adapter.action.runtime import REFUSED
+from experimental.harness.participation.views import back_office, cut, reports, transcript
 from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import plain
 from experimental.harness.scenario import Disclosure
-from experimental.simulation.bench.traveller import transcript
 from raven.providers.capabilities import vision_verdict
 from raven.providers.rates import warm_catalog_in_background
 
 if TYPE_CHECKING:
-    from experimental.simulation.bench.scenario import Scenario
+    from experimental.cultivation.counterpart.scenario import Scenario
 
 NAME = "submit_review"
 # Raven fences a report on lines of its own; a request that quotes one inside JSON (a strategy's inference input)
 # has escaped line breaks there, so it is not read as a report reaching the employee.
-REPORT = re.compile(
-    r"\[BEGIN UNTRUSTED subagent #(?P<tag>\w+)[^\]\n]*\]\n(?P<body>.*?)\n\[END UNTRUSTED subagent #(?P=tag)\]", re.S
-)
 # A delegation's result as Raven announces it to the employee (`raven/agent/subagent/manager.py`): the task the
 # employee wrote, then optional instance and working-directory lines, then the fenced result.
-ANNOUNCE = re.compile(
-    r"\[Subagent '[^\n]*' [^\n]*\]\n\nTask: (?P<task>.*?)\n(?:\nInstance handle: [^\n]*\n)?"
-    r"(?:Working directory: [^\n]*\n)?\nResult:\Z",
-    re.S,
-)
 # Raven's tally of a delegation's failed tool calls, fenced after the result it belongs to.
-FAILED_CALLS = re.compile(r"^\[raven\] (?P<failed>\d+) of this run's (?P<made>\d+) tool calls? failed\.")
 # Other marked blocks (a skill catalog, say) may quote the start of a report's marker.
-OTHER_BLOCK = re.compile(
-    r"\[BEGIN UNTRUSTED (?!subagent )[^\]#]*#(?P<tag>\w+)[^\]]*\].*?\[END UNTRUSTED [^\]#]*#(?P=tag)\]", re.S
-)
-TASK_LABEL, ANSWER_LABEL = "The task the sub-agent was given:", "What it returned as its answer:"
-TAIL_LABEL = "Tail of what the sub-agent did"
-LOOKS = frozenset({"read_file", "list_dir", "grep", "find", "web_search", "web_fetch", "load_skill", "read_skill"})
 TEXT_FILES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml"})
 PRIVATE = frozenset({"sessions", "subagents", "uploads", "skills", "memory", "agent_memory", "user_memory", "decks"})
 SOURCE = "agency"
@@ -133,12 +116,6 @@ def waiting(review: Spoken) -> dict[str, str]:
     return {verdict.id: verdict.waits_on for verdict in review.verdicts if verdict.waits_on}
 
 
-def cut(text: str, tokens: int | None = None) -> str:
-    """`text` up to about `tokens` tokens (`experimental.harness.participation.allowance.reading_budget` by default); a longer one says how
-    much was left out, so the owner never takes a cut document for the whole of it."""
-    return excerpt(text, reading_budget() if tokens is None else tokens)
-
-
 def deliverables(exchanges, *, tokens: int | None = None) -> dict[str, str]:
     """The last version of each file a conversation handed over, a deck read slide by slide with its styling."""
     files = {}
@@ -179,54 +156,6 @@ def research(exchanges, *, tokens: int | None = None) -> dict[str, str]:
     return found
 
 
-def reports(exchanges, *, tokens: int | None = None) -> list[dict]:
-    """Every report a colleague (a subagent or a playbook step) sent back to the employee, with the task it had.
-
-    Read from the model requests of the employee's turns, where each reaches it in marked blocks: a delegation's
-    announced result quotes the task the employee wrote for it, and a tally of its failed tool calls when it had any
-    (`failed_calls`); a reviewed result names the task it was given, then what it returned as its answer (the tail of
-    what it did is left out); a playbook step's account follows the note that names the step. The task is the
-    employee's own hand-over, so it is kept whole up to the same `tokens` as the report. The same report repeats in
-    every later request, so each is kept once.
-    """
-    found: dict[str, dict] = {}
-    for turn in exchanges:
-        for row in turn.execution.records:
-            if row.get("kind") != "provider.request":
-                continue
-            for message in (row.get("parameters") or {}).get("messages") or []:
-                content = message.get("content") if isinstance(message, dict) else None
-                if not isinstance(content, str) or "[BEGIN UNTRUSTED subagent" not in content:
-                    continue
-                content, task, start, last = OTHER_BLOCK.sub("", content), "", 0, None
-                for match in REPORT.finditer(content):
-                    lead = content[start : match.start()].strip()
-                    start = match.end()
-                    label = lead.splitlines()[-1] if lead else ""
-                    body = match.group("body").strip()
-                    if TASK_LABEL in label:
-                        task = body
-                        continue
-                    if label.startswith(TAIL_LABEL):
-                        continue
-                    tally = FAILED_CALLS.match(lead.split("\n\n")[-1])
-                    if tally:
-                        if last is not None and "failed_calls" not in last:
-                            last["failed_calls"] = f"{tally['failed']} of {tally['made']} failed: {body}"
-                        continue
-                    announced = ANNOUNCE.search(lead)
-                    if announced:
-                        asked = announced.group("task").strip()
-                    else:
-                        asked = task if ANSWER_LABEL in label else lead.split("\n\n")[-1]
-                        asked = asked.split("Working directory:", 1)[0].strip()
-                        asked = "" if asked.startswith("[Runtime Context") else asked
-                    report = cut(body, tokens)
-                    last = found.setdefault(report, {"task": "", "report": report})
-                    last["task"] = last["task"] or cut(asked, tokens)
-    return list(found.values())
-
-
 def written(folder: Path, before: Path, *, label: str, skip=frozenset(), tokens: int | None = None) -> dict[str, str]:
     """Files under `folder` that are new or changed against `before`, keyed `label/relative path`.
 
@@ -257,54 +186,6 @@ def written(folder: Path, before: Path, *, label: str, skip=frozenset(), tokens:
     return files
 
 
-def back_office(exchanges) -> list[dict]:
-    """What the employee did besides talking, turn by turn and in order: files written, commands, playbooks,
-    delegations and deliveries, each with whether it succeeded (see `actions`), so the owner can see what happened
-    before what and never takes a failed write for a filed ticket."""
-    return [
-        {"turn": index, **action}
-        for index, turn in enumerate(exchanges, start=1)
-        for action in actions(turn.execution.records)
-    ]
-
-
-def actions(records) -> list[dict]:
-    """The calls in one execution's records besides looking around, in order, each with its target and whether it
-    succeeded (`ok`, with the tool's error when it failed, null when no outcome was recorded). A call an Action
-    strategy refused did not run, so it failed, with the refusal as its error."""
-    started, finished = [], {}
-    for row in records:
-        event = row.get("event") or {}
-        if row.get("kind") != "runner.event" or row.get("event_type", "ToolEvent") != "ToolEvent":
-            continue
-        if event.get("phase") == "start" and event.get("name") and event["name"] not in LOOKS:
-            started.append(event)
-        elif event.get("phase") == "complete" and event.get("tool_call_id"):
-            finished[event["tool_call_id"]] = event
-    found = []
-    for event in started:
-        arguments = event.get("arguments") or {}
-        target = (
-            arguments.get("path")
-            or arguments.get("node_id")
-            or arguments.get("name")
-            or arguments.get("agent")
-            or str(arguments.get("command") or "")[:120]
-            or [
-                Path(str(item.get("path") or "")).name
-                for item in arguments.get("files") or []
-                if isinstance(item, dict)
-            ]
-        )
-        done = finished.get(event.get("tool_call_id"))
-        refused = done is not None and str(done.get("result_preview") or "").startswith(REFUSED)
-        outcome = {"ok": None} if done is None else {"ok": done.get("ok") is not False and not refused}
-        if done is not None and not outcome["ok"]:
-            outcome["error"] = str(done.get("result_preview") or "")[:300]
-        found.append({"action": event["name"], "target": target, **outcome})
-    return found
-
-
 def attached(paths, kinds) -> tuple[Handover, ...]:
     """Uploaded files as a signal's handovers, one per material, its files relative to the agent home as
     `uploads/<material>/...` however deep they sit in the package; `kinds` gives each material's kind."""
@@ -326,7 +207,7 @@ class Owner:
     (what the price list gives for the card, whether a forbidden word appears in a delivered file); `pictures(sessions)`
     gives, per drill, what the owner must look at rather than read and the image parts to show it, with the sentence
     that introduces them. Both default to nothing.
-    `cards` returns each drill's current playing of its card (see `Traveller.card`), keyed by drill name; the owner
+    `cards` returns each drill's current playing of its card (see `experimental.simulation.bench.conversant.Conversant.card`), keyed by drill name; the owner
     reads it and the facts take their values from it. With `records`, each judged drill's card and facts are
     appended to `references.jsonl` there. `workdirs` maps each drill to the `workdir` and `home` of the replica it
     played on (see `experimental.cultivation.employee.Together`); `workdir` is the employee's own, where every replica
