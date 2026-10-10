@@ -15,7 +15,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ...audience import CURATOR, RECORD_ONLY
+from experimental.audience import CURATOR, RECORD_ONLY
 
 NATIVE = "native"
 # Input keys that follow a version or a routing order: a commitment citing one may point at an input that has since

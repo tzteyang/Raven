@@ -79,7 +79,7 @@ def main():
     path = connection.recv()
     if path is not None:
         sys.path[:] = path
-    from .worker import _serve
+    from experimental.curator.raven_adapter.worker import _serve
 
     _serve(connection, *connection.recv())
 

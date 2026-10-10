@@ -3,9 +3,9 @@
 from abc import abstractmethod
 from typing import Protocol
 
-from ..context import CompactionRequest, ContextRequest, ContextView, InitialContext
-from ..interaction import InteractionRequest
-from ..preparation import StrategyPreparation
+from experimental.curator.harness.context import CompactionRequest, ContextRequest, ContextView, InitialContext
+from experimental.curator.harness.interaction import InteractionRequest
+from experimental.curator.harness.preparation import StrategyPreparation
 
 
 class MemoryStrategy[InitializationT, CommandT, ReplyT](StrategyPreparation, Protocol):

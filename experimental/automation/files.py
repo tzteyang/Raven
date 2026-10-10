@@ -12,7 +12,7 @@ from pptx import Presentation
 from pptx.enum.dml import MSO_FILL
 from pptx.enum.shapes import MSO_SHAPE_TYPE
 
-from .render import cached
+from experimental.automation.render import cached
 
 _HIDDEN = ("script", "style", "template")
 _TEXT = (".md", ".txt", ".json", ".csv", ".yaml", ".yml")

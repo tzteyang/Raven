@@ -3,13 +3,13 @@
 import shutil
 from pathlib import Path
 
-from ..iteration.compartment import Guard
-from ..iteration.hearing import heard
-from ..iteration.protocols import Handover, Signal
-from ..scenario import Scenario, contents
-from ..scenario.sealed import sealed_for
-from .curator import collect_for_curator, handover_information
-from .information import Request
+from experimental.iteration.compartment import Guard
+from experimental.iteration.hearing import heard
+from experimental.iteration.protocols import Handover, Signal
+from experimental.research.curator import collect_for_curator, handover_information
+from experimental.research.information import Request
+from experimental.scenario import Scenario, contents
+from experimental.scenario.sealed import sealed_for
 
 
 def released_materials(scenario: Scenario, released) -> dict:

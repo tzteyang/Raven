@@ -6,10 +6,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..attribution.state import AttributionState
-from ..generation.run import Generated, GenerationPausedError, Limits
-from ..generation.state import GenerationState
-from ..harness import Validation
+from experimental.curator.attribution.state import AttributionState
+from experimental.curator.generation.run import Generated, GenerationPausedError, Limits
+from experimental.curator.generation.state import GenerationState
+from experimental.curator.harness import Validation
 
 COUNTERS = ("calls", "queries", "checks", "repairs")
 COMPOSITION = "composition.json"

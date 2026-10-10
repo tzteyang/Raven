@@ -5,10 +5,7 @@ import json
 from dataclasses import dataclass
 from uuid import uuid4
 
-from raven.agent.loop.recovery import DraftGate
-from raven.contracts.loop_hooks import AgentHook, HookDecision
-
-from ...harness.action import (
+from experimental.curator.harness.action import (
     ActionDecision,
     ActionEvent,
     ActionInteraction,
@@ -22,13 +19,15 @@ from ...harness.action import (
     ProposalEvent,
     ProposedCall,
 )
-from ...harness.inference import InferenceError
-from ...harness.interaction import InteractionScope
-from ...harness.preparation import StrategyPreparation
-from ...harness.strategies import ActionStrategy
-from ..interaction_tools import interaction_tool
-from ..observe import plain
-from ..strategy import SESSION, BoundStrategy, concrete
+from experimental.curator.harness.inference import InferenceError
+from experimental.curator.harness.interaction import InteractionScope
+from experimental.curator.harness.preparation import StrategyPreparation
+from experimental.curator.harness.strategies import ActionStrategy
+from experimental.curator.raven_adapter.interaction_tools import interaction_tool
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.strategy import SESSION, BoundStrategy, concrete
+from raven.agent.loop.recovery import DraftGate
+from raven.contracts.loop_hooks import AgentHook, HookDecision
 
 # How a refused call is answered to the model; Raven records that answer as the call's result, with ok still true.
 REFUSED = "Action refused this call"
@@ -452,6 +451,6 @@ class BoundAction(BoundStrategy):
 
 def build_gate(context):
     """Resolve the already bound owner when Raven constructs its native gate contribution."""
-    from ..bind import _ASSEMBLY
+    from experimental.curator.raven_adapter.bind import _ASSEMBLY
 
     return _ASSEMBLY.get()[3]["action_gate"]

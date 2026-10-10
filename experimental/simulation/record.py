@@ -75,23 +75,23 @@ from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
 
-from .. import model_roles
-from ..analyst.activity import INTERVENTIONS
-from ..analyst.activity import classify as _classify
-from ..analyst.activity import cut as _cut
-from ..analyst.activity import dicts as _dicts
-from ..analyst.activity import scope_of as _scope
-from ..analyst.activity import scoped as _scoped
-from ..automation.channel import seen
-from ..automation.employee import AREA, REPLICAS
-from ..automation.isolation import RESULT as ISOLATION
-from ..curator.raven_adapter.targets import catalogue
-from ..iteration import records
-from ..scenario.digest import digest
-from .agency import REFERENCES
-from .attribution import RESULT as ATTRIBUTION
-from .scenario import BUNDLED
-from .value import judge
+from experimental import model_roles
+from experimental.analyst.activity import INTERVENTIONS
+from experimental.analyst.activity import classify as _classify
+from experimental.analyst.activity import cut as _cut
+from experimental.analyst.activity import dicts as _dicts
+from experimental.analyst.activity import scope_of as _scope
+from experimental.analyst.activity import scoped as _scoped
+from experimental.automation.channel import seen
+from experimental.automation.employee import AREA, REPLICAS
+from experimental.automation.isolation import RESULT as ISOLATION
+from experimental.curator.raven_adapter.targets import catalogue
+from experimental.iteration import records
+from experimental.scenario.digest import digest
+from experimental.simulation.agency import REFERENCES
+from experimental.simulation.attribution import RESULT as ATTRIBUTION
+from experimental.simulation.scenario import BUNDLED
+from experimental.simulation.value import judge
 
 SCHEMA = 1
 DIFF_LINES = 400
@@ -1150,7 +1150,7 @@ def _cost(root: Path, state_root) -> dict | None:
             "by_part": parts,
             "source": SUMMARY,
         }
-    from .suite import spend
+    from experimental.simulation.suite import spend
 
     parts = spend(Path(state_root) / root.name if state_root else root / "traces" / "absent", root)
     total = parts.pop("total")

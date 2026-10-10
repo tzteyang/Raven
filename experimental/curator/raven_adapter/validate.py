@@ -1,6 +1,6 @@
 """Static candidate checks and evidence for optional isolated host probes."""
 
-from ..harness import Candidate
+from experimental.curator.harness import Candidate
 
 
 def static_checks(candidate: Candidate) -> list[str]:

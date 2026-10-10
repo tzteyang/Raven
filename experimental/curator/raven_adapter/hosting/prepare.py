@@ -4,13 +4,12 @@ import json
 import shlex
 from pathlib import Path
 
+from experimental.curator.raven_adapter.baselines import Baseline
+from experimental.curator.raven_adapter.baselines.agents import prepare_agent
+from experimental.curator.raven_adapter.deployment import Child, child_directory
+from experimental.curator.raven_adapter.materialize import _write
 from raven.agent.subagent.builtin_agents import GENERIC_AGENT
 from raven.agent.subagent.vendored_agents import product_folder
-
-from ..baselines import Baseline
-from ..baselines.agents import prepare_agent
-from ..deployment import Child, child_directory
-from ..materialize import _write
 
 
 def prepare_children(parent, root, names):

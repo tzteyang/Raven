@@ -10,8 +10,8 @@ import json
 import time
 from pathlib import Path
 
-from .information import ResearchReview
-from .inquiry import check, verify
+from experimental.research.information import ResearchReview
+from experimental.research.inquiry import check, verify
 
 PROMPT = Path(__file__).resolve().parent / "prompts" / "review_research.md"
 UNREADABLE = "not read or could not be read"

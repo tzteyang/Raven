@@ -2,15 +2,14 @@
 
 from pathlib import Path
 
+from experimental.curator.harness.declaration import Target
+from experimental.curator.harness.interaction import InteractionRequest, InteractionTool
+from experimental.curator.harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
+from experimental.curator.harness.state import StateUse
+from experimental.curator.harness.strategies import PlanningStrategy
+from experimental.curator.raven_adapter.planning.contracts import TARGET, PlanningBinding, PlanningObservation
+from experimental.curator.raven_adapter.targets.knowledge import PROMPT, PROMPT_RESOURCES, STRATEGY_PROMPTS
 from raven.contracts.harness import PlanningModule
-
-from ...harness.declaration import Target
-from ...harness.interaction import InteractionRequest, InteractionTool
-from ...harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
-from ...harness.state import StateUse
-from ...harness.strategies import PlanningStrategy
-from ..planning.contracts import TARGET, PlanningBinding, PlanningObservation
-from .knowledge import PROMPT, PROMPT_RESOURCES, STRATEGY_PROMPTS
 
 CONTRACT = PlanningModule
 

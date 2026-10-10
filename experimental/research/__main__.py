@@ -5,20 +5,19 @@ import asyncio
 import json
 from pathlib import Path
 
+from experimental.automation.employee import hire_task, withheld
+from experimental.curator.harness import Task
+from experimental.curator.raven_adapter.observe import ObservedProvider, Recorder
+from experimental.research.calls import AgentCalls, SpendLimit
+from experimental.research.collection import CollectionLimits
+from experimental.research.curator import collect_for_curator, stage_materials
+from experimental.research.guidance import Guidance
+from experimental.research.information import DIMENSIONS, Answers, Request, Snapshot
+from experimental.research.researchers import Agent
+from experimental.research.scenario import release_guard, scenario_request, stage_released
+from experimental.research.terminal import answer as terminal_answer
+from experimental.scenario import Disclosure, load
 from raven.providers.factory import make_lazy_provider, make_resolving_provider
-
-from ..automation.employee import hire_task, withheld
-from ..curator.harness import Task
-from ..curator.raven_adapter.observe import ObservedProvider, Recorder
-from ..scenario import Disclosure, load
-from .calls import AgentCalls, SpendLimit
-from .collection import CollectionLimits
-from .curator import collect_for_curator, stage_materials
-from .guidance import Guidance
-from .information import DIMENSIONS, Answers, Request, Snapshot
-from .researchers import Agent
-from .scenario import release_guard, scenario_request, stage_released
-from .terminal import answer as terminal_answer
 
 
 async def research(args):
@@ -104,7 +103,7 @@ async def research(args):
 
     answerer = terminal_answer if args.interactive else None
     if getattr(args, "answer_material", None):
-        from ..simulation.information import CounterpartAnswers
+        from experimental.simulation.information import CounterpartAnswers
 
         if scenario is None:
             raise ValueError("simulated answers require a Scenario")

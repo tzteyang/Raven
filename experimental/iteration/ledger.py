@@ -17,7 +17,7 @@ reads each round's held-out assessment, which no role saw, as the measure of wha
 
 import json
 
-from .history import Entry, Raised
+from experimental.iteration.history import Entry, Raised
 
 ITEM_GROUNDS = ("check:", "case:")
 

@@ -9,12 +9,12 @@ from collections.abc import Awaitable, Callable, Sequence
 from dataclasses import asdict, dataclass
 from pathlib import Path
 
-from ..curator.raven_adapter.materialize import _write
-from ..curator.raven_adapter.observe import plain
-from ..curator.raven_adapter.worker import Execution
-from ..iteration.protocols import Exchange, Sessions
-from .checks import Finding, Verifier
-from .standard import observations
+from experimental.assessor.checks import Finding, Verifier
+from experimental.assessor.standard import observations
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.worker import Execution
+from experimental.iteration.protocols import Exchange, Sessions
 
 
 def fingerprint(value) -> str:

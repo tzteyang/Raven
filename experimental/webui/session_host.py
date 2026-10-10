@@ -23,29 +23,29 @@ from pathlib import Path
 from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
 
-from .. import model_roles
-from ..analyst.run import Limits as AnalystLimits
-from ..assessor.builder import RubricBuilder
-from ..assessor.guidance import GuidanceStore
-from ..assessor.human import Human
-from ..assessor.reviewer import MetaReviewer
-from ..assessor.standard import Assessor, Standard
-from ..assessor.validation import ReplayCorpus, fingerprint
-from ..curator.attribution import AttributionLimits, ModelAttributor
-from ..curator.generation.run import Limits as CuratorLimits
-from ..curator.raven_adapter.observe import plain
-from ..experience.curator import CuratorExperience
-from ..iteration.compartment import Boundaries
-from ..iteration.conversation import Conversation
-from ..iteration.protocols import Signal
-from ..iteration.records import cultivation
-from ..iteration.session import Limits, Session, StepError
-from ..scenario import ROLES, load
-from ..scenario.sealed import sealed_for
-from . import employ
-from .live import MODEL_ROLES
-from .process import redact
-from .studio import slim_exchange
+from experimental import model_roles
+from experimental.analyst.run import Limits as AnalystLimits
+from experimental.assessor.builder import RubricBuilder
+from experimental.assessor.guidance import GuidanceStore
+from experimental.assessor.human import Human
+from experimental.assessor.reviewer import MetaReviewer
+from experimental.assessor.standard import Assessor, Standard
+from experimental.assessor.validation import ReplayCorpus, fingerprint
+from experimental.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.curator.generation.run import Limits as CuratorLimits
+from experimental.curator.raven_adapter.observe import plain
+from experimental.experience.curator import CuratorExperience
+from experimental.iteration.compartment import Boundaries
+from experimental.iteration.conversation import Conversation
+from experimental.iteration.protocols import Signal
+from experimental.iteration.records import cultivation
+from experimental.iteration.session import Limits, Session, StepError
+from experimental.scenario import ROLES, load
+from experimental.scenario.sealed import sealed_for
+from experimental.webui import employ
+from experimental.webui.live import MODEL_ROLES
+from experimental.webui.process import redact
+from experimental.webui.studio import slim_exchange
 
 SOURCE = "human"
 BACKGROUND = ("onboard", "trial", "assess", "analyse", "curate")

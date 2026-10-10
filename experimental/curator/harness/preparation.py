@@ -4,8 +4,8 @@ from typing import Protocol
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .artifact import ArtifactPath
-from .state import Task
+from experimental.curator.harness.artifact import ArtifactPath
+from experimental.curator.harness.state import Task
 
 
 class PreparationRequest(BaseModel):

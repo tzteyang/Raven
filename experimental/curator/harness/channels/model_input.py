@@ -1,6 +1,6 @@
 """Sources, placement and lifetime of information entering a model request."""
 
-from ..view import project
+from experimental.curator.harness.view import project
 
 NAME = "model_input"
 

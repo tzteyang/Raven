@@ -2,15 +2,19 @@
 
 from pathlib import Path
 
-from raven.contracts.harness import MemoryModule
-
-from ...harness.context import CompactionRequest, ContextRequest, ContextSource, ContextView, InitialContext
-from ...harness.declaration import Target
-from ...harness.interaction import InteractionRequest, InteractionScope, InteractionTool
-from ...harness.state import StateUse
-from ...harness.strategies import MemoryStrategy
-from ..memory.contracts import TARGET, MemoryBinding
-from .knowledge import (
+from experimental.curator.harness.context import (
+    CompactionRequest,
+    ContextRequest,
+    ContextSource,
+    ContextView,
+    InitialContext,
+)
+from experimental.curator.harness.declaration import Target
+from experimental.curator.harness.interaction import InteractionRequest, InteractionScope, InteractionTool
+from experimental.curator.harness.state import StateUse
+from experimental.curator.harness.strategies import MemoryStrategy
+from experimental.curator.raven_adapter.memory.contracts import TARGET, MemoryBinding
+from experimental.curator.raven_adapter.targets.knowledge import (
     PEERS,
     PLAN_READER,
     PROMPT,
@@ -21,6 +25,7 @@ from .knowledge import (
     TASK,
     TASK_BINDING,
 )
+from raven.contracts.harness import MemoryModule
 
 CONTRACT = MemoryModule
 

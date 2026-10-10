@@ -8,9 +8,9 @@ with the counterpart and the Analyst, what it said may reach the Curator (`exper
 from dataclasses import dataclass, field
 from typing import Literal, Protocol
 
-from ..audience import EVALUATION, HEARD, audience
-from ..curator.raven_adapter.worker import Execution
-from ..requirements import Authority
+from experimental.audience import EVALUATION, HEARD, audience
+from experimental.curator.raven_adapter.worker import Execution
+from experimental.requirements import Authority
 
 
 @dataclass(frozen=True)

@@ -4,8 +4,8 @@ from typing import Annotated, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from .interaction import InteractionRequest, InteractionScope
-from .resources import EffectiveCapabilities
+from experimental.curator.harness.interaction import InteractionRequest, InteractionScope
+from experimental.curator.harness.resources import EffectiveCapabilities
 
 Control = Literal["continue", "reject", "revise", "finish"]
 EventKind = Literal["input", "progress", "proposal", "outcome", "failure", "control"]

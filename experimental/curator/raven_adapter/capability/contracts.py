@@ -1,6 +1,6 @@
 """Capability authoring names the implementation that prepares and selects resources."""
 
-from ..strategy import TaskBinding
+from experimental.curator.raven_adapter.strategy import TaskBinding
 
 TARGET = "capability.strategy"
 

@@ -10,14 +10,13 @@ from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import dataclass
 
+from experimental.curator.harness.context import ContextSource
+from experimental.curator.harness.declaration import typed
+from experimental.curator.raven_adapter.observe import plain
 from raven.context_engine.assembler import ContextAssembler
 from raven.context_engine.factory import build_context_engine
 from raven.contracts.context import ContextEngine
 from raven.providers.prompt_cache import STABLE_PREFIX_KEY
-
-from ..harness.context import ContextSource
-from ..harness.declaration import typed
-from .observe import plain
 
 _COLLECTING: ContextVar[list | None] = ContextVar("curator_context_sources", default=None)
 _KINDS = {

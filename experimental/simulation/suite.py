@@ -26,10 +26,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..automation.employee import AREA, FORWARDED
-from .__main__ import CHAINS
-from .record import REDACTED, SUMMARY, build_record, export_record, redact
-from .scenario import Scenario
+from experimental.automation.employee import AREA, FORWARDED
+from experimental.simulation.__main__ import CHAINS
+from experimental.simulation.record import REDACTED, SUMMARY, build_record, export_record, redact
+from experimental.simulation.scenario import Scenario
 
 KEPT_FILES = ("run.log", "command.json")
 VALUE = "value.json"
@@ -330,12 +330,12 @@ def finish(run: Run, args) -> dict:
     redacted = scrub(run.records) if run.records.is_dir() else 0
     isolation = None
     try:
-        from ..automation.isolation import write as check_isolation
+        from experimental.automation.isolation import write as check_isolation
 
         isolation = check_isolation(run.records, run.state, args.forbid) if run.records.is_dir() else None
     except Exception as exc:  # noqa: BLE001 -- an unscanned run is judged not isolated, never lost
         run.notes.append(f"isolation scan failed: {exc!r}")
-    from ..automation.files import page_images
+    from experimental.automation.files import page_images
 
     decks = sorted(run.records.rglob("*.pptx")) if run.records.is_dir() else []
     for deck in (deck for deck in decks if "deliverables" in deck.relative_to(run.records).parts):

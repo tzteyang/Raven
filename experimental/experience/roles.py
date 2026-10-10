@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from .contracts import BuildRequest, ExperienceProposal, ExperienceReview
+from experimental.experience.contracts import BuildRequest, ExperienceProposal, ExperienceReview
 
 
 class ExperienceBuilder(Protocol):

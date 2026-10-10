@@ -4,9 +4,8 @@ from hashlib import sha256
 from inspect import getsourcefile, getsourcelines
 from pathlib import Path
 
+from experimental.curator.raven_adapter.targets import catalogue
 from raven.core.runtime import RavenRuntime
-
-from ..targets import catalogue
 
 
 def source_entry(symbol) -> dict | None:
@@ -31,6 +30,8 @@ def source_entry(symbol) -> dict | None:
 
 
 def native_sources() -> dict[str, dict]:
+    from experimental.curator.raven_adapter.inspection.mechanisms import STRATEGIES
+    from experimental.curator.raven_adapter.targets import action, capability, memory, planning
     from raven.agent.harness import default_harness_modules, participants
     from raven.agent.hook.participant import ParticipantHook
     from raven.agent.loop.main import AgentLoop
@@ -50,9 +51,6 @@ def native_sources() -> dict[str, dict]:
     from raven.core.runtime import build_runtime
     from raven.plugins.context import PluginContext
     from raven.plugins.registry import PluginRegistry
-
-    from ..targets import action, capability, memory, planning
-    from .mechanisms import STRATEGIES
 
     symbols = {
         **{f"strategy.{name}": contract for name, contract in STRATEGIES.items()},

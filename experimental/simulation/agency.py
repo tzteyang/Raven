@@ -9,10 +9,20 @@ Curator is the owner's.
 import base64
 from pathlib import Path
 
-from ..automation.files import page_images
-from ..counterpart.owner import NAME, REFERENCES, Owner, attached, back_office, cut, reports, research, written
-from .reference import Rules, references
-from .scenario import Scenario
+from experimental.automation.files import page_images
+from experimental.counterpart.owner import (
+    NAME,
+    REFERENCES,
+    Owner,
+    attached,
+    back_office,
+    cut,
+    reports,
+    research,
+    written,
+)
+from experimental.simulation.reference import Rules, references
+from experimental.simulation.scenario import Scenario
 
 PAGES = 24
 

@@ -3,11 +3,11 @@
 import fcntl
 import json
 
-from ..curator.raven_adapter.materialize import _write
-from .contracts import ExperienceEvent, ExperienceProposal, OutcomeReceipt, RecordOrigin, digest
-from .records import RecordRejectedError, _check_text, normalize
-from .retrieve import GuidanceQuery
-from .verification import VALIDATING
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.experience.contracts import ExperienceEvent, ExperienceProposal, OutcomeReceipt, RecordOrigin, digest
+from experimental.experience.records import RecordRejectedError, _check_text, normalize
+from experimental.experience.retrieve import GuidanceQuery
+from experimental.experience.verification import VALIDATING
 
 
 def _episode_path(owner, reference):

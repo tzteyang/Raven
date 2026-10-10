@@ -1,6 +1,6 @@
 """Tool exposure, calls, results and state shared with Loop decisions."""
 
-from ..view import project
+from experimental.curator.harness.view import project
 
 NAME = "tool_interaction"
 

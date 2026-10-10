@@ -37,7 +37,7 @@ import argparse
 import json
 from pathlib import Path
 
-from ..counterpart.case import delivered_for
+from experimental.counterpart.case import delivered_for
 
 MIN_ROUNDS = 2
 CULTIVATED = 2
@@ -314,7 +314,7 @@ def cli():
     parser.add_argument("run_dir", type=Path)
     parser.add_argument("--state-root", type=Path)
     args = parser.parse_args()
-    from .record import build_record
+    from experimental.simulation.record import build_record
 
     print(json.dumps(judge(build_record(args.run_dir, state_root=args.state_root)), ensure_ascii=False, indent=2))
 

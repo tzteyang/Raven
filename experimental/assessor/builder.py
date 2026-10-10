@@ -18,13 +18,13 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..iteration.exchange import ExchangeError, exchange, messages
-from ..requirements import CriterionKind
-from .revision import Permission, RevisionScope
-from .rubric import AssessmentPlan, Basis, Criterion, Definition, digest
-from .standard import Decidability, Standard
+from experimental.assessor.revision import Permission, RevisionScope
+from experimental.assessor.rubric import AssessmentPlan, Basis, Criterion, Definition, digest
+from experimental.assessor.standard import Decidability, Standard
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.iteration.exchange import ExchangeError, exchange, messages
+from experimental.requirements import CriterionKind
 
 PROMPT = Path(__file__).resolve().parent / "prompts" / "builder.md"
 REVISE = "submit_revision"

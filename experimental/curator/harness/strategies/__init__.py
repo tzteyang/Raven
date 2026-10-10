@@ -4,9 +4,9 @@ Generated strategy classes explicitly inherit their corresponding public protoco
 with concrete types. Supporting resources and delegates retain their own contracts.
 """
 
-from .action import ActionStrategy
-from .capability import CapabilityStrategy
-from .memory import MemoryStrategy
-from .planning import PlanningStrategy
+from experimental.curator.harness.strategies.action import ActionStrategy
+from experimental.curator.harness.strategies.capability import CapabilityStrategy
+from experimental.curator.harness.strategies.memory import MemoryStrategy
+from experimental.curator.harness.strategies.planning import PlanningStrategy
 
 __all__ = ["ActionStrategy", "CapabilityStrategy", "MemoryStrategy", "PlanningStrategy"]

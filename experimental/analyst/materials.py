@@ -9,11 +9,11 @@ from collections import Counter
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..audience import project
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..curator.raven_adapter.observe import plain
-from .activity import activity
+from experimental.analyst.activity import activity
+from experimental.audience import project
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.curator.raven_adapter.observe import plain
 
 RECORDS = "read_records"
 

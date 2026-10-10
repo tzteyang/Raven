@@ -4,9 +4,9 @@ import json
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...harness.declaration import schema_for
-from .collect import Context
-from .render import tool
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
 
 
 class SourceQuery(BaseModel):

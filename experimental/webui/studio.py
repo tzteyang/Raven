@@ -15,8 +15,8 @@ import threading
 import time
 from pathlib import Path
 
-from .process import redact
-from .rundir import annex, joined, labels
+from experimental.webui.process import redact
+from experimental.webui.rundir import annex, joined, labels
 
 # What a sub-harness execution keeps of its records: the mechanisms that acted and the inputs its model received.
 CHILD_KEPT = ("action.", "planning.", "capability.", "memory.", "strategy.", "loop.", "model.input")

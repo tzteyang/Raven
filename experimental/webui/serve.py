@@ -20,11 +20,11 @@ from mimetypes import guess_type
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from ..automation.employee import AREA, HOME, REPLICAS
-from ..iteration.records import runs
-from .live import Live, LiveConfig
-from .process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
-from .rundir import (
+from experimental.automation.employee import AREA, HOME, REPLICAS
+from experimental.iteration.records import runs
+from experimental.webui.live import Live, LiveConfig
+from experimental.webui.process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
+from experimental.webui.rundir import (
     RecordError,
     annex,
     curator_progress,
@@ -36,7 +36,7 @@ from .rundir import (
     standard,
     verdicts,
 )
-from .studio import event_summary, raw_record, studio_index, studio_run
+from experimental.webui.studio import event_summary, raw_record, studio_index, studio_run
 
 DIST = Path(__file__).resolve().parent / "dist"
 SCENARIO = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency" / "scenario.json"
@@ -571,7 +571,7 @@ def _builder():
     """`build_record` of the simulation, imported on each call until it succeeds, so a builder that lands while the
     server runs is picked up; None with the reason while it cannot be imported."""
     try:
-        from ..simulation.record import build_record
+        from experimental.simulation.record import build_record
     except Exception as exc:  # noqa: BLE001 -- any import failure means the page shows the builder as unavailable
         importlib.invalidate_caches()
         return None, f"{type(exc).__name__}: {exc}"

@@ -16,10 +16,10 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..iteration.exchange import exchange, messages
-from .value import candidates
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.iteration.exchange import exchange, messages
+from experimental.simulation.value import candidates
 
 NAME = "submit_attribution"
 CONCERNS = "submit_requirement_rules"
@@ -146,7 +146,7 @@ async def write(root: Path, provider, *, scenario_dir=None, model=None, effort=N
     """Read a finished run's requirements, then its interventions, against the rules of the scenario it ran and keep
     both beside its records; the interventions are read on the record the requirement reading already links, since
     only a mechanism sedimented for a rule is asked about it."""
-    from .record import build_record
+    from experimental.simulation.record import build_record
 
     root = Path(root)
     concerns = await read_requirements(

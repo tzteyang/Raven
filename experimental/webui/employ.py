@@ -11,12 +11,12 @@ its process.
 
 from pathlib import Path
 
-from ..automation import caching
-from ..automation.employee import hire_task, starting_harness, withheld, workplace
-from ..curator.harness import Task
-from ..iteration.protocols import Handover
-from ..simulation.agency import attached
-from ..simulation.scenario import Scenario
+from experimental.automation import caching
+from experimental.automation.employee import hire_task, starting_harness, withheld, workplace
+from experimental.curator.harness import Task
+from experimental.iteration.protocols import Handover
+from experimental.simulation.agency import attached
+from experimental.simulation.scenario import Scenario
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 

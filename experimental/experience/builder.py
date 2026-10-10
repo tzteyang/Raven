@@ -2,9 +2,17 @@
 
 from pydantic import Field
 
-from .contracts import SOURCE, BuildRequest, Contract, ExperienceProposal, ExperienceReview, digest, for_model
-from .governance import changed_fields
-from .model import PROMPTS, ModelCallError, ModelClient
+from experimental.experience.contracts import (
+    SOURCE,
+    BuildRequest,
+    Contract,
+    ExperienceProposal,
+    ExperienceReview,
+    digest,
+    for_model,
+)
+from experimental.experience.governance import changed_fields
+from experimental.experience.model import PROMPTS, ModelCallError, ModelClient
 
 
 class ProposalSubmission(Contract):

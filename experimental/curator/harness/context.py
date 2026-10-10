@@ -9,8 +9,8 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from .interaction import InteractionScope
-from .resources import EffectiveCapabilities
+from experimental.curator.harness.interaction import InteractionScope
+from experimental.curator.harness.resources import EffectiveCapabilities
 
 
 class ContextSource(BaseModel):

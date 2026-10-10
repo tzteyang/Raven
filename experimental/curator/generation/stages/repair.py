@@ -2,12 +2,12 @@
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...harness import Candidate
-from ...harness.artifact import Selection
-from ...harness.declaration import schema_for
-from ..context.collect import Context
-from ..context.render import tool
-from . import implement
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.generation.context.render import tool
+from experimental.curator.generation.stages import implement
+from experimental.curator.harness import Candidate
+from experimental.curator.harness.artifact import Selection
+from experimental.curator.harness.declaration import schema_for
 
 NAME = "revise_plan"
 

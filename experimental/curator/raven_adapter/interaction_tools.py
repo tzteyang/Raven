@@ -4,11 +4,10 @@ import json
 
 from pydantic import ConfigDict, create_model
 
+from experimental.curator.harness.declaration import parse_as, schema_for
+from experimental.curator.harness.interaction import InteractionMode
+from experimental.curator.raven_adapter.observe import plain
 from raven.contracts.tool import Tool
-
-from ..harness.declaration import parse_as, schema_for
-from ..harness.interaction import InteractionMode
-from .observe import plain
 
 
 def interaction_tool(binding, command_type, invoke, *, modes=False):

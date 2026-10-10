@@ -6,10 +6,10 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import AfterValidator, BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from ...audience import CURATOR, INTERNAL, RECORD_ONLY
-from .attribution import Attributed
-from .commitments import CommitmentChange
-from .state import StateUse
+from experimental.audience import CURATOR, INTERNAL, RECORD_ONLY
+from experimental.curator.harness.attribution import Attributed
+from experimental.curator.harness.commitments import CommitmentChange
+from experimental.curator.harness.state import StateUse
 
 
 def relative_path(value: str) -> str:

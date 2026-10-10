@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .contracts import (
+from experimental.experience.contracts import (
     RECORD_ONLY,
     Contract,
     ExperienceEvent,
@@ -15,7 +15,7 @@ from .contracts import (
     OpaqueReference,
     digest,
 )
-from .state import CandidateRef
+from experimental.experience.state import CandidateRef
 
 type ExperienceStatus = Literal["candidate", "supported", "contested", "retired"]
 

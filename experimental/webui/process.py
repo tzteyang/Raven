@@ -15,7 +15,7 @@ from collections import OrderedDict
 from datetime import datetime, timezone
 from pathlib import Path
 
-from ..automation.employee import AREA, HOME
+from experimental.automation.employee import AREA, HOME
 
 NAME = re.compile(r"[A-Za-z0-9][A-Za-z0-9_.-]{0,199}")
 SECRETS = (

@@ -6,11 +6,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..experience.governance import Issue as ExperienceIssue
-from ..iteration.exchange import exchange, messages
-from .revision import Permission
+from experimental.assessor.revision import Permission
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.experience.governance import Issue as ExperienceIssue
+from experimental.iteration.exchange import exchange, messages
 
 PROMPT = Path(__file__).resolve().parent / "prompts" / "review.md"
 REVIEW = "submit_evaluation_review"

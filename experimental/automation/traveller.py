@@ -12,10 +12,10 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Protocol
 
-from ..allowance import excerpt, reading_budget
-from ..iteration.exchange import ExchangeError, messages
-from .channel import said
-from .files import read_delivered
+from experimental.allowance import excerpt, reading_budget
+from experimental.automation.channel import said
+from experimental.automation.files import read_delivered
+from experimental.iteration.exchange import ExchangeError, messages
 
 LEAVE = "LEAVE"
 TRAILING = re.compile(r"\s+\W*LEAVE\W*$")

@@ -2,9 +2,9 @@
 
 from pydantic import Field, model_validator
 
-from ...harness.action import EventKind
-from ...harness.interaction import InteractionTool
-from ..strategy import TaskBinding
+from experimental.curator.harness.action import EventKind
+from experimental.curator.harness.interaction import InteractionTool
+from experimental.curator.raven_adapter.strategy import TaskBinding
 
 TARGET = "action.strategy"
 

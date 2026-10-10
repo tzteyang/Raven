@@ -6,14 +6,13 @@ from inspect import getdoc, iscoroutinefunction
 from pathlib import Path
 from typing import Any
 
+from experimental.curator.composition.requirements import read_requirements
+from experimental.curator.harness import Artifact, Declaration
+from experimental.curator.raven_adapter.baselines import Baseline
+from experimental.curator.raven_adapter.inspection import mechanisms
+from experimental.curator.raven_adapter.inspection.sources import file_source
+from experimental.curator.raven_adapter.targets import catalogue
 from raven.core.runtime import RavenRuntime
-
-from ...composition.requirements import read_requirements
-from ...harness import Artifact, Declaration
-from ..baselines import Baseline
-from ..targets import catalogue
-from . import mechanisms
-from .sources import file_source
 
 
 def fingerprint(value: Any) -> str:
@@ -74,10 +73,9 @@ def declaration_for(identity, unavailable, *, names=None, fields=None, phases=No
 
 
 def describe_runtime(runtime: RavenRuntime, baseline: Baseline, authored: Artifact, records, sources) -> dict:
+    from experimental.curator.raven_adapter.materials import skill_package_inputs
+    from experimental.curator.raven_adapter.preparation import describe_preparation
     from raven.context_engine.segments.render import BOOTSTRAP_FILES
-
-    from ..materials import skill_package_inputs
-    from ..preparation import describe_preparation
 
     loop = runtime.loop
     sources = {name: dict(entry) for name, entry in sources.items()}
@@ -155,9 +153,8 @@ def describe_runtime(runtime: RavenRuntime, baseline: Baseline, authored: Artifa
             raise ValueError(f"configured worker mode is unavailable: {baseline.mode}")
         facts["turn_profile"] = asdict(profile)
     unavailable = unavailable_targets(baseline)
+    from experimental.curator.raven_adapter.targets import action, capability, memory, planning
     from raven.contracts.loop_hooks import AgentHook
-
-    from ..targets import action, capability, memory, planning
 
     facts["loop_contract"] = {
         "roles": mechanisms.roles(),

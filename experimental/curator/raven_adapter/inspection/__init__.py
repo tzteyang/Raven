@@ -4,11 +4,16 @@ from dataclasses import dataclass
 from hashlib import sha256
 from pathlib import Path
 
-from ...harness import Declaration
-from ...harness.view import Mechanism, validate
-from ..baselines import Baseline
-from .runtime import declaration_for, fingerprint, redact, unavailable_targets
-from .sources import file_source, runtime_sources
+from experimental.curator.harness import Declaration
+from experimental.curator.harness.view import Mechanism, validate
+from experimental.curator.raven_adapter.baselines import Baseline
+from experimental.curator.raven_adapter.inspection.runtime import (
+    declaration_for,
+    fingerprint,
+    redact,
+    unavailable_targets,
+)
+from experimental.curator.raven_adapter.inspection.sources import file_source, runtime_sources
 
 
 @dataclass(frozen=True)

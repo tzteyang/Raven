@@ -31,26 +31,25 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from experimental.allowance import excerpt, reading_budget
+from experimental.automation.channel import said
+from experimental.automation.files import read_delivered
+from experimental.automation.traveller import transcript
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.curator.raven_adapter.action.runtime import REFUSED
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from experimental.iteration.compartment import texts_of
+from experimental.iteration.exchange import exchange, messages
+from experimental.iteration.protocols import Handover, Item, Signal
+from experimental.research.curator import INFORMATION_FILE
+from experimental.scenario import Disclosure
 from raven.providers.capabilities import vision_verdict
 from raven.providers.rates import warm_catalog_in_background
 
-from ..allowance import excerpt, reading_budget
-from ..automation.channel import said
-from ..automation.files import read_delivered
-from ..automation.traveller import transcript
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..curator.raven_adapter.action.runtime import REFUSED
-from ..curator.raven_adapter.materialize import _write
-from ..curator.raven_adapter.observe import plain
-from ..iteration.compartment import texts_of
-from ..iteration.exchange import exchange, messages
-from ..iteration.protocols import Handover, Item, Signal
-from ..research.curator import INFORMATION_FILE
-from ..scenario import Disclosure
-
 if TYPE_CHECKING:
-    from ..simulation.scenario import Scenario
+    from experimental.simulation.scenario import Scenario
 
 NAME = "submit_review"
 # Raven fences a report on lines of its own; a request that quotes one inside JSON (a strategy's inference input)

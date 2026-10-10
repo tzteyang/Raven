@@ -15,10 +15,7 @@ from dataclasses import asdict, replace
 from pathlib import Path
 from uuid import uuid4
 
-from raven.config.live import hold_for_this_turn
-from raven.permissions.turn import start_permission_turn
-
-from .attribution import (
+from experimental.curator.attribution import (
     AttributionInterruptedError,
     AttributionState,
     ModelAttributor,
@@ -28,14 +25,16 @@ from .attribution import (
     input_key,
     subjects,
 )
-from .generation.context.collect import collect
-from .generation.run import GenerationError, GenerationInterruptedError, Limits, generate
-from .generation.state import GenerationState
-from .harness.attribution import Attributed
-from .raven_adapter.exploration import Exploration, Withheld
-from .raven_adapter.inspection import fingerprint
-from .raven_adapter.materialize import _write
-from .raven_adapter.observe import plain
+from experimental.curator.generation.context.collect import collect
+from experimental.curator.generation.run import GenerationError, GenerationInterruptedError, Limits, generate
+from experimental.curator.generation.state import GenerationState
+from experimental.curator.harness.attribution import Attributed
+from experimental.curator.raven_adapter.exploration import Exploration, Withheld
+from experimental.curator.raven_adapter.inspection import fingerprint
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from raven.config.live import hold_for_this_turn
+from raven.permissions.turn import start_permission_turn
 
 PENDING = "pending.json"
 CANDIDATE = "candidate.json"
@@ -64,7 +63,7 @@ def _experience_before(experience, worker):
 def _prepare_experience(experience, previous, context, provider, model, worker, pending, record, loaded):
     import sqlite3
 
-    from ..experience.store import StoreError
+    from experimental.experience.store import StoreError
 
     if experience is None:
         return context, None, None, provider
@@ -98,7 +97,7 @@ def unfinished(worker) -> bool:
     root = getattr(worker, "root", None)
     if root is None:
         return False
-    from .composition.state import pending
+    from experimental.curator.composition.state import pending
 
     directory = Path(root) / "curation"
     return (directory / PENDING).is_file() or pending(directory)
@@ -137,7 +136,7 @@ async def improve(
     elsewhere instead, for the root scope: an `Attribution`, such as diagnoses a person reviewed, or the
     `Attributed` result of `attribute`, whose identity and record the curation keeps as its origin."""
     if getattr(worker, "children", None):
-        from .composition.run import improve as improve_composition
+        from experimental.curator.composition.run import improve as improve_composition
 
         return await improve_composition(
             worker,
@@ -175,7 +174,7 @@ async def attribute(
     paused attribution is continued by the next call; a composite worker attributes its root scope as `improve`
     would see it."""
     if getattr(worker, "children", None):
-        from .composition.run import attribute as attribute_composition
+        from experimental.curator.composition.run import attribute as attribute_composition
 
         return await attribute_composition(
             worker,
@@ -626,7 +625,7 @@ async def _finish_experience(experience, snapshot, loaded, record, path, worker,
         record["experience_loaded"] = sorted(loaded)
         experience.observe(snapshot, record=str(path), loaded=loaded)
         if installed and "generated" in record and not record.get("error"):
-            from ..experience.contracts import RecordOrigin
+            from experimental.experience.contracts import RecordOrigin
 
             scope = inspection.facts.get("scope", {})
             source_scope = "root" if scope.get("kind", "root") == "root" else "child/" + scope["name"]

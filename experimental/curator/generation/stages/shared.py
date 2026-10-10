@@ -3,14 +3,14 @@ and the gap report any stage or the attribution may end with."""
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .... import audience
-from ...harness.channels import execution_control, model_decision, model_input, tool_interaction
-from ...harness.commitments import active
-from ...harness.declaration import schema_for
-from ...harness.view import Mechanism, project
-from ..context import render
-from ..context.collect import Context, read_reference
-from ..context.render import tool
+from experimental import audience
+from experimental.curator.generation.context import render
+from experimental.curator.generation.context.collect import Context, read_reference
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.channels import execution_control, model_decision, model_input, tool_interaction
+from experimental.curator.harness.commitments import active
+from experimental.curator.harness.declaration import schema_for
+from experimental.curator.harness.view import Mechanism, project
 
 
 def _information(context: Context) -> dict | None:

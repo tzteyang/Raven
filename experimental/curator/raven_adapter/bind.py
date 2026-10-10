@@ -8,6 +8,38 @@ from inspect import Parameter, iscoroutinefunction, signature
 from pathlib import Path, PurePosixPath
 from typing import Any
 
+from experimental.curator.harness import Artifact, Declaration
+from experimental.curator.harness.artifact import relative_path
+from experimental.curator.harness.interaction import InteractionScope
+from experimental.curator.harness.preparation import PreparationRequest
+from experimental.curator.harness.resources import ToolContribution
+from experimental.curator.raven_adapter.action.contracts import ActionBinding
+from experimental.curator.raven_adapter.action.runtime import BoundAction
+from experimental.curator.raven_adapter.capability.baseline import bind_workspace_skills
+from experimental.curator.raven_adapter.capability.catalog import CapabilityCatalog
+from experimental.curator.raven_adapter.capability.contracts import CapabilityBinding
+from experimental.curator.raven_adapter.capability.runtime import BoundCapability
+from experimental.curator.raven_adapter.content import ContentInstallation
+from experimental.curator.raven_adapter.context_sources import SourceContext
+from experimental.curator.raven_adapter.inference import Inference, supplied
+from experimental.curator.raven_adapter.inspection import Baseline, fingerprint, runtime_sources
+from experimental.curator.raven_adapter.inspection.runtime import playbook_library
+from experimental.curator.raven_adapter.materialize import (
+    PLUGIN_ID,
+    load_factory,
+    native_settings,
+    write_package,
+)
+from experimental.curator.raven_adapter.memory.runtime import BoundMemory
+from experimental.curator.raven_adapter.memory.window import MemoryWindow
+from experimental.curator.raven_adapter.model_input import ModelInput
+from experimental.curator.raven_adapter.observe import LoopObserver, ObservedPool, ObservedProvider, Recorder
+from experimental.curator.raven_adapter.peers import RuntimePeers
+from experimental.curator.raven_adapter.planning.contracts import TARGET, PlanningBinding
+from experimental.curator.raven_adapter.planning.runtime import BoundPlanning
+from experimental.curator.raven_adapter.preparation import Preparation, PreparedHarness
+from experimental.curator.raven_adapter.prompts import bind_prompts
+from experimental.curator.raven_adapter.strategy import SESSION
 from raven.agent.loop.bundles import HostWiring, TurnPolicy
 from raven.agent.loop.recovery import limits_from_defaults
 from raven.agent.tools.deliver import DeliverFilesTool
@@ -27,39 +59,6 @@ from raven.plugins.context import PluginContext, ServiceLocator
 from raven.providers.factory import make_lazy_provider
 from raven.providers.pool import ProviderPool
 from raven.session.manager import SessionManager
-
-from ..harness import Artifact, Declaration
-from ..harness.artifact import relative_path
-from ..harness.interaction import InteractionScope
-from ..harness.preparation import PreparationRequest
-from ..harness.resources import ToolContribution
-from .action.contracts import ActionBinding
-from .action.runtime import BoundAction
-from .capability.baseline import bind_workspace_skills
-from .capability.catalog import CapabilityCatalog
-from .capability.contracts import CapabilityBinding
-from .capability.runtime import BoundCapability
-from .content import ContentInstallation
-from .context_sources import SourceContext
-from .inference import Inference, supplied
-from .inspection import Baseline, fingerprint, runtime_sources
-from .inspection.runtime import playbook_library
-from .materialize import (
-    PLUGIN_ID,
-    load_factory,
-    native_settings,
-    write_package,
-)
-from .memory.runtime import BoundMemory
-from .memory.window import MemoryWindow
-from .model_input import ModelInput
-from .observe import LoopObserver, ObservedPool, ObservedProvider, Recorder
-from .peers import RuntimePeers
-from .planning.contracts import TARGET, PlanningBinding
-from .planning.runtime import BoundPlanning
-from .preparation import Preparation, PreparedHarness
-from .prompts import bind_prompts
-from .strategy import SESSION
 
 _ASSEMBLY: ContextVar[Any] = ContextVar("curator_assembly", default=None)
 
@@ -521,9 +520,8 @@ def assemble(
         context_engine = source_context
 
     if baseline.hosting == "acp":
+        from experimental.curator.raven_adapter.hosting.lifecycle import local_host
         from raven.core.engine_stack import build_local_sessions
-
-        from .hosting.lifecycle import local_host
 
         sessions, workdir = build_local_sessions(effective.config, workspace=None)
         host = local_host(effective.config)
@@ -598,7 +596,7 @@ def assemble(
                 else runtime.loop.harness.memory,
             )
         if not baseline.allow_delegation:
-            from .capability.leaf import bind_leaf
+            from experimental.curator.raven_adapter.capability.leaf import bind_leaf
 
             bind_leaf(runtime)
         _verify_bindings(runtime, prepared, objects, effective.extensions.memory.backend)
@@ -699,7 +697,7 @@ def _verify_playbooks(runtime, prepared):
     loaded = set(library.names()) if library is not None else set()
     for name in files:
         parts = PurePosixPath(relative_path(name)).parts
-        from ..composition.requirements import read_requirements, requirement_node
+        from experimental.curator.composition.requirements import read_requirements, requirement_node
 
         if requirement_node(name):
             read_requirements(files[name])

@@ -10,8 +10,8 @@ from typing import Annotated, Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from .artifact import ArtifactPath
-from .interaction import InteractionScope
+from experimental.curator.harness.artifact import ArtifactPath
+from experimental.curator.harness.interaction import InteractionScope
 
 
 class ToolContribution(BaseModel):

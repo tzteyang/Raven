@@ -4,8 +4,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from ...harness.interaction import InteractionScope, InteractionTool
-from ..strategy import TaskBinding
+from experimental.curator.harness.interaction import InteractionScope, InteractionTool
+from experimental.curator.raven_adapter.strategy import TaskBinding
 
 TARGET = "memory.strategy"
 

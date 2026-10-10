@@ -4,7 +4,7 @@ from typing import Literal
 
 from pydantic import Field
 
-from .contracts import RECORD_ONLY, Contract, ExperienceProposal, ExperienceReview
+from experimental.experience.contracts import RECORD_ONLY, Contract, ExperienceProposal, ExperienceReview
 
 
 class CandidateRef(Contract):

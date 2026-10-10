@@ -2,7 +2,12 @@
 
 from pathlib import Path
 
-from .capability.catalog import inspect_package, materialize_tree, package_digest, package_files
+from experimental.curator.raven_adapter.capability.catalog import (
+    inspect_package,
+    materialize_tree,
+    package_digest,
+    package_files,
+)
 
 
 def stage_skill_package(source: Path, agent_home: Path) -> dict:

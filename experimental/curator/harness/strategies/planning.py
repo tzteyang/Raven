@@ -3,9 +3,9 @@
 from abc import abstractmethod
 from typing import Protocol
 
-from ..interaction import InteractionRequest
-from ..planning import PlanningInitialization, PlanningProjection, PlanningResult
-from ..preparation import StrategyPreparation
+from experimental.curator.harness.interaction import InteractionRequest
+from experimental.curator.harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
+from experimental.curator.harness.preparation import StrategyPreparation
 
 
 class PlanningStrategy[ViewT, CommandT, ReplyT](StrategyPreparation, Protocol):

@@ -1,10 +1,10 @@
 """Diagnose and replace Curator methods under host-bound fields and independent targeted comparisons."""
 
-from . import render
-from .contracts import ExperienceProposal, RepairRequest, for_model
-from .governance import Check, Decision, Diagnosis, Issue, fingerprint
-from .state import CandidateRef
-from .verification import Study, compare_methods
+from experimental.experience import render
+from experimental.experience.contracts import ExperienceProposal, RepairRequest, for_model
+from experimental.experience.governance import Check, Decision, Diagnosis, Issue, fingerprint
+from experimental.experience.state import CandidateRef
+from experimental.experience.verification import Study, compare_methods
 
 FIELDS = frozenset(
     {

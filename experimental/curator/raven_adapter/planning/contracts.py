@@ -4,8 +4,8 @@ from typing import Literal, Protocol
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from ...harness.interaction import InteractionScope, InteractionTool
-from ..targets import EntryPoint
+from experimental.curator.harness.interaction import InteractionScope, InteractionTool
+from experimental.curator.raven_adapter.targets import EntryPoint
 
 TARGET = "planning.strategy"
 

@@ -1,8 +1,8 @@
 """Bind cross-strategy operations without exposing owner state or a reflective dispatcher."""
 
-from ..harness.peers import StrategyPeers
-from .calls import OperationGroup, interaction_mode, require_writable
-from .observe import plain
+from experimental.curator.harness.peers import StrategyPeers
+from experimental.curator.raven_adapter.calls import OperationGroup, interaction_mode, require_writable
+from experimental.curator.raven_adapter.observe import plain
 
 
 class RuntimePeers(StrategyPeers):

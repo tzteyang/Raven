@@ -1,6 +1,6 @@
 """How judgments and lifecycle actions affect continuation, resampling and completion."""
 
-from ..view import project
+from experimental.curator.harness.view import project
 
 NAME = "execution_control"
 

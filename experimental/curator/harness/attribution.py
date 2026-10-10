@@ -11,7 +11,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue, model_validator
 
-from ...audience import CURATOR
+from experimental.audience import CURATOR
 
 State = Literal[
     "absent", "not_exposed", "not_triggered", "not_consumed", "wrong_logic", "blocked", "model_ignored", "uncovered"

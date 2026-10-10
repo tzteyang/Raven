@@ -6,11 +6,11 @@ import json
 from collections.abc import Mapping
 from pathlib import Path
 
-from ..curator.raven_adapter.materialize import _write
-from ..experience import render
-from ..experience.governance import Check, Decision, Diagnosis, Experience, Governance, Issue
-from .reviewer import GuidanceProposal
-from .validation import Validation, compare, fingerprint, input_identity
+from experimental.assessor.reviewer import GuidanceProposal
+from experimental.assessor.validation import Validation, compare, fingerprint, input_identity
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.experience import render
+from experimental.experience.governance import Check, Decision, Diagnosis, Experience, Governance, Issue
 
 POLICY = fingerprint({"domain": "rubric", "rule": "independent-improvement-without-regression", "version": 2})
 

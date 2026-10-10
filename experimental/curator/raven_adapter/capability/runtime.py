@@ -2,21 +2,20 @@
 
 from copy import deepcopy
 
-from raven.agent.hook.participant import ParticipantHook
-from raven.contracts.participant import AgentParticipant
-
-from ...harness.declaration import typed
-from ...harness.interaction import InteractionScope
-from ...harness.resources import (
+from experimental.curator.harness.declaration import typed
+from experimental.curator.harness.interaction import InteractionScope
+from experimental.curator.harness.resources import (
     CapabilityContribution,
     CapabilitySelection,
     EffectiveCapabilities,
     RegistrationReceipt,
     SelectionRequest,
 )
-from ...harness.strategies import CapabilityStrategy
-from ..observe import plain
-from ..strategy import SESSION, BoundStrategy
+from experimental.curator.harness.strategies import CapabilityStrategy
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.strategy import SESSION, BoundStrategy
+from raven.agent.hook.participant import ParticipantHook
+from raven.contracts.participant import AgentParticipant
 
 
 class NativeCapability(CapabilityStrategy):

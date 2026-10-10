@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from ..iteration.protocols import Sessions, Signal
+from experimental.iteration.protocols import Sessions, Signal
 
 
 class AssessorProtocol(Protocol):

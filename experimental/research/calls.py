@@ -6,9 +6,8 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, field_validator
 
+from experimental.research.researchers import Agent
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
-
-from .researchers import Agent
 
 
 class Selection(BaseModel):

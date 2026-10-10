@@ -22,11 +22,11 @@ import tempfile
 import time
 from pathlib import Path
 
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..iteration.exchange import exchange, messages
-from .inquiry import NAME, Inquiry
-from .voice import prompt
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.iteration.exchange import exchange, messages
+from experimental.research.inquiry import NAME, Inquiry
+from experimental.research.voice import prompt
 
 AGENTS = ("claude", "codex")
 OUTPUT = 20_000

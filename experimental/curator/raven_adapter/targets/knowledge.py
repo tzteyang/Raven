@@ -2,6 +2,12 @@
 
 from pathlib import Path
 
+from experimental.curator.harness.declaration import Reference
+from experimental.curator.harness.prompts import Prompt
+from experimental.curator.harness.state import Task
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.planning.contracts import PlanningObservation, PlanReader
+from experimental.curator.raven_adapter.strategy import TaskBinding
 from raven.contracts.llm_provider import (
     CallRecord,
     ErrorClassification,
@@ -13,13 +19,6 @@ from raven.contracts.llm_provider import (
 from raven.contracts.participant import StepView
 from raven.contracts.tool import Tool
 from raven.providers.tool_calls import openai_tool_call
-
-from ...harness.declaration import Reference
-from ...harness.prompts import Prompt
-from ...harness.state import Task
-from ..observe import plain
-from ..planning.contracts import PlanningObservation, PlanReader
-from ..strategy import TaskBinding
 
 _HARNESS = Path(__file__).resolve().parents[2] / "harness"
 _PROMPTING = "read when the design adds or changes a model-facing prompt"

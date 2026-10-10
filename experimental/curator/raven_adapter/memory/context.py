@@ -1,6 +1,6 @@
 """Validate message projections against host requirements and tool evidence pairing."""
 
-from ..context_sources import message_text
+from experimental.curator.raven_adapter.context_sources import message_text
 
 
 class ProjectionOverflowError(ValueError):

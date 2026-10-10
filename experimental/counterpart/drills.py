@@ -5,9 +5,9 @@ and groups the conversations so that at most `size` play at once (`experimental.
 on a replica `spawn` makes. The same two steps serve the round's drills and the held-out ones.
 """
 
-from ..automation.employee import Together
-from ..automation.traveller import Traveller
-from ..iteration.conversation import Conversation
+from experimental.automation.employee import Together
+from experimental.automation.traveller import Traveller
+from experimental.iteration.conversation import Conversation
 
 
 def enlist(

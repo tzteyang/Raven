@@ -6,7 +6,7 @@ import os
 import tempfile
 from pathlib import Path
 
-from .governance import Governance
+from experimental.experience.governance import Governance
 
 
 class GovernanceFile:

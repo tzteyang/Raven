@@ -17,26 +17,31 @@ from uuid import uuid4
 
 from pydantic import TypeAdapter
 
-from raven.spine.message import ChatType, Source
-from raven.spine.scheduler import conversation_id
-from raven.spine.turn import AnswerlessTurnError, TurnRequest
-
-from ...audience import HEARD
-from ..harness import Artifact, Candidate, Validation
-from .deployment import Child, bind_children, child_directory
-from .exploration import Withheld
-from .inspection import Baseline, Inspection, declaration_for, fingerprint, unavailable_targets
-from .inspection.runtime import describe_bound, playbook_nodes
-from .launch import Process
-from .materialize import (
+from experimental.audience import HEARD
+from experimental.curator.harness import Artifact, Candidate, Validation
+from experimental.curator.raven_adapter.deployment import Child, bind_children, child_directory
+from experimental.curator.raven_adapter.exploration import Withheld
+from experimental.curator.raven_adapter.inspection import (
+    Baseline,
+    Inspection,
+    declaration_for,
+    fingerprint,
+    unavailable_targets,
+)
+from experimental.curator.raven_adapter.inspection.runtime import describe_bound, playbook_nodes
+from experimental.curator.raven_adapter.launch import Process
+from experimental.curator.raven_adapter.materialize import (
     _write,
     copy_local_state,
     extend_artifact,
     restore_content,
 )
-from .observe import Recorder, delivered_files, observed_errors, plain
-from .preparation import PreparedHarness
-from .targets import catalogue
+from experimental.curator.raven_adapter.observe import Recorder, delivered_files, observed_errors, plain
+from experimental.curator.raven_adapter.preparation import PreparedHarness
+from experimental.curator.raven_adapter.targets import catalogue
+from raven.spine.message import ChatType, Source
+from raven.spine.scheduler import conversation_id
+from raven.spine.turn import AnswerlessTurnError, TurnRequest
 
 
 def _send(connection, value):
@@ -94,7 +99,7 @@ def _serve(
     children_data,
     restored_children,
 ):
-    from .bind import assemble
+    from experimental.curator.raven_adapter.bind import assemble
 
     if os.name == "posix":
         os.setsid()
@@ -128,7 +133,7 @@ def _serve(
                 home = children[name].baseline.config.workspace_path
                 restore_content(home, {home / path: value for path, value in content.items()})
             baseline = bind_children(baseline, children, Path(planning_state).parent)
-            from .hosting.lifecycle import configure_role
+            from experimental.curator.raven_adapter.hosting.lifecycle import configure_role
 
             configure_role(baseline)
             os.chdir(baseline.workdir)
@@ -139,7 +144,7 @@ def _serve(
                 baseline, artifact, declaration, assembly_root, recorder, provider_factory, Path(planning_state)
             )
             if children:
-                from .capability.protected import protect_delegation
+                from experimental.curator.raven_adapter.capability.protected import protect_delegation
 
                 protect_delegation(
                     bound.runtime.loop,
@@ -184,7 +189,7 @@ def _serve(
                     elif operation == "inspect":
                         data = describe_bound(bound, recorder.rows[:offset])
                         if children:
-                            from .inspection import redact
+                            from experimental.curator.raven_adapter.inspection import redact
 
                             data["facts"]["scope"] = {"kind": "root"}
                             data["facts"]["composition"] = {
@@ -195,8 +200,8 @@ def _serve(
                                 {"root": data["identity"], "composition": data["facts"]["composition"]}
                             )
                     elif operation == "inspect_agent":
-                        from .hosting.connection import connection as agent_connection
-                        from .hosting.evidence import inspect as inspect_child
+                        from experimental.curator.raven_adapter.hosting.connection import connection as agent_connection
+                        from experimental.curator.raven_adapter.hosting.evidence import inspect as inspect_child
 
                         backend = loop.subagents._resolve_backend(request["agent"])
                         if getattr(backend, "kind", None) != "acp":
@@ -208,7 +213,7 @@ def _serve(
                         )
                         data = await inspect_child(active.client, offset=0)
                     elif operation == "probe":
-                        from .validate import run_probe
+                        from experimental.curator.raven_adapter.validate import run_probe
 
                         await run_probe(bound, probe)
                         data = {"records": recorder.rows[offset:]}
@@ -227,7 +232,7 @@ def _serve(
                             },
                         }
                     elif operation == "run":
-                        from .runner import run_turn as run_scoped_turn
+                        from experimental.curator.raven_adapter.runner import run_turn as run_scoped_turn
 
                         turn = TypeAdapter(TurnRequest).validate_python(request["turn"])
                         if turn.origin != baseline.origin:
@@ -256,7 +261,7 @@ def _serve(
                                 bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
                             )
 
-                        from .hosting.evidence import record_children, snapshots
+                        from experimental.curator.raven_adapter.hosting.evidence import record_children, snapshots
 
                         child_before = await snapshots(children)
                         try:
@@ -424,7 +429,7 @@ class Worker:
 
     async def stage_skill_package(self, source: Path) -> dict:
         """Make an uploaded package inspectable; Curator still must explicitly adopt it."""
-        from .materials import stage_skill_package
+        from experimental.curator.raven_adapter.materials import stage_skill_package
 
         async with self._lock:
             return stage_skill_package(source, self.baseline.config.workspace_path)
@@ -652,7 +657,7 @@ class Worker:
 
     async def install(self, candidate: Candidate, *, children=None):
         """Activate one set; an explicit child value of None restores its supplied baseline artifact."""
-        from .deployment import activate
+        from experimental.curator.raven_adapter.deployment import activate
 
         return await activate(self, candidate, children)
 
@@ -765,8 +770,8 @@ class Worker:
 
     async def preview_materials(self, candidate, *, children=()):
         """Hand children actual prepared resources as durable inputs, including binary assets."""
-        from .capability.catalog import inspect_package, materialize_tree
-        from .materials import stage_skill_package
+        from experimental.curator.raven_adapter.capability.catalog import inspect_package, materialize_tree
+        from experimental.curator.raven_adapter.materials import stage_skill_package
 
         async with self._lock:
             self._accept(candidate, await self._inspect())
@@ -798,7 +803,7 @@ class Worker:
 
     @asynccontextmanager
     async def _validation_copy(self, candidate, *, probe=None, inspection=None, children=None):
-        from .validate import static_checks
+        from experimental.curator.raven_adapter.validate import static_checks
 
         inspection = await self._inspect() if inspection is None else inspection
         candidate = self._accept(candidate, inspection)
@@ -820,7 +825,7 @@ class Worker:
                 **self.limits,
             )
             trial._copy_inputs = (str(self.root), str(temp))
-            from .deployment import child_artifact
+            from experimental.curator.raven_adapter.deployment import child_artifact
 
             for name, submitted in (children or {}).items():
                 child = trial.children[name]

@@ -9,7 +9,7 @@ from collections.abc import Callable
 from dataclasses import asdict, dataclass
 from uuid import uuid4
 
-from ..iteration.protocols import Exchange, Item, Sessions, Signal
+from experimental.iteration.protocols import Exchange, Item, Sessions, Signal
 
 
 @dataclass(frozen=True)

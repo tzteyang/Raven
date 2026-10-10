@@ -10,7 +10,7 @@ from uuid import uuid4
 
 from pydantic import ValidationError
 
-from .admission import (
+from experimental.experience.admission import (
     AdmissionAssessment,
     AdmissionPolicy,
     LinkedEvidence,
@@ -19,8 +19,8 @@ from .admission import (
     assess_family,
     method_id,
 )
-from .contracts import ExperienceEvent, ExperienceProposal, ExperienceReview, digest, for_model
-from .state import BuildState, CandidateRef
+from experimental.experience.contracts import ExperienceEvent, ExperienceProposal, ExperienceReview, digest, for_model
+from experimental.experience.state import BuildState, CandidateRef
 
 SCHEMA_VERSION = 2
 _SCHEMA = (

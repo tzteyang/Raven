@@ -3,12 +3,12 @@
 import json
 from collections import Counter
 
-from ...harness import Declaration, Plan
-from ...harness.artifact import Selection
-from ...harness.attribution import Attribution
-from ...harness.commitments import check_design
-from ..context.collect import Context
-from ..context.render import tool
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness import Declaration, Plan
+from experimental.curator.harness.artifact import Selection
+from experimental.curator.harness.attribution import Attribution
+from experimental.curator.harness.commitments import check_design
 
 NAME = "submit_plan"
 

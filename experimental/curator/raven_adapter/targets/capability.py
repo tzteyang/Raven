@@ -2,15 +2,12 @@
 
 from pathlib import Path
 
-from raven.agent.tools.registry import admit_tool
-from raven.contracts.harness import CapabilityModule
-
-from ...harness.declaration import Target
-from ...harness.state import StateUse
-from ...harness.strategies import CapabilityStrategy
-from ..capability.contracts import TARGET, CapabilityBinding
-from ..strategy import TaskBinding
-from .knowledge import (
+from experimental.curator.harness.declaration import Target
+from experimental.curator.harness.state import StateUse
+from experimental.curator.harness.strategies import CapabilityStrategy
+from experimental.curator.raven_adapter.capability.contracts import TARGET, CapabilityBinding
+from experimental.curator.raven_adapter.strategy import TaskBinding
+from experimental.curator.raven_adapter.targets.knowledge import (
     INTERACTION,
     PEERS,
     PLAN_READER,
@@ -21,6 +18,8 @@ from .knowledge import (
     TASK,
     TOOL,
 )
+from raven.agent.tools.registry import admit_tool
+from raven.contracts.harness import CapabilityModule
 
 CONTRACT = CapabilityModule
 

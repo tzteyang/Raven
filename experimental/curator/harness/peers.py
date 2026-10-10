@@ -4,8 +4,8 @@ from typing import Protocol
 
 from pydantic import JsonValue
 
-from .interaction import InteractionMode
-from .resources import EffectiveCapabilities
+from experimental.curator.harness.interaction import InteractionMode
+from experimental.curator.harness.resources import EffectiveCapabilities
 
 
 class StrategyPeers(Protocol):

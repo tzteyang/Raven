@@ -14,7 +14,7 @@ import json
 import re
 from collections import defaultdict
 
-from ..curator.raven_adapter.observe import delivered_files
+from experimental.curator.raven_adapter.observe import delivered_files
 
 STRATEGY_ROWS = {
     "planning": "planning.strategy",

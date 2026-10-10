@@ -2,7 +2,7 @@
 
 from pathlib import Path
 
-from .governance import fingerprint
+from experimental.experience.governance import fingerprint
 
 DEFINITIONS = Path(__file__).with_name("prompts") / "guidance.md"
 

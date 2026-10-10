@@ -11,10 +11,10 @@ from typing import Any
 from pydantic import BaseModel, ConfigDict, Field, TypeAdapter, create_model
 from pydantic.json_schema import GenerateJsonSchema
 
-from .artifact import Artifact, Candidate, Plan, Selection
-from .attribution import Attribution
-from .commitments import NATIVE
-from .state import StateUse
+from experimental.curator.harness.artifact import Artifact, Candidate, Plan, Selection
+from experimental.curator.harness.attribution import Attribution
+from experimental.curator.harness.commitments import NATIVE
+from experimental.curator.harness.state import StateUse
 
 
 class _ClosedModels(GenerateJsonSchema):

@@ -5,10 +5,9 @@ from typing import Annotated
 
 from pydantic import Field, RootModel
 
+from experimental.curator.harness.declaration import Reference
+from experimental.curator.harness.state import StateUse
 from raven.plugins.manifest import _FACTORY_REF_RE
-
-from ...harness.declaration import Reference
-from ...harness.state import StateUse
 
 
 class EntryPoint(RootModel[Annotated[str, Field(pattern=_FACTORY_REF_RE)]]):
@@ -38,11 +37,17 @@ def catalogue():
     """Return candidates; actual reachability and the manual determine grants."""
     from pathlib import Path
 
-    from ...harness.inference import InferenceError, InferenceRequest, StrategyInference
-    from ...harness.preparation import PreparationRequest, StrategyPreparation
-    from ..preparation import ActionHost, CapabilityHost, MemoryHost, PlanningHost, StrategyHost
-    from . import action, capability, memory, planning
-    from .knowledge import complete
+    from experimental.curator.harness.inference import InferenceError, InferenceRequest, StrategyInference
+    from experimental.curator.harness.preparation import PreparationRequest, StrategyPreparation
+    from experimental.curator.raven_adapter.preparation import (
+        ActionHost,
+        CapabilityHost,
+        MemoryHost,
+        PlanningHost,
+        StrategyHost,
+    )
+    from experimental.curator.raven_adapter.targets import action, capability, memory, planning
+    from experimental.curator.raven_adapter.targets.knowledge import complete
 
     targets = (*memory.TARGETS, *planning.TARGETS, *capability.TARGETS, *action.TARGETS)
     hosts = {"memory": MemoryHost, "planning": PlanningHost, "capability": CapabilityHost, "action": ActionHost}

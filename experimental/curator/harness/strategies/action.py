@@ -2,7 +2,7 @@
 
 from typing import Protocol
 
-from ..action import (
+from experimental.curator.harness.action import (
     ActionDecision,
     ActionEvent,
     ActionInteraction,
@@ -14,7 +14,7 @@ from ..action import (
     ProgressEvent,
     ProposalEvent,
 )
-from ..preparation import StrategyPreparation
+from experimental.curator.harness.preparation import StrategyPreparation
 
 
 class ActionStrategy[CommandT, ReplyT](StrategyPreparation, Protocol):

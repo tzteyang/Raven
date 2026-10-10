@@ -18,10 +18,10 @@ from pathlib import Path
 
 from pptx import Presentation
 
-from ..automation.channel import said
-from ..automation.files import _MOTION, deck_slides
-from ..scenario.contract import frontmatter
-from .cards import Trip
+from experimental.automation.channel import said
+from experimental.automation.files import _MOTION, deck_slides
+from experimental.scenario.contract import frontmatter
+from experimental.simulation.cards import Trip
 
 CONFIG = "reference.md"
 NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"

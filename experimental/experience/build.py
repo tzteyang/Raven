@@ -4,14 +4,21 @@ import asyncio
 import math
 from dataclasses import dataclass
 
-from .admission import AdmissionPolicy
-from .builder import ProposalSubmission, validate_proposals
-from .contracts import BuildRequest, ExperienceEvent, ExperienceProposal, RepairRequest, digest, for_model
-from .critic import ReviewSubmission, validate_reviews
-from .model import ModelCallError
-from .roles import ExperienceBuilder, ExperienceCritic
-from .state import BuildResult
-from .store import BindingMismatchError, ExperienceStore, StoreConflictError, StoreError
+from experimental.experience.admission import AdmissionPolicy
+from experimental.experience.builder import ProposalSubmission, validate_proposals
+from experimental.experience.contracts import (
+    BuildRequest,
+    ExperienceEvent,
+    ExperienceProposal,
+    RepairRequest,
+    digest,
+    for_model,
+)
+from experimental.experience.critic import ReviewSubmission, validate_reviews
+from experimental.experience.model import ModelCallError
+from experimental.experience.roles import ExperienceBuilder, ExperienceCritic
+from experimental.experience.state import BuildResult
+from experimental.experience.store import BindingMismatchError, ExperienceStore, StoreConflictError, StoreError
 
 
 @dataclass(frozen=True)

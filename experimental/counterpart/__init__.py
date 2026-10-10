@@ -8,9 +8,20 @@ delivered file that is not text (`pictures`). `drills` plays a case's cards on r
 holds what a run is judged by that differs between cases.
 """
 
-from .case import deck_delivered, delivered_for, files_delivered
-from .drills import enlist, grouped
-from .owner import NAME, REFERENCES, Owner, attached, back_office, cut, deliverables, reports, research, written
+from experimental.counterpart.case import deck_delivered, delivered_for, files_delivered
+from experimental.counterpart.drills import enlist, grouped
+from experimental.counterpart.owner import (
+    NAME,
+    REFERENCES,
+    Owner,
+    attached,
+    back_office,
+    cut,
+    deliverables,
+    reports,
+    research,
+    written,
+)
 
 __all__ = [
     "NAME",

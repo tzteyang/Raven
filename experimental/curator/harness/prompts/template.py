@@ -8,8 +8,8 @@ from typing import Generic, TypeVar
 
 from pydantic import BaseModel
 
-from ..artifact import relative_path
-from ..declaration import schema_for, typed
+from experimental.curator.harness.artifact import relative_path
+from experimental.curator.harness.declaration import schema_for, typed
 
 InputT = TypeVar("InputT", bound=BaseModel)
 

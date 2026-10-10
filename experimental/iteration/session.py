@@ -13,25 +13,25 @@ from pathlib import Path
 from typing import Literal
 from uuid import uuid4
 
-from ..analyst.feedback import Feedback
-from ..analyst.role import Analyst
-from ..analyst.run import Limits as AnalystLimits
-from ..analyst.run import sourced
-from ..assessor.validation import evidence_fingerprint, fingerprint, promotion
-from ..audience import project
-from ..curator.generation.run import GapReportedError, GenerationInterruptedError
-from ..curator.generation.run import Limits as CuratorLimits
-from ..curator.raven_adapter.materialize import _write
-from ..curator.raven_adapter.observe import plain
-from ..curator.raven_adapter.worker import Execution
-from ..curator.workflow import PENDING, improve
-from ..requirements import ExternalRequirement
-from .compartment import Boundaries, Compartment
-from .hearing import heard, heard_activity, heard_history, heard_observations, heard_prior
-from .history import Entry, entry
-from .ledger import mark
-from .protocols import Exchange, Handover, Item, Sessions, Signal
-from .records import Cultivation
+from experimental.analyst.feedback import Feedback
+from experimental.analyst.role import Analyst
+from experimental.analyst.run import Limits as AnalystLimits
+from experimental.analyst.run import sourced
+from experimental.assessor.validation import evidence_fingerprint, fingerprint, promotion
+from experimental.audience import project
+from experimental.curator.generation.run import GapReportedError, GenerationInterruptedError
+from experimental.curator.generation.run import Limits as CuratorLimits
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.worker import Execution
+from experimental.curator.workflow import PENDING, improve
+from experimental.iteration.compartment import Boundaries, Compartment
+from experimental.iteration.hearing import heard, heard_activity, heard_history, heard_observations, heard_prior
+from experimental.iteration.history import Entry, entry
+from experimental.iteration.ledger import mark
+from experimental.iteration.protocols import Exchange, Handover, Item, Sessions, Signal
+from experimental.iteration.records import Cultivation
+from experimental.requirements import ExternalRequirement
 
 
 @dataclass(frozen=True)
@@ -470,7 +470,7 @@ class Session:
                     feedback=scope.admit(self._heard({"signals": plain(heard(opening))}), "information.input"),
                     admit=scope.admit,
                 )
-                from ..research.curator import information_feedback
+                from experimental.research.curator import information_feedback
 
                 self.record["information"] = {
                     "status": result.status,
@@ -635,7 +635,7 @@ class Session:
         return tuple(given)
 
     async def _experience_outcomes(self, witnesses):
-        from ..experience.contracts import OutcomeReceipt
+        from experimental.experience.contracts import OutcomeReceipt
 
         ignored = {row["policy"] for row in witnesses if row["source"] in self.measuring}
         relevant = [row for row in witnesses if row["source"] not in self.measuring]

@@ -20,11 +20,10 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
+from experimental.audience import ROLES, Role, project
+from experimental.curator.raven_adapter.observe import plain
+from experimental.scenario.sealed import Sealed
 from raven.contracts.llm_provider import LLMProvider
-
-from ..audience import ROLES, Role, project
-from ..curator.raven_adapter.observe import plain
-from ..scenario.sealed import Sealed
 
 CURRENT: ContextVar["Compartment | None"] = ContextVar("compartment", default=None)
 Policy = Literal["abort", "warn"]

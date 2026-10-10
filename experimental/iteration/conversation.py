@@ -3,9 +3,9 @@
 from typing import Protocol
 from uuid import uuid4
 
-from ..curator.raven_adapter.worker import TurnTimeoutError
-from .hearing import opaque
-from .protocols import Exchange, Sessions
+from experimental.curator.raven_adapter.worker import TurnTimeoutError
+from experimental.iteration.hearing import opaque
+from experimental.iteration.protocols import Exchange, Sessions
 
 
 class Conversant(Protocol):

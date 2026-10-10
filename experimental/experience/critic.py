@@ -2,7 +2,7 @@
 
 from pydantic import Field
 
-from .contracts import (
+from experimental.experience.contracts import (
     SOURCE,
     BuildRequest,
     Contract,
@@ -12,8 +12,8 @@ from .contracts import (
     digest,
     for_model,
 )
-from .governance import Issue, Record
-from .model import PROMPTS, ModelCallError, ModelClient
+from experimental.experience.governance import Issue, Record
+from experimental.experience.model import PROMPTS, ModelCallError, ModelClient
 
 
 class ReviewSubmission(Contract):

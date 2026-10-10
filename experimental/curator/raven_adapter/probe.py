@@ -12,9 +12,9 @@ beyond what the candidate's own selection calls: a translation that returns a co
 candidate's own `interact`, as the runtime would, on the copied state.
 """
 
-from ..harness.action import FailureEvent, InputEvent, OutcomeEvent, ProgressEvent, ProposalEvent
-from .memory.contracts import MemoryObservation
-from .planning.contracts import PlanningObservation
+from experimental.curator.harness.action import FailureEvent, InputEvent, OutcomeEvent, ProgressEvent, ProposalEvent
+from experimental.curator.raven_adapter.memory.contracts import MemoryObservation
+from experimental.curator.raven_adapter.planning.contracts import PlanningObservation
 
 PROBE = "validation.translation"
 ALL_CONTROLS = ("continue", "reject", "revise", "finish")

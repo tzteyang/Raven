@@ -18,11 +18,11 @@ import re
 from pathlib import Path
 from uuid import uuid4
 
-from ..automation.traveller import opened, transcript
-from ..curator.raven_adapter.materialize import _write
-from ..curator.raven_adapter.observe import plain
-from ..iteration.hearing import opaque
-from ..iteration.protocols import Item, Signal
+from experimental.automation.traveller import opened, transcript
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from experimental.iteration.hearing import opaque
+from experimental.iteration.protocols import Item, Signal
 
 SOURCE = "self"
 VERDICT = re.compile(r"^\s*VERDICT\s*:\s*(pass|fail|unknown)\b", re.I | re.M)

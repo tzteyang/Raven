@@ -5,7 +5,7 @@ from copy import deepcopy
 from dataclasses import dataclass
 from typing import Any
 
-from ...harness import Commitment, Declaration, Plan
+from experimental.curator.harness import Commitment, Declaration, Plan
 
 
 @dataclass(frozen=True)

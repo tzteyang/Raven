@@ -21,12 +21,12 @@ from dataclasses import dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 
-from .. import model_roles
-from ..iteration.records import runs
-from ..scenario import load as load_contract
-from .process import redact
-from .rundir import curator_progress, pending_stage
-from .studio import studio_run
+from experimental import model_roles
+from experimental.iteration.records import runs
+from experimental.scenario import load as load_contract
+from experimental.webui.process import redact
+from experimental.webui.rundir import curator_progress, pending_stage
+from experimental.webui.studio import studio_run
 
 BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency"
 # The model roles of a live session: a person on the page is the counterpart and every conversant, and nothing is
@@ -129,7 +129,7 @@ class LiveConfig:
 
 def _host(connection, spec: dict) -> None:
     # Imported here, in the session's process, so the server's own process never loads the loop.
-    from .session_host import main
+    from experimental.webui.session_host import main
 
     main(connection, spec)
 

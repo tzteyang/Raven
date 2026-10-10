@@ -3,8 +3,8 @@
 from abc import abstractmethod
 from typing import Protocol
 
-from ..preparation import PreparationRequest, StrategyPreparation
-from ..resources import (
+from experimental.curator.harness.preparation import PreparationRequest, StrategyPreparation
+from experimental.curator.harness.resources import (
     CapabilityContribution,
     CapabilitySelection,
     RegistrationReceipt,

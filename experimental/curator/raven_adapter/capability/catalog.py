@@ -8,21 +8,20 @@ from copy import deepcopy
 from inspect import iscoroutinefunction
 from pathlib import Path
 
-from raven.agent.tools.registry import admit_tool
-from raven.config.raven import LocalDirConfig
-from raven.contracts.tool import Tool
-from raven.memory_engine.skill_forge.catalog import render_skill_body
-
-from ...harness.artifact import relative_path
-from ...harness.declaration import typed
-from ...harness.resources import (
+from experimental.curator.harness.artifact import relative_path
+from experimental.curator.harness.declaration import typed
+from experimental.curator.harness.resources import (
     CapabilityContribution,
     RegistrationReceipt,
     SkillContribution,
     SkillView,
     ToolContribution,
 )
-from ..materialize import load_factory
+from experimental.curator.raven_adapter.materialize import load_factory
+from raven.agent.tools.registry import admit_tool
+from raven.config.raven import LocalDirConfig
+from raven.contracts.tool import Tool
+from raven.memory_engine.skill_forge.catalog import render_skill_body
 
 
 def admitted_name(tool) -> str:

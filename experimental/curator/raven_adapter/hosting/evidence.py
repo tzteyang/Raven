@@ -2,10 +2,9 @@
 
 from collections import Counter
 
+from experimental.curator.raven_adapter.hosting.acp import INSPECT
 from raven.acp_client.pool import get_pool
 from raven.agent.subagent.instances import get_registry
-
-from .acp import INSPECT
 
 
 async def inspect(client, *, offset=None):

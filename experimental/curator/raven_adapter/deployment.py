@@ -7,13 +7,12 @@ import sys
 from dataclasses import dataclass, field
 from pathlib import Path
 
+from experimental.curator.harness import Artifact, Commitment, Plan
+from experimental.curator.harness.commitments import apply, withdraw
+from experimental.curator.raven_adapter.baselines import Baseline
+from experimental.curator.raven_adapter.inspection import fingerprint
+from experimental.curator.raven_adapter.materialize import _write
 from raven.config.schema import ThirdPartyAcpSubagentConfig
-
-from ..harness import Artifact, Commitment, Plan
-from ..harness.commitments import apply, withdraw
-from .baselines import Baseline
-from .inspection import fingerprint
-from .materialize import _write
 
 
 @dataclass
@@ -108,10 +107,10 @@ async def activate(worker, candidate, children=None):
     """Preview code-produced effects, then atomically activate one idle deployment."""
     import asyncio
 
-    from .content import check_owners, snapshot
-    from .inspection import Inspection
-    from .materialize import extend_artifact, restore_content
-    from .preparation import PreparedHarness
+    from experimental.curator.raven_adapter.content import check_owners, snapshot
+    from experimental.curator.raven_adapter.inspection import Inspection
+    from experimental.curator.raven_adapter.materialize import extend_artifact, restore_content
+    from experimental.curator.raven_adapter.preparation import PreparedHarness
 
     async with worker._lock:
         if not await worker._exchange({"operation": "idle"}):
@@ -227,7 +226,7 @@ def _settle(worker, candidate, children, commitments):
 
 def child_artifact(child, candidate, inspection, *, restoring=False):
     """Resolve one proposed child version for both copied validation and real activation."""
-    from .materialize import extend_artifact
+    from experimental.curator.raven_adapter.materialize import extend_artifact
 
     if candidate is not None:
         inspection.declaration.validate(candidate)

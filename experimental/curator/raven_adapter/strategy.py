@@ -12,15 +12,14 @@ from typing import Any, TypeVar, get_args, get_type_hints
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
+from experimental.curator.harness.declaration import parse_as, schema_for, typed
+from experimental.curator.harness.preparation import PreparationRequest
+from experimental.curator.raven_adapter.calls import OperationGroup, owner_operation
+from experimental.curator.raven_adapter.inference import strategy_factory
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import _copy_observation
+from experimental.curator.raven_adapter.targets import EntryPoint
 from raven.permissions.turn import current_turn
-
-from ..harness.declaration import parse_as, schema_for, typed
-from ..harness.preparation import PreparationRequest
-from .calls import OperationGroup, owner_operation
-from .inference import strategy_factory
-from .materialize import _write
-from .observe import _copy_observation
-from .targets import EntryPoint
 
 SESSION: ContextVar[str | None] = ContextVar("curator_session", default=None)
 """The session (conversation) the current turn belongs to; the worker sets it around each turn it runs."""
@@ -207,7 +206,7 @@ class BoundStrategy:
 
     def bind_method(self, name, inputs, output):
         """Validate an enabled host extension on this same strategy owner."""
-        from .calls import strategy_method
+        from experimental.curator.raven_adapter.calls import strategy_method
 
         method = strategy_method(self.strategy, name, len(inputs), asynchronous=True)
         annotations = get_type_hints(method)

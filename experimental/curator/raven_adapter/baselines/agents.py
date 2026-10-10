@@ -7,7 +7,7 @@ import subprocess
 import sys
 from pathlib import Path
 
-from .prepare import prepare
+from experimental.curator.raven_adapter.baselines.prepare import prepare
 
 _PREFIXES = {
     "raven-code": "CODE",
@@ -49,7 +49,7 @@ def prepare_agent(directory: Path, *, root: Path, workdir: Path, task=None, mode
 
 
 def _render(request):
-    from ..materialize import _write
+    from experimental.curator.raven_adapter.materialize import _write
 
     directory, root = Path(request["directory"]), Path(request["root"])
     prefix = _PREFIXES[directory.name]

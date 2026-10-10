@@ -11,8 +11,8 @@ from typing import ClassVar
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from ..audience import ANALYST, CURATOR, INTERNAL, RECORD_ONLY
-from ..requirements import Authority
+from experimental.audience import ANALYST, CURATOR, INTERNAL, RECORD_ONLY
+from experimental.requirements import Authority
 
 
 class Raised(BaseModel):

@@ -4,7 +4,7 @@ from typing import ClassVar, Literal
 
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from ..requirements import ExternalRequirement, Requirement
+from experimental.requirements import ExternalRequirement, Requirement
 
 
 class Feedback(BaseModel):

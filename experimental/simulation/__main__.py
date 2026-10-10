@@ -37,19 +37,16 @@ import tempfile
 import time
 from pathlib import Path
 
-from raven.config.loader import load_config
-from raven.config.mode_catalogue import build_mode_catalogue
-
-from .. import model_roles
-from ..analyst.run import Limits as AnalystLimits
-from ..assessor.builder import RubricBuilder
-from ..assessor.guidance import GuidanceStore
-from ..assessor.introspect import Introspection
-from ..assessor.reviewer import MetaReviewer
-from ..assessor.standard import SOURCES, Assessor, Standard
-from ..assessor.validation import ReplayCorpus, fingerprint
-from ..automation import caching
-from ..automation.employee import (
+from experimental import model_roles
+from experimental.analyst.run import Limits as AnalystLimits
+from experimental.assessor.builder import RubricBuilder
+from experimental.assessor.guidance import GuidanceStore
+from experimental.assessor.introspect import Introspection
+from experimental.assessor.reviewer import MetaReviewer
+from experimental.assessor.standard import SOURCES, Assessor, Standard
+from experimental.assessor.validation import ReplayCorpus, fingerprint
+from experimental.automation import caching
+from experimental.automation.employee import (
     REPLICAS,
     baseline,
     hire,
@@ -61,32 +58,34 @@ from ..automation.employee import (
     unsealed,
     workplace,
 )
-from ..counterpart.drills import enlist, grouped
-from ..counterpart.owner import SOURCE as OWNER
-from ..curator.attribution import AttributionLimits, ModelAttributor
-from ..curator.generation.run import GenerationError
-from ..curator.generation.run import Limits as CuratorLimits
-from ..curator.raven_adapter.confinement import Confinement
-from ..curator.raven_adapter.probe import exercise_translations
-from ..curator.raven_adapter.worker import WorkerError
-from ..experience.curator import CuratorExperience
-from ..iteration.compartment import Boundaries
-from ..iteration.exchange import ExchangeError
-from ..iteration.records import cultivation
-from ..iteration.run import run
-from ..iteration.session import Limits
-from ..research.collection import CollectionLimits
-from ..research.information import Result as InformationResult
-from ..research.scenario import scenario_preparer
-from ..scenario import ROLES
-from ..scenario.digest import digest
-from ..scenario.sealed import sealed_for
-from .agency import Agency
-from .attribution import write as attribute_run
-from .brand import BrandOwner
-from .information import CounterpartAnswers
-from .record import PLACEHOLDERS, keep_scenario, placed
-from .scenario import Scenario
+from experimental.counterpart.drills import enlist, grouped
+from experimental.counterpart.owner import SOURCE as OWNER
+from experimental.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.curator.generation.run import GenerationError
+from experimental.curator.generation.run import Limits as CuratorLimits
+from experimental.curator.raven_adapter.confinement import Confinement
+from experimental.curator.raven_adapter.probe import exercise_translations
+from experimental.curator.raven_adapter.worker import WorkerError
+from experimental.experience.curator import CuratorExperience
+from experimental.iteration.compartment import Boundaries
+from experimental.iteration.exchange import ExchangeError
+from experimental.iteration.records import cultivation
+from experimental.iteration.run import run
+from experimental.iteration.session import Limits
+from experimental.research.collection import CollectionLimits
+from experimental.research.information import Result as InformationResult
+from experimental.research.scenario import scenario_preparer
+from experimental.scenario import ROLES
+from experimental.scenario.digest import digest
+from experimental.scenario.sealed import sealed_for
+from experimental.simulation.agency import Agency
+from experimental.simulation.attribution import write as attribute_run
+from experimental.simulation.brand import BrandOwner
+from experimental.simulation.information import CounterpartAnswers
+from experimental.simulation.record import PLACEHOLDERS, keep_scenario, placed
+from experimental.simulation.scenario import Scenario
+from raven.config.loader import load_config
+from raven.config.mode_catalogue import build_mode_catalogue
 
 # The owner each bundled scenario is judged by; the travel agency's is the default for a scenario directory given by path.
 OWNERS = {"brand_strategist": BrandOwner}

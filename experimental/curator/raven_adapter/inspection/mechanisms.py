@@ -2,9 +2,9 @@
 
 from inspect import getdoc
 
-from ...harness.strategies import ActionStrategy, CapabilityStrategy, MemoryStrategy, PlanningStrategy
-from ...harness.view import Mechanism
-from ..targets import catalogue
+from experimental.curator.harness.strategies import ActionStrategy, CapabilityStrategy, MemoryStrategy, PlanningStrategy
+from experimental.curator.harness.view import Mechanism
+from experimental.curator.raven_adapter.targets import catalogue
 
 STRATEGIES = {
     "memory": MemoryStrategy,

@@ -9,9 +9,9 @@ from copy import deepcopy
 from pathlib import Path
 from typing import Any
 
-from ..harness import Artifact
-from ..harness.artifact import relative_path
-from .inspection import Baseline, fingerprint
+from experimental.curator.harness import Artifact
+from experimental.curator.harness.artifact import relative_path
+from experimental.curator.raven_adapter.inspection import Baseline, fingerprint
 
 PLUGIN_ID = "experimental-curator"
 

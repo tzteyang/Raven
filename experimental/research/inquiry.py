@@ -11,7 +11,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..scenario.sealed import Sealed, carried
+from experimental.scenario.sealed import Sealed, carried
 
 NAME = "submit_findings"
 PROMPT = Path(__file__).resolve().parent / "prompts" / "research.md"

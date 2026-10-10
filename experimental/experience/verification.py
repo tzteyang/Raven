@@ -10,7 +10,7 @@ from typing import Literal
 
 from pydantic import Field, model_validator
 
-from .governance import Record, fingerprint
+from experimental.experience.governance import Record, fingerprint
 
 VALIDATING = ContextVar("experience_validation", default=False)
 

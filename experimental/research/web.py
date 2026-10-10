@@ -12,10 +12,9 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
 from raven.agent.tools.web import WebFetchTool, WebSearchTool
-
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
 
 SEARCH, READ = "search", "read"
 PAGE_CHARS = 12_000

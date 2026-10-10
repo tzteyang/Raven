@@ -1,7 +1,7 @@
 """Show every granted implementation entry without copying its authority."""
 
-from ...harness import Declaration
-from ..context.render import tool
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness import Declaration
 
 NAME = "submit_selection"
 REVISE = "revise_selection"

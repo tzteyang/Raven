@@ -3,13 +3,12 @@
 from dataclasses import dataclass
 from pathlib import Path
 
+from experimental.curator.harness import Task
 from raven.config.mode_catalogue import build_mode_catalogue
 from raven.config.raven import RavenConfig, load_raven_config
 from raven.config.schema import Config
 from raven.core.config_stack import load_runtime_config
 from raven.spine.turn import Origin
-
-from ...harness import Task
 
 
 @dataclass

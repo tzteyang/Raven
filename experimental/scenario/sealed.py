@@ -20,7 +20,7 @@ import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
 
-from .contract import ROLES, Role, Scenario, contents
+from experimental.scenario.contract import ROLES, Role, Scenario, contents
 
 WINDOW = 20
 # A copied passage: this many consecutive sealed windows, about thirty characters of Chinese or twenty words of

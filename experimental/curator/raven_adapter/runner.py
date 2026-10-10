@@ -3,10 +3,9 @@
 from dataclasses import replace
 from uuid import uuid4
 
+from experimental.curator.raven_adapter.strategy import SESSION
 from raven.spine.events import Text
 from raven.spine.scheduler import conversation_id
-
-from .strategy import SESSION
 
 
 async def run_turn(bound, request, emit, drain, *, stream=False, usage_sink=None, text_sink=None):

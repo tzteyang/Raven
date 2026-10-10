@@ -2,15 +2,15 @@
 
 from pathlib import Path
 
-from . import render
-from .admission import AdmissionPolicy
-from .contracts import GuidanceBundle, GuidanceItem
-from .governance import Check, Decision, Experience, fingerprint
-from .journal import GovernanceFile
-from .records import RecordAccess
-from .retrieve import ExperienceRetriever, GuidanceQuery
-from .state import CandidateRef
-from .store import ExperienceStore, StoreError
+from experimental.experience import render
+from experimental.experience.admission import AdmissionPolicy
+from experimental.experience.contracts import GuidanceBundle, GuidanceItem
+from experimental.experience.governance import Check, Decision, Experience, fingerprint
+from experimental.experience.journal import GovernanceFile
+from experimental.experience.records import RecordAccess
+from experimental.experience.retrieve import ExperienceRetriever, GuidanceQuery
+from experimental.experience.state import CandidateRef
+from experimental.experience.store import ExperienceStore, StoreError
 
 PHASES = ("diagnose", "select", "design", "implement", "repair")
 
@@ -49,9 +49,9 @@ class CuratorExperience:
         verification=None,
         writable_roots=(),
     ):
-        from .build import ExperiencePipeline
-        from .builder import ModelExperienceBuilder
-        from .critic import ModelExperienceCritic
+        from experimental.experience.build import ExperiencePipeline
+        from experimental.experience.builder import ModelExperienceBuilder
+        from experimental.experience.critic import ModelExperienceCritic
 
         directory = Path(directory).resolve()
         if any(directory.is_relative_to(Path(root).resolve()) for root in writable_roots):
@@ -95,27 +95,27 @@ class CuratorExperience:
         self.store.close()
 
     async def learn(self, record, *, origin, capabilities=(), contract_ids=()):
-        from .learning import learn_record
+        from experimental.experience.learning import learn_record
 
         return await learn_record(self, record, origin=origin, capabilities=capabilities, contract_ids=contract_ids)
 
     async def outcome(self, reference, receipt, *, held_out):
-        from .learning import observe_outcome
+        from experimental.experience.learning import observe_outcome
 
         return await observe_outcome(self, reference, receipt, held_out=held_out)
 
     def diagnose(self, issue, *, evidence):
-        from .repair import diagnose
+        from experimental.experience.repair import diagnose
 
         return diagnose(self, issue, evidence=set(evidence))
 
     async def audit(self, snapshot, events):
-        from .repair import audit
+        from experimental.experience.repair import audit
 
         return await audit(self, snapshot, tuple(events))
 
     async def repair(self, diagnosis, events, *, capabilities=(), contract_ids=()):
-        from .repair import admit, propose
+        from experimental.experience.repair import admit, propose
 
         result = await propose(self, diagnosis, tuple(events), capabilities=capabilities, contract_ids=contract_ids)
         if result["status"] == "candidate" and self.verification is not None:
@@ -125,7 +125,7 @@ class CuratorExperience:
         return result
 
     async def verify_repair(self, candidate, *, cases, evaluate, history=None, purpose="improvement", timeout=180):
-        from .repair import verify
+        from experimental.experience.repair import verify
 
         return await verify(
             self, candidate, cases=cases, evaluate=evaluate, history=history, purpose=purpose, timeout=timeout
@@ -163,8 +163,8 @@ class CuratorExperience:
         )
 
     def refresh(self) -> dict:
-        from .repair import pending_methods, verified
-        from .verification import VALIDATING
+        from experimental.experience.repair import pending_methods, verified
+        from experimental.experience.verification import VALIDATING
 
         if VALIDATING.get():
             active = self.journal.read().active("curator", self.access.access_scope)
@@ -236,7 +236,7 @@ class CuratorExperience:
         return self.journal.update(update)
 
     def _registered(self, item: GuidanceItem, ledger):
-        from .repair import verified
+        from experimental.experience.repair import verified
 
         binding = self._binding(CandidateRef(id=item.id, version=item.version))
         if not binding["current"]:
@@ -252,7 +252,7 @@ class CuratorExperience:
         raise StoreError("the Curator method has not passed shared admission")
 
     def _available(self, query, ledger):
-        from .retrieve import _relevance
+        from experimental.experience.retrieve import _relevance
 
         items = {}
         for _, _, item in self.reader._items(query):
@@ -282,7 +282,7 @@ class CuratorExperience:
         return tuple(items.values())
 
     def _validate_bundle(self, bundle, query, ledger):
-        from .retrieve import _bundle, export_bundle
+        from experimental.experience.retrieve import _bundle, export_bundle
 
         if bundle.snapshot_id != _bundle(bundle.items).snapshot_id or len(export_bundle(bundle)) > 8192:
             raise StoreError("the guidance payload or its export limits changed")
@@ -351,7 +351,7 @@ class CuratorExperience:
                 except StoreError:
                     continue
                 proposed = [*selected, item]
-                from .retrieve import _bundle, export_bundle
+                from experimental.experience.retrieve import _bundle, export_bundle
 
                 if len(export_bundle(_bundle(tuple(proposed)))) > 8192:
                     continue
@@ -374,7 +374,7 @@ class CuratorExperience:
                 remaining -= 1
                 size += extra
             if selected:
-                from .retrieve import _bundle
+                from experimental.experience.retrieve import _bundle
 
                 choices[phase] = (query, _bundle(tuple(selected)))
 

@@ -2,8 +2,8 @@
 
 from pathlib import Path
 
-from ..harness.prompts import Prompt
-from .materialize import load_object
+from experimental.curator.harness.prompts import Prompt
+from experimental.curator.raven_adapter.materialize import load_object
 
 
 def bind_prompts(artifact, package: Path, *, references):

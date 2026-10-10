@@ -18,7 +18,7 @@ situation the round played; the label is the same for the same trial in every ro
 import hashlib
 import re
 
-from ..audience import project
+from experimental.audience import project
 
 
 def opaque(name: str) -> str:

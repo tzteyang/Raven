@@ -6,7 +6,7 @@ hints and reasoning are never sent to a channel, so they are not part of what th
 treats as said to the customer.
 """
 
-from ..curator.raven_adapter.observe import delivered_files
+from experimental.curator.raven_adapter.observe import delivered_files
 
 DEGRADED = "organ_degraded"
 

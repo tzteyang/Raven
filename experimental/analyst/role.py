@@ -7,9 +7,9 @@ review a round another way, as long as it answers with a `Review`.
 
 from dataclasses import dataclass, field
 
-from .activity import activity
-from .feedback import Feedback
-from .run import Limits, analyse
+from experimental.analyst.activity import activity
+from experimental.analyst.feedback import Feedback
+from experimental.analyst.run import Limits, analyse
 
 
 @dataclass(frozen=True)

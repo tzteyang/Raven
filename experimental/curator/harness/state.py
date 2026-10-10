@@ -5,7 +5,7 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ...audience import CURATOR
+from experimental.audience import CURATOR
 
 
 class StateUse(BaseModel):

@@ -4,11 +4,11 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..harness import Candidate, Plan, Validation
-from ..harness.artifact import Selection
-from ..harness.attribution import Attributed
-from ..raven_adapter.inspection import fingerprint
-from .context.collect import Context
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.harness import Candidate, Plan, Validation
+from experimental.curator.harness.artifact import Selection
+from experimental.curator.harness.attribution import Attributed
+from experimental.curator.raven_adapter.inspection import fingerprint
 
 
 class GenerationState(BaseModel):

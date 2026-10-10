@@ -31,8 +31,8 @@ import re
 import shlex
 from pathlib import Path
 
-from ..analyst.activity import scoped
-from .employee import AREA, REPLICAS, WORKDIR
+from experimental.analyst.activity import scoped
+from experimental.automation.employee import AREA, REPLICAS, WORKDIR
 
 LOG = "observations.jsonl"
 RESULT = "isolation.json"

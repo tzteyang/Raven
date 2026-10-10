@@ -5,9 +5,9 @@ import json
 import os
 from pathlib import Path
 
-from ..harness.artifact import relative_path
-from .materialize import _check_parent, _write, restore_content
-from .preparation import PreparedHarness
+from experimental.curator.harness.artifact import relative_path
+from experimental.curator.raven_adapter.materialize import _check_parent, _write, restore_content
+from experimental.curator.raven_adapter.preparation import PreparedHarness
 
 
 def snapshot(home: Path, names) -> dict:

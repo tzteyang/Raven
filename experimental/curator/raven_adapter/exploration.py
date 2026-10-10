@@ -10,15 +10,14 @@ from hashlib import sha256
 from pathlib import Path
 from tempfile import TemporaryDirectory
 
+from experimental.curator.harness import Artifact
+from experimental.curator.raven_adapter.materialize import _write, extend_artifact, write_package
 from raven.agent.tools.file_search import FindTool, GrepTool
 from raven.agent.tools.filesystem import ListDirTool, ReadFileTool
 from raven.agent.tools.registry import ToolRegistry
 from raven.agent.tools.shell import ExecTool
 from raven.permissions import BuiltinRulings, PermissionGate
 from raven.sandbox import build_executor
-
-from ..harness import Artifact
-from .materialize import _write, extend_artifact, write_package
 
 _REPOSITORY = Path(__file__).resolve().parents[3]
 _SOURCE_PATHS = (

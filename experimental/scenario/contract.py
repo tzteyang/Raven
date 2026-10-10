@@ -23,7 +23,7 @@ from typing import Literal
 import yaml
 from pydantic import BaseModel, ConfigDict, Field, model_validator
 
-from .disclosure import partition
+from experimental.scenario.disclosure import partition
 
 Role = Literal["partner", "conversant", "counterpart", "analyst", "curator"]
 ROLES: tuple[Role, ...] = ("partner", "conversant", "counterpart", "analyst", "curator")

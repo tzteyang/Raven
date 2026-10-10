@@ -5,7 +5,7 @@ from pathlib import PurePosixPath
 
 from pydantic import TypeAdapter
 
-from ...requirements import Requirement
+from experimental.requirements import Requirement
 
 
 def requirement_node(path):

@@ -12,10 +12,10 @@ import re
 from dataclasses import dataclass
 from pathlib import Path
 
-from ..automation.channel import said
-from ..automation.files import read_delivered
-from ..counterpart.owner import Owner
-from .reference import CONFIG, words
+from experimental.automation.channel import said
+from experimental.automation.files import read_delivered
+from experimental.counterpart.owner import Owner
+from experimental.simulation.reference import CONFIG, words
 
 ONCALL = "Raven-Oncall"
 CAMPAIGN_TOOLS = ("ops_declare", "ops_submit", "ops_check_later", "ops_finish", "ops_ask_owner")

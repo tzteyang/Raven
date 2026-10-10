@@ -2,7 +2,7 @@
 
 from pydantic import BaseModel, ConfigDict
 
-from .interaction import InteractionScope
+from experimental.curator.harness.interaction import InteractionScope
 
 
 class PlanningInitialization(BaseModel):

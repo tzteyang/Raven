@@ -8,7 +8,7 @@ records it and joins it to what happened next. The component is its own step: it
 implementation can satisfy. The default, `ModelAttributor`, is the Curator's own model.
 """
 
-from .model import (
+from experimental.curator.attribution.model import (
     NAME,
     PROMPT_FILES,
     PROMPTS,
@@ -21,13 +21,13 @@ from .model import (
     parse,
     submission,
 )
-from .state import (
+from experimental.curator.attribution.state import (
     AttributionInterruptedError,
     AttributionLimits,
     AttributionPausedError,
     AttributionState,
 )
-from .subjects import subjects
+from experimental.curator.attribution.subjects import subjects
 
 __all__ = [
     "NAME",

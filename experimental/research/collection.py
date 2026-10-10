@@ -16,13 +16,11 @@ from dataclasses import dataclass
 from pathlib import Path
 from uuid import uuid4
 
-from raven.agent.tools.registry import call_failed
-
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..iteration.exchange import ExchangeError, exchange, messages
-from ..model_calls import MalformedArgumentsError, argument_errors
-from .information import (
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.iteration.exchange import ExchangeError, exchange, messages
+from experimental.model_calls import MalformedArgumentsError, argument_errors
+from experimental.research.information import (
     Assessment,
     Description,
     Evidence,
@@ -35,9 +33,10 @@ from .information import (
     Section,
     Snapshot,
 )
-from .researchers import ResearchError
-from .voice import prompt
-from .waves import Attempts, gaps, run_wave
+from experimental.research.researchers import ResearchError
+from experimental.research.voice import prompt
+from experimental.research.waves import Attempts, gaps, run_wave
+from raven.agent.tools.registry import call_failed
 
 ASSESS = "submit_assessment"
 PLAN = "submit_research_plan"

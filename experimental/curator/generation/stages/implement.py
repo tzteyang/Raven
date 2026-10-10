@@ -7,14 +7,14 @@ from importlib.util import find_spec
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from .... import audience
-from ...harness import Artifact, Candidate, Declaration, Plan
-from ...harness.artifact import ArtifactPath, Selection
-from ...harness.commitments import active, apply, check_artifact
-from ...harness.declaration import parse_as, schema_for
-from ..context.collect import Context
-from ..context.render import tool
-from . import design
+from experimental import audience
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.generation.context.render import tool
+from experimental.curator.generation.stages import design
+from experimental.curator.harness import Artifact, Candidate, Declaration, Plan
+from experimental.curator.harness.artifact import ArtifactPath, Selection
+from experimental.curator.harness.commitments import active, apply, check_artifact
+from experimental.curator.harness.declaration import parse_as, schema_for
 
 NAME = "submit_artifact"
 STAGE_FILE = "stage_file"

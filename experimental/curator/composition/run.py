@@ -8,24 +8,24 @@ from pathlib import Path
 from types import SimpleNamespace
 from uuid import uuid4
 
-from ..attribution import AttributionInterruptedError
-from ..generation.run import (
+from experimental.curator.attribution import AttributionInterruptedError
+from experimental.curator.composition.context import child_observations, execution_turns, merge_sources
+from experimental.curator.composition.requirements import feedback_for
+from experimental.curator.composition.state import COMPOSITION, SCOPE, Progress
+from experimental.curator.generation.run import (
     GapReportedError,
     Generated,
     GenerationError,
     GenerationInterruptedError,
     GenerationPausedError,
 )
-from ..harness import Validation
-from ..raven_adapter.deployment import child_directory
-from ..raven_adapter.inspection import Inspection, file_source, fingerprint
-from ..raven_adapter.materialize import _write
-from ..raven_adapter.observe import plain
-from ..workflow import ATTRIBUTION, CANDIDATE, PENDING, information_scope, propose
-from ..workflow import attribute as attribute_local
-from .context import child_observations, execution_turns, merge_sources
-from .requirements import feedback_for
-from .state import COMPOSITION, SCOPE, Progress
+from experimental.curator.harness import Validation
+from experimental.curator.raven_adapter.deployment import child_directory
+from experimental.curator.raven_adapter.inspection import Inspection, file_source, fingerprint
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.workflow import ATTRIBUTION, CANDIDATE, PENDING, information_scope, propose
+from experimental.curator.workflow import attribute as attribute_local
 
 
 def _save(path, state):
@@ -180,7 +180,7 @@ async def improve(
     the node requirements routed to it), each with the attributor's own budget; `attribution` supplies the root's.
     Every scope's attribution records are copied beside the worker's own, where the loop reads a round's
     attributions, and the curation record names the root's."""
-    from ..raven_adapter.worker import Worker, WorkerError
+    from experimental.curator.raven_adapter.worker import Worker, WorkerError
 
     actual_children = {name: await worker.agent_state(name) for name in worker.children}
     inspection = await worker.inspect()
@@ -518,7 +518,7 @@ async def improve(
 async def _learn_composition(experience, record, path, worker, inspection):
     if experience is None or not record.get("changed") or record.get("error") or record.get("paused"):
         return
-    from ...experience.contracts import RecordOrigin
+    from experimental.experience.contracts import RecordOrigin
 
     try:
         origin = RecordOrigin(

@@ -7,8 +7,8 @@ from typing import Annotated, ClassVar, Literal
 
 from pydantic import ConfigDict, Field, TypeAdapter
 
-from ..audience import EVALUATION
-from ..requirements import Authority, CriterionKind
+from experimental.audience import EVALUATION
+from experimental.requirements import Authority, CriterionKind
 
 Origin = Literal["declared", "derived", "sedimented"]
 ORIGINS: tuple[Origin, ...] = ("declared", "derived", "sedimented")

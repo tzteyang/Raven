@@ -6,7 +6,7 @@ the work and the world it happens in, what the interacting counterpart knows and
 scenario directory into them and refuses a file that belongs to none, so no input arrives outside the categories.
 """
 
-from .contract import (
+from experimental.scenario.contract import (
     KINDS,
     ROLES,
     VIEWS,
@@ -25,7 +25,7 @@ from .contract import (
     default_visibility,
     load,
 )
-from .disclosure import Disclosure
+from experimental.scenario.disclosure import Disclosure
 
 __all__ = [
     "KINDS",

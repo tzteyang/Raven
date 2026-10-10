@@ -5,8 +5,8 @@ from math import isfinite
 
 from pydantic import BaseModel, ConfigDict, Field, JsonValue
 
-from ..generation.run import GenerationInterruptedError
-from ..harness.attribution import Attribution
+from experimental.curator.generation.run import GenerationInterruptedError
+from experimental.curator.harness.attribution import Attribution
 
 
 @dataclass(frozen=True)

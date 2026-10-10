@@ -3,9 +3,8 @@
 from copy import deepcopy
 from dataclasses import replace
 
+from experimental.curator.raven_adapter.memory.context import ProjectionOverflowError
 from raven.contracts.llm_provider import ErrorClassification, LLMResponse
-
-from .memory.context import ProjectionOverflowError
 
 
 class ModelInput:

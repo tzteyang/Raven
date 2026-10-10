@@ -2,14 +2,21 @@
 
 from pathlib import Path
 
+from experimental.curator.harness.declaration import Target
+from experimental.curator.harness.state import StateUse, Task
+from experimental.curator.harness.strategies import ActionStrategy
+from experimental.curator.raven_adapter.action.contracts import TARGET, ActionBinding
+from experimental.curator.raven_adapter.strategy import TaskBinding
+from experimental.curator.raven_adapter.targets.knowledge import (
+    INTERACTION,
+    PEERS,
+    PLAN_READER,
+    PROMPT,
+    PROMPT_RESOURCES,
+    STEP_VIEW,
+    STRATEGY_PROMPTS,
+)
 from raven.contracts.harness import ActionModule
-
-from ...harness.declaration import Target
-from ...harness.state import StateUse, Task
-from ...harness.strategies import ActionStrategy
-from ..action.contracts import TARGET, ActionBinding
-from ..strategy import TaskBinding
-from .knowledge import INTERACTION, PEERS, PLAN_READER, PROMPT, PROMPT_RESOURCES, STEP_VIEW, STRATEGY_PROMPTS
 
 CONTRACT = ActionModule
 

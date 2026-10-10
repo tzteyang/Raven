@@ -5,22 +5,25 @@ from uuid import uuid4
 
 from pydantic import JsonValue
 
+from experimental.curator.harness.context import CompactionRequest, ContextRequest, ContextView, InitialContext
+from experimental.curator.harness.declaration import typed
+from experimental.curator.harness.interaction import InteractionRequest, InteractionScope
+from experimental.curator.harness.strategies import MemoryStrategy
+from experimental.curator.raven_adapter.calls import interaction_mode, strategy_method
+from experimental.curator.raven_adapter.context_sources import message_text
+from experimental.curator.raven_adapter.inspection import fingerprint
+from experimental.curator.raven_adapter.interaction_tools import interaction_tool
+from experimental.curator.raven_adapter.memory.context import (
+    ProjectionOverflowError,
+    protected_positions,
+    validate_projection,
+)
+from experimental.curator.raven_adapter.memory.contracts import MemoryArchive, MemoryInput, MemoryObservation
+from experimental.curator.raven_adapter.observe import plain
+from experimental.curator.raven_adapter.strategy import SESSION, BoundStrategy, concrete
 from raven.agent.hook.participant import ParticipantHook
 from raven.contracts.participant import AgentParticipant, Intake
 from raven.utils.tokens import estimate_prompt_tokens
-
-from ...harness.context import CompactionRequest, ContextRequest, ContextView, InitialContext
-from ...harness.declaration import typed
-from ...harness.interaction import InteractionRequest, InteractionScope
-from ...harness.strategies import MemoryStrategy
-from ..calls import interaction_mode, strategy_method
-from ..context_sources import message_text
-from ..inspection import fingerprint
-from ..interaction_tools import interaction_tool
-from ..observe import plain
-from ..strategy import SESSION, BoundStrategy, concrete
-from .context import ProjectionOverflowError, protected_positions, validate_projection
-from .contracts import MemoryArchive, MemoryInput, MemoryObservation
 
 
 class BoundMemory(BoundStrategy):

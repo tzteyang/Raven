@@ -22,17 +22,28 @@ from pathlib import Path
 from string import Template
 from typing import Protocol
 
-from ..generation.context import query
-from ..generation.context.collect import Context
-from ..generation.context.render import prompt_files, tool
-from ..generation.run import GapReportedError, GenerationInterruptedError, GenerationPausedError, ask, shared_materials
-from ..generation.stages import shared
-from ..generation.state import GenerationState
-from ..harness.attribution import Attributed, Attribution
-from ..harness.declaration import schema_for
-from ..raven_adapter.inspection import fingerprint
-from .state import AttributionInterruptedError, AttributionLimits, AttributionPausedError, AttributionState
-from .subjects import subjects
+from experimental.curator.attribution.state import (
+    AttributionInterruptedError,
+    AttributionLimits,
+    AttributionPausedError,
+    AttributionState,
+)
+from experimental.curator.attribution.subjects import subjects
+from experimental.curator.generation.context import query
+from experimental.curator.generation.context.collect import Context
+from experimental.curator.generation.context.render import prompt_files, tool
+from experimental.curator.generation.run import (
+    GapReportedError,
+    GenerationInterruptedError,
+    GenerationPausedError,
+    ask,
+    shared_materials,
+)
+from experimental.curator.generation.stages import shared
+from experimental.curator.generation.state import GenerationState
+from experimental.curator.harness.attribution import Attributed, Attribution
+from experimental.curator.harness.declaration import schema_for
+from experimental.curator.raven_adapter.inspection import fingerprint
 
 PROMPTS = Path(__file__).resolve().parent / "prompts"
 STAGES = ("understand.md", "diagnose.md")

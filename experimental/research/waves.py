@@ -12,9 +12,17 @@ import time
 
 from pydantic import Field
 
-from ..iteration.exchange import ExchangeError
-from .information import Dimension, Evidence, ResearchBrief, ResearchGroup, ResearchGuide, ResearchReview, _Model
-from .researchers import ResearchError
+from experimental.iteration.exchange import ExchangeError
+from experimental.research.information import (
+    Dimension,
+    Evidence,
+    ResearchBrief,
+    ResearchGroup,
+    ResearchGuide,
+    ResearchReview,
+    _Model,
+)
+from experimental.research.researchers import ResearchError
 
 
 class ResearchAssignment(_Model):

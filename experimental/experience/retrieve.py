@@ -7,8 +7,8 @@ from dataclasses import dataclass
 
 from pydantic import Field
 
-from .admission import AdmissionPolicy
-from .contracts import (
+from experimental.experience.admission import AdmissionPolicy
+from experimental.experience.contracts import (
     RECORD_ONLY,
     Contract,
     ExperienceProposal,
@@ -20,7 +20,7 @@ from .contracts import (
     digest,
     for_model,
 )
-from .store import ExperienceStore, StoreError
+from experimental.experience.store import ExperienceStore, StoreError
 
 _STOP_WORDS = frozenset("a an the of to and or in for when with from then is are be its that this".split())
 

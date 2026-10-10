@@ -1,6 +1,6 @@
 """How a model request becomes a response or a proposal to call tools."""
 
-from ..view import project
+from experimental.curator.harness.view import project
 
 NAME = "model_decision"
 

@@ -28,23 +28,23 @@ from uuid import uuid4
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..allowance import excerpt, reading_budget
-from ..audience import EVALUATION, audience
-from ..counterpart.owner import actions, back_office, reports
-from ..curator.generation.context.render import tool
-from ..curator.harness.declaration import schema_for
-from ..curator.raven_adapter.materialize import _write
-from ..experience.governance import fingerprint
-from ..iteration.exchange import exchange, messages
-from ..iteration.protocols import Item, Sessions, Signal
-from ..requirements import ExternalRequirement
-from .checks import VERIFIERS, Finding, combine, program
-from .rubric import ORIGINS, Basis, Criterion, Definition, LLMCheck, Origin, Reference, digest
+from experimental.allowance import excerpt, reading_budget
+from experimental.assessor.checks import VERIFIERS, Finding, combine, program
+from experimental.assessor.rubric import ORIGINS, Basis, Criterion, Definition, LLMCheck, Origin, Reference, digest
+from experimental.audience import EVALUATION, audience
+from experimental.counterpart.owner import actions, back_office, reports
+from experimental.curator.generation.context.render import tool
+from experimental.curator.harness.declaration import schema_for
+from experimental.curator.raven_adapter.materialize import _write
+from experimental.experience.governance import fingerprint
+from experimental.iteration.exchange import exchange, messages
+from experimental.iteration.protocols import Item, Sessions, Signal
+from experimental.requirements import ExternalRequirement
 
 if TYPE_CHECKING:
-    from .builder import RubricBuilder
-    from .guidance import GuidanceStore
-    from .reviewer import MetaReviewer
+    from experimental.assessor.builder import RubricBuilder
+    from experimental.assessor.guidance import GuidanceStore
+    from experimental.assessor.reviewer import MetaReviewer
 
 Strength = Literal["must_hold", "should"]
 SOURCES = ORIGINS
@@ -780,7 +780,7 @@ class Assessor:
         return self._uncertain(items, unresolved, measured)
 
     async def _validate_repair(self, target, before, after):
-        from .validation import ReplayEvaluation, _snapshot, compare, fingerprint
+        from experimental.assessor.validation import ReplayEvaluation, _snapshot, compare, fingerprint
 
         versions = {before.version: before, after.version: after}
         suite = self.repair_suites[target]
@@ -865,7 +865,7 @@ class Assessor:
         }
 
     async def _replay(self, instructions, case):
-        from .validation import ReplayEvaluation
+        from experimental.assessor.validation import ReplayEvaluation
 
         builder = replace(
             self.builder,
@@ -904,7 +904,7 @@ class Assessor:
         return ReplayEvaluation(decision, self._keep_validation("validation", record))
 
     def _keep_validation(self, prefix, record):
-        from .validation import fingerprint
+        from experimental.assessor.validation import fingerprint
 
         id = prefix + "-" + fingerprint(record)
         root = (

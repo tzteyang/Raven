@@ -5,7 +5,7 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, model_validator
 
-from .rubric import digest
+from experimental.assessor.rubric import digest
 
 EDIT_FIELDS = frozenset(
     {
