@@ -190,6 +190,7 @@ def test_the_prior_is_heard_as_its_histories_under_opaque_labels():
 
 
 def test_delivered_files_go_whole_for_uncited_successes(tmp_path):
+    from experimental.analyst.materials import summary
     from experimental.curator.generation.context.render import observation_index
 
     path = tmp_path / "report.md"
@@ -199,3 +200,4 @@ def test_delivered_files_go_whole_for_uncited_successes(tmp_path):
     assert rows[0]["cited"] is False
     assert rows[0]["deliverables"][0]["text"] == path.read_text()
     assert observation_index(rows)[0]["deliverables"] == rows[0]["deliverables"]
+    assert summary(ex)["deliverables"] == rows[0]["deliverables"]

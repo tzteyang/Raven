@@ -194,6 +194,26 @@ async def test_a_query_on_the_last_call_is_retried_under_the_grace(tmp_path, ses
 
 
 @pytest.mark.asyncio
+async def test_analyst_receives_handed_materials_but_not_files_outside_uploads(tmp_path, sessions):
+    worker = FakeWorker(tmp_path)
+    home = tmp_path / "home"
+    docs = home / "uploads" / "service"
+    docs.mkdir(parents=True)
+    (docs / "README.md").write_text("Typed decisions, local endpoint, request and response examples.")
+    hidden = tmp_path / "holdout.md"
+    hidden.write_text("Held-out source must remain hidden.")
+    (docs / "outside.md").symlink_to(hidden)
+    worker.baseline.config = SimpleNamespace(workspace_path=home)
+    provider = Provider(response(NAME, {"decision": "continue", "reason": "No change needed."}))
+    await analyse(worker, provider, (Signal("owner", "Review the actual outputs."),), sessions)
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["available_materials"] == {
+        "service/README.md": "Typed decisions, local endpoint, request and response examples."
+    }
+    assert "Held-out source" not in json.dumps(packet)
+
+
+@pytest.mark.asyncio
 async def test_the_last_call_offers_only_the_submission_tool(tmp_path, sessions):
     worker = FakeWorker(tmp_path)
     provider = Provider(

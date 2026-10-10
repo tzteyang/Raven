@@ -230,6 +230,17 @@ async def analyse(
                 }
             locations = ["root", *(f"child/{name}" for name in getattr(worker, "children", {}))]
             packet["locations"] = locations
+            home = getattr(getattr(worker.baseline, "config", None), "workspace_path", None)
+            uploads = Path(home) / "uploads" if home else None
+            packet["available_materials"] = (
+                {
+                    path.relative_to(uploads).as_posix(): path.read_text(errors="replace")
+                    for path in sorted(uploads.rglob("*.md"))
+                    if path.is_file() and path.resolve().is_relative_to(uploads.resolve())
+                }
+                if uploads is not None and uploads.is_dir()
+                else {}
+            )
             schema = schema_for(Feedback)
             external = sorted({signal.source for signal in signals if signal.authority == "external"})
             if external:
