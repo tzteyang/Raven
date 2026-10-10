@@ -623,6 +623,18 @@ class Worker:
             )
             return self.last_execution
 
+    async def keep(self):
+        """Record the active deployment so `reinstate` can return to it after later revisions."""
+        from .deployment import keep
+
+        return await keep(self)
+
+    async def reinstate(self, kept):
+        """Return exactly to a deployment recorded by `keep`."""
+        from .deployment import reinstate
+
+        return await reinstate(self, kept)
+
     def _keep_deliverables(self, turn_id, records) -> tuple[str, ...]:
         """Copy what the turn delivered, so a later turn rewriting the same file does not erase this one.
 

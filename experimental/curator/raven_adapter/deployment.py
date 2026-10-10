@@ -225,6 +225,77 @@ def _settle(worker, candidate, children, commitments):
     worker.commitments = commitments
 
 
+_STATE_FILES = ("assembly/content-state.json", "memory.json", "planning.json", "capability.json", "action.json")
+
+
+@dataclass(frozen=True)
+class Kept:
+    """One activation as it stood, enough to return to it exactly after later activations replaced it."""
+
+    artifact: Artifact
+    prepared: object
+    plan: Plan | None
+    attribution: object
+    selection: object
+    children: dict
+    commitments: tuple[Commitment, ...]
+    content: dict
+    files: dict
+
+
+async def keep(worker) -> Kept:
+    """Record the active single-layer deployment: artifact, prepared content, strategy state, the plan behind it and
+    the commitments it carries out."""
+    from .content import snapshot
+
+    async with worker._lock:
+        if worker.children:
+            raise ValueError("keeping a deployment with child Harnesses is not supported")
+        files = {}
+        for name in _STATE_FILES:
+            path = worker.area / name
+            files[path] = path.read_bytes() if path.exists() else None
+        return Kept(
+            worker.artifact,
+            worker.prepared,
+            worker.last_plan,
+            worker.last_attribution,
+            worker.last_selection,
+            dict(worker.last_children),
+            worker.commitments,
+            snapshot(worker.baseline.config.workspace_path, worker.prepared.files().keys()),
+            files,
+        )
+
+
+async def reinstate(worker, kept: Kept):
+    """Activate a kept deployment again exactly as it was. Unlike `activate`, nothing is merged into the current
+    artifact: content and strategy state later revisions wrote are undone, then the worker restarts."""
+    from ..harness.artifact import relative_path
+    from .materialize import restore_content
+
+    async with worker._lock:
+        if not await worker._exchange({"operation": "idle"}):
+            raise ValueError("reinstating a deployment requires an idle worker")
+        home = worker.baseline.config.workspace_path
+        stale = {home / relative_path(name): (None, 0) for name in worker.prepared.files()}
+        await worker._close()
+        restore_content(home, {**stale, **kept.content})
+        for path, content in kept.files.items():
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                _write(path, content)
+        worker.artifact, worker.prepared = kept.artifact, kept.prepared
+        await worker._start()
+        installed = await worker._inspect()
+        worker.last_plan, worker.last_attribution, worker.last_selection = kept.plan, kept.attribution, kept.selection
+        worker.last_children = dict(kept.children)
+        worker.commitments = kept.commitments
+        worker._preview = None
+        return installed
+
+
 def child_artifact(child, candidate, inspection, *, restoring=False):
     """Resolve one proposed child version for both copied validation and real activation."""
     from .materialize import extend_artifact
