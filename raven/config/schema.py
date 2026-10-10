@@ -1285,6 +1285,9 @@ class PermissionsConfig(Base):
     tools: dict[str, str | dict[str, str]] = Field(default_factory=dict)
     judge_model: str = ""
     judge_timeout_seconds: float = 10.0
+    # A cultivated Harness's tools are code the Curator installed and checked, already as trusted as its
+    # strategies, which run unreviewed; their names are chosen per revision, so no allow rule can name them.
+    trust_harness_tools: bool = False
 
     @field_validator("tools")
     @classmethod
