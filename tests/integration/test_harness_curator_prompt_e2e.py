@@ -5,18 +5,18 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker, WorkerError
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
 from tests.test_harness_curator_generation import response
 
 ACTION = """from pydantic import BaseModel, ConfigDict
-from experimental.curator.harness.prompts import Prompt
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import ActionEvent, ActionDecision
+from experimental.harness.contract.prompts import Prompt
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
 
 class Inputs(BaseModel):
     goal: str
@@ -44,8 +44,8 @@ class Action(ActionStrategy[None, None]):
 def create(state, task, *, infer, host):
     return Action(state, task, infer, host)
 """
-MEMORY = """from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView, CompactionRequest
+MEMORY = """from experimental.harness.contract.strategies import MemoryStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView, CompactionRequest
 
 class Memory(MemoryStrategy[bool, str, bool]):
     async def initialize(self, initial: InitialContext) -> bool:
@@ -165,10 +165,10 @@ async def test_strategy_inference_is_distinct_from_worker_model_decision(baselin
 
 SEMANTIC_ACTION = """from typing import Literal
 from pydantic import BaseModel, ConfigDict
-from experimental.curator.harness.action import ActionEvent, ActionDecision
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.prompts import Prompt
-from experimental.curator.harness.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.prompts import Prompt
+from experimental.harness.contract.strategies import ActionStrategy
 
 class Criteria(BaseModel):
     goal: str

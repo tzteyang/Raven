@@ -160,7 +160,7 @@
 
 ## 8. 执行次序、预算与停止条件
 
-当前专家入口为 `uv run python -m experimental.simulation.experts`，接收 `--expert`、`--config`、全新 `--output` 及可重复的 `--request-file`。五个源目录均使用此入口，不再使用旧旅行临时脚本。它与 simulation.hire 共用 hire_task，保留正常员工的 generic/可用产品子基线、工具和既有无人值守约束；不额外关闭委派、检索或插件。构建目标只列完整原包与自然要求，任务卡在构建后才发给 Worker。
+当前专家入口为 `uv run python -m experimental.simulation.bench.experts`，接收 `--expert`、`--config`、全新 `--output` 及可重复的 `--request-file`。五个源目录均使用此入口，不再使用旧旅行临时脚本。它与 simulation.hire 共用 hire_task，保留正常员工的 generic/可用产品子基线、工具和既有无人值守约束；不额外关闭委派、检索或插件。构建目标只列完整原包与自然要求，任务卡在构建后才发给 Worker。
 
 运行目录保存 `inputs.json` 的完整来源清单、`before.json`/`after.json` 的根和子事实、`generation.json`、实际任务执行与 `result.json`。结果分别列出 available_children、children_requested_for_curation、child_targets 和 observed_child_executions；这些字段不能相互替代。没有 request-file 时仅做构建，task_validation 为 not_run。
 

@@ -5,8 +5,8 @@ import json
 
 import pytest
 
-from experimental.simulation.attribution import CONCERNS, NAME, RESULT, read_requirements, write
-from experimental.simulation.record import build_record
+from experimental.simulation.bench.attribution import CONCERNS, NAME, RESULT, read_requirements, write
+from experimental.simulation.bench.record import build_record
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.test_simulation_record import by_id, make_run
 

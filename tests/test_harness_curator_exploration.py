@@ -8,12 +8,12 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.generation.context.collect import collect
-from experimental.curator.generation.run import GenerationError, Limits
-from experimental.curator.harness import Declaration, Validation
-from experimental.curator.raven_adapter.exploration import Exploration, Withheld
-from experimental.curator.raven_adapter.inspection import Inspection
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Declaration, Validation
+from experimental.harness.curator.generation.context.collect import collect
+from experimental.harness.curator.generation.run import GenerationError, Limits
+from experimental.harness.raven_adapter.exploration import Exploration, Withheld
+from experimental.harness.raven_adapter.inspection import Inspection
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.agent.tools.registry import ToolRegistry, call_failed
 from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
@@ -400,26 +400,29 @@ async def test_reopened_exploration_refuses_changed_source(exploration, tmp_path
 
 @pytest.mark.asyncio
 async def test_registered_file_outside_an_existing_mount_remains_readable_without_widening_its_parent(tmp_path):
-    from experimental.curator.harness import Declaration
-    from experimental.curator.raven_adapter.exploration import Exploration
-    from experimental.curator.raven_adapter.inspection import Inspection, file_source
+    from experimental.harness.contract import Declaration
+    from experimental.harness.raven_adapter.exploration import Exploration
+    from experimental.harness.raven_adapter.inspection import Inspection, file_source
     from raven.config.schema import Config
 
     repository = tmp_path / "repository"
-    narrow = repository / "experimental/curator"
+    narrow = repository / "experimental/harness/curator"
     narrow.mkdir(parents=True)
     (narrow / "module.py").write_text("PUBLIC = True\n")
-    shared = narrow.parent / "requirements.py"
+    shared = narrow.parent / "participation" / "requirements.py"
+    shared.parent.mkdir()
     shared.write_text("SHARED_CONTRACT = True\n")
     unrelated = narrow.parent / "unregistered.txt"
     unrelated.write_text("outside the declared materials")
     source = {**file_source(shared), "root": str(narrow.parent)}
     inspection = Inspection(Declaration("baseline", ()), {}, {"shared": source})
     async with Exploration(
-        Config(), inspection, repository=repository, source_paths=("experimental/curator",)
+        Config(), inspection, repository=repository, source_paths=("experimental/harness/curator",)
     ) as exploration:
         assert exploration.read_source(name="shared")["text"] == "SHARED_CONTRACT = True"
-        assert (exploration.root / "source/experimental/requirements.py").read_text() == shared.read_text()
+        assert (
+            exploration.root / "source/experimental/harness/participation/requirements.py"
+        ).read_text() == shared.read_text()
         assert not (exploration.root / "source/experimental/unregistered.txt").exists()
         exploration.verify()
 
@@ -458,7 +461,7 @@ def test_the_evaluation_side_the_caller_withholds_never_enters_the_snapshot(tmp_
     (repository / "raven/helper.py").write_text("VALUE = 1\n")
     (repository / "tests/test_raven_helper.py").write_text("def test_value(): pass\n")
     (repository / "tests/test_simulation_reference.py").write_text("QUOTE = 'HL-Q-1026-4P'\n")
-    (repository / "tests/test_cards.py").write_text("from experimental.simulation.cards import draw\n")
+    (repository / "tests/test_cards.py").write_text("from experimental.simulation.bench.cards import draw\n")
     inspection = Inspection(
         Declaration("baseline", catalogue()),
         {"task": {"id": "task", "text": "Inspect"}, "authored": {"values": {}, "files": {"rules.py": ""}}},

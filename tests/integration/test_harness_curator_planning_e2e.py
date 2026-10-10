@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.planning.contracts import TARGET
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter.planning.contracts import TARGET
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.fixtures.harness_curator.authoring import capability, combine
 from tests.integration.test_harness_curator_e2e import ReplayProvider, plan_for, replay_provider, submitted

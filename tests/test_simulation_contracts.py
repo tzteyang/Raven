@@ -9,22 +9,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst.activity import activity
-from experimental.analyst.role import Analyst
-from experimental.analyst.run import NAME as FEEDBACK
-from experimental.automation.channel import seen
-from experimental.counterpart.owner import back_office, handles
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.action.runtime import REFUSED
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.history import entry
-from experimental.iteration.protocols import Exchange
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency, reports
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.channel import seen
+from experimental.cultivation.conversation import Conversation
+from experimental.cultivation.counterpart.owner import back_office, handles
+from experimental.harness.analyst.activity import activity
+from experimental.harness.analyst.role import Analyst
+from experimental.harness.analyst.run import NAME as FEEDBACK
+from experimental.harness.contract import Task
+from experimental.harness.loop.history import entry
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.action.runtime import REFUSED
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency, reports
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from raven.security.trust import wrap_untrusted
 
@@ -264,7 +264,7 @@ class Owner:
 
 
 def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut():
-    from experimental.simulation.agency import back_office, cut
+    from experimental.simulation.cases.travel_agency.owner import back_office, cut
 
     rows = [
         {
@@ -328,7 +328,7 @@ def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut()
 
 def test_the_owner_reads_what_the_employee_filed_and_not_the_hosts_bookkeeping(tmp_path):
     """Raven's `.raven` checkpoint files and a deck engine's dot files are bookkeeping, not something filed."""
-    from experimental.simulation.agency import written
+    from experimental.simulation.cases.travel_agency.owner import written
 
     before, after = tmp_path / "before", tmp_path / "after"
     before.mkdir()

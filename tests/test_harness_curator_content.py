@@ -4,9 +4,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.raven_adapter.content import ContentInstallation
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.preparation import PreparedHarness
+from experimental.harness.raven_adapter.content import ContentInstallation
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.preparation import PreparedHarness
 
 
 def install(tmp_path, files):
@@ -91,7 +91,7 @@ def test_content_cannot_write_through_an_escaping_parent(tmp_path):
 
 
 def test_prepared_playbooks_require_a_real_native_consumer():
-    from experimental.curator.raven_adapter.bind import _verify_playbooks
+    from experimental.harness.raven_adapter.bind import _verify_playbooks
 
     runtime = SimpleNamespace(loop=SimpleNamespace(_playbooks=SimpleNamespace(names=lambda: ["plan-delivery"])))
     _verify_playbooks(runtime, PreparedHarness(content={"planning": {"playbooks/plan-delivery/playbook.md": "spec"}}))
@@ -100,7 +100,7 @@ def test_prepared_playbooks_require_a_real_native_consumer():
 
 
 def test_a_playbook_that_did_not_load_is_reported_with_the_loaders_own_reason(tmp_path):
-    from experimental.curator.raven_adapter.bind import _verify_playbooks
+    from experimental.harness.raven_adapter.bind import _verify_playbooks
     from raven.playbook.store import PlaybookStore
 
     (tmp_path / "broken").mkdir()

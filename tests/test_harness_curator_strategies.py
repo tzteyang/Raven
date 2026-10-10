@@ -8,21 +8,21 @@ import pytest
 from pydantic import BaseModel
 from pydantic_core import PydanticSerializationError
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.action import ActionDecision, FailureEvent, ProposalEvent
-from experimental.curator.harness.context import ContextRequest, ContextSource
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.resources import EffectiveCapabilities, SelectionRequest
-from experimental.curator.raven_adapter.action.contracts import ActionBinding
-from experimental.curator.raven_adapter.action.runtime import REFUSED, BoundAction
-from experimental.curator.raven_adapter.capability.catalog import CapabilityCatalog
-from experimental.curator.raven_adapter.capability.contracts import CapabilityBinding
-from experimental.curator.raven_adapter.capability.runtime import BoundCapability
-from experimental.curator.raven_adapter.context_sources import ContextFrame
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.memory.contracts import MemoryBinding
-from experimental.curator.raven_adapter.memory.runtime import BoundMemory
-from experimental.curator.raven_adapter.observe import Recorder
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.action import ActionDecision, FailureEvent, ProposalEvent
+from experimental.harness.contract.context import ContextRequest, ContextSource
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.resources import EffectiveCapabilities, SelectionRequest
+from experimental.harness.raven_adapter.action.contracts import ActionBinding
+from experimental.harness.raven_adapter.action.runtime import REFUSED, BoundAction
+from experimental.harness.raven_adapter.capability.catalog import CapabilityCatalog
+from experimental.harness.raven_adapter.capability.contracts import CapabilityBinding
+from experimental.harness.raven_adapter.capability.runtime import BoundCapability
+from experimental.harness.raven_adapter.context_sources import ContextFrame
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.memory.contracts import MemoryBinding
+from experimental.harness.raven_adapter.memory.runtime import BoundMemory
+from experimental.harness.raven_adapter.observe import Recorder
 from raven.agent.tools.registry import ToolRegistry
 from raven.config.raven import RavenConfig
 from raven.contracts.assembled import TokenBudget
@@ -233,7 +233,7 @@ async def test_capability_selection_uses_active_resources_and_invalid_names_pres
 
 @pytest.mark.asyncio
 async def test_the_validation_probe_runs_the_capability_selection_on_the_installed_catalogue(tmp_path):
-    from experimental.curator.raven_adapter.probe import PROBE, exercise_translations
+    from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
 
     def bound_for(owner):
         owner.runtime.loop.subagents = SimpleNamespace(list_agents=lambda: [])
@@ -286,9 +286,9 @@ async def test_action_reply_and_terminal_failure_have_distinct_control_allowance
 DISPATCH_STRATEGY = '''
 """Decide each dispatch the way its arguments say, standing in for a strategy whose judgment may be unavailable."""
 
-from experimental.curator.harness.action import ActionDecision, ActionEvent
-from experimental.curator.harness.inference import InferenceError
-from experimental.curator.harness.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionDecision, ActionEvent
+from experimental.harness.contract.inference import InferenceError
+from experimental.harness.contract.strategies import ActionStrategy
 
 
 class Action(ActionStrategy[None, None]):
@@ -364,7 +364,7 @@ def test_removed_protocol_payloads_fail_explicitly():
 
 
 def test_session_working_state_and_explicit_shared_knowledge_survive_reconstruction(tmp_path):
-    from experimental.curator.raven_adapter.strategy import SESSION, Scopes
+    from experimental.harness.raven_adapter.strategy import SESSION, Scopes
 
     task = Task(id="task", text="Serve travellers")
     memory = Scopes("memory", task, tmp_path / "memory.json", lambda state: state, per_session=True)

@@ -6,9 +6,9 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker, WorkerError
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Task
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from tests.fixtures.harness_curator.authoring import add_method, capability
 from tests.integration.test_harness_curator_e2e import baseline as baseline
@@ -131,7 +131,8 @@ def create(context):
     return Service()
 """
         source = (
-            "from experimental.curator.harness.preparation import PreparationRequest\n" + bad["files"]["task_action.py"]
+            "from experimental.harness.contract.preparation import PreparationRequest\n"
+            + bad["files"]["task_action.py"]
         )
         source = add_method(
             source,
@@ -232,7 +233,7 @@ async def exercise_tool_guard(bound):
 async def test_semantic_translation_failure_reaches_repair_through_native_execution(baseline, tmp_path):
     from pathlib import Path
 
-    from experimental.curator.generation.context.collect import collect
+    from experimental.harness.curator.generation.context.collect import collect
     from tests.test_harness_curator_generation import generate
 
     baseline.task = Task(id="guard", text="Refuse blocked_probe and allow safe_probe.")

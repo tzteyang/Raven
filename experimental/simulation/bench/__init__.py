@@ -1,0 +1,1 @@
+"""The bench that runs a cultivation without people: a conversant played from persona cards, drills on worker replicas, the simulated counterpart's answers, run records, value judgement and the audit of whether a run stayed inside its own folders. A case (`experimental.simulation.cases`) is what the bench plays."""

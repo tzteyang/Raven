@@ -6,8 +6,8 @@ is asked again down the effort ladder to no reasoning."""
 import pytest
 from pydantic import BaseModel, ConfigDict, field_validator
 
-from experimental.iteration.exchange import ECHOED_CHARS, OUTPUT_TOKENS, ExchangeError, descent, exchange
-from experimental.model_calls import MalformedArgumentsError
+from experimental.harness.participation.exchange import ECHOED_CHARS, OUTPUT_TOKENS, ExchangeError, descent, exchange
+from experimental.harness.participation.model_calls import MalformedArgumentsError
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.research_helpers import Provider, response
 

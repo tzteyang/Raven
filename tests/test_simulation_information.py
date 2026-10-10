@@ -4,9 +4,9 @@ import json
 
 import pytest
 
-from experimental.research.information import Question
-from experimental.scenario import load
-from experimental.simulation.information import CounterpartAnswers
+from experimental.cultivation.collector.information import Question
+from experimental.harness.scenario import load
+from experimental.simulation.bench.information import CounterpartAnswers
 from tests.research_helpers import Provider, make_scenario, response
 
 

@@ -4,7 +4,7 @@ their announcements as follow-up turns; a conversant who is away only for a whil
 import asyncio
 from dataclasses import dataclass
 
-from experimental.curator.raven_adapter.worker import follow_up, trial_turn
+from experimental.harness.raven_adapter.worker import follow_up, trial_turn
 from raven.spine.turn import AnswerlessTurnError
 
 

@@ -1,4 +1,4 @@
-/* The record view: a run's cultivation record as experimental/simulation/record.py
+/* The record view: a run's cultivation record as experimental/simulation/bench/record.py
    builds it. It leads with the knowledge-sedimentation ledger (each of the
    owner's rules by round: did it fail, what did the Analyst ask for, what did the
    Curator land in which harness, did a mechanism fire, did the employee then
@@ -762,7 +762,7 @@ export function RecordView({
             {reply.error === RECORD_UNAVAILABLE ? 'The record builder is not available on this server.' : reply.status === 404 ? 'The server knows no such run.' : `The record could not be built: ${reply.error}`}
           </p>
           {reply.detail ? <p className="quiet small">{reply.detail}</p> : null}
-          {reply.error === RECORD_UNAVAILABLE ? <p className="quiet small">It lands as experimental/simulation/record.py; the view reads it as soon as the server can import it.</p> : null}
+          {reply.error === RECORD_UNAVAILABLE ? <p className="quiet small">It lands as experimental/simulation/bench/record.py; the view reads it as soon as the server can import it.</p> : null}
         </div>
       </div>
     )

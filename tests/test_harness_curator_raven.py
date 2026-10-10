@@ -6,20 +6,20 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Artifact, Declaration, Target, Task
-from experimental.curator.raven_adapter.bind import assemble
-from experimental.curator.raven_adapter.content import ContentInstallation
-from experimental.curator.raven_adapter.inspection import (
+from experimental.harness.contract import Artifact, Declaration, Target, Task
+from experimental.harness.raven_adapter.bind import assemble
+from experimental.harness.raven_adapter.content import ContentInstallation
+from experimental.harness.raven_adapter.inspection import (
     Baseline,
     Inspection,
     declaration_for,
     file_source,
     redact,
 )
-from experimental.curator.raven_adapter.materialize import load_factory, native_settings, write_package
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.preparation import PreparedHarness, describe_preparation
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.raven_adapter.materialize import load_factory, native_settings, write_package
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.preparation import PreparedHarness, describe_preparation
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse
@@ -203,7 +203,7 @@ def test_unknown_bindings_are_rejected_before_loading_code(tmp_path, baseline):
 
 @pytest.mark.asyncio
 async def test_model_pool_bindings_keep_native_settings_and_emit_observations(tmp_path):
-    from experimental.curator.raven_adapter.observe import ObservedPool
+    from experimental.harness.raven_adapter.observe import ObservedPool
     from raven.providers.binding import ModelBinding
 
     class Provider:
@@ -232,7 +232,7 @@ async def test_model_pool_bindings_keep_native_settings_and_emit_observations(tm
 
 @pytest.mark.parametrize("inside", ["home", "work"])
 def test_validation_copy_preserves_directory_relationships_and_excludes_itself(tmp_path, inside):
-    from experimental.curator.raven_adapter.materialize import copy_local_state
+    from experimental.harness.raven_adapter.materialize import copy_local_state
 
     outer = tmp_path / "outer"
     outer.mkdir()
@@ -266,8 +266,8 @@ def test_a_reference_to_a_module_missing_from_the_package_says_where_its_source_
 
 
 async def test_returned_provider_error_is_visible_to_execution_error_consumers(tmp_path):
-    from experimental.curator.raven_adapter.observe import ObservedProvider, Recorder
-    from experimental.curator.raven_adapter.worker import Execution
+    from experimental.harness.raven_adapter.observe import ObservedProvider, Recorder
+    from experimental.harness.raven_adapter.worker import Execution
     from raven.contracts.llm_provider import LLMResponse
 
     class Failed:
@@ -283,7 +283,7 @@ async def test_returned_provider_error_is_visible_to_execution_error_consumers(t
 
 
 def test_execution_errors_preserve_child_failure_attribution():
-    from experimental.curator.raven_adapter.worker import Execution
+    from experimental.harness.raven_adapter.worker import Execution
 
     nested = {
         "kind": "child.execution",
@@ -310,7 +310,7 @@ def test_execution_errors_preserve_child_failure_attribution():
 async def test_file_roots_confine_the_native_file_tools_and_keep_disabled_ones_absent(tmp_path):
     from types import SimpleNamespace
 
-    from experimental.curator.raven_adapter.bind import _confine_files
+    from experimental.harness.raven_adapter.bind import _confine_files
     from raven.agent.tools.deliver import DeliverFilesTool
     from raven.agent.tools.filesystem import ReadFileTool, WriteFileTool
     from raven.agent.tools.registry import ToolRegistry, call_failed
@@ -339,7 +339,7 @@ async def test_file_roots_confine_the_native_file_tools_and_keep_disabled_ones_a
 
 
 def test_a_copied_baseline_moves_its_file_roots_with_the_copy_and_with_its_parents(tmp_path):
-    from experimental.curator.raven_adapter.materialize import copy_local_state, remap_paths
+    from experimental.harness.raven_adapter.materialize import copy_local_state, remap_paths
 
     parent_home, parent_work = tmp_path / "parent" / "home", tmp_path / "parent" / "work"
     home, work = parent_home / "subagents" / "child", tmp_path / "child-work"
@@ -370,7 +370,7 @@ def test_a_copied_baseline_moves_its_file_roots_with_the_copy_and_with_its_paren
 
 @pytest.mark.parametrize("name", ["raven-code", "raven-research", "raven-oncall", "raven-design", "raven-ppt"])
 def test_existing_agent_preparation_reuses_renderer_and_isolates_host_environment(tmp_path, name):
-    from experimental.curator.raven_adapter.baselines.agents import prepare_agent
+    from experimental.harness.raven_adapter.baselines.agents import prepare_agent
     from raven.config.mode_catalogue import build_mode_catalogue
 
     host = tmp_path / "host"

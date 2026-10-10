@@ -5,13 +5,21 @@ from dataclasses import asdict
 
 import pytest
 
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.checks import Finding
-from experimental.assessor.reviewer import REVIEW, MetaReviewer
-from experimental.assessor.rubric import AssessmentPlan, Basis, Definition, LLMCheck, ProgramCheck, Reference, digest
-from experimental.assessor.standard import Assessor, Criterion, Standard
-from experimental.assessor.validation import RepairSuite, ReplayCase
-from experimental.iteration.protocols import Exchange
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.checks import Finding
+from experimental.harness.assessor.reviewer import REVIEW, MetaReviewer
+from experimental.harness.assessor.rubric import (
+    AssessmentPlan,
+    Basis,
+    Definition,
+    LLMCheck,
+    ProgramCheck,
+    Reference,
+    digest,
+)
+from experimental.harness.assessor.standard import Assessor, Criterion, Standard
+from experimental.harness.assessor.validation import RepairSuite, ReplayCase
+from experimental.harness.participation.protocols import Exchange
 from tests.test_assessor_builder import drafted
 from tests.test_assessor_standard import Provider, execution, response, verdict
 

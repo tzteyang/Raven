@@ -6,12 +6,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.curator.generation.context.collect import collect
-from experimental.curator.generation.context.render import REREAD
-from experimental.curator.generation.run import GenerationError, Limits
-from experimental.curator.generation.run import generate as generate_from
-from experimental.curator.harness import Attributed, Attribution, Declaration, Diagnosis, Validation
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Attributed, Attribution, Declaration, Diagnosis, Validation
+from experimental.harness.curator.generation.context.collect import collect
+from experimental.harness.curator.generation.context.render import REREAD
+from experimental.harness.curator.generation.run import GenerationError, Limits
+from experimental.harness.curator.generation.run import generate as generate_from
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.contracts.llm_provider import LLMResponse, RunMeta, ToolCallRequest
 from raven.contracts.tool import RAW_ARGUMENTS_KEY
 
@@ -100,7 +100,7 @@ def plan(*targets, serves=("task",)):
 
 def assigned(declaration, *targets, current=()):
     """A plan as the design stage returns it: its added commitments carry their host ids."""
-    from experimental.curator.harness.commitments import assign
+    from experimental.harness.contract.commitments import assign
 
     parsed = declaration.parse_plan(plan(*targets))
     return parsed.model_copy(update={"commitments": assign(current, parsed.commitments)})
@@ -391,8 +391,8 @@ async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(
 def test_orientation_is_complete_and_uses_the_inspected_source_version(context, tmp_path):
     from dataclasses import replace
 
-    from experimental.curator.generation.stages.shared import materials
-    from experimental.curator.raven_adapter.inspection import Inspection, file_source
+    from experimental.harness.curator.generation.stages.shared import materials
+    from experimental.harness.raven_adapter.inspection import Inspection, file_source
 
     text = "Host mechanism background.\n" * 1500 + "FINAL_REQUIRED_CONDITION"
     path = tmp_path / "index.md"
@@ -410,7 +410,7 @@ def test_orientation_is_complete_and_uses_the_inspected_source_version(context, 
 def test_dynamic_control_uses_host_inputs_and_keeps_task_materials_in_the_data_message():
     import json
 
-    from experimental.curator.generation.context.render import messages, tool
+    from experimental.harness.curator.generation.context.render import messages, tool
 
     material = {
         "task": "USER_TASK_MARKER ${actions}",
@@ -431,7 +431,7 @@ def test_dynamic_control_uses_host_inputs_and_keeps_task_materials_in_the_data_m
 def test_artifact_wire_normalization_preserves_file_text_and_authority(context):
     import json
 
-    from experimental.curator.generation.stages.implement import parse
+    from experimental.harness.curator.generation.stages.implement import parse
 
     selected = designed(context, "action.strategy")
     file_text = '{"keep": "this is file content, not a container to decode"}'
@@ -454,7 +454,7 @@ def test_artifact_wire_normalization_preserves_file_text_and_authority(context):
 
 
 def test_design_sends_knowledge_shared_by_several_selected_contracts_once(context):
-    from experimental.curator.generation.stages.design import materials
+    from experimental.harness.curator.generation.stages.design import materials
 
     chosen = context.declaration.parse_selection(
         selection("action.strategy", "capability.strategy"), ATTRIBUTED.attribution
@@ -488,7 +488,7 @@ def test_design_sends_knowledge_shared_by_several_selected_contracts_once(contex
 def test_a_handed_over_expert_description_travels_as_a_material_of_every_stage(context, tmp_path):
     from dataclasses import replace
 
-    from experimental.curator.generation.stages.shared import materials
+    from experimental.harness.curator.generation.stages.shared import materials
 
     page = tmp_path / "expert.md"
     page.write_text("# Expert\n\nWhat the expert does.\n")
@@ -512,10 +512,10 @@ def test_a_handed_over_expert_description_travels_as_a_material_of_every_stage(c
 
 
 def test_implementation_sees_only_the_selected_contracts_while_selection_lists_every_target(context):
-    from experimental.curator.generation.stages.implement import materials
+    from experimental.harness.curator.generation.stages.implement import materials
 
     selected = designed(context, "action.strategy")
-    from experimental.curator.generation.stages.select import materials as catalogue_of
+    from experimental.harness.curator.generation.stages.select import materials as catalogue_of
 
     data = materials(
         context, context.declaration.parse_selection(selection("action.strategy"), ATTRIBUTED.attribution), selected
@@ -631,8 +631,8 @@ async def test_design_can_reselect_dependencies_but_must_design_the_new_selectio
 @pytest.mark.asyncio
 async def test_redesign_retains_failed_candidate_evidence_but_clears_active_draft(context, tmp_path):
 
-    from experimental.curator.raven_adapter.exploration import Exploration
-    from experimental.curator.raven_adapter.inspection import Inspection
+    from experimental.harness.raven_adapter.exploration import Exploration
+    from experimental.harness.raven_adapter.inspection import Inspection
     from raven.config.schema import Config
 
     previous = plan("action.strategy")
@@ -822,7 +822,7 @@ def test_an_unset_stage_allowance_leaves_the_pool_as_the_only_cap():
 
 
 def test_history_indexes_repeatable_reads_and_keeps_everything_else():
-    from experimental.curator.generation.context.render import history
+    from experimental.harness.curator.generation.context.render import history
 
     trace = [
         {"stage": "diagnose", "event": "model.call", "call": 1},
@@ -925,7 +925,7 @@ async def test_invalid_arguments_preserve_stage_and_context_before_resubmission(
 
 
 def test_provider_reasoning_and_tool_metadata_survive_native_message_building():
-    from experimental.curator.generation.context.render import assistant_message
+    from experimental.harness.curator.generation.context.render import assistant_message
 
     response = LLMResponse(
         content=None,
@@ -940,7 +940,7 @@ def test_provider_reasoning_and_tool_metadata_survive_native_message_building():
 
 
 def test_a_degenerate_reply_text_goes_back_into_the_conversation_capped():
-    from experimental.curator.generation.context.render import ECHOED_CHARS, assistant_message
+    from experimental.harness.curator.generation.context.render import ECHOED_CHARS, assistant_message
 
     markup = "<invoke name=submit>" * 50_000
     message = assistant_message(LLMResponse(content=markup, tool_calls=[ToolCallRequest("id", "query", {})]))
@@ -1038,8 +1038,8 @@ async def test_a_failure_that_is_not_resumable_ends_the_generation_instead_of_pa
 @pytest.mark.asyncio
 @pytest.mark.parametrize("pause_after", [1, 2, 3, 4, 5, 6])
 async def test_serialized_resume_preserves_every_stage_and_does_not_replay_work(context, pause_after):
-    from experimental.curator.generation.run import GenerationPausedError
-    from experimental.curator.generation.state import GenerationState
+    from experimental.harness.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.state import GenerationState
 
     draft = {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}
     provider = Provider(
@@ -1083,7 +1083,7 @@ async def test_serialized_resume_preserves_every_stage_and_does_not_replay_work(
 
 @pytest.mark.asyncio
 async def test_resumption_does_not_implicitly_refill_any_budget(context):
-    from experimental.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.run import GenerationPausedError
 
     provider = Provider(response("read_source", {"name": "loop"}))
     with pytest.raises(GenerationPausedError) as paused:
@@ -1110,7 +1110,7 @@ async def test_resumption_does_not_implicitly_refill_any_budget(context):
 async def test_resume_refuses_changed_inputs_before_any_model_call(context, change):
     from dataclasses import replace
 
-    from experimental.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.run import GenerationPausedError
 
     provider = Provider(response("read_source", {"name": "loop"}))
     with pytest.raises(GenerationPausedError) as paused:
@@ -1131,7 +1131,7 @@ async def test_resume_refuses_changed_inputs_before_any_model_call(context, chan
 @pytest.mark.asyncio
 @pytest.mark.parametrize("revision", ["revise_plan", "revise_selection"])
 async def test_pause_after_backtracking_resumes_design_without_a_stale_plan(context, revision):
-    from experimental.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.run import GenerationPausedError
 
     target = "memory.strategy" if revision == "revise_selection" else "action.strategy"
     arguments = selection(target) if revision == "revise_selection" else {"reason": "Reconsider the mechanism"}
@@ -1237,8 +1237,8 @@ async def test_after_staging_a_file_another_stages_submission_is_still_refused_a
 def test_observations_reach_a_request_as_an_index_and_are_read_on_demand():
     import json
 
-    from experimental.curator.generation.context import query, render
-    from experimental.curator.generation.context.collect import Context
+    from experimental.harness.curator.generation.context import query, render
+    from experimental.harness.curator.generation.context.collect import Context
 
     huge = {"kind": "child.execution", "turn_id": "t1", "records": [{"kind": "tool", "text": "x" * 1000}] * 100}
     rows = [{"kind": "task.execution", "turn_id": "t1"}, huge]
@@ -1504,8 +1504,8 @@ async def test_a_file_edited_before_the_check_may_be_rewritten_whole_in_repair(a
 
 @pytest.mark.asyncio
 async def test_a_paused_implementation_keeps_its_edits_and_a_revised_plan_drops_them(authored):
-    from experimental.curator.generation.run import GenerationPausedError
-    from experimental.curator.generation.state import GenerationState
+    from experimental.harness.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.state import GenerationState
 
     values = {"action.strategy": {"factory": "rules:create"}}
     provider = Provider(
@@ -1541,7 +1541,7 @@ async def test_a_paused_implementation_keeps_its_edits_and_a_revised_plan_drops_
 async def test_a_target_whose_commitments_are_retired_must_leave_with_them(context):
     from dataclasses import replace
 
-    from experimental.curator.harness import Commitment
+    from experimental.harness.contract import Commitment
 
     gate = Commitment(id="H1", surface="action.strategy", statement="Stop unchecked deliveries", serves=("task",))
     facts = {**context.facts, "authored": {"values": {"action.strategy": {"factory": "rules:create"}}, "files": {}}}

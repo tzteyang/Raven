@@ -2,10 +2,10 @@
 
 import pytest
 
-from experimental.assessor.dataset import Case, Dataset
-from experimental.assessor.validation import promotion
-from experimental.iteration.protocols import Item, Signal
-from experimental.iteration.session import Session
+from experimental.harness.assessor.dataset import Case, Dataset
+from experimental.harness.assessor.validation import promotion
+from experimental.harness.loop.session import Session
+from experimental.harness.participation.protocols import Item, Signal
 from tests.test_iteration_run import CONTINUE, FakeWorker, Verifier, passing
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- scripted Analyst fixture
 from tests.test_iteration_session import (

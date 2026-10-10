@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
-from experimental.simulation import record
-from experimental.simulation.record import build_record, export_record, facet, ledger, redact
+from experimental.harness.loop.history import Diagnosed, Entry, Raised, Revised
+from experimental.simulation.bench import record
+from experimental.simulation.bench.record import build_record, export_record, facet, ledger, redact
 
 T1 = "a1" * 16
 T2 = "b2" * 16
@@ -1022,7 +1022,7 @@ def test_each_drill_carries_the_card_it_played_and_the_figures_computed_for_its_
 
 
 def test_host_guards_and_argument_errors_are_not_mechanism_refusals():
-    from experimental.analyst.activity import classify
+    from experimental.harness.analyst.activity import classify
 
     def refusal(preview):
         tools = {}
@@ -1055,7 +1055,7 @@ def test_host_guards_and_argument_errors_are_not_mechanism_refusals():
 
 
 def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_carries_only_words():
-    from experimental.simulation.record import _analysis, _evaluation
+    from experimental.simulation.bench.record import _analysis, _evaluation
 
     scorecard = {
         "source": "agency",
@@ -1081,8 +1081,8 @@ def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_c
 
 
 def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_place(tmp_path):
-    from experimental.scenario.digest import digest
-    from experimental.simulation.scenario import BUNDLED
+    from experimental.harness.scenario.digest import digest
+    from experimental.simulation.bench.scenario import BUNDLED
     from tests.research_helpers import make_scenario
 
     shop = make_scenario(tmp_path / "shop")

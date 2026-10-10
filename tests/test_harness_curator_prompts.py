@@ -3,10 +3,10 @@
 import pytest
 from pydantic import BaseModel
 
-from experimental.curator.harness import Artifact
-from experimental.curator.harness.prompts import Prompt
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.prompts import bind_prompts
+from experimental.harness.contract import Artifact
+from experimental.harness.contract.prompts import Prompt
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.prompts import bind_prompts
 
 
 class Inputs(BaseModel):
@@ -43,7 +43,7 @@ def test_prompt_admission_uses_real_object_and_candidate_content(tmp_path):
     artifact = Artifact(
         values={},
         files={
-            "defs.py": "from pydantic import BaseModel\nfrom experimental.curator.harness.prompts import Prompt\n"
+            "defs.py": "from pydantic import BaseModel\nfrom experimental.harness.contract.prompts import Prompt\n"
             'class Inputs(BaseModel):\n    goal: str\nGUIDE = Prompt.from_file(__file__, "guide.md", Inputs)\n',
             "guide.md": "Goal: $goal",
         },

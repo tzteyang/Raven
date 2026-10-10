@@ -4,9 +4,9 @@ from copy import deepcopy
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.build import ExperiencePipeline
-from experimental.experience.contracts import (
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.build import ExperiencePipeline
+from experimental.harness.experience.contracts import (
     EvidenceLink,
     ExperienceCondition,
     ExperienceProposal,
@@ -14,9 +14,9 @@ from experimental.experience.contracts import (
     OutcomeReceipt,
     digest,
 )
-from experimental.experience.curator import CuratorExperience
-from experimental.experience.store import ExperienceStore, StoreConflictError
-from experimental.experience.verification import Case, Result, compare_methods
+from experimental.harness.experience.curator import CuratorExperience
+from experimental.harness.experience.store import ExperienceStore, StoreConflictError
+from experimental.harness.experience.verification import Case, Result, compare_methods
 from tests.test_experience_records import access, origin, record  # noqa: F401 -- approved source fixtures
 
 

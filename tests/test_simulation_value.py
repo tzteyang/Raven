@@ -1,7 +1,7 @@
 """The value judge: which runs show the owner's rules turned from failing to holding by the Curator's revisions, and
 which of them were sedimented as planning or action that then acted."""
 
-from experimental.simulation.value import candidates, cases, cultivated, judge, reason_key
+from experimental.simulation.bench.value import candidates, cases, cultivated, judge, reason_key
 
 RULE = "quote-sheet-correct"
 SECOND = "two-questions-at-most"
@@ -62,7 +62,7 @@ CLEAN = {"valid": True, "breaches": 0, "logs": 3, "findings": []}
 
 def record(rounds, ledger, isolation=CLEAN):
     """A judged run whose attribution read every intervention reason `FOR_RULE` as enforcing each rule its target was
-    sedimented for, and any other reason as enforcing none (see `experimental.simulation.attribution`)."""
+    sedimented for, and any other reason as enforcing none (see `experimental.simulation.bench.attribution`)."""
     value = {
         "run": {"name": "hoh-staged", "chain": "staged", "status": "finished"},
         "rounds": rounds,
@@ -218,7 +218,7 @@ def test_a_blocked_last_round_or_too_few_rounds_keeps_a_case_partial():
 
 
 async def test_a_model_names_the_rules_each_intervention_reason_enforces_within_what_its_target_was_built_for():
-    from experimental.simulation.attribution import NAME, attribute
+    from experimental.simulation.bench.attribution import NAME, attribute
     from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
     class Provider:

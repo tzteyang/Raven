@@ -6,23 +6,23 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.context import ContextRequest, ContextSource
-from experimental.curator.harness.interaction import InteractionScope, InteractionTool
-from experimental.curator.harness.resources import EffectiveCapabilities
-from experimental.curator.raven_adapter.action.contracts import ActionBinding
-from experimental.curator.raven_adapter.action.runtime import BoundAction
-from experimental.curator.raven_adapter.calls import OperationGroup, owner_operation
-from experimental.curator.raven_adapter.context_sources import ContextFrame, SourceContext
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.memory.context import ProjectionOverflowError
-from experimental.curator.raven_adapter.memory.contracts import MemoryBinding
-from experimental.curator.raven_adapter.memory.runtime import BoundMemory
-from experimental.curator.raven_adapter.memory.window import MemoryWindow
-from experimental.curator.raven_adapter.model_input import ModelInput
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.peers import RuntimePeers
-from experimental.curator.raven_adapter.strategy import SESSION
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.context import ContextRequest, ContextSource
+from experimental.harness.contract.interaction import InteractionScope, InteractionTool
+from experimental.harness.contract.resources import EffectiveCapabilities
+from experimental.harness.raven_adapter.action.contracts import ActionBinding
+from experimental.harness.raven_adapter.action.runtime import BoundAction
+from experimental.harness.raven_adapter.calls import OperationGroup, owner_operation
+from experimental.harness.raven_adapter.context_sources import ContextFrame, SourceContext
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.memory.context import ProjectionOverflowError
+from experimental.harness.raven_adapter.memory.contracts import MemoryBinding
+from experimental.harness.raven_adapter.memory.runtime import BoundMemory
+from experimental.harness.raven_adapter.memory.window import MemoryWindow
+from experimental.harness.raven_adapter.model_input import ModelInput
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.peers import RuntimePeers
+from experimental.harness.raven_adapter.strategy import SESSION
 from raven.contracts.assembled import TokenBudget
 from raven.contracts.harness import ShrinkResult, WindowPressure, WindowState
 
@@ -96,10 +96,10 @@ async def test_parallel_children_cannot_bypass_the_current_strategy_chain():
 
 
 CODE = """from pydantic import BaseModel
-from experimental.curator.harness.strategies import MemoryStrategy, ActionStrategy
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView, CompactionRequest
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.action import ActionInteraction, ActionResponse
+from experimental.harness.contract.strategies import MemoryStrategy, ActionStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView, CompactionRequest
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.action import ActionInteraction, ActionResponse
 
 class Command(BaseModel):
     text: str
@@ -276,7 +276,7 @@ async def test_model_tool_arguments_cannot_select_host_identity_or_observation_p
 @pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["read", "attempted-write"])
 async def test_planning_query_propagates_readonly_to_memory(owners, tmp_path, text):
-    from experimental.curator.raven_adapter.planning.runtime import BoundPlanning
+    from experimental.harness.raven_adapter.planning.runtime import BoundPlanning
     from tests.test_harness_curator_planning_binding import binding, files
 
     await owners.memory.initialize_context("session:a", owners.frame)

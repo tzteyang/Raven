@@ -217,11 +217,11 @@ uv run python -m experimental.simulation --config <config.json> --home <基线 h
   --state-dir <新的空目录> --scenario travel_agency --chain documents --rounds 4
 
 # 离线准备：只使用指定披露计划的首轮材料，输出审核结果与记录
-uv run python -m experimental.research --scenario <场景目录> --disclose staged \
+uv run python -m experimental.cultivation.collector --scenario <场景目录> --disclose staged \
   --output <新的准备目录> --config <config.json> --research exchange
 
 # 或明确指定此次已交付材料；允许询问真人
-uv run python -m experimental.research --scenario <场景目录> --release <材料名> \
+uv run python -m experimental.cultivation.collector --scenario <场景目录> --release <材料名> \
   --output <新的准备目录> --config <config.json> --interactive
 
 # Scenario 首轮可复用离线审核结果；任务、材料、环境不匹配时拒绝，需要重新评估
@@ -238,20 +238,20 @@ uv run python -m experimental.simulation --config <config.json> --state-dir <新
   --scenario brand_strategist --chain documents --owner-feedback silent --standard derived sedimented
 
 # 真人 CLI：真人既是对话方也是评价者
-uv run python -m experimental.iteration --help
+uv run python -m experimental.harness.loop --help
 
 # 从业务任务和交互材料开始；没有产品案例也能进行信息收集
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --task-file <业务任务.md> --material <交互材料目录> --output <新的运行目录> \
   --research exchange --interactive
 
 # 可选：产品案例仅为调研提供引导，不作为本次交互输入
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --task-file <业务任务.md> --research-reference <产品案例目录> --output <新的运行目录> \
   --research exchange --research-tasks 3
 
 # 产品包也可以明确作为交互输入：先评估已有信息与缺口，不强制抽象或重新调研
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --expert <专家包目录> --output <新的运行目录> \
   --research exchange --interactive --request-file <客户需求.md>
 

@@ -3,8 +3,8 @@ call the turn made that handed nothing over, such as one an Action strategy refu
 
 import pytest
 
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.worker import TurnTimeoutError, Worker, WorkerTimeoutError
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.worker import TurnTimeoutError, Worker, WorkerTimeoutError
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 

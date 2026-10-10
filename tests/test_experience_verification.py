@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.experience.verification import Case, Result, compare_methods
+from experimental.harness.experience.verification import Case, Result, compare_methods
 
 
 def cases():

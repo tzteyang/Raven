@@ -9,13 +9,14 @@ from typing import ClassVar
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.audience import ROLES, UndeclaredAudienceError, audience, audiences_of, project
-from experimental.curator.harness.artifact import Change, Plan, Selection
-from experimental.curator.harness.attribution import Attributed, Attribution, Diagnosis
-from experimental.curator.harness.commitments import Commitment, CommitmentChange
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import (
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.contract.artifact import Change, Plan, Selection
+from experimental.harness.contract.attribution import Attributed, Attribution, Diagnosis
+from experimental.harness.contract.commitments import Commitment, CommitmentChange
+from experimental.harness.loop.session import Limits, Session
+from experimental.harness.participation.audience import ROLES, UndeclaredAudienceError, audience, audiences_of, project
+from experimental.harness.participation.compartment import (
     Boundaries,
     BoundaryError,
     Compartment,
@@ -23,15 +24,14 @@ from experimental.iteration.compartment import (
     GuardedFactory,
     GuardedProvider,
 )
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.exchange import messages
-from experimental.iteration.hearing import opaque
-from experimental.iteration.protocols import Exchange, Handover, Item, Signal
-from experimental.iteration.session import Limits, Session
-from experimental.requirements import Requirement
-from experimental.scenario import load
-from experimental.scenario.sealed import Sealed, sealed_for, weight, windows
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.participation.exchange import messages
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange, Handover, Item, Signal
+from experimental.harness.participation.requirements import Requirement
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario import load
+from experimental.harness.scenario.sealed import Sealed, sealed_for, weight, windows
+from experimental.simulation.bench.scenario import BUNDLED
 from raven.contracts.llm_provider import LLMResponse
 from tests.test_iteration_run import CURATE, FakeWorker, Scripted, Verifier, failing
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
@@ -457,7 +457,7 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
 
 @pytest.mark.asyncio
 async def test_the_analyst_and_the_curator_spare_whatever_the_conversants_said(tmp_path, monkeypatch):
-    from experimental.analyst import role
+    from experimental.harness.analyst import role
 
     card = "We are a family of two adults and one child with a budget of 8000 for the first week of October."
     hidden = "Only if asked: they want a quiet hotel near the station with a pool for the child."

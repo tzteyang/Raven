@@ -14,7 +14,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from experimental.iteration.hearing import opaque
+from experimental.harness.participation.hearing import opaque
 from experimental.webui import serve
 from experimental.webui.serve import (
     Handler,

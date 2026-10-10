@@ -5,7 +5,7 @@ import json
 import pytest
 from pydantic import ValidationError
 
-from experimental.experience.contracts import (
+from experimental.harness.experience.contracts import (
     BuildRequest,
     EvidenceLink,
     EvidenceView,

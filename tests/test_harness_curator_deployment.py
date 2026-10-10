@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.content import check_owners
-from experimental.curator.raven_adapter.deployment import Child
-from experimental.curator.raven_adapter.preparation import PreparedHarness
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.content import check_owners
+from experimental.harness.raven_adapter.deployment import Child
+from experimental.harness.raven_adapter.preparation import PreparedHarness
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 from tests.fixtures.harness_curator.authoring import action, profile
@@ -63,7 +63,7 @@ def preview(prepared, child_prepared=None):
 
 
 def test_feedback_location_routes_requirements_without_discarding_original_signals():
-    from experimental.curator.composition.requirements import feedback_for
+    from experimental.harness.curator.composition.requirements import feedback_for
 
     feedback = {
         "signals": ["supplied document"],
@@ -85,10 +85,10 @@ async def test_failed_activation_restores_the_checkpoint_flushed_by_shutdown(tmp
     import asyncio
     from unittest.mock import AsyncMock
 
-    from experimental.curator.harness import Declaration
-    from experimental.curator.raven_adapter.deployment import activate
-    from experimental.curator.raven_adapter.inspection import Inspection
-    from experimental.curator.raven_adapter.targets import catalogue
+    from experimental.harness.contract import Declaration
+    from experimental.harness.raven_adapter.deployment import activate
+    from experimental.harness.raven_adapter.inspection import Inspection
+    from experimental.harness.raven_adapter.targets import catalogue
     from tests.test_harness_curator_generation import assigned
 
     root = tmp_path / "runtime"
@@ -142,11 +142,11 @@ async def test_root_and_child_activation_is_one_boundary_that_restores_every_hom
     import asyncio
     from unittest.mock import AsyncMock
 
-    from experimental.curator.harness import Commitment, Declaration
-    from experimental.curator.raven_adapter.deployment import activate, child_directory
-    from experimental.curator.raven_adapter.inspection import Inspection, fingerprint
-    from experimental.curator.raven_adapter.inspection.runtime import declaration_for
-    from experimental.curator.raven_adapter.targets import catalogue
+    from experimental.harness.contract import Commitment, Declaration
+    from experimental.harness.raven_adapter.deployment import activate, child_directory
+    from experimental.harness.raven_adapter.inspection import Inspection, fingerprint
+    from experimental.harness.raven_adapter.inspection.runtime import declaration_for
+    from experimental.harness.raven_adapter.targets import catalogue
     from tests.test_harness_curator_generation import assigned
 
     before = (Commitment(id="H1", surface="memory.strategy", statement="Keep the profile", serves=("task",)),)
@@ -249,11 +249,11 @@ async def test_an_activation_that_changes_no_code_still_makes_its_curation_curre
     import asyncio
     from unittest.mock import AsyncMock
 
-    from experimental.curator.harness import CommitmentChange, Declaration, Plan
-    from experimental.curator.harness.commitments import assign
-    from experimental.curator.raven_adapter.deployment import activate
-    from experimental.curator.raven_adapter.inspection import Inspection
-    from experimental.curator.raven_adapter.targets import catalogue
+    from experimental.harness.contract import CommitmentChange, Declaration, Plan
+    from experimental.harness.contract.commitments import assign
+    from experimental.harness.raven_adapter.deployment import activate
+    from experimental.harness.raven_adapter.inspection import Inspection
+    from experimental.harness.raven_adapter.targets import catalogue
 
     declaration = Declaration("old", catalogue())
     native = CommitmentChange(
@@ -289,12 +289,12 @@ async def test_a_child_curation_without_code_changes_and_a_restored_child_settle
     import asyncio
     from unittest.mock import AsyncMock
 
-    from experimental.curator.harness import Commitment, CommitmentChange, Declaration, Plan
-    from experimental.curator.harness.commitments import assign
-    from experimental.curator.raven_adapter.deployment import activate
-    from experimental.curator.raven_adapter.inspection import Inspection
-    from experimental.curator.raven_adapter.inspection.runtime import declaration_for
-    from experimental.curator.raven_adapter.targets import catalogue
+    from experimental.harness.contract import Commitment, CommitmentChange, Declaration, Plan
+    from experimental.harness.contract.commitments import assign
+    from experimental.harness.raven_adapter.deployment import activate
+    from experimental.harness.raven_adapter.inspection import Inspection
+    from experimental.harness.raven_adapter.inspection.runtime import declaration_for
+    from experimental.harness.raven_adapter.targets import catalogue
 
     root_declaration, child_declaration = Declaration("root@1", catalogue()), declaration_for("hosted@1", {})
     kept, restored = Child(baseline(tmp_path / "kept")), Child(baseline(tmp_path / "restored"))
@@ -333,7 +333,7 @@ async def test_a_child_curation_without_code_changes_and_a_restored_child_settle
 
 
 def test_a_child_carries_its_commitments_through_export_and_restore(tmp_path):
-    from experimental.curator.harness import Commitment
+    from experimental.harness.contract import Commitment
 
     child = Child(baseline(tmp_path / "home"))
     child.commitments = (Commitment(id="H1", surface="memory.strategy", statement="Keep the brief", serves=("task",)),)

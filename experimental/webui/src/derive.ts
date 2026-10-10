@@ -115,7 +115,7 @@ export interface Progress {
   regressed: string[]
 }
 
-/* Mirrors experimental/iteration/records.py progress(): verdicts by round, and
+/* Mirrors experimental/harness/loop/records.py progress(): verdicts by round, and
    the items that flipped between fail and pass over the run. */
 export function progress(run: Run): Progress {
   const matrix: Progress['matrix'] = {}

@@ -5,11 +5,11 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.generation.run import GenerationPausedError, Limits
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Task
+from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse
 from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
 from tests.fixtures.harness_curator.authoring import planning as prepare_planning
@@ -132,7 +132,7 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             await worker.close()
             await worker.start()
         if transport_failure:
-            from experimental.curator.generation.run import GenerationInterruptedError
+            from experimental.harness.curator.generation.run import GenerationInterruptedError
 
             with pytest.raises(GenerationInterruptedError) as interrupted:
                 await improve(

@@ -3,10 +3,10 @@
 import ast
 import json
 
-from experimental.curator.harness import Artifact
+from experimental.harness.contract import Artifact
 
-CAPABILITY = """from experimental.curator.harness.strategies import CapabilityStrategy
-from experimental.curator.harness.resources import CapabilityContribution, RegistrationReceipt, SelectionRequest, CapabilitySelection
+CAPABILITY = """from experimental.harness.contract.strategies import CapabilityStrategy
+from experimental.harness.contract.resources import CapabilityContribution, RegistrationReceipt, SelectionRequest, CapabilitySelection
 
 class Capability(CapabilityStrategy):
     def __init__(self, state, registrar):
@@ -21,9 +21,9 @@ def create(state, task, *, registrar):
 """
 
 
-MEMORY = """from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView
-from experimental.curator.harness.preparation import PreparationRequest
+MEMORY = """from experimental.harness.contract.strategies import MemoryStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView
+from experimental.harness.contract.preparation import PreparationRequest
 
 class Memory(MemoryStrategy[dict, str, str]):
     def __init__(self, state, host):
@@ -50,7 +50,7 @@ def add_method(source, class_name, method):
 
 def capability(resources, *, source=CAPABILITY, module="capability_impl", class_name="Capability", files=None):
     source = (
-        "import json\nfrom pydantic import TypeAdapter\nfrom experimental.curator.harness.preparation import PreparationRequest\n"
+        "import json\nfrom pydantic import TypeAdapter\nfrom experimental.harness.contract.preparation import PreparationRequest\n"
         + source
     )
     source = add_method(
@@ -102,11 +102,11 @@ def combine(*artifacts):
 
 
 PLANNING = """import json
-from experimental.curator.harness.strategies import PlanningStrategy
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
-from experimental.requirements import Requirement
+from experimental.harness.contract.strategies import PlanningStrategy
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.planning import PlanningInitialization, PlanningProjection, PlanningResult
+from experimental.harness.participation.requirements import Requirement
 from raven.playbook import PlaybookSpec
 
 class Planning(PlanningStrategy[dict, dict, dict]):
@@ -141,9 +141,9 @@ def planning(procedures, *, module="planning_impl"):
 
 
 ACTION = """import json
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.raven_adapter.preparation import GenerationPolicy, ExecutionPolicy
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.raven_adapter.preparation import GenerationPolicy, ExecutionPolicy
 
 class Action(ActionStrategy[str, str]):
     def __init__(self, host):
@@ -184,7 +184,7 @@ def setup(role, statements, *, files=None, binding=None):
         )
         source = source.replace("return Capability(state, registrar)", "return Capability(state, registrar, host)")
     elif role == "action":
-        source = """from experimental.curator.harness.strategies import ActionStrategy
+        source = """from experimental.harness.contract.strategies import ActionStrategy
 class Action(ActionStrategy[str, str]):
     def __init__(self, host):
         self.host = host
@@ -193,7 +193,7 @@ def create(state, task, *, host):
 """
     else:
         raise ValueError("unsupported setup fixture role")
-    source = "from experimental.curator.harness.preparation import PreparationRequest\n" + source
+    source = "from experimental.harness.contract.preparation import PreparationRequest\n" + source
     source = add_method(
         source,
         role.title(),

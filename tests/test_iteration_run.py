@@ -6,22 +6,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst import role
-from experimental.analyst.feedback import Feedback
-from experimental.assessor.dataset import Case, Dataset, contains
-from experimental.assessor.human import Human
-from experimental.curator.generation.run import GenerationPausedError
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.curator.harness import Attributed, Attribution, Diagnosis, Task
-from experimental.curator.raven_adapter.worker import Execution, TurnTimeoutError
-from experimental.iteration import session as stepping
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.hearing import opaque
-from experimental.iteration.history import Diagnosed, Raised
-from experimental.iteration.protocols import Exchange, Handover, Item, Signal
-from experimental.iteration.records import load, runs
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits, satisfied, trial_sessions
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst import role
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.assessor.dataset import Case, Dataset, contains
+from experimental.harness.assessor.human import Human
+from experimental.harness.contract import Attributed, Attribution, Diagnosis, Task
+from experimental.harness.curator.generation.run import GenerationPausedError
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.loop import session as stepping
+from experimental.harness.loop.history import Diagnosed, Raised
+from experimental.harness.loop.records import load, runs
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits, satisfied, trial_sessions
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange, Handover, Item, Signal
+from experimental.harness.raven_adapter.worker import Execution, TurnTimeoutError
 
 
 class FakeWorker:
@@ -430,7 +430,7 @@ async def test_a_round_is_recorded_before_its_curation_and_a_paused_curator_leav
             (worker.root / "curation" / "pending.json").write_text("{}")
             state = SimpleNamespace(trace=[], calls=0, model_copy=lambda deep: None)
             if transport:
-                from experimental.curator.generation.run import GenerationInterruptedError
+                from experimental.harness.curator.generation.run import GenerationInterruptedError
 
                 raise GenerationInterruptedError("provider unavailable", state)
             raise GenerationPausedError(state)

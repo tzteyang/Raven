@@ -6,11 +6,11 @@ from dataclasses import asdict, replace
 
 import pytest
 
-from experimental.assessor.builder import Revision, RubricBuilder
-from experimental.assessor.checks import Finding
-from experimental.assessor.reviewer import Issue, MetaReviewer
-from experimental.assessor.revision import Permission, RevisionScope
-from experimental.assessor.rubric import (
+from experimental.harness.assessor.builder import Revision, RubricBuilder
+from experimental.harness.assessor.checks import Finding
+from experimental.harness.assessor.reviewer import Issue, MetaReviewer
+from experimental.harness.assessor.revision import Permission, RevisionScope
+from experimental.harness.assessor.rubric import (
     AssessmentPlan,
     Basis,
     Criterion,
@@ -19,10 +19,10 @@ from experimental.assessor.rubric import (
     Reference,
     digest,
 )
-from experimental.assessor.standard import Assessor, Standard
-from experimental.assessor.validation import RepairSuite, ReplayCase
-from experimental.iteration.protocols import Exchange
-from experimental.requirements import ExternalRequirement
+from experimental.harness.assessor.standard import Assessor, Standard
+from experimental.harness.assessor.validation import RepairSuite, ReplayCase
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.participation.requirements import ExternalRequirement
 from raven.contracts.llm_provider import LLMResponse
 from tests.test_assessor_builder import drafted
 from tests.test_assessor_standard import Provider, execution, response, verdict

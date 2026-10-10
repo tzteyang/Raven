@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator import workflow
-from experimental.curator.attribution import (
+from experimental.harness.contract import Attributed, Attribution, Validation
+from experimental.harness.contract.artifact import Selection
+from experimental.harness.curator import workflow
+from experimental.harness.curator.attribution import (
     NAME,
     PROMPT_FILES,
     PROMPTS,
@@ -19,10 +21,8 @@ from experimental.curator.attribution import (
     parse,
     subjects,
 )
-from experimental.curator.generation.run import GapReportedError, GenerationPausedError, Limits, generate
-from experimental.curator.generation.stages import design
-from experimental.curator.harness import Attributed, Attribution, Validation
-from experimental.curator.harness.artifact import Selection
+from experimental.harness.curator.generation.run import GapReportedError, GenerationPausedError, Limits, generate
+from experimental.harness.curator.generation.stages import design
 from tests.test_harness_curator_generation import (
     Provider,
     context,  # noqa: F401 -- the generation tests' curation context
@@ -229,7 +229,7 @@ async def test_a_generation_starts_from_its_attribution_and_its_reads_and_keeps_
     }
     assert "Select the necessary" in instructions(provider.requests[0])
     paused = Provider(response("read_source", {"name": "loop"}))
-    from experimental.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
 
     with pytest.raises(GenerationPausedError) as stopped:
         await generate(context, paused, attribution=attributed, validate=validate, limits=Limits(max_calls=1))
@@ -382,7 +382,7 @@ async def test_an_attribution_that_reports_a_gap_is_recorded_with_what_it_attrib
 
 
 def test_an_attributor_version_is_everything_its_request_is_written_from(tmp_path, monkeypatch):
-    from experimental.curator.attribution import model
+    from experimental.harness.curator.attribution import model
 
     before = ModelAttributor().identity("m")
     shared = [tmp_path / path.name for path in model.prompt_files()]

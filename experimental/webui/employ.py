@@ -11,12 +11,12 @@ its process.
 
 from pathlib import Path
 
-from experimental.automation import caching
-from experimental.automation.employee import hire_task, starting_harness, withheld, workplace
-from experimental.curator.harness import Task
-from experimental.iteration.protocols import Handover
-from experimental.simulation.agency import attached
-from experimental.simulation.scenario import Scenario
+from experimental.cultivation.employee import hire_task, starting_harness, withheld, workplace
+from experimental.harness.contract import Task
+from experimental.harness.participation.protocols import Handover
+from experimental.simulation.bench import caching
+from experimental.simulation.bench.scenario import Scenario
+from experimental.simulation.cases.travel_agency.owner import attached
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 
@@ -27,12 +27,12 @@ class UnsupportedError(RuntimeError):
 
 def prepare() -> None:
     """Set up the session's process before anything is hired, as an automated run does: the gateway cache
-    breakpoints (`experimental.automation.caching`)."""
+    breakpoints (`experimental.simulation.bench.caching`)."""
     caching.install()
 
 
 def starting() -> dict:
-    """Which code every harness of the session starts from (`experimental.automation.employee.starting_harness`)."""
+    """Which code every harness of the session starts from (`experimental.cultivation.employee.starting_harness`)."""
     return starting_harness(REPOSITORY)
 
 

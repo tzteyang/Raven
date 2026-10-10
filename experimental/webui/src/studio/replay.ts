@@ -84,7 +84,7 @@ export function trialsOf(sessions: Record<string, Exchange[]>, number: number, v
 const escaped = (text: string): string => text.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')
 
 /* Child harness executions inside a turn's records, the way
-   experimental/curator/composition/context.py child_observations finds them:
+   experimental/harness/curator/composition/context.py child_observations finds them:
    a child.execution row is taken whole and not entered, any other row with
    records is entered. */
 function childRuns(records: RecordRow[], found: string[] = []): string[] {
@@ -99,10 +99,10 @@ function childRuns(records: RecordRow[], found: string[] = []): string[] {
    handed them over. The root gets the turns a requirement's evidence or
    observation names by turn id, in session order, each under its session's
    opaque label, which the server supplies as `labels` since the loop's rule
-   (experimental/iteration/hearing.py opaque, cited, heard_observations) is a
+   (experimental/harness/participation/hearing.py opaque, cited, heard_observations) is a
    hash the page does not recompute. A child gets its own current execution
    first, then its executions inside those cited turns
-   (experimental/curator/composition/run.py and context.py). With no feedback
+   (experimental/harness/curator/composition/run.py and context.py). With no feedback
    there are none. */
 export function observedOf(round: Round, labels: Record<string, string> = {}): ObservedLists | null {
   const feedback = round.feedback

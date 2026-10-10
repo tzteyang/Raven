@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.experience.governance import Check, Decision, Diagnosis, Experience, Governance
+from experimental.harness.experience.governance import Check, Decision, Diagnosis, Experience, Governance
 
 
 def proposal(text="Check the actual consumer.", *, domain="curator", **kwargs):

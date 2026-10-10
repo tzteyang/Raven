@@ -3,7 +3,7 @@
 A candidate is one disclosure plan: a chain preset, a partition given as JSON, or a random partition of the scenario's
 materials (the owner still knows everything from the start and has handed everything over before the last round; only
 the partition differs, see `experimental.simulation.__main__`). Each finished run is judged by
-`experimental.simulation.value`; with `--stop-on-value` the first run that qualifies stops the others.
+`experimental.simulation.bench.value`; with `--stop-on-value` the first run that qualifies stops the others.
 
 Each run gets its own Raven home under `--state-root` (the only place a configuration with credentials is written,
 readable by its owner only) and its own record directory under `--runs-dir`. While runs go, their spend is read from
@@ -26,10 +26,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from experimental.automation.employee import AREA, FORWARDED
+from experimental.cultivation.employee import AREA, FORWARDED
 from experimental.simulation.__main__ import CHAINS
-from experimental.simulation.record import REDACTED, SUMMARY, build_record, export_record, redact
-from experimental.simulation.scenario import Scenario
+from experimental.simulation.bench.record import REDACTED, SUMMARY, build_record, export_record, redact
+from experimental.simulation.bench.scenario import Scenario
 
 KEPT_FILES = ("run.log", "command.json")
 VALUE = "value.json"
@@ -330,12 +330,12 @@ def finish(run: Run, args) -> dict:
     redacted = scrub(run.records) if run.records.is_dir() else 0
     isolation = None
     try:
-        from experimental.automation.isolation import write as check_isolation
+        from experimental.simulation.bench.isolation import write as check_isolation
 
         isolation = check_isolation(run.records, run.state, args.forbid) if run.records.is_dir() else None
     except Exception as exc:  # noqa: BLE001 -- an unscanned run is judged not isolated, never lost
         run.notes.append(f"isolation scan failed: {exc!r}")
-    from experimental.automation.files import page_images
+    from experimental.harness.participation.files import page_images
 
     decks = sorted(run.records.rglob("*.pptx")) if run.records.is_dir() else []
     for deck in (deck for deck in decks if "deliverables" in deck.relative_to(run.records).parts):

@@ -5,11 +5,11 @@ import json
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.contracts import digest
-from experimental.experience.curator import CuratorExperience, stage_guidance
-from experimental.experience.records import RecordAccess
-from experimental.experience.store import ExperienceStore, StoreError
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.contracts import digest
+from experimental.harness.experience.curator import CuratorExperience, stage_guidance
+from experimental.harness.experience.records import RecordAccess
+from experimental.harness.experience.store import ExperienceStore, StoreError
 from tests.experience_helpers import event, proposal, reviewed
 from tests.test_harness_curator_generation import Provider, diagnosis, response, selection
 from tests.test_harness_curator_workflow import worker  # noqa: F401 -- the actual workflow's local worker fixture
@@ -82,7 +82,7 @@ def test_frozen_guidance_cannot_change_consumer_inputs_or_text(tmp_path):
 
 
 def test_journal_failure_does_not_publish_domain_eligible_methods(tmp_path, monkeypatch):
-    from experimental.experience import journal
+    from experimental.harness.experience import journal
 
     owner = consumer(tmp_path)
     with owner.store:
@@ -119,7 +119,7 @@ def adopted_diagnosis(owner):
 
 @pytest.mark.asyncio
 async def test_workflow_delivers_only_the_stage_method_and_records_actual_loading(worker, tmp_path):
-    from experimental.curator.workflow import improve
+    from experimental.harness.curator.workflow import improve
 
     owner = consumer(tmp_path)
     with owner.store:
@@ -138,7 +138,7 @@ async def test_workflow_delivers_only_the_stage_method_and_records_actual_loadin
 
 @pytest.mark.asyncio
 async def test_cancelled_learning_preserves_the_successful_install_record(worker, tmp_path, monkeypatch):
-    from experimental.curator.workflow import improve
+    from experimental.harness.curator.workflow import improve
 
     owner = consumer(tmp_path)
 
@@ -158,8 +158,8 @@ async def test_cancelled_learning_preserves_the_successful_install_record(worker
 
 @pytest.mark.asyncio
 async def test_workflow_refuses_revoked_guidance_before_resumed_model_calls(worker, tmp_path):
-    from experimental.curator.generation.run import GenerationPausedError, Limits
-    from experimental.curator.workflow import improve
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.workflow import improve
 
     owner = consumer(tmp_path)
     with owner.store:
@@ -181,8 +181,8 @@ async def test_workflow_refuses_revoked_guidance_before_resumed_model_calls(work
 
 @pytest.mark.asyncio
 async def test_unavailable_optional_memory_stays_disabled_for_the_frozen_curation(worker, tmp_path, monkeypatch):
-    from experimental.curator.generation.run import GenerationPausedError, Limits
-    from experimental.curator.workflow import improve
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.workflow import improve
 
     owner = consumer(tmp_path)
     with owner.store:

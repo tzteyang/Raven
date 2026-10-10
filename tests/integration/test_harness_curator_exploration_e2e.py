@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter import exploration
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Task
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter import exploration
+from experimental.harness.raven_adapter.worker import Worker
 from tests.fixtures.harness_curator.authoring import action, profile
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider, submitted
@@ -79,7 +79,7 @@ async def test_native_exploration_preflight_repair_and_worker_installation(basel
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_real_worker_budget_pause_resumes_and_installs_without_reselection(baseline, tmp_path):
-    from experimental.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
 
     baseline.task = Task(id="resume-task", text="Adjust sampling for this task.")
     first = CuratorProvider(

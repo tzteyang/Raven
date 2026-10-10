@@ -417,7 +417,7 @@ test('the record view shows the header, the ledger and a cell\'s chain of eviden
 
 test('the record view says so when the record builder is not available', async () => {
   vi.stubGlobal('fetch', vi.fn(async (path: string) => (
-    path.startsWith('/api/record/export') ? reply(200, { folder: '/r/record', bundle: null }) : reply(503, { error: 'record builder not available', detail: "ModuleNotFoundError: No module named 'experimental.simulation.record'" })
+    path.startsWith('/api/record/export') ? reply(200, { folder: '/r/record', bundle: null }) : reply(503, { error: 'record builder not available', detail: "ModuleNotFoundError: No module named 'experimental.simulation.bench.record'" })
   )))
   render(<RecordView runId="w/r" live={false} onTrial={() => undefined} onRemark={() => undefined} />)
   expect(await screen.findByText('The record builder is not available on this server.')).toBeTruthy()

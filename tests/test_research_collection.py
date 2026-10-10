@@ -7,7 +7,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import ValidationError
 
-from experimental.research.collection import (
+from experimental.cultivation.collector.collection import (
     ASSESS,
     PLAN,
     REVIEW,
@@ -16,8 +16,8 @@ from experimental.research.collection import (
     CollectionLimits,
     collect_information,
 )
-from experimental.research.curator import INFORMATION_FILE, handover_information
-from experimental.research.information import (
+from experimental.cultivation.collector.curator import INFORMATION_FILE, handover_information
+from experimental.cultivation.collector.information import (
     DIMENSIONS,
     Description,
     Evidence,
@@ -948,7 +948,7 @@ def test_publication_refuses_composite_and_nested_checkpoints(tmp_path, checkpoi
 
 
 def test_interrupted_publication_recovers_the_same_version(tmp_path, monkeypatch):
-    from experimental.research import curator
+    from experimental.cultivation.collector import curator
 
     worker = SimpleNamespace(
         root=tmp_path / "run", baseline=SimpleNamespace(config=SimpleNamespace(workspace_path=tmp_path / "home"))
@@ -1014,8 +1014,8 @@ def test_answers_refuse_another_snapshot_even_when_question_ids_match():
 
 
 def test_recorded_information_restores_source_scope_on_a_new_worker():
-    from experimental.curator.raven_adapter.exploration import Withheld
-    from experimental.curator.workflow import information_scope
+    from experimental.harness.curator.workflow import information_scope
+    from experimental.harness.raven_adapter.exploration import Withheld
 
     worker = SimpleNamespace(withheld=Withheld(paths=("evaluation/*",)))
     feedback = {"information": {"version": "recorded", "excluded_sources": ["docs/research-case.md"]}}

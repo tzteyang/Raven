@@ -2,11 +2,11 @@
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.materialize import native_settings, write_package
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.preparation import (
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.materialize import native_settings, write_package
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.preparation import (
     BackendPolicy,
     ContextPolicy,
     ExecutionPolicy,

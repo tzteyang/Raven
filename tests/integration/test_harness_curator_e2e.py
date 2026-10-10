@@ -4,9 +4,9 @@ from copy import deepcopy
 
 import pytest
 
-from experimental.curator.harness import Artifact, Change, Plan, Task
-from experimental.curator.raven_adapter.inspection import Baseline
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.harness.contract import Artifact, Change, Plan, Task
+from experimental.harness.raven_adapter.inspection import Baseline
+from experimental.harness.raven_adapter.worker import Worker
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 from raven.contracts.llm_provider import GenerationSettings
@@ -173,10 +173,10 @@ async def test_worker_inspection_and_conversation_survive_multiple_turns(baselin
 
 
 COMPOSED_CODE = """
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import ActionEvent, ActionDecision
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.raven_adapter.preparation import GenerationPolicy
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.raven_adapter.preparation import GenerationPolicy
 from raven.contracts.tool import Tool
 
 class Probe(Tool):
@@ -207,8 +207,8 @@ def create(state, task, *, host):
 """
 
 GATE_CODE = """
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import ActionEvent, ActionDecision
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
 class Action(ActionStrategy[str, str]):
     async def handle_event(self, event: ActionEvent) -> ActionDecision:
         if event.kind == "proposal" and event.stage == "dispatch" and event.calls[0].name == "probe":
@@ -275,7 +275,7 @@ def observer(context):
 
 
 async def exercise_turn(bound):
-    from experimental.curator.raven_adapter.runner import run_turn
+    from experimental.harness.raven_adapter.runner import run_turn
     from raven.spine import ChatType, Source, TurnRequest
 
     async def emit(event):
@@ -309,7 +309,7 @@ async def exercise_lifecycle(bound):
 async def test_generation_queries_plans_repairs_and_runs_a_composed_harness(baseline, tmp_path):
     from functools import partial
 
-    from experimental.curator.generation.context.collect import collect
+    from experimental.harness.curator.generation.context.collect import collect
     from raven.contracts.llm_provider import ToolCallRequest
     from tests.test_harness_curator_generation import generate
 
@@ -428,7 +428,7 @@ async def test_generated_backend_services_and_observers_follow_native_lifecycle(
             "memory",
             "\n".join(
                 [
-                    "from experimental.curator.raven_adapter.preparation import BackendPolicy",
+                    "from experimental.harness.raven_adapter.preparation import BackendPolicy",
                     'self.host.backend_factory("curated", "lifecycle:backend")',
                     'self.host.backend(BackendPolicy(backend="curated"))',
                     'self.host.service("service", "lifecycle:service")',
@@ -497,7 +497,7 @@ def make(context):
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_failed_service_activation_restores_content_and_the_previous_worker(baseline, tmp_path):
-    from experimental.curator.raven_adapter.worker import WorkerError
+    from experimental.harness.raven_adapter.worker import WorkerError
 
     path = baseline.config.workspace_path / "TOOLS.md"
     path.write_text("ORIGINAL_CONTENT")
@@ -574,7 +574,7 @@ async def test_native_class_helpers_apply_to_actual_requests(baseline, tmp_path)
     from tests.integration.test_harness_curator_interactions_e2e import MEMORY
 
     source = (
-        "from pydantic import JsonValue\nfrom experimental.curator.raven_adapter.memory.contracts import MemoryInput, MemoryArchive\n"
+        "from pydantic import JsonValue\nfrom experimental.harness.raven_adapter.memory.contracts import MemoryInput, MemoryArchive\n"
         + MEMORY
     )
     source = add_method(
@@ -601,11 +601,11 @@ async def test_native_class_helpers_apply_to_actual_requests(baseline, tmp_path)
     )
     guided = setup(
         "action",
-        "from experimental.curator.raven_adapter.preparation import GenerationPolicy\nself.host.generation(GenerationPolicy(temperature=0.2))",
+        "from experimental.harness.raven_adapter.preparation import GenerationPolicy\nself.host.generation(GenerationPolicy(temperature=0.2))",
         binding={"events": ["progress"]},
     )
     guided.files["action_setup.py"] = (
-        "from experimental.curator.harness.action import ProgressEvent, ActionDecision\n"
+        "from experimental.harness.contract.action import ProgressEvent, ActionDecision\n"
         + add_method(
             guided.files["action_setup.py"],
             "Action",
@@ -656,8 +656,8 @@ async def test_salvage_is_reached_when_the_native_turn_has_no_answer(baseline, t
     )
     async with Worker(baseline, tmp_path / "runtime", provider_factory=factory, timeout=30) as worker:
         inspection = await worker.inspect()
-        source = """from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import FailureEvent, ActionDecision
+        source = """from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import FailureEvent, ActionDecision
 class Action(ActionStrategy[str, str]):
     async def _handle_failure(self, event: FailureEvent) -> ActionDecision:
         return ActionDecision(control="finish", reply="SALVAGE_RUNTIME_MARKER")
@@ -746,8 +746,8 @@ async def test_a_failed_check_returns_its_evidence_and_leaves_the_active_harness
     row that says why, and the worker keeps running the baseline."""
     broken = "def make(context):\n    raise RuntimeError('FACTORY_FAILURE_MARKER')\n"
     invalid = """
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import ActionEvent, ActionDecision
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
 class Action(ActionStrategy[str, str]):
     async def handle_event(self, event: ActionEvent) -> ActionDecision:
         return {"control": "not-a-control"}

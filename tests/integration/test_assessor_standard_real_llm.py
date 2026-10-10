@@ -5,10 +5,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.standard import Assessor, Standard
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.protocols import Exchange
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.standard import Assessor, Standard
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.worker import Execution
 from raven.core.config_stack import load_runtime_config
 from raven.providers.factory import make_lazy_provider
 

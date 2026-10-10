@@ -6,10 +6,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.scenario import KINDS, ROLES, VIEWS, Scenario, default_visibility, load
-from experimental.scenario.contract import frontmatter
-from experimental.scenario.sealed import sealed_for
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.scenario import KINDS, ROLES, VIEWS, Scenario, default_visibility, load
+from experimental.harness.scenario.contract import frontmatter
+from experimental.harness.scenario.sealed import sealed_for
+from experimental.simulation.bench.scenario import BUNDLED
 
 TRAVEL = BUNDLED / "travel_agency"
 
@@ -175,8 +175,8 @@ def test_a_material_package_keeps_its_nested_files_inside_its_category(tmp_path)
 
 
 def test_a_document_handed_over_as_written_is_a_material_and_a_folder_without_one_is_not(tmp_path):
-    from experimental.simulation.agency import attached
-    from experimental.simulation.scenario import Scenario as Simulated
+    from experimental.simulation.bench.scenario import Scenario as Simulated
+    from experimental.simulation.cases.travel_agency.owner import attached
 
     root = copy(tmp_path)
     spec = json.loads((root / "scenario.json").read_text())

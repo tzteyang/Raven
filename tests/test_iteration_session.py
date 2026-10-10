@@ -5,15 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.curator.generation.run import GapReportedError, GenerationPausedError
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.iteration import session as stepping
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.protocols import Handover, Signal
-from experimental.iteration.records import load, runs
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits, Outcome, Session, StepError
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.curator.generation.run import GapReportedError, GenerationPausedError
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.loop import session as stepping
+from experimental.harness.loop.records import load, runs
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits, Outcome, Session, StepError
+from experimental.harness.participation.protocols import Handover, Signal
 from tests.test_iteration_run import CONTINUE, CURATE, FakeWorker, Scripted, Verifier, failing, passing
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
 
@@ -477,10 +477,10 @@ async def test_a_resumed_session_keeps_the_names_of_its_onboarding_attributions(
 async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resume_keeps_it(
     tmp_path, curations, analyses
 ):
-    from experimental.iteration.compartment import Boundaries, BoundaryError
-    from experimental.iteration.history import Entry, Raised
-    from experimental.iteration.records import Cultivation, cultivation
-    from experimental.scenario.sealed import Sealed
+    from experimental.harness.loop.history import Entry, Raised
+    from experimental.harness.loop.records import Cultivation, cultivation
+    from experimental.harness.participation.compartment import Boundaries, BoundaryError
+    from experimental.harness.scenario.sealed import Sealed
 
     card = "The customer asks for a refund above the listed amount and wants a manager to approve it today."
     check = "A refund above the listed amount is refused unless a named manager approves it in writing first."
@@ -536,7 +536,7 @@ async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resum
 @pytest.mark.asyncio
 @pytest.mark.parametrize("blocked", [False, True])
 async def test_unready_information_prevents_curation_and_trials(tmp_path, curations, analyses, blocked):
-    from experimental.research.information import Question, Result, Review, Snapshot
+    from experimental.cultivation.collector.information import Question, Result, Review, Snapshot
     from tests.test_research_collection import accepted, snapshot
 
     original = snapshot()
@@ -578,7 +578,7 @@ async def test_unready_information_prevents_curation_and_trials(tmp_path, curati
 
 @pytest.mark.asyncio
 async def test_information_is_prepared_once_and_its_version_reaches_later_curation(tmp_path, curations, analyses):
-    from experimental.research.information import Result, Review
+    from experimental.cultivation.collector.information import Result, Review
     from tests.test_research_collection import accepted, snapshot
 
     preparations = []
@@ -630,8 +630,8 @@ async def test_a_conversant_who_comes_back_later_lets_the_worker_run_meanwhile()
 
 @pytest.mark.asyncio
 async def test_a_met_external_condition_survives_resume_and_guards_the_next_round(tmp_path, curations, analyses):
-    from experimental.assessor.standard import Assessor
-    from experimental.requirements import ExternalRequirement
+    from experimental.harness.assessor.standard import Assessor
+    from experimental.harness.participation.requirements import ExternalRequirement
     from tests.test_assessor_standard import Provider, response, verdict
 
     condition = ExternalRequirement(source="human", quote="Future quotes must include tax.", kind="gate")

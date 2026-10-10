@@ -1,7 +1,7 @@
 """Run the travel-agency cultivation: each round the agency plays customers from its drill cards against the
 digital employee, reviews the drills and speaks to the Curator, and the loop curates the employee's Harness. The
 agency is the loop's assessor: it only speaks, and the base Analyst turns its words into the Curator's requirements
-(see `experimental.simulation.agency`).
+(see `experimental.simulation.cases.travel_agency.owner`).
 
 The owner knows all of the scenario's materials from the start and has handed every one over by the review before the
 last round; what varies is the partition of the materials into steps, which is how cultivation runs are told apart and
@@ -10,13 +10,13 @@ partition), and `--partition` gives any other as JSON. The run's settings, with 
 credential or configuration path, are written to `settings.json` beside the records.
 
 Each model role runs on the model and effort `--model ROLE=MODEL` and `--effort ROLE=LEVEL` name for it, and a role
-not named on the partner's, from `--config` (see `experimental.model_roles`); the resolved map is in `settings.json`.
+not named on the partner's, from `--config` (see `experimental.harness.participation.model_roles`); the resolved map is in `settings.json`.
 
-Each round plays every drill card with freshly drawn values (see `experimental.simulation.cards`) from `--seed`, so a
+Each round plays every drill card with freshly drawn values (see `experimental.simulation.bench.cards`) from `--seed`, so a
 rule counts as held only on values the employee has not met before; arms given one seed meet the same values.
 `--without` leaves materials out of the scenario altogether, for arms that differ only in what the agency owns.
 Every drill runs on its own replica of the employee, made from it as the round begins and kept under `replicas/`
-beside the records (see `experimental.automation.employee.Together`), so no drill sees another's files;
+beside the records (see `experimental.cultivation.employee.Together`), so no drill sees another's files;
 `--concurrent-drills` plays that many of a round's drills at once.
 
 With `--isolate-as USER` the employee's process tree (its shell, children and the strategy code the Curator installs)
@@ -37,16 +37,11 @@ import tempfile
 import time
 from pathlib import Path
 
-from experimental import model_roles
-from experimental.analyst.run import Limits as AnalystLimits
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.guidance import GuidanceStore
-from experimental.assessor.introspect import Introspection
-from experimental.assessor.reviewer import MetaReviewer
-from experimental.assessor.standard import SOURCES, Assessor, Standard
-from experimental.assessor.validation import ReplayCorpus, fingerprint
-from experimental.automation import caching
-from experimental.automation.employee import (
+from experimental.cultivation.collector.collection import CollectionLimits
+from experimental.cultivation.collector.information import Result as InformationResult
+from experimental.cultivation.collector.scenario import scenario_preparer
+from experimental.cultivation.counterpart.owner import SOURCE as OWNER
+from experimental.cultivation.employee import (
     REPLICAS,
     baseline,
     hire,
@@ -58,32 +53,37 @@ from experimental.automation.employee import (
     unsealed,
     workplace,
 )
-from experimental.counterpart.drills import enlist, grouped
-from experimental.counterpart.owner import SOURCE as OWNER
-from experimental.curator.attribution import AttributionLimits, ModelAttributor
-from experimental.curator.generation.run import GenerationError
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.curator.raven_adapter.confinement import Confinement
-from experimental.curator.raven_adapter.probe import exercise_translations
-from experimental.curator.raven_adapter.worker import WorkerError
-from experimental.experience.curator import CuratorExperience
-from experimental.iteration.compartment import Boundaries
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.records import cultivation
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits
-from experimental.research.collection import CollectionLimits
-from experimental.research.information import Result as InformationResult
-from experimental.research.scenario import scenario_preparer
-from experimental.scenario import ROLES
-from experimental.scenario.digest import digest
-from experimental.scenario.sealed import sealed_for
-from experimental.simulation.agency import Agency
-from experimental.simulation.attribution import write as attribute_run
-from experimental.simulation.brand import BrandOwner
-from experimental.simulation.information import CounterpartAnswers
-from experimental.simulation.record import PLACEHOLDERS, keep_scenario, placed
-from experimental.simulation.scenario import Scenario
+from experimental.harness.analyst.run import Limits as AnalystLimits
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.guidance import GuidanceStore
+from experimental.harness.assessor.introspect import Introspection
+from experimental.harness.assessor.reviewer import MetaReviewer
+from experimental.harness.assessor.standard import SOURCES, Assessor, Standard
+from experimental.harness.assessor.validation import ReplayCorpus, fingerprint
+from experimental.harness.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.harness.curator.generation.run import GenerationError
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.experience.curator import CuratorExperience
+from experimental.harness.loop.records import cultivation
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.compartment import Boundaries
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.raven_adapter.confinement import Confinement
+from experimental.harness.raven_adapter.probe import exercise_translations
+from experimental.harness.raven_adapter.worker import WorkerError
+from experimental.harness.scenario import ROLES
+from experimental.harness.scenario.digest import digest
+from experimental.harness.scenario.sealed import sealed_for
+from experimental.simulation.bench import caching
+from experimental.simulation.bench.attribution import write as attribute_run
+from experimental.simulation.bench.drills import enlist, grouped
+from experimental.simulation.bench.information import CounterpartAnswers
+from experimental.simulation.bench.record import PLACEHOLDERS, keep_scenario, placed
+from experimental.simulation.bench.scenario import Scenario
+from experimental.simulation.cases.brand_strategist.owner import BrandOwner
+from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
 
@@ -100,7 +100,7 @@ def settings(args, roles: dict, partner_tier=None) -> dict:
     """What a reader needs to know about how this run was set up; never a credential or a local config path.
 
     `argv` is the command line as given, with the configuration's path replaced: a reader reproduces the run from it.
-    `roles` is the resolved map of `experimental.model_roles`; `research` is the research channel of the collector.
+    `roles` is the resolved map of `experimental.harness.participation.model_roles`; `research` is the research channel of the collector.
     """
     return {
         "argv": placed(args.argv, {"--config": PLACEHOLDERS["--config"]}),

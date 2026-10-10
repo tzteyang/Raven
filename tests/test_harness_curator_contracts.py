@@ -7,13 +7,13 @@ import pytest
 from jsonschema import Draft202012Validator
 from pydantic import BaseModel, ConfigDict
 
-from experimental.curator.harness import Artifact, Change, Declaration, Plan, Target
-from experimental.curator.harness.action import ActionDecision
-from experimental.curator.harness.artifact import Selection
-from experimental.curator.harness.attribution import Attributed, Attribution, Diagnosis
-from experimental.curator.raven_adapter.materialize import extend_artifact
-from experimental.curator.raven_adapter.preparation import ContextPolicy, GenerationPolicy, WindowPolicy
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Artifact, Change, Declaration, Plan, Target
+from experimental.harness.contract.action import ActionDecision
+from experimental.harness.contract.artifact import Selection
+from experimental.harness.contract.attribution import Attributed, Attribution, Diagnosis
+from experimental.harness.raven_adapter.materialize import extend_artifact
+from experimental.harness.raven_adapter.preparation import ContextPolicy, GenerationPolicy, WindowPolicy
+from experimental.harness.raven_adapter.targets import catalogue
 
 
 @pytest.fixture
@@ -251,7 +251,7 @@ def test_generic_result_validation_remains_typed_and_phase_limited():
 
 
 def test_listed_references_need_a_purpose_and_read_by_the_names_the_target_gives_them(host, tmp_path):
-    from experimental.curator.harness.declaration import Reference
+    from experimental.harness.contract.declaration import Reference
 
     page = tmp_path / "page.md"
     page.write_text("# Page\n\nbody\n")

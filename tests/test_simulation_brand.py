@@ -1,8 +1,9 @@
 """The brand strategist's facts: forbidden words, slogan consistency, unsourced figures and on-call evidence, computed
 from what the assistant said and delivered with the scenario's own word table."""
 
-from experimental.iteration.protocols import Exchange, Execution
-from experimental.simulation.brand import (
+from experimental.harness.participation.protocols import Exchange, Execution
+from experimental.simulation.bench.scenario import Scenario
+from experimental.simulation.cases.brand_strategist.owner import (
     Vocabulary,
     facts,
     forbidden_words,
@@ -10,7 +11,6 @@ from experimental.simulation.brand import (
     slogan_lines,
     unsourced_figures,
 )
-from experimental.simulation.scenario import Scenario
 
 VOCABULARY = Vocabulary(
     forbidden=("best", "only", "100%"),

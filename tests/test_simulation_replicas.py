@@ -7,19 +7,19 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.automation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
-from experimental.counterpart.owner import handles
-from experimental.curator.raven_adapter.deployment import child_directory
-from experimental.curator.raven_adapter.hosting.prepare import prepare_children
-from experimental.curator.raven_adapter.strategy import Scopes
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import Guard, GuardedFactory
-from experimental.iteration.hearing import opaque
-from experimental.iteration.protocols import Exchange
-from experimental.scenario.sealed import Sealed
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.counterpart.owner import handles
+from experimental.cultivation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
+from experimental.harness.participation.compartment import Guard, GuardedFactory
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.deployment import child_directory
+from experimental.harness.raven_adapter.hosting.prepare import prepare_children
+from experimental.harness.raven_adapter.strategy import Scopes
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from raven.providers.factory import make_lazy_provider
 from tests.fixtures.harness_curator.authoring import profile

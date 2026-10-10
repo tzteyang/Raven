@@ -10,9 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.scenario import Disclosure
+from experimental.harness.scenario import Disclosure
 from experimental.simulation import suite
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
 
 
 def span(cost, session=None):
@@ -143,7 +143,7 @@ def test_scrub_also_redacts_a_credential_a_harness_read_out_of_a_configuration_c
 def test_scrub_reaches_the_product_configurations_pinned_for_the_employee_and_its_replicas(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    from experimental.automation import employee
+    from experimental.cultivation import employee
     from raven.config.schema import Config
 
     folder = tmp_path / "product"

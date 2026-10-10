@@ -116,7 +116,7 @@ Frozen experiments remain possible: record Scenario digest, released-material ma
 | Surface | Target behavior |
 |---|---|
 | `simulation.experts` | Retain task/package inputs and separate research references; shared preparation, curation, optional tasks. Fix task-only execution and retire unused staging duplication. |
-| `python -m experimental.research` | Offline entry to the same collector, using a task or Scenario-derived allowed input view. Output a versioned collection result and records, not a rewritten Scenario. Update help/callers together; do not silently retain former `--out` semantics. |
+| `python -m experimental.cultivation.collector` | Offline entry to the same collector, using a task or Scenario-derived allowed input view. Output a versioned collection result and records, not a rewritten Scenario. Update help/callers together; do not silently retain former `--out` semantics. |
 | Scenario first onboarding | Once opening handovers are determined and staged, prepare the actual released materials and Curator-visible task/context. Replay a reviewed offline result only when its task/source manifest matches; otherwise reassess. |
 | Later rounds | Keep current behavior. Preserve need origin and scope for a future request; no automatic supplement/clarification/gap dispatch. Missing authority or capability is not automatically a web-research question. |
 | User answers | Use the common answer channel. A simulation adapter may use counterpart-private knowledge internally, but must enforce outgoing release/sealing rules. No private source text or evaluation result becomes collector context. |

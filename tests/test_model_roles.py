@@ -2,8 +2,8 @@
 
 import pytest
 
-from experimental import model_roles
-from experimental.model_roles import Choice
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.model_roles import Choice
 from raven.config.schema import Config
 
 PARTNER = Choice("deepseek/deepseek-v4-flash", "low")

@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.assessor.checks import Finding, combine, expression, program
+from experimental.harness.assessor.checks import Finding, combine, expression, program
 
 pytestmark = pytest.mark.integration
 

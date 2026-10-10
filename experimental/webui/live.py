@@ -21,14 +21,14 @@ from dataclasses import dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 
-from experimental import model_roles
-from experimental.iteration.records import runs
-from experimental.scenario import load as load_contract
+from experimental.harness.loop.records import runs
+from experimental.harness.participation import model_roles
+from experimental.harness.scenario import load as load_contract
 from experimental.webui.process import redact
 from experimental.webui.rundir import curator_progress, pending_stage
 from experimental.webui.studio import studio_run
 
-BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency"
+BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "cases" / "travel_agency"
 # The model roles of a live session: a person on the page is the counterpart and every conversant, and nothing is
 # collected before onboarding.
 MODEL_ROLES = ("curator", "attribution", "analyst", "assessor", "rubric_builder", "meta_reviewer", "sub-harness")
@@ -50,7 +50,7 @@ class LiveConfig:
     the session's process only, never shown or recorded), the `root` the sessions are kept under, the `scenario`
     directory whose contract bounds them and whose materials a person may hand over, and the run's settings, named as
     the automated run's command line names them; `models` and `efforts` map a model role of `MODEL_ROLES` to its model and
-    effort (`experimental.model_roles`), a role not named running on the partner's. A relative path is read from the
+    effort (`experimental.harness.participation.model_roles`), a role not named running on the partner's. A relative path is read from the
     file's own directory."""
 
     config: Path

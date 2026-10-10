@@ -105,7 +105,7 @@ experimental/
 - 2.2 的 hearing 一半：`heard` 是 `project(signals, "curator")`，`Remark` 删除；`cited(sessions, feedback)` 取要求的证据或观察点名的回合，会话键换成不透明标签（按试炼名的短哈希，`hearing.opaque`）；`heard_observations` 只送这些回合，`run()` 与 `Session` 都改走它，对方新增的全量 `execution_observations` 由此退掉。测试 `tests/test_iteration_hearing.py`。
 - 按出处豁免：`Sealed.without(texts)`；`Boundaries.compartment(role, spoken=…)` 给 Curator 隔间减去引用回合里工作对象的话；`Guard.check_request` 对伙伴减去 user 消息的文本。
 - 伙伴守卫：`hire(guard=…)` 把 `GuardedFactory(make_lazy_provider, guard)` 作为 `provider_factory` 交给 Worker，随 spawn 进子进程；`simulation/__main__.py` 从契约推出各角色封印，装配 `Boundaries`，日志在运行目录的 `boundaries.jsonl`。
-- 2.4 的路径部分：`employee.EVALUATION_PATHS` 覆盖 `iteration`、`assessor`、`analyst`、`scenario`、`simulation` 五个包与它们的测试，内容标记同步加上 `experimental.scenario`、`experimental.assessor` 及斜杠写法。
+- 2.4 的路径部分：`employee.EVALUATION_PATHS` 覆盖 `iteration`、`assessor`、`analyst`、`scenario`、`simulation` 五个包与它们的测试，内容标记同步加上 `experimental.harness.scenario`、`experimental.harness.assessor` 及斜杠写法。
 
 2.3 已完成（2026-09-29）：`Requirement` 加 `id`（闭环按历史顺序分配，`repeats` 时沿用）、`situation`、`grounds`（受众 counterpart、analyst）、`materials`；`analyst.run.vet` 在提交时把反馈投影到 curator 受众后扫描（本轮条目 id、会话键、target 名、短的参考答案与备注，加运行的 Curator 封印），并要求每条要求点名本轮回合、写明情境；`Signal.attachments` 改为 `Handover(name, kind, files)`，模拟老板从契约读种类，记录按名字识别资料。长的参考文本只由运行封印负责：要求会合法复述检查项复述的规范，只有差分封印分得清。
 

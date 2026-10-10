@@ -9,10 +9,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.contracts import digest
-from experimental.experience.retrieve import ExperienceRetriever, GuidanceQuery
-from experimental.experience.store import ExperienceStore, StoreError
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.contracts import digest
+from experimental.harness.experience.retrieve import ExperienceRetriever, GuidanceQuery
+from experimental.harness.experience.store import ExperienceStore, StoreError
 from tests.experience_helpers import event, reviewed
 
 pytestmark = pytest.mark.integration
@@ -39,7 +39,7 @@ def test_revocation_from_another_process_invalidates_a_live_readers_guidance(tmp
         assert bundle.items
         script = """from pathlib import Path
 import sys
-from experimental.experience.store import ExperienceStore
+from experimental.harness.experience.store import ExperienceStore
 with ExperienceStore(Path(sys.argv[1])) as store:
     store.revoke_event('project', sys.argv[2], expected_version=1)
 """

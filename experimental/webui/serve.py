@@ -20,8 +20,8 @@ from mimetypes import guess_type
 from pathlib import Path
 from urllib.parse import parse_qs, urlsplit
 
-from experimental.automation.employee import AREA, HOME, REPLICAS
-from experimental.iteration.records import runs
+from experimental.cultivation.employee import AREA, HOME, REPLICAS
+from experimental.harness.loop.records import runs
 from experimental.webui.live import Live, LiveConfig
 from experimental.webui.process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
 from experimental.webui.rundir import (
@@ -39,7 +39,7 @@ from experimental.webui.rundir import (
 from experimental.webui.studio import event_summary, raw_record, studio_index, studio_run
 
 DIST = Path(__file__).resolve().parent / "dist"
-SCENARIO = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency" / "scenario.json"
+SCENARIO = Path(__file__).resolve().parents[1] / "simulation" / "cases" / "travel_agency" / "scenario.json"
 DECKS = {".pptx", ".ppt", ".odp", ".pdf"}
 TEXTS = {".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml"}
 # Upload thumbnails live outside the run: the uploads folder is the employee's own, and a cache there would be
@@ -423,7 +423,7 @@ def scenario(path: Path | None) -> dict:
 
 
 def run_scenario(root: Path, run_id: str, fallback: Path | None) -> Path | None:
-    """The scenario.json a run was cultivated in: the copy its records keep (`experimental.simulation.record.
+    """The scenario.json a run was cultivated in: the copy its records keep (`experimental.simulation.bench.record.
     keep_scenario`), else the scenario directory its `settings.json` names while that still holds one, else
     `fallback` (the server's own); a run id naming no run also falls back."""
     paths = _run_paths(root, run_id) if run_id else None
@@ -571,7 +571,7 @@ def _builder():
     """`build_record` of the simulation, imported on each call until it succeeds, so a builder that lands while the
     server runs is picked up; None with the reason while it cannot be imported."""
     try:
-        from experimental.simulation.record import build_record
+        from experimental.simulation.bench.record import build_record
     except Exception as exc:  # noqa: BLE001 -- any import failure means the page shows the builder as unavailable
         importlib.invalidate_caches()
         return None, f"{type(exc).__name__}: {exc}"

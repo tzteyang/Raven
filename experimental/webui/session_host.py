@@ -5,7 +5,7 @@ every message at once with its state, so the page can poll while a curation or a
 Each step is the Session's own (`onboard`, `trial`, `signal`, `assess`, `analyse`, `curate`, `skip`, `finish`), one
 at a time, and a step the Session refuses is answered with its reason; calling a paused step again resumes it, as the
 Session documents. The person on the page is the counterpart: what it writes and the materials it hands over become a
-`Signal` from `human`, and in a trial it is the conversant, the terminal's `experimental.assessor.human.Human` reading
+`Signal` from `human`, and in a trial it is the conversant, the terminal's `experimental.harness.assessor.human.Human` reading
 the page's messages instead (`PagePerson`). The run is assembled as the automated one (`experimental.simulation`)
 assembles its own, from the scenario's contract, except that its boundaries warn instead of aborting: the person is
 the counterpart, so what it says is its own to say, and a crossing is logged rather than refused.
@@ -20,32 +20,31 @@ import time
 from dataclasses import asdict
 from pathlib import Path
 
-from raven.config.loader import load_config
-from raven.config.mode_catalogue import build_mode_catalogue
-
-from experimental import model_roles
-from experimental.analyst.run import Limits as AnalystLimits
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.guidance import GuidanceStore
-from experimental.assessor.human import Human
-from experimental.assessor.reviewer import MetaReviewer
-from experimental.assessor.standard import Assessor, Standard
-from experimental.assessor.validation import ReplayCorpus, fingerprint
-from experimental.curator.attribution import AttributionLimits, ModelAttributor
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.curator.raven_adapter.observe import plain
-from experimental.experience.curator import CuratorExperience
-from experimental.iteration.compartment import Boundaries
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.protocols import Signal
-from experimental.iteration.records import cultivation
-from experimental.iteration.session import Limits, Session, StepError
-from experimental.scenario import ROLES, load
-from experimental.scenario.sealed import sealed_for
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.run import Limits as AnalystLimits
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.guidance import GuidanceStore
+from experimental.harness.assessor.human import Human
+from experimental.harness.assessor.reviewer import MetaReviewer
+from experimental.harness.assessor.standard import Assessor, Standard
+from experimental.harness.assessor.validation import ReplayCorpus, fingerprint
+from experimental.harness.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.experience.curator import CuratorExperience
+from experimental.harness.loop.records import cultivation
+from experimental.harness.loop.session import Limits, Session, StepError
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.compartment import Boundaries
+from experimental.harness.participation.protocols import Signal
+from experimental.harness.raven_adapter.observe import plain
+from experimental.harness.scenario import ROLES, load
+from experimental.harness.scenario.sealed import sealed_for
 from experimental.webui import employ
 from experimental.webui.live import MODEL_ROLES
 from experimental.webui.process import redact
 from experimental.webui.studio import slim_exchange
+from raven.config.loader import load_config
+from raven.config.mode_catalogue import build_mode_catalogue
 
 SOURCE = "human"
 BACKGROUND = ("onboard", "trial", "assess", "analyse", "curate")

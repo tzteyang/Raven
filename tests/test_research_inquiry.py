@@ -8,16 +8,16 @@ import sys
 
 import pytest
 
-from experimental.research import inquire
-from experimental.scenario import default_visibility
+from experimental.cultivation.collector import inquire
+from experimental.harness.scenario import default_visibility
 
 AUDIENCE = default_visibility("norm")
-from experimental.research.information import Review
-from experimental.research.inquiry import NAME, Found, Inquiry, problems, quoted, verify
-from experimental.research.researchers import Agent, Exchange, ResearchError, strict
-from experimental.research.web import READ
-from experimental.scenario import load
-from experimental.scenario.sealed import sealed_for
+from experimental.cultivation.collector.information import Review
+from experimental.cultivation.collector.inquiry import NAME, Found, Inquiry, problems, quoted, verify
+from experimental.cultivation.collector.researchers import Agent, Exchange, ResearchError, strict
+from experimental.cultivation.collector.web import READ
+from experimental.harness.scenario import load
+from experimental.harness.scenario.sealed import sealed_for
 from tests.research_helpers import CHECK, Provider, make_scenario, research_brief, response
 
 PAGE = "https://tea.example/guide"

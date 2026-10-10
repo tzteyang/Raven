@@ -5,10 +5,10 @@ from dataclasses import dataclass, field
 
 import pytest
 
-from experimental.assessor.introspect import SOURCE, Introspection, parse, request
-from experimental.audience import project
-from experimental.iteration.hearing import opaque
-from experimental.iteration.protocols import Exchange
+from experimental.harness.assessor.introspect import SOURCE, Introspection, parse, request
+from experimental.harness.participation.audience import project
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange
 
 
 @dataclass

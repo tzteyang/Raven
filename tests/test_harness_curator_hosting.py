@@ -7,11 +7,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.raven_adapter.capability.leaf import LeafRegistry, bind_leaf
-from experimental.curator.raven_adapter.hosting.acp import PAGE_BYTES, ROW_BYTES, bounded, page
-from experimental.curator.raven_adapter.hosting.connection import connection
-from experimental.curator.raven_adapter.hosting.evidence import inspect as inspect_child
-from experimental.curator.raven_adapter.hosting.transport import serve
+from experimental.harness.raven_adapter.capability.leaf import LeafRegistry, bind_leaf
+from experimental.harness.raven_adapter.hosting.acp import PAGE_BYTES, ROW_BYTES, bounded, page
+from experimental.harness.raven_adapter.hosting.connection import connection
+from experimental.harness.raven_adapter.hosting.evidence import inspect as inspect_child
+from experimental.harness.raven_adapter.hosting.transport import serve
 from raven.acp.methods import AcpMethodError
 from raven.agent.subagent.manager import SubagentManager
 from raven.agent.subagent.role import SUBAGENT_ENV_VAR

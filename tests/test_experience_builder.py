@@ -2,9 +2,9 @@
 
 import pytest
 
-from experimental.experience.builder import ModelExperienceBuilder
-from experimental.experience.contracts import BuildRequest
-from experimental.experience.model import ModelCallError, ModelLimits
+from experimental.harness.experience.builder import ModelExperienceBuilder
+from experimental.harness.experience.contracts import BuildRequest
+from experimental.harness.experience.model import ModelCallError, ModelLimits
 from raven.contracts.llm_provider import LLMResponse
 from tests.experience_helpers import Provider, event, proposal, response
 

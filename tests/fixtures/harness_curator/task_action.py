@@ -1,7 +1,7 @@
 """Require observed evidence in the current turn before accepting a final claim."""
 
-from experimental.curator.harness.action import ActionDecision, ActionEvent
-from experimental.curator.harness.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionDecision, ActionEvent
+from experimental.harness.contract.strategies import ActionStrategy
 
 REQUIRE_EVIDENCE = True
 

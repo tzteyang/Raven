@@ -4,11 +4,11 @@ import random
 
 import pytest
 
-from experimental.automation.traveller import Traveller
-from experimental.scenario.contract import frontmatter
-from experimental.simulation.cards import draw
-from experimental.simulation.reference import Rules
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.harness.scenario.contract import frontmatter
+from experimental.simulation.bench.cards import draw
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.bench.traveller import Traveller
+from experimental.simulation.cases.travel_agency.reference import Rules
 from raven.contracts.llm_provider import LLMResponse
 
 TRAVEL = BUNDLED / "travel_agency"

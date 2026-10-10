@@ -1,6 +1,6 @@
 /* What a Harness change is, read from its target and the binding value the
    revision authored. A Harness has four first-class strategies, each one
-   factory binding (experimental/curator/raven_adapter/targets/): memory,
+   factory binding (experimental/harness/raven_adapter/targets/): memory,
    planning, capability and action. A binding names the factory whose code the
    artifact's files hold, and switches on the host consumers the strategy is
    called from (the binding classes in raven_adapter/<strategy>/contracts.py). */

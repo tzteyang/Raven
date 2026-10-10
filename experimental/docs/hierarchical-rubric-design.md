@@ -324,9 +324,9 @@ Change.refine 保存继续处理该节点的理由，宿主据此安排后续局
 独立验证使用 RepairSuite，显式区分“修复哪个问题”和“核验哪个属性”。例如，修复税费检查器必须给税费准则提供独立正反例；不能拿整任务失败标签推断这个检查器正确。关系调整或删除可以核验受影响的父范围。配置示意：
 
 ```python
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.standard import Assessor
-from experimental.assessor.validation import RepairSuite
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.standard import Assessor
+from experimental.harness.assessor.validation import RepairSuite
 
 assessor = Assessor(
     provider,

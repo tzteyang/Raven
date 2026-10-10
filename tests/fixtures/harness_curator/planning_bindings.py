@@ -1,6 +1,6 @@
 """Example generated carriers delegating to a semantic planning strategy."""
 
-from experimental.curator.raven_adapter.planning.contracts import PlanningObservation
+from experimental.harness.raven_adapter.planning.contracts import PlanningObservation
 from raven.contracts.tool import Tool
 
 from .task_planning import Evidence, View

@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.curator import workflow
-from experimental.curator.generation.run import GenerationPausedError, Limits
-from experimental.curator.harness import Artifact, Declaration, Validation
-from experimental.curator.raven_adapter.exploration import Exploration, Withheld
-from experimental.curator.raven_adapter.inspection import Inspection
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Artifact, Declaration, Validation
+from experimental.harness.curator import workflow
+from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+from experimental.harness.raven_adapter.exploration import Exploration, Withheld
+from experimental.harness.raven_adapter.inspection import Inspection
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.config.schema import Config
 from tests.test_harness_curator_generation import Provider, diagnosis, plan, response, selection
 
@@ -161,7 +161,7 @@ async def test_proposal_retains_its_candidate_and_investigation_without_installi
 @pytest.mark.asyncio
 async def test_provider_interruption_retains_investigation_and_resumes_the_current_stage(worker):
     """The continuation runs on a new worker object over the same root: everything it needs is on disk."""
-    from experimental.curator.generation.run import GenerationInterruptedError
+    from experimental.harness.curator.generation.run import GenerationInterruptedError
     from raven.contracts.llm_provider import LLMResponse
 
     first = Provider(

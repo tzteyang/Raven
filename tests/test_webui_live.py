@@ -15,10 +15,10 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from experimental.curator.generation.run import GenerationPausedError
-from experimental.curator.harness import Task
-from experimental.iteration import session as stepping
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.contract import Task
+from experimental.harness.curator.generation.run import GenerationPausedError
+from experimental.harness.loop import session as stepping
+from experimental.simulation.bench.scenario import BUNDLED
 from experimental.webui import employ, session_host
 from experimental.webui.live import Handle, Live, LiveConfig
 from experimental.webui.serve import Handler

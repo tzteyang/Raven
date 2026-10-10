@@ -3,13 +3,20 @@ it hears from the conversant not sealed against it."""
 
 import json
 
-from experimental.analyst.feedback import Feedback
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.hearing import cited, heard, heard_activity, heard_history, heard_observations, opaque
-from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
-from experimental.iteration.protocols import Exchange, Handover, Item, Signal
-from experimental.requirements import Requirement
-from experimental.scenario.sealed import Sealed
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.loop.history import Diagnosed, Entry, Raised, Revised
+from experimental.harness.participation.hearing import (
+    cited,
+    heard,
+    heard_activity,
+    heard_history,
+    heard_observations,
+    opaque,
+)
+from experimental.harness.participation.protocols import Exchange, Handover, Item, Signal
+from experimental.harness.participation.requirements import Requirement
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
 
 
 def exchange(turn, user, records=()):
@@ -164,9 +171,9 @@ def test_what_the_conversant_said_is_not_sealed_against_whoever_heard_it():
 
 
 def test_the_prior_is_heard_as_its_histories_under_opaque_labels():
-    from experimental.iteration.hearing import heard_prior
-    from experimental.iteration.history import Entry, Raised
-    from experimental.iteration.records import Cultivation
+    from experimental.harness.loop.history import Entry, Raised
+    from experimental.harness.loop.records import Cultivation
+    from experimental.harness.participation.hearing import heard_prior
 
     first = Entry(
         round=1,

@@ -8,9 +8,9 @@ from pathlib import Path
 
 import pytest
 
-from experimental.research.information import Result
-from experimental.scenario.digest import digest
-from experimental.simulation.scenario import BUNDLED
+from experimental.cultivation.collector.information import Result
+from experimental.harness.scenario.digest import digest
+from experimental.simulation.bench.scenario import BUNDLED
 
 pytestmark = [pytest.mark.integration, pytest.mark.real_llm, pytest.mark.slow]
 
@@ -26,7 +26,7 @@ def test_initial_information_is_reviewed_without_rewriting_the_scenario(tmp_path
         [
             sys.executable,
             "-m",
-            "experimental.research",
+            "experimental.cultivation.collector",
             "--scenario",
             str(scenario),
             "--output",
@@ -61,15 +61,22 @@ async def test_claude_collection_closed_loop_with_retained_research(monkeypatch)
     if directory := os.environ.get("RESEARCH_CLAUDE_CONFIG_DIR"):
         monkeypatch.setenv("CLAUDE_CONFIG_DIR", str(Path(directory).expanduser().resolve()))
 
-    from experimental.automation.employee import hire_task
-    from experimental.curator.harness import Task
-    from experimental.research import curator
-    from experimental.research.calls import AgentCalls
-    from experimental.research.collection import CollectionLimits
-    from experimental.research.information import DIMENSIONS, Description, Request, Section, Snapshot, render
-    from experimental.research.inquiry import PROMPT as RESEARCH_PROMPT
-    from experimental.research.inquiry import Inquiry
-    from experimental.research.researchers import Agent
+    from experimental.cultivation.collector import curator
+    from experimental.cultivation.collector.calls import AgentCalls
+    from experimental.cultivation.collector.collection import CollectionLimits
+    from experimental.cultivation.collector.information import (
+        DIMENSIONS,
+        Description,
+        Request,
+        Section,
+        Snapshot,
+        render,
+    )
+    from experimental.cultivation.collector.inquiry import PROMPT as RESEARCH_PROMPT
+    from experimental.cultivation.collector.inquiry import Inquiry
+    from experimental.cultivation.collector.researchers import Agent
+    from experimental.cultivation.employee import hire_task
+    from experimental.harness.contract import Task
     from tests.test_research_inquiry import Pages
 
     mode = os.environ.get("RESEARCH_COLLECTION_MODE", "replay")

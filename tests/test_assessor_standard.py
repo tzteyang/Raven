@@ -4,16 +4,24 @@ import json
 
 import pytest
 
-from experimental.assessor.rubric import AssessmentPlan, Basis, Definition, LLMCheck, ProgramCheck, Reference, digest
-from experimental.assessor.standard import Assessor, Criterion, Standard, conversations, satisfied
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import Boundaries
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.protocols import Exchange, Item
-from experimental.iteration.session import Limits, Session
-from experimental.requirements import Requirement
-from experimental.scenario.sealed import Sealed
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.assessor.rubric import (
+    AssessmentPlan,
+    Basis,
+    Definition,
+    LLMCheck,
+    ProgramCheck,
+    Reference,
+    digest,
+)
+from experimental.harness.assessor.standard import Assessor, Criterion, Standard, conversations, satisfied
+from experimental.harness.loop.session import Limits, Session
+from experimental.harness.participation.compartment import Boundaries
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.participation.protocols import Exchange, Item
+from experimental.harness.participation.requirements import Requirement
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.test_iteration_run import CURATE, REQUIREMENT, FakeWorker, Scripted
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
@@ -46,9 +54,9 @@ async def test_unreadable_deliverables_remain_unknown_and_programs_receive_execu
 
 @pytest.mark.asyncio
 async def test_resume_preserves_rubric_episodes_builder_and_meta_review(tmp_path):
-    from experimental.assessor.builder import RubricBuilder
-    from experimental.assessor.reviewer import MetaReviewer
-    from experimental.requirements import ExternalRequirement
+    from experimental.harness.assessor.builder import RubricBuilder
+    from experimental.harness.assessor.reviewer import MetaReviewer
+    from experimental.harness.participation.requirements import ExternalRequirement
 
     rule = Criterion(
         "derived-1",
@@ -333,7 +341,7 @@ def test_sedimentation_does_not_upgrade_model_inference_or_weaken_an_external_re
 
 @pytest.mark.asyncio
 async def test_all_necessary_checks_run_and_the_program_failure_survives_a_model_pass():
-    from experimental.assessor.checks import Finding
+    from experimental.harness.assessor.checks import Finding
 
     seen = []
 
@@ -360,7 +368,7 @@ async def test_all_necessary_checks_run_and_the_program_failure_survives_a_model
 
 @pytest.mark.asyncio
 async def test_local_passes_do_not_establish_a_complete_semantic_claim():
-    from experimental.assessor.checks import Finding
+    from experimental.harness.assessor.checks import Finding
 
     async def a_number_exists(evidence):
         return Finding("pass", actual="Subtotal: 100.")
@@ -385,8 +393,8 @@ async def test_local_passes_do_not_establish_a_complete_semantic_claim():
 async def test_a_program_decision_requires_calibration_bound_to_its_exact_contract():
     from dataclasses import replace
 
-    from experimental.assessor.checks import Finding
-    from experimental.assessor.standard import observations
+    from experimental.harness.assessor.checks import Finding
+    from experimental.harness.assessor.standard import observations
 
     async def all_costs(evidence):
         text = evidence["conversations"]["quote"][0]["assistant"]
@@ -416,7 +424,7 @@ async def test_a_program_decision_requires_calibration_bound_to_its_exact_contra
 
 @pytest.mark.asyncio
 async def test_required_evidence_blocks_a_model_pass_and_is_visible_to_the_judge(tmp_path):
-    from experimental.assessor.rubric import EvidenceRequirement
+    from experimental.harness.assessor.rubric import EvidenceRequirement
 
     definition = Definition("Final quote document", "Cover every required fee.", "A quote was requested.")
     criterion = Criterion(

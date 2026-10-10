@@ -176,7 +176,7 @@ const channelName = (channel: string): string => CHANNELS[channel] ?? channel
 
 const minutes = (seconds?: number | null): string => (typeof seconds === 'number' ? `${Math.max(1, Math.round(seconds / 60))} min` : '')
 
-/* The research stage that prepares the Curator's information before onboarding (experimental/research/): how it
+/* The research stage that prepares the Curator's information before onboarding (experimental/cultivation/collector/): how it
    ended, the review's verdict, each dimension's coverage, every stage's calls with what went wrong, and the research
    agents with the models they reported answering with. A collection
    that is not ready stops the run before its first curation, so its reason is the run's reason. */

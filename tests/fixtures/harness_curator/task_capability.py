@@ -1,7 +1,7 @@
 """Capability policy delegates candidate registration and selects actual evidence resources."""
 
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.resources import (
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.resources import (
     CapabilityContribution,
     CapabilitySelection,
     RegistrationReceipt,
@@ -10,7 +10,7 @@ from experimental.curator.harness.resources import (
     SkillSelection,
     ToolContribution,
 )
-from experimental.curator.harness.strategies import CapabilityStrategy
+from experimental.harness.contract.strategies import CapabilityStrategy
 from raven.contracts.tool import Tool
 
 

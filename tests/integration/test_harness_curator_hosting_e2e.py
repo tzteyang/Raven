@@ -9,13 +9,13 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.hosting.acp import INSPECT
-from experimental.curator.raven_adapter.hosting.connection import connection as agent_connection
-from experimental.curator.raven_adapter.hosting.evidence import inspect as inspect_child
-from experimental.curator.raven_adapter.inspection import Inspection
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.hosting.acp import INSPECT
+from experimental.harness.raven_adapter.hosting.connection import connection as agent_connection
+from experimental.harness.raven_adapter.hosting.evidence import inspect as inspect_child
+from experimental.harness.raven_adapter.inspection import Inspection
+from experimental.harness.raven_adapter.worker import Worker
 from raven.acp_client.acp_agent import AcpAgentBackend
 from raven.acp_client.client import AcpClient
 from raven.acp_client.pool import AcpConnectionPool
@@ -44,7 +44,7 @@ LAUNCHER = """import asyncio
 import json
 import sys
 from pathlib import Path
-from experimental.curator.raven_adapter.hosting.acp import main
+from experimental.harness.raven_adapter.hosting.acp import main
 from raven.providers.base import LLMProvider
 from raven.contracts.llm_provider import GenerationSettings, LLMResponse
 from tests.integration.test_harness_curator_planning_e2e import response
@@ -91,14 +91,14 @@ def hosted(baseline, tmp_path):
         from tests.fixtures.harness_curator.authoring import add_method
 
         source = (
-            "from experimental.curator.harness.preparation import PreparationRequest\n"
+            "from experimental.harness.contract.preparation import PreparationRequest\n"
             + authored_files["task_memory.py"]
         )
         kept = [name for name in dropped if name not in {"skills", "active_skills"}]
         source = add_method(
             source,
             "Memory",
-            f"def prepare(self, request: PreparationRequest) -> None:\n    from experimental.curator.raven_adapter.preparation import ContextPolicy\n    self.host.context(ContextPolicy(drop_segments={kept!r}))",
+            f"def prepare(self, request: PreparationRequest) -> None:\n    from experimental.harness.raven_adapter.preparation import ContextPolicy\n    self.host.context(ContextPolicy(drop_segments={kept!r}))",
         )
         source += "\n_original_create = create\ndef create(state, task, *, shared, host):\n    value = _original_create(state, task, shared=shared)\n    value.host = host\n    return value\n"
         authored_files["task_memory.py"] = source
@@ -149,7 +149,7 @@ async def test_full_four_strategies_run_in_the_responding_acp_process(baseline, 
         extensions.skill_forge.router.hub.endpoint = ""
         baseline = Baseline(config, extensions, baseline.workdir, source_roots=(RUN_PY.parent,))
     elif profile != "plain":
-        from experimental.curator.raven_adapter.baselines.agents import prepare_agent
+        from experimental.harness.raven_adapter.baselines.agents import prepare_agent
 
         host = tmp_path / "parent-config"
         host.mkdir()

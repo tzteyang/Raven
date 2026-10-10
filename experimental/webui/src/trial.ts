@@ -3,8 +3,8 @@
    decks each drill delivered, and whether a changed strategy was called. An
    Action decision is a request; the host's receipt (action.control) says
    whether it was applied, and only an applied receipt is an intervention, as
-   experimental/analyst/activity.py counts it. Record kinds follow
-   experimental/curator/raven_adapter/action/runtime.py, observe.py and
+   experimental/harness/analyst/activity.py counts it. Record kinds follow
+   experimental/harness/raven_adapter/action/runtime.py, observe.py and
    worker.py. */
 
 import { tone } from './derive'
@@ -28,7 +28,7 @@ export function replyText(execution: Execution): string {
 }
 
 /** The worker timeout in seconds a turn ran past before it was stopped, true when the record names none, and null
-    for a turn that ended in time (experimental/curator/raven_adapter/worker.py TurnTimeoutError). */
+    for a turn that ended in time (experimental/harness/raven_adapter/worker.py TurnTimeoutError). */
 export function timedOut(execution: Execution): number | true | null {
   const outcome = obj(execution.outcome)
   if (outcome.timed_out !== true) return null

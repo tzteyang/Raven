@@ -1,4 +1,4 @@
-/* The cultivation record experimental/simulation/record.py builds for a run:
+/* The cultivation record experimental/simulation/bench/record.py builds for a run:
    its inputs, every curation with the harness scope it changed, each round's
    trial, evaluation, analysis and mechanism evidence, and the ledger that
    follows each of the owner's rules across rounds. This module reads that
@@ -226,9 +226,9 @@ export interface CultivationRecord {
   rounds: RecordRound[]
   ledger: LedgerRow[]
   /** What the run spent, by part; `quota` is what ran under a subscription login, priced at its API equivalent and
-      not in the total (experimental/simulation/record.py _research_spend). */
+      not in the total (experimental/simulation/bench/record.py _research_spend). */
   cost: { total: number; by_part: Record<string, number>; quota?: Record<string, number> } | null
-  /** The value judge's reading of this run (experimental/simulation/value.py), when the record carries one. */
+  /** The value judge's reading of this run (experimental/simulation/bench/value.py), when the record carries one. */
   value: ValueVerdict | null
 }
 
@@ -473,7 +473,7 @@ export const handedAfter = (record: CultivationRecord, round: number): string[] 
 
 const shortModel = (name: string): string => name.split('/').pop() ?? name
 
-/** One model role's model and effort as a run's settings keep them (experimental/model_roles.py). */
+/** One model role's model and effort as a run's settings keep them (experimental/harness/participation/model_roles.py). */
 export interface RoleChoice {
   role: string
   model: string

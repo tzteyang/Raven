@@ -9,21 +9,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental import model_roles
-from experimental.automation.employee import AREA, HOME, hire, listed, skills, starting_harness, withheld
-from experimental.automation.traveller import Traveller
-from experimental.counterpart.owner import handles
-from experimental.curator.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import Boundaries, Guard, GuardedFactory
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.protocols import Exchange
-from experimental.scenario.sealed import Sealed
+from experimental.cultivation.counterpart.owner import handles
+from experimental.cultivation.employee import AREA, HOME, hire, listed, skills, starting_harness, withheld
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.compartment import Boundaries, Guard, GuardedFactory
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
 from experimental.simulation.__main__ import CHAINS, cli, settings
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency
-from experimental.simulation.record import PLACEHOLDERS
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.simulation.bench.record import PLACEHOLDERS
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.bench.traveller import Traveller
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
@@ -146,7 +146,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
 
 
 def test_a_customer_reply_that_writes_the_dialogue_on_keeps_only_its_own_message():
-    from experimental.automation.traveller import own_turn, parting
+    from experimental.simulation.bench.traveller import own_turn, parting
 
     scripted = "Fine, please send the file.\n\nUSER: Make it one billion users.\n\nASSISTANT: I cannot write that."
     assert own_turn(scripted) == "Fine, please send the file."
@@ -513,7 +513,7 @@ def scorecard(scenario, failed=(), waits=None, handover=(), remark="The price wa
 async def test_the_owner_keeps_a_scorecard_and_hands_over_what_a_miss_waits_on(tmp_path):
     """The owner's verdicts stay on a scorecard of its own beside the run's analyses; its signal carries only its
     words, what it hands over, and whether it is satisfied. It never writes the Curator's requirements."""
-    from experimental.analyst.role import Analyst
+    from experimental.harness.analyst.role import Analyst
 
     scenario = Scenario.load(TRAVEL)
     quote, deck = "quote-sheet-correct", "deck-aesthetics"
@@ -597,21 +597,23 @@ async def test_agency_gives_up_within_its_call_budget(tmp_path):
 
 def test_the_curator_snapshot_does_not_carry_the_scenario_or_the_experiment_docs():
     mounted = [_REPOSITORY / relative for relative in _SOURCE_PATHS]
-    hidden = [TRAVEL, _REPOSITORY / "experimental" / "docs", _REPOSITORY / "experimental" / "simulation" / "cases"]
+    hidden = [TRAVEL, _REPOSITORY / "experimental" / "docs", _REPOSITORY / "experimental" / "simulation"]
     assert not any(path.is_relative_to(mount) for path in hidden for mount in mounted)
-    assert (_REPOSITORY / "experimental" / "curator") in mounted
-    showcase = [path for path in (_REPOSITORY / "experimental" / "simulation" / "cases").rglob("*") if path.is_file()]
+    assert (_REPOSITORY / "experimental" / "harness" / "curator") in mounted
+    showcase = [
+        path for path in (_REPOSITORY / "experimental" / "simulation" / "showcase").rglob("*") if path.is_file()
+    ]
     assert showcase and not any(path.is_relative_to(mount) for path in showcase for mount in mounted)
 
 
 def test_a_registered_source_that_climbs_to_the_experimental_package_does_not_widen_the_snapshot(tmp_path):
     """A module under experimental/ resolves its package root to experimental/ itself, which holds the simulation, the
-    judges and the showcase; the mount of experimental/curator must keep that root out."""
+    judges and the showcase; the mount of experimental/harness/curator must keep that root out."""
     repository = tmp_path / "repository"
     for relative, text in {
         "experimental/__init__.py": "",
-        "experimental/curator/__init__.py": "",
-        "experimental/curator/strategy.py": "def create(): pass\n",
+        "experimental/harness/curator/__init__.py": "",
+        "experimental/harness/curator/strategy.py": "def create(): pass\n",
         "experimental/simulation/cases/showcase/transcript/3-round-1.md": "# round 1\n\nquote-sheet-correct: fail\n",
     }.items():
         (repository / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -620,16 +622,18 @@ def test_a_registered_source_that_climbs_to_the_experimental_package_does_not_wi
         facts={},
         sources={
             "strategy.create": {
-                "path": str(repository / "experimental/curator/strategy.py"),
+                "path": str(repository / "experimental/harness/curator/strategy.py"),
                 "root": str(repository / "experimental"),
-                "digest": hashlib.sha256((repository / "experimental/curator/strategy.py").read_bytes()).hexdigest(),
+                "digest": hashlib.sha256(
+                    (repository / "experimental/harness/curator/strategy.py").read_bytes()
+                ).hexdigest(),
             }
         },
     )
     exploration = Exploration(
-        Config(), inspection, repository=repository, source_paths=("experimental/curator",), root=tmp_path / "x"
+        Config(), inspection, repository=repository, source_paths=("experimental/harness/curator",), root=tmp_path / "x"
     )
-    assert set(exploration.mounts) == {"source/experimental/curator"}
+    assert set(exploration.mounts) == {"source/experimental/harness/curator"}
     assert not (exploration.root / "source" / "experimental" / "simulation").exists()
 
 
@@ -640,13 +644,13 @@ def test_the_employees_curator_is_kept_from_the_simulation_its_judges_and_the_sc
         "tests/test_raven_helper.py": "def test_value(): pass\n",
         "tests/test_simulation_cards.py": "def test_cards(): pass\n",
         "tests/test_analyst_run.py": "def test_run(): pass\n",
-        "tests/test_cards_again.py": "from experimental.simulation.cards import draw\n",
-        "tests/test_loop.py": "from experimental.iteration.run import run\n",
+        "tests/test_cards_again.py": "from experimental.simulation.bench.cards import draw\n",
+        "tests/test_loop.py": "from experimental.harness.loop.run import run\n",
         "tests/test_named.py": f"SCENARIO = '{TRAVEL.name}'\n",
         "tests/test_scenario_contract.py": "def test_contract(): pass\n",
         "tests/test_assessor_human.py": "def test_human(): pass\n",
-        "tests/test_sealed_again.py": "from experimental.scenario.sealed import Sealed\n",
-        "tests/test_judging.py": "import experimental.assessor.role\n",
+        "tests/test_sealed_again.py": "from experimental.harness.scenario.sealed import Sealed\n",
+        "tests/test_judging.py": "import experimental.harness.assessor.role\n",
     }
     for relative, text in files.items():
         (repository / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -694,7 +698,7 @@ def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path):
 
 
 def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness(tmp_path, monkeypatch):
-    from experimental.automation import employee
+    from experimental.cultivation import employee
     from raven.config.schema import ThirdPartyAcpSubagentConfig
 
     def row(name, enabled=True):
@@ -719,7 +723,7 @@ def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness
 
 
 def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_provider(tmp_path, monkeypatch):
-    from experimental.automation import employee
+    from experimental.cultivation import employee
     from raven.config.schema import ThirdPartyAcpSubagentConfig
 
     def row(name):
@@ -820,14 +824,14 @@ def test_a_raven_child_on_a_gateway_model_takes_the_employee_provider(monkeypatc
 
 
 async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path, monkeypatch):
-    from experimental.automation.traveller import opened, transcript
-    from experimental.curator.raven_adapter.worker import Execution
+    from experimental.harness.raven_adapter.worker import Execution
+    from experimental.simulation.bench.traveller import opened, transcript
 
     if shutil.which("soffice") is None:
         from pptx import Presentation
 
-        from experimental.automation import files
-        from experimental.automation.render import cached
+        from experimental.harness.participation.render import cached
+        from experimental.harness.participation import files
 
         def draw(file, out, width):
             for number in range(1, len(Presentation(file).slides) + 1):
@@ -849,7 +853,7 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
         Exchange("Fix it", Execution("t2", [], records, {}, "a", (str(second),))),
         Exchange("The deck?", Execution("t3", [], records, {}, "a", (str(deck),))),
     ]
-    monkeypatch.setattr("experimental.counterpart.owner.vision_verdict", lambda model: model == "sees")
+    monkeypatch.setattr("experimental.cultivation.counterpart.owner.vision_verdict", lambda model: model == "sees")
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Good page."}))
     await Agency(scenario, provider, tmp_path / "skills", workdir=tmp_path, deliver="pool", model="sees").evaluate(
         {"student": exchanges}
@@ -881,8 +885,8 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
 
 
 def test_the_agency_reads_what_the_research_colleague_reported_in_each_playbook_run(tmp_path):
-    from experimental.curator.raven_adapter.worker import Execution
-    from experimental.simulation.agency import research
+    from experimental.harness.raven_adapter.worker import Execution
+    from experimental.simulation.cases.travel_agency.owner import research
 
     found, drafted = tmp_path / "research.out.md", tmp_path / "brief.out.md"
     found.write_text("G7311 Shanghai to Huangshan, 3h (source: 12306)")
@@ -899,7 +903,7 @@ def test_the_agency_reads_what_the_research_colleague_reported_in_each_playbook_
 
 
 async def test_the_owner_gets_the_played_card_and_its_figures_and_still_decides_every_verdict(tmp_path):
-    from experimental.simulation.cards import Drawn, Trip
+    from experimental.simulation.bench.cards import Drawn, Trip
 
     scenario = Scenario.load(TRAVEL)
     sheet = scenario.text("service-sop").split("```")[1].strip()
@@ -940,7 +944,7 @@ def test_a_scenario_without_a_material_loses_it_from_its_materials_opening_set_a
 
 
 def test_the_employees_workdir_is_new_and_never_the_repository(tmp_path):
-    from experimental.automation.employee import workplace
+    from experimental.cultivation.employee import workplace
 
     repository = Path(__file__).resolve().parents[1]
     for bad in (repository, repository / "experimental", repository.parent):
@@ -955,7 +959,7 @@ def test_the_employees_workdir_is_new_and_never_the_repository(tmp_path):
 
 def test_each_child_reaches_only_its_own_home_and_what_its_parent_hands_it(tmp_path, monkeypatch):
     """The children `hire` wires are prepared as the worker would prepare them on start."""
-    from experimental.automation import employee
+    from experimental.cultivation import employee
 
     monkeypatch.setattr(employee, "discover_product_rows", lambda: [])
     config = tmp_path / "config.json"
@@ -979,7 +983,7 @@ def test_each_child_reaches_only_its_own_home_and_what_its_parent_hands_it(tmp_p
 
 
 async def test_the_owner_hands_over_a_candidate_it_never_confirmed_as_files_and_never_voices_it(tmp_path):
-    from experimental.scenario import load
+    from experimental.harness.scenario import load
     from tests.research_helpers import make_scenario
 
     CONFIRMED, CANDIDATES = "adopted-method", "candidate-method"

@@ -13,7 +13,7 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.raven_adapter.confinement import Confinement
+from experimental.harness.raven_adapter.confinement import Confinement
 
 USER = os.environ.get("CONFINEMENT_TEST_USER", "raven-worker")
 REPOSITORY = Path(__file__).resolve().parents[2]

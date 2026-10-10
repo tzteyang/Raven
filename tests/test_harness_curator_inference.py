@@ -7,10 +7,10 @@ from typing import Literal
 import pytest
 from pydantic import BaseModel, ConfigDict
 
-from experimental.curator.harness.inference import InferenceError, InferenceRequest
-from experimental.curator.raven_adapter.calls import OperationGroup, owner_operation
-from experimental.curator.raven_adapter.inference import Inference
-from experimental.curator.raven_adapter.observe import Recorder
+from experimental.harness.contract.inference import InferenceError, InferenceRequest
+from experimental.harness.raven_adapter.calls import OperationGroup, owner_operation
+from experimental.harness.raven_adapter.inference import Inference
+from experimental.harness.raven_adapter.observe import Recorder
 from raven.contracts.llm_provider import GenerationSettings, LLMResponse, ToolCallRequest
 
 

@@ -5,9 +5,9 @@ import shutil
 
 import pytest
 
-from experimental.scenario import Disclosure, load
-from experimental.scenario.disclosure import partition
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.scenario import Disclosure, load
+from experimental.harness.scenario.disclosure import partition
+from experimental.simulation.bench.scenario import BUNDLED
 
 TRAVEL = BUNDLED / "travel_agency"
 

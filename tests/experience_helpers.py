@@ -2,8 +2,8 @@
 
 from uuid import uuid4
 
-from experimental.experience.admission import ProcessCheckReceipt
-from experimental.experience.contracts import (
+from experimental.harness.experience.admission import ProcessCheckReceipt
+from experimental.harness.experience.contracts import (
     EvidenceLink,
     EvidenceView,
     ExperienceCondition,
@@ -13,7 +13,7 @@ from experimental.experience.contracts import (
     RecordOrigin,
     digest,
 )
-from experimental.experience.state import BuildState
+from experimental.harness.experience.state import BuildState
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
 

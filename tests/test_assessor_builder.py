@@ -5,10 +5,10 @@ from dataclasses import asdict
 
 import pytest
 
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.rubric import Basis, Definition, Reference, digest
-from experimental.assessor.standard import Assessor, Criterion, Decidability, Standard
-from experimental.iteration.protocols import Exchange
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.rubric import Basis, Definition, Reference, digest
+from experimental.harness.assessor.standard import Assessor, Criterion, Decidability, Standard
+from experimental.harness.participation.protocols import Exchange
 from tests.test_assessor_standard import Provider, execution, response, verdict
 
 SOP = "Step 4: name the source of every price in the quote.\nStep 5: send the plan as a file named after the quote."
@@ -52,7 +52,7 @@ def rejections(trace):
 
 @pytest.mark.parametrize("op", ["remove", "rewrite"])
 def test_missing_evidence_cannot_remove_a_required_model_condition(op):
-    from experimental.assessor.builder import Revision
+    from experimental.harness.assessor.builder import Revision
 
     rule = Criterion(
         "derived-1",
@@ -329,7 +329,7 @@ async def test_confirmation_protects_a_generated_criterion_against_builder_edits
     builder = RubricBuilder(read={"sop": digest(SOP)})
     assert await builder.revise(provider, {"sop": SOP}, standard, {}) == standard
     assert not provider.requests
-    from experimental.assessor.builder import Revision
+    from experimental.harness.assessor.builder import Revision
 
     with pytest.raises(ValueError, match="protected external requirement"):
         builder._check(Revision.model_validate({"changes": [change]}), {"sop": SOP}, standard, {})
