@@ -391,6 +391,14 @@ it without reporting a worker defect. Session preserves it across restart and ha
 supplied conditions on the current output; hard failures or unknowns can trigger one additional analysis. It remains
 separate from behavior gaps that need Curator attribution and repair.
 
+**Requirement example** (`experimental/requirements.py`, `Example`):
+A concrete instance the Analyst attaches to a requirement. A `wrong` example quotes the input and what the worker
+produced there, with the handling that follows from the input, the handed-over materials and the requirement's
+behavior alone; a `right` example is a turn of the same kind the worker handled correctly. Examples show the behavior
+on seen inputs; they never carry an assessor's reference, notes or values, and the behavior must still hold on inputs
+the Curator has not seen.
+_Avoid_: calling them cases; a case is a dataset input with its own id (`case:<id>`).
+
 **Harness promotion** (`experimental/assessor/validation.py`, `experimental/iteration/session.py`):
 The host's adoption judgment about an installed experimental revision. A held-out assessment qualifies only with a
 fixed external rubric or dataset policy; revision identity, requirement context and retained execution evidence must

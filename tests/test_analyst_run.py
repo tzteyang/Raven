@@ -64,6 +64,16 @@ REQUIREMENT = {
     "expectation": "new",
     "acceptance": "No itinerary appears before those four items have been asked for.",
     "strength": "must_hold",
+    "examples": [
+        {
+            "kind": "wrong",
+            "turn": "t1",
+            "input": "Plan me a trip",
+            "output": "Here is a three-day itinerary.",
+            "handling": "Reply with questions about the missing trip details and hold any plan until they are answered.",
+            "why": "The intake rule puts the traveller's details before any plan.",
+        }
+    ],
 }
 
 
@@ -211,6 +221,44 @@ async def test_analyst_receives_handed_materials_but_not_files_outside_uploads(t
         "service/README.md": "Typed decisions, local endpoint, request and response examples."
     }
     assert "Held-out source" not in json.dumps(packet)
+
+
+@pytest.mark.asyncio
+async def test_analyst_must_prioritize_instead_of_submitting_four_requirements(tmp_path, sessions):
+    provider = Provider(
+        response(
+            NAME,
+            {
+                "decision": "curate",
+                "reason": "Too many independent edits.",
+                "requirements": [{**REQUIREMENT, "behavior": f"behavior {i}"} for i in range(4)],
+            },
+        ),
+        response(NAME, {"decision": "continue", "reason": "Further diagnosis is needed."}),
+    )
+    result = await analyse(FakeWorker(tmp_path), provider, (Signal("owner", "Inspect the replies."),), sessions)
+    assert result.decision == "continue"
+    assert any("at most 3" in error for error in rejections(provider))
+
+
+@pytest.mark.asyncio
+async def test_a_requirement_is_returned_until_its_wrong_example_states_the_handling(tmp_path, sessions):
+    wrong = REQUIREMENT["examples"][0]
+    attempts = [
+        {**REQUIREMENT, "examples": []},
+        {**REQUIREMENT, "examples": [{**wrong, "kind": "right", "handling": ""}]},
+        {**REQUIREMENT, "examples": [{**wrong, "handling": " "}]},
+        REQUIREMENT,
+    ]
+    provider = Provider(
+        *(response(NAME, {"decision": "curate", "reason": "r", "requirements": [item]}) for item in attempts)
+    )
+    feedback = await analyse(FakeWorker(tmp_path), provider, (Signal("owner", "No plan before details."),), sessions)
+    (accepted,) = feedback.requirements
+    assert accepted.examples[0].handling == wrong["handling"]
+    errors = rejections(provider)
+    assert len(errors) == 3
+    assert "no wrong example" in errors[0] and "no wrong example" in errors[1] and "states no handling" in errors[2]
 
 
 @pytest.mark.asyncio
