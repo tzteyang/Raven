@@ -10,18 +10,21 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { listRuns, loadStudioRun } from './api'
+import { exportLive, listRuns, loadStudioRun } from './api'
 import { T } from './copy'
-import { closeRound, lastFooter, livePhase, openTrials, processes, sendRemark, trialsOf } from './live'
+import { detail } from './detail'
+import { closeRound, lastFooter, livePhase, marksOf, openTrials, processes, sendRemark, trialsOf } from './live'
 import { replayThread } from './replay'
 import { useVersionSpy } from './spy'
 import { useLive } from './useLive'
 import { Icon } from './views/bits'
-import { ArchiveDialog, NewSessionDialog } from './views/Dialogs'
+import { ArchiveDialog, NewSessionDialog, ScriptsDialog } from './views/Dialogs'
 import { Composer, ReplayBar, StepBar, TrialPill } from './views/Dock'
 import { AuditPane, DiffPane, InspectorPane, LedgerPane, RawOutputPane } from './views/Panes'
 import { Rail } from './views/Rail'
 import { ThreadView } from './views/Thread'
+import { ExamCompare, examName, examTakes } from './views/Compare'
+import { CollectorAsk, Proposals } from './views/Proposals'
 import { TrialList, TrialPane } from './views/Trials'
 
 import type { JSX } from 'react'
@@ -29,6 +32,7 @@ import type { Run, RunEntry } from '../model'
 import type { LiveMaterial, StepReply } from './api'
 import type { LiveSession, Phase } from './live'
 import type { NewSessionInput } from './views/Dialogs'
+import type { StepAction } from './views/Dock'
 import type { Selected } from './views/Rail'
 import type { ProcessEntry, Thread } from './types'
 
@@ -39,6 +43,7 @@ type Pane =
   | { kind: 'raw'; card: string; scope: string }
   | { kind: 'ledger' }
   | { kind: 'audit' }
+  | { kind: 'compare'; name: string }
   | null
 
 interface Loaded {
@@ -88,10 +93,12 @@ export function Studio(): JSX.Element {
   const [full, setFull] = useState(false)
   const [list, setList] = useState(false)
   const [pick, setPick] = useState(false)
-  const [dialog, setDialog] = useState<'new' | 'archive' | null>(null)
+  const [dialog, setDialog] = useState<'new' | 'archive' | 'scripts' | null>(null)
   const [refusal, setRefusal] = useState<string | null>(null)
   const [creating, setCreating] = useState<string | null>(null)
   const [waiting, setWaiting] = useState(false)
+  const [exporting, setExporting] = useState<string | null>(null)
+  const [exported, setExported] = useState<string | null>(null)
   const live = useLive(selected?.kind === 'live' ? selected.id : null)
 
   useEffect(() => {
@@ -151,6 +158,7 @@ export function Studio(): JSX.Element {
     setList(false)
     setPick(false)
     setRefusal(null)
+    setExported(null)
   }, [selected])
 
   useEffect(() => {
@@ -176,6 +184,25 @@ export function Studio(): JSX.Element {
   const running = thread ? openTrials(thread).length : 0
   const cardOf = (key: string): ProcessEntry | undefined => (thread ? processes(thread).find((card) => card.key === key) : undefined)
   const phase: Phase | null = session ? livePhase(session) : null
+  const exportBusy = waiting || !!session?.busy || !!session?.state?.step || !!session?.state?.trial || phase?.kind === 'starting'
+  const exportDisabled = !session?.summary.exportable || exportBusy || exporting !== null
+  const exportHint = exportBusy ? T.exportBusy : !session?.summary.exportable ? T.exportUnsaved : T.exportHint
+
+  const download = async () => {
+    if (!session || exportDisabled) return
+    const id = session.id
+    setExporting(id)
+    setExported(null)
+    setRefusal(null)
+    try {
+      await exportLive(id)
+      setExported(id)
+    } catch (error) {
+      setRefusal((error as Error).message)
+    } finally {
+      setExporting(null)
+    }
+  }
 
   /* One of the Session's steps for this session; a refusal or a failed request is shown above the dock. */
   const stepper = (id: string) => async (op: string, body: Record<string, unknown> = {}): Promise<StepReply> => {
@@ -194,7 +221,10 @@ export function Studio(): JSX.Element {
     setRefusal(null)
     work().finally(() => setWaiting(false))
   }
-  const assess = !!live.info?.settings.standard && !(session?.run?.pending?.signals ?? []).some((signal) => signal.source === 'standard')
+  const assess = !!session?.state?.assessor && !session.state.assessed
+  const offered = (live.info?.scenarios ?? []).find((item) => item.name === (session?.summary.scenario ?? live.info?.scenario))
+  const practice = (offered?.scripts ?? live.info?.scripts ?? []).filter((script) => !script.exam)
+  const exams = (offered?.scripts ?? live.info?.scripts ?? []).filter((script) => script.exam)
 
   const openTrial = (id: string) => {
     setPane({ kind: 'trial', id })
@@ -215,7 +245,13 @@ export function Studio(): JSX.Element {
   const send = (text: string, attachments: LiveMaterial[]) => {
     if (!session) return
     const id = session.id
-    const message = { text, materials: attachments.map((material) => material.name), onboarded: !!session.state?.onboarded, assess }
+    const message = {
+      text,
+      materials: attachments.map((material) => material.name),
+      onboarded: !!session.state?.onboarded,
+      assess,
+      reviewing: phase?.kind === 'review',
+    }
     setPick(false)
     act(() => sendRemark(stepper(id), () => live.settle(id), message))
   }
@@ -235,6 +271,14 @@ export function Studio(): JSX.Element {
     const id = session.id
     const version = session.current
     const take = stepper(id)
+    const state = session.state
+    const score = state?.exam?.current
+    const examText = score ? ` ${T.examLine(score, state?.exam?.previous ?? null)}${state?.exam?.previous && score.failed > state.exam.previous.failed ? ` ${T.examWorse}` : ''}` : ''
+    const more: StepAction[] = [
+      ...(practice.length ? [{ label: T.playScripts, icon: 'flask', disabled: waiting, onClick: () => setDialog('scripts') }] : []),
+      ...(exams.length && state?.assessor && !score ? [{ label: T.examAction, icon: 'shield', disabled: waiting, title: T.examHint, onClick: () => act(() => take('exam')) }] : []),
+      ...(state?.revertible ? [{ label: T.revertAction, icon: 'chevron', disabled: waiting, title: T.revertHint, onClick: () => act(() => take('revert')) }] : []),
+    ]
     switch (phase.kind) {
       case 'between': {
         const stop = lastFooter(session)?.kind === 'stop'
@@ -242,21 +286,43 @@ export function Studio(): JSX.Element {
           <StepBar
             icon={stop ? 'check' : 'spark'}
             tone={stop ? 'ok' : 'amber'}
-            text={stop ? T.dockStopAsk(version) : T.dockAsk(version)}
+            text={(stop ? T.dockStopAsk(version) : T.dockAsk(version)) + examText}
             actions={[
               { label: T.openTrial, icon: 'flask', primary: !stop, disabled: waiting, onClick: newTrial },
+              ...more,
               { label: T.dockArchive(version), icon: 'archive', primary: stop, disabled: waiting || version === 'v0', onClick: () => setDialog('archive') },
             ]}
           />
         )
       }
+      case 'busy':
+        if (phase.step !== 'script' && phase.step !== 'exam') return null
+        return (
+          <StepBar
+            icon={phase.step === 'exam' ? 'shield' : 'flask'}
+            text={`${T.liveSteps[phase.step]}${T.colon}${T.scriptsProgress(state?.scripts ?? [])}`}
+            actions={
+              (state?.scripts ?? []).some((row) => row.done < row.steps)
+                ? [{ label: T.scriptsStop, disabled: waiting, onClick: () => act(() => take('close')) }]
+                : []
+            }
+          />
+        )
       case 'round':
         return (
           <StepBar
             icon="flask"
-            text={T.dockRound(phase.trials, phase.remarks)}
+            text={T.dockRound(phase.trials, phase.remarks) + examText}
             actions={[
               { label: T.openTrial, icon: 'flask', disabled: waiting, onClick: newTrial },
+              ...more,
+              {
+                label: T.proposeAction,
+                icon: 'spark',
+                title: T.proposeHint,
+                disabled: waiting || !phase.trials || !!state?.proposals?.busy,
+                onClick: () => act(() => take('propose')),
+              },
               {
                 label: T.dockAnalyse,
                 icon: 'spark',
@@ -323,9 +389,15 @@ export function Studio(): JSX.Element {
     if (pane.kind === 'raw') return T.rawOutputTitle(pane.scope || T.scopeRoot)
     if (pane.kind === 'ledger') return T.ledgerTitle
     if (pane.kind === 'audit') return T.auditTitle
+    if (pane.kind === 'compare') return T.compareTitle(pane.name)
     return T.inspectorTitle(paneCard?.onboarding ? T.onboardingLabel : T.roundLabel(paneCard?.round ?? 0))
   })()
   const holding = !!session && paneTrial?.source === 'live' && paneTrial.status === 'running'
+  const pendingRound = (session?.run?.rounds.length ?? 0) + 1
+  const paneSession = paneTrial ? paneTrial.id.split(':').slice(1).join(':') : ''
+  const paneExam = paneTrial ? examName(paneTrial) : null
+  const markable =
+    !!session && !!paneTrial && !paneTrial.holdout && paneTrial.status !== 'running' && paneTrial.id.startsWith(`${pendingRound}:`) && !!phase && ['between', 'round'].includes(phase.kind)
 
   return (
     <div className="app st-app" data-pane={pane ? (full ? 'full' : 'open') : 'off'}>
@@ -351,7 +423,7 @@ export function Studio(): JSX.Element {
               </span>
             )}
             {thread && (
-              <span className="st-vers" aria-label="versions">
+              <span className="st-vers" aria-label={T.versions}>
                 {thread.versions.map((version, i) => (
                   <span key={version} className="st-verwrap">
                     {i > 0 && <Icon name="chevron" size={10} className="st-vsep" />}
@@ -371,16 +443,46 @@ export function Studio(): JSX.Element {
               </span>
             )}
             <span className="spacer grow" />
-            {ledgered && (
+            {session && (
+              <span className="st-export" title={exportHint}>
+                <button type="button" className="st-btn" title={exportHint} disabled={exportDisabled} aria-busy={exporting === session.id} onClick={() => void download()}>
+                  <Icon name="download" size={14} />
+                  {exporting === session.id ? T.exporting : T.exportEmployee}
+                </button>
+              </span>
+            )}
+            {ledgered && detail === 'full' && (
               <button type="button" className="ghost-ic st-tbtn" aria-label={T.ledger} title={T.ledgerTitle} aria-pressed={pane?.kind === 'ledger'} onClick={() => setPane(pane?.kind === 'ledger' ? null : { kind: 'ledger' })}>
                 <Icon name="book" />
                 {(thread?.questions ?? []).length > 0 && <span className="st-count st-count-warn">{thread?.questions?.length}</span>}
               </button>
             )}
-            {thread?.boundaries && (
+            {thread?.boundaries && detail === 'full' && (
               <button type="button" className="ghost-ic st-tbtn" aria-label={T.audit} title={violations ? T.auditViolations(violations) : T.auditTitle} aria-pressed={pane?.kind === 'audit'} onClick={() => setPane(pane?.kind === 'audit' ? null : { kind: 'audit' })}>
                 <Icon name="shield" />
                 {violations > 0 && <span className="st-count st-count-bad">{violations}</span>}
+              </button>
+            )}
+            {session && (
+              <button
+                type="button"
+                className="ghost-ic st-tbtn"
+                aria-label={T.deleteSession}
+                title={T.deleteSession}
+                disabled={waiting}
+                onClick={() => {
+                  if (!window.confirm(T.deleteConfirm(session.title))) return
+                  const id = session.id
+                  act(async () => {
+                    const reply = await stepper(id)('delete')
+                    if (reply.ok) {
+                      setSelected(null)
+                      live.forget(id)
+                    }
+                  })
+                }}
+              >
+                <Icon name="trash" />
               </button>
             )}
             {thread && (
@@ -393,7 +495,7 @@ export function Studio(): JSX.Element {
           <div className="scroll" ref={scroller} style={{ ['--lift' as string]: bar ? '260px' : composing ? '210px' : '150px' }}>
             <div className="col" id="stage">
               {!thread && !loadError && <p className="st-quiet st-center">{selected ? T.loadingRun : T.pickSomething}</p>}
-              {loadError && <p className="st-bad st-center">{T.loadFailed}: {loadError}</p>}
+              {loadError && <p className="st-bad st-center">{T.loadFailed}{T.colon}{loadError}</p>}
               {thread && (
                 <ThreadView
                   thread={thread}
@@ -409,6 +511,11 @@ export function Studio(): JSX.Element {
                     onOpenTrial: phase && ['between', 'round'].includes(phase.kind) ? newTrial : undefined,
                     onArchive: phase?.kind === 'between' ? () => setDialog('archive') : undefined,
                     onAttach: phase && OPEN.has(phase.kind) ? () => setPick(true) : undefined,
+                    inquiries: session?.state?.inquiries ?? [],
+                    onInquire:
+                      session && session.summary.attached && phase && !['archived', 'ended'].includes(phase.kind)
+                        ? (round, role, question) => act(() => stepper(session.id)('inquire', { round, role, question }))
+                        : undefined,
                   }}
                 />
               )}
@@ -418,13 +525,27 @@ export function Studio(): JSX.Element {
             <div className="dock">
               <TrialPill running={running} total={trials.length} onToggle={() => setList(!list)} />
               {refusal && <p className="st-bad st-refusal">{T.liveRefused(refusal)}</p>}
+              {exported === session?.id && <p className="st-good st-refusal" role="status">{T.exportDone}</p>}
               {session?.busy && <p className="st-quiet st-refusal">{T.liveUnreachable}</p>}
+              {session && phase && (phase.kind === 'between' || phase.kind === 'round') && (
+                <Proposals
+                  proposals={session.state?.proposals ?? null}
+                  adopted={session.state?.adopted ?? []}
+                  onAdopt={waiting ? undefined : (index, choice) => act(() => stepper(session.id)('adopt', { index, ...choice }))}
+                />
+              )}
+              {!!session?.state?.information?.questions?.length && (
+                <CollectorAsk
+                  questions={session.state.information.questions}
+                  onAnswer={waiting ? undefined : (id, answer) => act(() => stepper(session.id)('answer', { id, ...answer }))}
+                />
+              )}
               {bar}
               {session && phase && composing && (
                 <Composer
                   placeholder={placeholder(session, phase)}
-                  disabled={waiting || !OPEN.has(phase.kind)}
-                  materials={live.info?.materials ?? []}
+                  disabled={waiting || !(OPEN.has(phase.kind) || phase.kind === 'review')}
+                  materials={offered?.materials ?? live.info?.materials ?? []}
                   curator={session.summary.models.curator ?? live.info?.settings.curator ?? ''}
                   tag={session.state?.onboarded ? T.requestTag : T.onboardingTag}
                   pickOpen={pick}
@@ -442,9 +563,12 @@ export function Studio(): JSX.Element {
         {pane && thread && (
           <section className="desk-pane st-pane" data-full={full} aria-label={paneTitle}>
             <header>
-              <Icon name={{ trial: 'flask', diff: 'layers', raw: 'braces', ledger: 'book', audit: 'shield', inspect: 'eye' }[pane.kind]} size={15} />
+              <Icon name={{ trial: 'flask', diff: 'layers', raw: 'braces', ledger: 'book', audit: 'shield', inspect: 'eye', compare: 'layers' }[pane.kind]} size={15} />
               <b title={paneTitle}>{paneTitle}</b>
               {pane.kind === 'trial' && paneTrial && <code className="st-vtag">{paneTrial.version}</code>}
+              {pane.kind === 'trial' && thread && paneExam && examTakes(thread, paneExam).length > 1 && (
+                <button type="button" className="st-btn" onClick={() => setPane({ kind: 'compare', name: paneExam })}>{T.compareAction}</button>
+              )}
               <span className="pane-spacer grow" />
               <button type="button" className="pane-fullscreen" aria-label={full ? T.shrink : T.expand} title={full ? T.shrink : T.expand} onClick={() => setFull(!full)}>
                 <Icon name={full ? 'shrink' : 'expand'} size={14} />
@@ -457,7 +581,26 @@ export function Studio(): JSX.Element {
                   trial={paneTrial}
                   run={thread.source ?? null}
                   onSay={holding && session ? (text) => void stepper(session.id)('say', { text }) : undefined}
+                  question={
+                    holding && session && session.state?.trial?.name === paneSession
+                      ? { state: session.state?.question ?? null, onAsk: () => void stepper(session.id)('question') }
+                      : undefined
+                  }
                   onEnd={holding && session ? () => void stepper(session.id)('close') : undefined}
+                  marking={
+                    markable && session
+                      ? {
+                          given: marksOf(session.run?.pending?.signals ?? [], paneSession),
+                          onMark: (turn, kind, note) =>
+                            act(() =>
+                              stepper(session.id)('signal', {
+                                text: T.markText(paneTrial.title, turn + 1, kind, note),
+                                marks: [{ session: paneSession, turn, kind, note }],
+                              }),
+                            ),
+                        }
+                      : undefined
+                  }
                 />
               )}
               {pane.kind === 'diff' && paneCard?.curation && <DiffPane view={paneCard.curation} scope={pane.scope} root={pane.root} target={pane.target} />}
@@ -465,6 +608,7 @@ export function Studio(): JSX.Element {
               {pane.kind === 'raw' && paneScope && <RawOutputPane key={`${pane.card}:${pane.scope}`} scope={paneScope} />}
               {pane.kind === 'ledger' && <LedgerPane thread={thread} />}
               {pane.kind === 'audit' && <AuditPane boundaries={thread.boundaries} />}
+              {pane.kind === 'compare' && <ExamCompare takes={examTakes(thread, pane.name)} />}
             </div>
           </section>
         )}
@@ -475,13 +619,25 @@ export function Studio(): JSX.Element {
           error={creating}
           onCreate={(input: NewSessionInput) => {
             setCreating(null)
-            live.create(input.title, input.task).then(
+            live.create(input.title, input.task, input.version, input.scenario).then(
               (id) => {
                 setSelected({ kind: 'live', id })
                 setDialog(null)
               },
               (error: Error) => setCreating(error.message),
             )
+          }}
+          onBuild={(draft) => live.build(draft)}
+          onCancel={() => setDialog(null)}
+        />
+      )}
+      {dialog === 'scripts' && session && (
+        <ScriptsDialog
+          scripts={practice}
+          onPlay={(names) => {
+            const id = session.id
+            setDialog(null)
+            act(() => stepper(id)('script', { names }))
           }}
           onCancel={() => setDialog(null)}
         />

@@ -191,6 +191,12 @@ _SEARCH_REQUESTS: dict[str, tuple[str, str, dict[str, Any], dict[str, str]]] = {
         {"params": {"q": "q1", "num": 4}},
         {"X-Api-Key": "k"},
     ),
+    "jina": (
+        "GET",
+        "https://s.jina.ai/",
+        {"params": {"q": "q1", "num": 4}},
+        {"Authorization": "Bearer k", "X-Respond-With": "no-content"},
+    ),
 }
 
 
@@ -299,6 +305,7 @@ _SEARCH_PAYLOADS: dict[str, Any] = {
     "brave": {"web": {"results": [{"title": "T1", "url": "https://a.example", "description": "S1"}]}},
     "firecrawl": {"success": True, "data": [{"title": "T1", "url": "https://a.example", "description": "S1"}]},
     "serply": {"results": [{"title": "T1", "link": "https://a.example", "description": "S1"}]},
+    "jina": {"code": 200, "data": [{"title": "T1", "url": "https://a.example", "description": "S1", "content": ""}]},
 }
 
 
@@ -911,7 +918,7 @@ def test_the_settings_page_offers_exactly_the_schemas_vendors() -> None:
     assert search["vendors"] == list(get_args(WebSearchProvider))
     assert fetch["vendors"] == list(get_args(WebFetchProvider))
     # Not vacuous: the parse found real lists, so an empty one cannot pass.
-    assert len(search["vendors"]) == 8 and len(fetch["vendors"]) == 5
+    assert len(search["vendors"]) == 9 and len(fetch["vendors"]) == 5
     assert search["fallback"] == DEFAULT_SEARCH_PROVIDER
     assert fetch["fallback"] == DEFAULT_FETCH_PROVIDER
     assert search["path"] == "tools.web.search.provider"

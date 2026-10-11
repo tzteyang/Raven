@@ -102,6 +102,20 @@ export interface Signal {
   attachments?: Handover[]
 }
 
+export interface Example {
+  kind: 'wrong' | 'right'
+  /** The turn id of the round where the example occurred. */
+  turn: string
+  /** The part of the input the example concerns, quoted. */
+  input: string
+  /** What the worker wrote or did there. */
+  output: string
+  /** Wrong examples: the decision and how to express it for this input; empty for right examples. */
+  handling?: string
+  /** The rule from the materials and why the output breaks or keeps it. */
+  why: string
+}
+
 export interface Requirement {
   /** The loop's id (R1, R2 ...); a requirement raised again keeps the earlier id and names it in `repeats`. */
   id?: string
@@ -120,6 +134,8 @@ export interface Requirement {
   grounds?: string[]
   /** The handed-over materials it draws on, by name. */
   materials?: string[]
+  /** Every wrong instance of the round, and turns of the same kind the worker handled right. */
+  examples?: Example[]
 }
 
 export interface Feedback {

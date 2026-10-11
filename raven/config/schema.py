@@ -990,7 +990,7 @@ class GatewayConfig(Base):
     page: GatewayPageConfig = Field(default_factory=GatewayPageConfig)
 
 
-WebSearchProvider = Literal["serper", "anysearch", "serpapi", "tavily", "exa", "brave", "firecrawl", "serply"]
+WebSearchProvider = Literal["serper", "anysearch", "serpapi", "tavily", "exa", "brave", "firecrawl", "serply", "jina"]
 WebFetchProvider = Literal["jina", "anysearch", "tavily", "exa", "firecrawl"]
 
 #: The bare environment variable each web vendor's tool falls back to when the

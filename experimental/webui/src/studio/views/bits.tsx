@@ -23,6 +23,7 @@ const PATHS: Record<string, string> = {
   shrink: 'M4 14h6v6M20 10h-6V4M14 10l7-7M3 21l7-7',
   eye: 'M2 12s3.6-7 10-7 10 7 10 7-3.6 7-10 7S2 12 2 12zM12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6z',
   archive: 'M3 4h18v4H3zM5 8v12h14V8M10 12h4',
+  download: 'M12 3v12M7 10l5 5 5-5M4 16v5h16v-5',
   check: 'M5 12.5 10 17l9-10',
   chevron: 'M9 6l6 6-6 6',
   down: 'M6 9l6 6 6-6',
@@ -38,6 +39,7 @@ const PATHS: Record<string, string> = {
   alert: 'M12 3 2 20h20zM12 10v4M12 17v.5',
   braces: 'M8 4H7a2 2 0 0 0-2 2v4a2 2 0 0 1-2 2 2 2 0 0 1 2 2v4a2 2 0 0 0 2 2h1M16 4h1a2 2 0 0 1 2 2v4a2 2 0 0 0 2 2 2 2 0 0 0-2 2v4a2 2 0 0 1-2 2h-1',
   book: 'M5 4h9a3 3 0 0 1 3 3v13H8a3 3 0 0 1-3-3zM17 20h2V6',
+  trash: 'M4 7h16M9 7V4h6v3M6 7l1 13h10l1-13M10 11v6M14 11v6',
 }
 
 export function Icon({ name, size = 16, className }: { name: keyof typeof PATHS | string; size?: number; className?: string }): JSX.Element {

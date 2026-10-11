@@ -78,7 +78,7 @@ const snapshot = (live: Partial<LiveState>, record: Run): LiveSnapshot => ({
   record,
 })
 
-function server(current: () => LiveSnapshot, live = true): [string, unknown][] {
+function server(current: () => LiveSnapshot, live = true, download?: () => Promise<Response>): [string, unknown][] {
   const posts: [string, unknown][] = []
   vi.stubGlobal(
     'fetch',
@@ -90,6 +90,7 @@ function server(current: () => LiveSnapshot, live = true): [string, unknown][] {
       }
       if (path === '/api/studio/runs') return answer([])
       if (path === '/api/studio/live') return live ? answer(info) : answer({ error: 'off' }, 404)
+      if (path === `/api/studio/live/${ID}/export` && download) return download()
       if (path.startsWith(`/api/studio/live/${ID}`)) return answer(current())
       return answer({ error: 'unknown endpoint' }, 404)
     }),
@@ -104,6 +105,7 @@ beforeEach(() => {
 
 afterEach(() => {
   cleanup()
+  vi.restoreAllMocks()
   vi.unstubAllGlobals()
 })
 
@@ -166,4 +168,96 @@ test('a session whose process is gone offers to resume it, which the server answ
   expect(await screen.findByText(T.liveGone)).toBeTruthy()
   fireEvent.click(await dock().findByRole('button', { name: T.dockReattach }))
   await waitFor(() => expect(posts.map(([path]) => path)).toEqual([`/api/studio/live/${ID}/resume`]))
+})
+
+test('while a curation waits, a remark goes to the Curator alone and does not close another round', async () => {
+  const current = snapshot({ reviewing: true, outcome: { next: 'curate', reason: '' } }, reviewed)
+  const posts = server(() => current)
+  await open()
+  const box = (await screen.findByPlaceholderText(T.composerReview)) as HTMLTextAreaElement
+  expect(box.disabled).toBe(false)
+  fireEvent.change(box, { target: { value: 'That requirement is wrong: keep the greeting.' } })
+  fireEvent.keyDown(box, { key: 'Enter' })
+  await waitFor(() => expect(posts).toEqual([[`/api/studio/live/${ID}/signal`, { text: 'That requirement is wrong: keep the greeting.', materials: [] }]]))
+})
+
+test('a session is deleted only once the person confirms, and leaves the page', async () => {
+  const posts = server(() => snapshot({}, fresh))
+  await open()
+  const confirm = vi.fn(() => false)
+  vi.stubGlobal('confirm', confirm)
+  fireEvent.click(screen.getByRole('button', { name: T.deleteSession }))
+  expect(confirm).toHaveBeenCalledWith(T.deleteConfirm('Agency'))
+  expect(posts).toEqual([])
+  confirm.mockReturnValue(true)
+  fireEvent.click(screen.getByRole('button', { name: T.deleteSession }))
+  await waitFor(() => expect(posts.map(([path]) => path)).toEqual([`/api/studio/live/${ID}/delete`]))
+  await waitFor(() => expect(screen.queryByRole('heading', { name: 'Agency' })).toBeNull())
+})
+
+test.each([false, undefined])('export explains why a session without a saved employee is unavailable (%s)', async (exportable) => {
+  server(() => ({ ...snapshot({}, fresh), exportable }))
+  await open()
+  const button = await screen.findByRole('button', { name: T.exportEmployee }) as HTMLButtonElement
+  await waitFor(() => expect(button.parentElement?.title).toBe(T.exportUnsaved))
+  expect(button.disabled).toBe(true)
+  fireEvent.click(button)
+  expect(fetch).not.toHaveBeenCalledWith(`/api/studio/live/${ID}/export`, expect.anything())
+})
+
+test.each([
+  { step: 'curate' },
+  { trial: { name: 'trial', exchanges: [], said: null, waiting: true } },
+])('a saved employee cannot be exported during a step or trial (%j)', async (live) => {
+  server(() => ({ ...snapshot(live, fresh), exportable: true }))
+  await open()
+  const button = await screen.findByRole('button', { name: T.exportEmployee }) as HTMLButtonElement
+  await waitFor(() => expect(button.parentElement?.title).toBe(T.exportBusy))
+  expect(button.disabled).toBe(true)
+})
+
+test('an ended saved session exports from the top bar, shows progress, and explains how to use its package', async () => {
+  let finish!: (response: Response) => void
+  const download = vi.fn(() => new Promise<Response>((resolve) => { finish = resolve }))
+  server(() => ({ ...snapshot({ ended: true, status: 'finished' }, { ...fresh, status: 'finished' }), exportable: true, attached: false }), true, download)
+  vi.stubGlobal('URL', class extends URL {
+    static createObjectURL = vi.fn(() => 'blob:employee-package')
+    static revokeObjectURL = vi.fn()
+  })
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  await open()
+  const button = await screen.findByRole('button', { name: T.exportEmployee }) as HTMLButtonElement
+  await waitFor(() => expect(button.disabled).toBe(false))
+  expect(document.querySelector('.top')?.contains(button)).toBe(true)
+  fireEvent.click(button)
+  expect(await screen.findByRole('button', { name: T.exporting })).toBe(button)
+  expect(button.disabled).toBe(true)
+  expect(button.getAttribute('aria-busy')).toBe('true')
+  fireEvent.click(button)
+  expect(download).toHaveBeenCalledOnce()
+
+  finish(new Response('employee package', { headers: { 'Content-Type': 'application/zip', 'Content-Disposition': 'attachment; filename=agency.zip' } }))
+
+  expect(await screen.findByRole('status')).toHaveProperty('textContent', T.exportDone)
+  expect(click).toHaveBeenCalledOnce()
+  expect(button.disabled).toBe(false)
+  expect(button.getAttribute('aria-busy')).toBe('false')
+  await waitFor(() => expect(URL.revokeObjectURL).toHaveBeenCalledWith('blob:employee-package'), { timeout: 2000 })
+})
+
+test('a refused export uses the existing error area and leaves the download button available for a retry', async () => {
+  server(() => ({ ...snapshot({}, fresh), exportable: true }), true, async () => new Response(JSON.stringify({ error: 'Employee is being saved' }), {
+    status: 409, headers: { 'Content-Type': 'application/json' },
+  }))
+  const click = vi.spyOn(HTMLAnchorElement.prototype, 'click').mockImplementation(() => undefined)
+  await open()
+  const button = await screen.findByRole('button', { name: T.exportEmployee }) as HTMLButtonElement
+  await waitFor(() => expect(button.disabled).toBe(false))
+  fireEvent.click(button)
+
+  const error = await screen.findByText(T.liveRefused('Employee is being saved'))
+  expect(error.classList.contains('st-refusal')).toBe(true)
+  expect(button.disabled).toBe(false)
+  expect(click).not.toHaveBeenCalled()
+  expect(screen.queryByText(T.exportDone)).toBeNull()
 })

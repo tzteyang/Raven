@@ -6,7 +6,8 @@
     "back to the name/help written in code, which stays the English source.",
     "ui: both locales are required; these surfaces have no in-code source.",
     "TUI consumes src/i18n/messages.generated.ts (npm run gen:i18n).",
-    "GUI inlines this file at build time (ui-gui/build.py)."
+    "GUI inlines this file at build time (ui-gui/build.py).",
+    "studio: the RSI Studio's (experimental/webui) words in zh only; its English is written in its code (src/studio/copy.ts), and {0}, {1}... stand for a function's arguments in order."
   ],
   "slash": {
     "help": {
@@ -10222,6 +10223,1772 @@
     "gui.pb.stint_status_finished": {
       "en": "finished",
       "zh": "已完成"
+    }
+  },
+  "studio": {
+    "product": {
+      "zh": "RSI Studio"
+    },
+    "langName": {
+      "zh": "中文"
+    },
+    "langShort": {
+      "zh": "中"
+    },
+    "langTitle": {
+      "zh": "界面语言"
+    },
+    "detailSimple": {
+      "zh": "简洁"
+    },
+    "detailFull": {
+      "zh": "完整"
+    },
+    "detailTitle": {
+      "zh": "显示培养过程的每一步，或只留判断员工好坏需要的部分"
+    },
+    "newSession": {
+      "zh": "新建培养"
+    },
+    "groupLive": {
+      "zh": "交互会话"
+    },
+    "groupRuns": {
+      "zh": "自动运行"
+    },
+    "groupArchived": {
+      "zh": "已归档的智能体"
+    },
+    "moreRuns": {
+      "zh": "展开其余 {0} 个运行"
+    },
+    "fewerRuns": {
+      "zh": "收起"
+    },
+    "emptyLive": {
+      "zh": "还没有交互会话"
+    },
+    "loadingRuns": {
+      "zh": "正在加载运行…"
+    },
+    "modeLive": {
+      "zh": "交互"
+    },
+    "modeReplay": {
+      "zh": "只读回放"
+    },
+    "archivedTag": {
+      "zh": "已归档"
+    },
+    "versions": {
+      "zh": "版本"
+    },
+    "headTask": {
+      "zh": "岗位说明"
+    },
+    "headBaseline": {
+      "zh": "起始 Harness"
+    },
+    "headModels": {
+      "zh": "模型"
+    },
+    "speakerYou": {
+      "zh": "你"
+    },
+    "speakerOwner": {
+      "zh": "模拟对接人 · 评审"
+    },
+    "speakerSelf": {
+      "zh": "员工自查 · 评审"
+    },
+    "speakerAssessor": {
+      "zh": "{0} · 评审"
+    },
+    "onboardingTag": {
+      "zh": "入职材料"
+    },
+    "requestTag": {
+      "zh": "改造请求"
+    },
+    "roundLabel": {
+      "zh": "第 {0} 轮 · 后台"
+    },
+    "onboardingLabel": {
+      "zh": "入职改造 · 后台"
+    },
+    "stepAnalyst": {
+      "zh": "分析师"
+    },
+    "stepDecide": {
+      "zh": "决定"
+    },
+    "stepCurate": {
+      "zh": "改造 → {0}"
+    },
+    "stepNoCurate": {
+      "zh": "未改造"
+    },
+    "pausedChild": {
+      "zh": "子 Harness {0}"
+    },
+    "pausedPlain": {
+      "zh": "改造已暂停"
+    },
+    "pausedIn": {
+      "zh": "改造在{0} 中暂停"
+    },
+    "pausedAt": {
+      "zh": "改造在「{0}」阶段暂停"
+    },
+    "pausedInAt": {
+      "zh": "改造在{0} 的「{1}」阶段暂停"
+    },
+    "stepKept": {
+      "zh": "改造未生效"
+    },
+    "inspector": {
+      "zh": "输入检查器"
+    },
+    "analysing": {
+      "zh": "分析师正在读本轮的反馈和演练记录…"
+    },
+    "analysisFailed": {
+      "zh": "分析失败"
+    },
+    "onboardingSkipsAnalyst": {
+      "zh": "入职材料直接交给改造师，不经过分析师。"
+    },
+    "decision.curate": {
+      "zh": "需要改造"
+    },
+    "decision.continue": {
+      "zh": "不改"
+    },
+    "decision.supplement": {
+      "zh": "缺材料"
+    },
+    "decision.clarify": {
+      "zh": "需要澄清"
+    },
+    "decision.stop": {
+      "zh": "已满意"
+    },
+    "handoverChip": {
+      "zh": "照样改造"
+    },
+    "handoverNote": {
+      "zh": "这次请求带了材料，按交接规则进入改造"
+    },
+    "stopBeatsHandover": {
+      "zh": "「已满意」优先：这次附带的材料没有用于改造"
+    },
+    "strength.must_hold": {
+      "zh": "必须"
+    },
+    "strength.should": {
+      "zh": "应当"
+    },
+    "repeats": {
+      "zh": "重复 {0}"
+    },
+    "situation": {
+      "zh": "情境"
+    },
+    "materials": {
+      "zh": "材料"
+    },
+    "wrongExamples": {
+      "zh": "{0} 个错误示例"
+    },
+    "rightExamples": {
+      "zh": "{0} 个正确示例"
+    },
+    "exampleWrong": {
+      "zh": "错误"
+    },
+    "exampleRight": {
+      "zh": "正确"
+    },
+    "exampleInput": {
+      "zh": "输入"
+    },
+    "exampleOutput": {
+      "zh": "输出"
+    },
+    "exampleHandling": {
+      "zh": "处理"
+    },
+    "exampleWhy": {
+      "zh": "原因"
+    },
+    "held.true": {
+      "zh": "下一轮守住了"
+    },
+    "held.false": {
+      "zh": "下一轮没守住"
+    },
+    "held.null": {
+      "zh": "等下一轮"
+    },
+    "heldHint": {
+      "zh": "改造后的下一轮是否守住：按循环的规则（ledger.py）判定，记在 history 里"
+    },
+    "expectation.new": {
+      "zh": "新要求"
+    },
+    "expectation.unmet": {
+      "zh": "承诺未兑现"
+    },
+    "expectation.met_but_rejected": {
+      "zh": "做到了但仍不满意"
+    },
+    "observed": {
+      "zh": "观察到的"
+    },
+    "evidence": {
+      "zh": "证据"
+    },
+    "acceptance": {
+      "zh": "验收标准"
+    },
+    "occurrence": {
+      "zh": "第 {0} 次出现"
+    },
+    "filtered": {
+      "zh": "{0} 条未采纳"
+    },
+    "requirements": {
+      "zh": "{0} 条要求"
+    },
+    "stages.diagnose": {
+      "zh": "诊断"
+    },
+    "stages.select": {
+      "zh": "理解与选择"
+    },
+    "stages.design": {
+      "zh": "设计"
+    },
+    "stages.implement": {
+      "zh": "实现"
+    },
+    "stages.validate": {
+      "zh": "校验"
+    },
+    "stages.repair": {
+      "zh": "修复"
+    },
+    "stages.install": {
+      "zh": "安装"
+    },
+    "calls": {
+      "zh": "{0} 次调用"
+    },
+    "queries": {
+      "zh": "{0} 次查询"
+    },
+    "scopeRoot": {
+      "zh": "根 Harness"
+    },
+    "progressRoot": {
+      "zh": "正在改造根 Harness"
+    },
+    "progressChild": {
+      "zh": "正在改造子 Harness {0}"
+    },
+    "diagnosisSpent": {
+      "zh": "诊断已用 {0} · {1}"
+    },
+    "curationSpent": {
+      "zh": "改造已用 {0} · {1}"
+    },
+    "reads": {
+      "zh": "改造师查阅了 {0} 次：{1}"
+    },
+    "readTool.read_source": {
+      "zh": "源码"
+    },
+    "readTool.read_fact": {
+      "zh": "Harness 事实"
+    },
+    "readTool.read_observation": {
+      "zh": "演练记录"
+    },
+    "readsNote": {
+      "zh": "分析师在要求里引用的轮次，会作为观察交给改造师（记录里不保存这些内容；改造师看到的是 session-7ae78d 这样的匿名标签，由演练名哈希得到，跨轮不变）。这里列出它实际读过的条目；点演练记录会打开对应的演练。"
+    },
+    "observedCurrent": {
+      "zh": "子 Harness 当前的执行"
+    },
+    "observedTurn": {
+      "zh": "{0} 第 {1} 轮"
+    },
+    "quoted": {
+      "zh": "「{0}」"
+    },
+    "readFailed": {
+      "zh": "读取失败"
+    },
+    "observedHanded": {
+      "zh": "另外交给改造师的：分析师引用的 {0} 个演练轮次，作为观察（不保存在改造记录里）。它读了其中 {1} 个："
+    },
+    "diagnosis": {
+      "zh": "诊断"
+    },
+    "diagnosed": {
+      "zh": "{0} 条输入"
+    },
+    "diagnosisNote": {
+      "zh": "动手之前，改造师先把每条输入（一条要求、交接的材料、分给子 Harness 的节点要求，或任务本身）对应到当前 Harness 的某个机制上。"
+    },
+    "attributionPaused": {
+      "zh": "诊断已暂停：{0}"
+    },
+    "attributionFailed": {
+      "zh": "诊断失败：{0}"
+    },
+    "states.absent": {
+      "zh": "缺失"
+    },
+    "states.not_exposed": {
+      "zh": "未暴露"
+    },
+    "states.not_triggered": {
+      "zh": "未触发"
+    },
+    "states.not_consumed": {
+      "zh": "未被使用"
+    },
+    "states.wrong_logic": {
+      "zh": "逻辑错误"
+    },
+    "states.blocked": {
+      "zh": "被拦截"
+    },
+    "states.model_ignored": {
+      "zh": "模型没照做"
+    },
+    "states.uncovered": {
+      "zh": "情境未覆盖"
+    },
+    "stateHints.absent": {
+      "zh": "没有任何机制覆盖它"
+    },
+    "stateHints.not_exposed": {
+      "zh": "机制存在，但模型从来看不到"
+    },
+    "stateHints.not_triggered": {
+      "zh": "机制存在，但触发条件从未成立"
+    },
+    "stateHints.not_consumed": {
+      "zh": "机制触发了，但结果没被用上"
+    },
+    "stateHints.wrong_logic": {
+      "zh": "机制运行了，但判断错了"
+    },
+    "stateHints.blocked": {
+      "zh": "被宿主或权限拦下了"
+    },
+    "stateHints.model_ignored": {
+      "zh": "信息在输入里，但模型没有照做"
+    },
+    "stateHints.uncovered": {
+      "zh": "机制存在，但够不到这个情境"
+    },
+    "aboutTask": {
+      "zh": "任务本身"
+    },
+    "aboutMaterial": {
+      "zh": "材料 {0}"
+    },
+    "aboutNode": {
+      "zh": "节点 {0}"
+    },
+    "diagMechanism": {
+      "zh": "机制"
+    },
+    "diagEvidence": {
+      "zh": "证据"
+    },
+    "diagEarlier": {
+      "zh": "此前"
+    },
+    "diagPlacement": {
+      "zh": "落点"
+    },
+    "selection": {
+      "zh": "选择"
+    },
+    "selectionWhy": {
+      "zh": "为什么选这些目标"
+    },
+    "grounds": {
+      "zh": "对应"
+    },
+    "ungrounded": {
+      "zh": "没有关联到诊断"
+    },
+    "treatment.modify": {
+      "zh": "修改"
+    },
+    "treatment.replace": {
+      "zh": "替换"
+    },
+    "treatment.add": {
+      "zh": "新增"
+    },
+    "treatmentHint": {
+      "zh": "这次改动是修改或替换诊断出的机制，还是在旁边新增一个"
+    },
+    "hooks.factory": {
+      "zh": "工厂"
+    },
+    "hooks.events": {
+      "zh": "事件"
+    },
+    "hooks.tool": {
+      "zh": "工具"
+    },
+    "hooks.dispatch": {
+      "zh": "逐次调用检查"
+    },
+    "hooks.requests": {
+      "zh": "跨策略请求"
+    },
+    "hooks.context": {
+      "zh": "上下文指引"
+    },
+    "hooks.observe": {
+      "zh": "观察"
+    },
+    "hooks.intake": {
+      "zh": "接收"
+    },
+    "hooks.archive": {
+      "zh": "归档"
+    },
+    "hooks.compact": {
+      "zh": "压缩"
+    },
+    "hooks.sources": {
+      "zh": "基线来源"
+    },
+    "owns.memory": {
+      "zh": "上下文：准备档案和存储，初始化每个会话，组装每一次模型输入"
+    },
+    "owns.planning": {
+      "zh": "会话计划：通过交互初始化和修订计划，投射视图和指引，准备可复用的剧本"
+    },
+    "owns.capability": {
+      "zh": "工具与技能：登记它准备的资源，并在每次模型调用前选出生效的那些"
+    },
+    "owns.action": {
+      "zh": "判断：处理宿主事件和 agent 请求，提出控制（拒绝、退回重写、代为结束）；是否生效由宿主决定"
+    },
+    "prepared": {
+      "zh": "准备"
+    },
+    "preparedNote": {
+      "zh": "候选版本的 prepare 在宿主检查中实际做了什么"
+    },
+    "preparedOp.profile": {
+      "zh": "写入档案"
+    },
+    "preparedOp.pinned_skills": {
+      "zh": "固定技能"
+    },
+    "preparedOp.playbook": {
+      "zh": "编译剧本"
+    },
+    "preparedOp.prompt": {
+      "zh": "登记提示词"
+    },
+    "preparedOp.register": {
+      "zh": "已登记"
+    },
+    "nodes": {
+      "zh": "{0} 个节点：{1}"
+    },
+    "nodeReasons": {
+      "zh": "剧本节点决策"
+    },
+    "semi": {
+      "zh": "；"
+    },
+    "colon": {
+      "zh": "："
+    },
+    "budgetCuration": {
+      "zh": "改造 {0} · {1}"
+    },
+    "budgetDiagnosis": {
+      "zh": "诊断 {0} · {1}"
+    },
+    "understanding": {
+      "zh": "理解"
+    },
+    "design": {
+      "zh": "设计"
+    },
+    "changes": {
+      "zh": "{0} 处改动"
+    },
+    "reason": {
+      "zh": "理由"
+    },
+    "expected": {
+      "zh": "预期"
+    },
+    "verification": {
+      "zh": "验证"
+    },
+    "mapTitle": {
+      "zh": "Harness 结构图"
+    },
+    "mapLegendChanged": {
+      "zh": "本次改动"
+    },
+    "mapLegendNew": {
+      "zh": "新增"
+    },
+    "mapLegendKept": {
+      "zh": "沿用"
+    },
+    "mapEmpty": {
+      "zh": "—"
+    },
+    "playbookTitle": {
+      "zh": "剧本协作结构"
+    },
+    "before": {
+      "zh": "改动前"
+    },
+    "after": {
+      "zh": "改动后"
+    },
+    "noPlaybook": {
+      "zh": "没有剧本"
+    },
+    "validationOk": {
+      "zh": "校验通过 · {0} 条观察"
+    },
+    "validationFailed": {
+      "zh": "校验失败 · {0} 个错误"
+    },
+    "curationFailed": {
+      "zh": "这次改造没有生效，仍是之前的版本"
+    },
+    "surfaces.memory": {
+      "zh": "记忆"
+    },
+    "surfaces.planning": {
+      "zh": "规划"
+    },
+    "surfaces.capability": {
+      "zh": "能力"
+    },
+    "surfaces.action": {
+      "zh": "行动"
+    },
+    "surfaces.other": {
+      "zh": "其他"
+    },
+    "footer.asked": {
+      "zh": "在「{0}」阶段，改造师报告了一个用现有材料补不上的缺口，所以本轮没有改动。它的问题：{1}"
+    },
+    "footer.pausedResume": {
+      "zh": "；下次调用会从检查点继续。"
+    },
+    "footer.pausedReason": {
+      "zh": "原因：{0}"
+    },
+    "footer.failed": {
+      "zh": "改造失败，没有产生改动。{0}"
+    },
+    "footer.curating": {
+      "zh": "正在改造，结果将是 {0}"
+    },
+    "footer.review": {
+      "zh": "分析师请求改造。由你决定：开始改造，或者跳过本轮、保持 {0}。"
+    },
+    "footer.interrupted": {
+      "zh": "改造没有完成：会话进程中途结束了。仍是 {0}。"
+    },
+    "footer.deployed": {
+      "zh": "{0} 已装上。开一场演练试试，或者在下方归档。"
+    },
+    "footer.deployedReplay": {
+      "zh": "{0} 已装上，下一轮在它上面练。"
+    },
+    "footer.deployedPast": {
+      "zh": "{0} 曾装上。"
+    },
+    "footer.kept": {
+      "zh": "仍是 {0}。"
+    },
+    "footer.noChange": {
+      "zh": "这次没有新版本，仍是 {0}。"
+    },
+    "footer.supplement": {
+      "zh": "把这些材料附在下一条请求里，就会触发改造。"
+    },
+    "footer.clarify": {
+      "zh": "在下一条消息里回答。"
+    },
+    "footer.stop": {
+      "zh": "这次没有新版本。"
+    },
+    "footer.lastRound": {
+      "zh": "最后一轮不改造：之后没有轮次能检验改动。"
+    },
+    "footer.analysisFailed": {
+      "zh": "本轮没有得到分析师的结论。"
+    },
+    "need": {
+      "zh": "需要"
+    },
+    "question": {
+      "zh": "分析师想确认"
+    },
+    "openTrial": {
+      "zh": "开一场演练"
+    },
+    "archiveVersion": {
+      "zh": "归档 {0}"
+    },
+    "attachMaterial": {
+      "zh": "附上材料"
+    },
+    "trialsOn": {
+      "zh": "{0} 上的 {1} 场演练"
+    },
+    "trialsRunning": {
+      "zh": "{0} 场演练进行中"
+    },
+    "trialsAll": {
+      "zh": "{0} 场演练"
+    },
+    "trialRunning": {
+      "zh": "进行中"
+    },
+    "trialDone": {
+      "zh": "已结束"
+    },
+    "trialTurns": {
+      "zh": "{0} 轮"
+    },
+    "trialDeliverables": {
+      "zh": "{0} 个交付物"
+    },
+    "trialInterceptions": {
+      "zh": "{0} 次机制干预"
+    },
+    "trialPlaybooks": {
+      "zh": "{0} 次剧本运行"
+    },
+    "trialEnd": {
+      "zh": "结束演练"
+    },
+    "trialSay": {
+      "zh": "以对话方的身份说点什么"
+    },
+    "trialThinking": {
+      "zh": "员工正在处理…"
+    },
+    "timedOutLimit": {
+      "zh": "（{0} 秒）"
+    },
+    "timedOut": {
+      "zh": "这一轮超过了员工的时限{0}，已被停止；对话方没有收到回复"
+    },
+    "trialHint": {
+      "zh": "你扮演给员工派活的人：在下面发消息，员工会逐条回复。不知道发什么，就点「AI 出题」。手动演练不会自动打分；结束后可以在每条回复下批注对错，交给分析师。"
+    },
+    "questionAsk": {
+      "zh": "AI 出题"
+    },
+    "questionBusy": {
+      "zh": "AI 正在出题…"
+    },
+    "questionHint": {
+      "zh": "AI 根据岗位说明、交接材料和分析师提过的要求，写一条针对薄弱点的消息"
+    },
+    "questionAim": {
+      "zh": "考什么"
+    },
+    "questionGood": {
+      "zh": "AI 认为好的回答"
+    },
+    "questionNote": {
+      "zh": "题目已经填进下面的输入框，可以改了再发。这段说明只有你能看到。"
+    },
+    "questionFailed": {
+      "zh": "这次没出成题：{0}"
+    },
+    "proposeAction": {
+      "zh": "AI 提验收项"
+    },
+    "proposeHint": {
+      "zh": "AI 读本轮的回复，把你还没定的规矩做成二选一"
+    },
+    "proposeBusy": {
+      "zh": "AI 正在读本轮的回复，提验收项…"
+    },
+    "proposeFailed": {
+      "zh": "这次没提出来：{0}"
+    },
+    "proposeNone": {
+      "zh": "没有要你定的：现有验收项已经覆盖本轮"
+    },
+    "proposePick": {
+      "zh": "选这个"
+    },
+    "proposeOwn": {
+      "zh": "都不对，我自己写一条"
+    },
+    "proposeUseOwn": {
+      "zh": "用我写的"
+    },
+    "proposeChosen": {
+      "zh": "已定：{0}"
+    },
+    "adoptedTitle": {
+      "zh": "你定的验收项：之后每次自动打分都按这些判"
+    },
+    "compareAction": {
+      "zh": "并排对比"
+    },
+    "compareTitle": {
+      "zh": "考试题 {0} · 各版本并排"
+    },
+    "compareAsk": {
+      "zh": "题目"
+    },
+    "compareVersion": {
+      "zh": "版本"
+    },
+    "compareFailed": {
+      "zh": "{1} 项中 {0} 项不通过"
+    },
+    "compareUnscored": {
+      "zh": "没有判卷结果"
+    },
+    "compareNone": {
+      "zh": "还没有版本考过这道题"
+    },
+    "trialNone": {
+      "zh": "还没有演练"
+    },
+    "trialTitle": {
+      "zh": "演练 {0}"
+    },
+    "trialFrom": {
+      "zh": "练习 {0}"
+    },
+    "trialHeldOut": {
+      "zh": "留出 {0}"
+    },
+    "trialsHeldOut": {
+      "zh": "{0} 上的 {1} 场留出演练"
+    },
+    "trialsPending": {
+      "zh": "第 {0} 轮有 {1} 场演练进行中"
+    },
+    "heldOutNote": {
+      "zh": "留出演练：会记录、会评分，但分析师读不到，也不会引用给改造师；用来检验改动能否推广"
+    },
+    "heldOutTag": {
+      "zh": "留出"
+    },
+    "called": {
+      "zh": "调用了 {0} 次工具：{1}"
+    },
+    "etc": {
+      "zh": " 等"
+    },
+    "modelCalls": {
+      "zh": "{0} 次模型调用"
+    },
+    "childHarnesses": {
+      "zh": "子 Harness：{0}"
+    },
+    "intercept.gate": {
+      "zh": "检查出错，调用被拒绝"
+    },
+    "intercept.permission": {
+      "zh": "权限不足"
+    },
+    "intercept.budget": {
+      "zh": "预算不够，退回被拒"
+    },
+    "control.reject": {
+      "zh": "拒绝这次调用"
+    },
+    "control.revise": {
+      "zh": "退回重写"
+    },
+    "control.finish": {
+      "zh": "结束并代为回答"
+    },
+    "controlStatus.requested": {
+      "zh": "只是请求，未应用"
+    },
+    "controlStatus.applied": {
+      "zh": "已应用"
+    },
+    "controlStatus.rejected": {
+      "zh": "宿主拒绝了这个控制"
+    },
+    "controlStatus.unsupported": {
+      "zh": "宿主不支持这个控制"
+    },
+    "controlOn": {
+      "zh": "作用于 {0}"
+    },
+    "guidance.action": {
+      "zh": "行动给模型的提示"
+    },
+    "guidance.planning": {
+      "zh": "规划给模型的指引"
+    },
+    "peer": {
+      "zh": "跨策略请求 → {0}.{1}"
+    },
+    "selected": {
+      "zh": "{0} 次能力选择"
+    },
+    "none": {
+      "zh": "无"
+    },
+    "toolList": {
+      "zh": "工具：{0}"
+    },
+    "skillList": {
+      "zh": "技能：{0}"
+    },
+    "registered": {
+      "zh": "登记了 {0} {1}"
+    },
+    "memoryOp.initialize": {
+      "zh": "上下文组织顺序"
+    },
+    "memoryOp.interact": {
+      "zh": "记忆记下一条"
+    },
+    "memoryOp.compact": {
+      "zh": "上下文压缩"
+    },
+    "memoryOp.compaction": {
+      "zh": "上下文压缩"
+    },
+    "strategyError": {
+      "zh": "策略出错"
+    },
+    "modelInput": {
+      "zh": "实际模型输入"
+    },
+    "tokens": {
+      "zh": "约 {0} token"
+    },
+    "tokenLimit": {
+      "zh": " / 上限 {0}"
+    },
+    "rawInput": {
+      "zh": "原始模型输入"
+    },
+    "messages": {
+      "zh": "{0} 条消息"
+    },
+    "chars": {
+      "zh": "{0} 个字符"
+    },
+    "loadRaw": {
+      "zh": "加载"
+    },
+    "loading": {
+      "zh": "加载中…"
+    },
+    "dockAsk": {
+      "zh": "{0} 已就绪。开一场演练继续培养，或者归档。"
+    },
+    "dockStopAsk": {
+      "zh": "分析师判断 {0} 已满足评审要求。你可以继续试，也可以归档。"
+    },
+    "dockArchive": {
+      "zh": "归档 {0}"
+    },
+    "dockReview": {
+      "zh": "分析师提了 {0} 条要求，请求改造。下一步？"
+    },
+    "dockCurate": {
+      "zh": "开始改造"
+    },
+    "dockSkip": {
+      "zh": "跳过本轮"
+    },
+    "dockPausedOnboard": {
+      "zh": "入职改造已暂停；继续时从检查点接着做。"
+    },
+    "dockPausedCuration": {
+      "zh": "改造已暂停；继续时从检查点接着做。"
+    },
+    "dockResume": {
+      "zh": "继续改造"
+    },
+    "dockRound": {
+      "zh": "本轮：{0} 场演练 · {1} 条点评"
+    },
+    "dockAssess": {
+      "zh": "自动评审"
+    },
+    "dockAnalyse": {
+      "zh": "交给分析师"
+    },
+    "dockNeedsTrial": {
+      "zh": "分析师读的是本轮的演练和你的点评：先开一场演练"
+    },
+    "dockEnded": {
+      "zh": "这次运行已结束，只能查看。"
+    },
+    "dockStarting": {
+      "zh": "正在启动会话：雇用员工、打开记录…"
+    },
+    "dockClose": {
+      "zh": "关闭会话"
+    },
+    "autoContinue": {
+      "zh": "自动继续迭代：本轮的练习交给评审打分"
+    },
+    "archivedAs": {
+      "zh": "已归档为「{0}」（{1}）"
+    },
+    "composerFirst": {
+      "zh": "描述岗位，并附上入职材料"
+    },
+    "composerNext": {
+      "zh": "写一条改造请求；发送后本轮交给分析师"
+    },
+    "composerBetween": {
+      "zh": "写点评或附材料；会和本轮的演练一起交给分析师"
+    },
+    "composerSupplement": {
+      "zh": "附上缺的材料，或者说明没有"
+    },
+    "composerClarify": {
+      "zh": "回答：{0}"
+    },
+    "composerTrials": {
+      "zh": "还有 {0} 场演练没结束；先结束再发改造请求"
+    },
+    "composerReview": {
+      "zh": "改造师动手前，有话在这里说：哪条要求不对、哪里别动，它改的时候会一起听到"
+    },
+    "composerPaused": {
+      "zh": "先继续已暂停的改造"
+    },
+    "composerBusy.onboard": {
+      "zh": "改造师正在做入职改造…"
+    },
+    "composerBusy.trial": {
+      "zh": "演练进行中…"
+    },
+    "composerBusy.assess": {
+      "zh": "自动评审正在给本轮打分…"
+    },
+    "composerBusy.analyse": {
+      "zh": "分析师正在分析…"
+    },
+    "composerBusy.curate": {
+      "zh": "改造进行中；结束前不能发新的改造请求"
+    },
+    "composerBusy.script": {
+      "zh": "脚本演练进行中…"
+    },
+    "composerBusy.exam": {
+      "zh": "考试进行中…"
+    },
+    "composerBusy.revert": {
+      "zh": "正在退回到之前的版本…"
+    },
+    "stops.analyst": {
+      "zh": "分析师判断可以结束"
+    },
+    "stops.satisfied": {
+      "zh": "所有评审都满意"
+    },
+    "stops.silent": {
+      "zh": "本轮没有任何评审"
+    },
+    "stops.exhausted": {
+      "zh": "轮次用完了"
+    },
+    "runEnded": {
+      "zh": "运行结束：{0}"
+    },
+    "runFailedText": {
+      "zh": "运行失败：{0}"
+    },
+    "noCurationRecord": {
+      "zh": "本轮请求了改造，但没有留下改造记录"
+    },
+    "scoreTitle": {
+      "zh": "标准评审"
+    },
+    "scoreNote": {
+      "zh": "自动标准评审没有自己的话，只按标准逐条给判定，改造师一条也听不到"
+    },
+    "scoreHeldOut": {
+      "zh": "留出评审 · 分析师和改造师都看不到"
+    },
+    "scoreMust": {
+      "zh": "「必须」通过率"
+    },
+    "scoreShould": {
+      "zh": "「应当」通过率"
+    },
+    "scoreSatisfied.true": {
+      "zh": "达标"
+    },
+    "scoreSatisfied.false": {
+      "zh": "未达标"
+    },
+    "scoreSatisfied.null": {
+      "zh": "无判定"
+    },
+    "scoreSources.declared": {
+      "zh": "声明的"
+    },
+    "scoreSources.derived": {
+      "zh": "推导的"
+    },
+    "scoreSources.sedimented": {
+      "zh": "沉淀的"
+    },
+    "scoreSourceHint.declared": {
+      "zh": "场景自带的检查项"
+    },
+    "scoreSourceHint.derived": {
+      "zh": "从交接的规范推导而来"
+    },
+    "scoreSourceHint.sedimented": {
+      "zh": "早先提出的要求，留作回归检查"
+    },
+    "basis.check": {
+      "zh": "检查项"
+    },
+    "basis.case": {
+      "zh": "数据集案例"
+    },
+    "basis.requirement": {
+      "zh": "回归 · 早先的要求"
+    },
+    "basis.material": {
+      "zh": "来自材料"
+    },
+    "basisHint.check": {
+      "zh": "对接人自己的检查项"
+    },
+    "basisHint.case": {
+      "zh": "数据集里的一个案例"
+    },
+    "basisHint.requirement": {
+      "zh": "早先提出的要求，留作回归检查；措辞只用改造师已经知道的内容"
+    },
+    "basisHint.material": {
+      "zh": "取自交给员工的材料；措辞只用改造师已经知道的内容"
+    },
+    "scoreCounts": {
+      "zh": "{0} 通过 · {1} 不通过 · 共 {2} 项"
+    },
+    "scoreRemark": {
+      "zh": "评语"
+    },
+    "verdicts.pass": {
+      "zh": "通过"
+    },
+    "verdicts.fail": {
+      "zh": "不通过"
+    },
+    "verdicts.unknown": {
+      "zh": "无法判断"
+    },
+    "ledger": {
+      "zh": "台账"
+    },
+    "ledgerTitle": {
+      "zh": "台账 · 要求是否守住"
+    },
+    "ledgerNote": {
+      "zh": "每条要求：提出的轮次、诊断状态、为它做的改动和处理方式，以及改动后下一轮是否守住（history 里循环的判定）。汇总按归因者、按（状态，处理方式）分组。"
+    },
+    "ledgerSummary": {
+      "zh": "汇总"
+    },
+    "ledgerRows": {
+      "zh": "按要求"
+    },
+    "childScopeHint": {
+      "zh": "组合改造中这个子 Harness 自己的改动或诊断"
+    },
+    "ledgerEmpty": {
+      "zh": "还没有提出要求。"
+    },
+    "ledgerNone": {
+      "zh": "—"
+    },
+    "ledgerCols.round": {
+      "zh": "轮次"
+    },
+    "ledgerCols.requirement": {
+      "zh": "要求"
+    },
+    "ledgerCols.state": {
+      "zh": "诊断"
+    },
+    "ledgerCols.changes": {
+      "zh": "改动"
+    },
+    "ledgerCols.held": {
+      "zh": "守住"
+    },
+    "ledgerCols.treatment": {
+      "zh": "处理方式"
+    },
+    "ledgerCols.judged": {
+      "zh": "已判定"
+    },
+    "ledgerCols.ratio": {
+      "zh": "守住率"
+    },
+    "ledgerCols.attributor": {
+      "zh": "归因者"
+    },
+    "ledgerMissing": {
+      "zh": "history 没有记录本轮的诊断，但本轮的归因记录里有；台账按 history 统计，所以诊断和改动为空"
+    },
+    "ledgerRecorded": {
+      "zh": "记录里："
+    },
+    "ledgerUncurated": {
+      "zh": "未改造"
+    },
+    "ledgerNoSummary": {
+      "zh": "还没有能汇总的要求：一条要求需要有诊断状态，以及改动后下一轮的判定。"
+    },
+    "ledgerSource": {
+      "zh": "来源"
+    },
+    "ledgerSatisfied": {
+      "zh": "判定"
+    },
+    "ledgerItems": {
+      "zh": "条目"
+    },
+    "historyTitle": {
+      "zh": "history 里的改动"
+    },
+    "historyNoAttributor": {
+      "zh": "history 没有记录归因者"
+    },
+    "historyNoAddresses": {
+      "zh": "没有记录它对应哪些输入"
+    },
+    "questions": {
+      "zh": "改造师的问题"
+    },
+    "audit": {
+      "zh": "隔离审计"
+    },
+    "auditTitle": {
+      "zh": "隔离审计 · boundaries.jsonl"
+    },
+    "auditNote": {
+      "zh": "每个模型角色在各自的隔间里运行，进入隔间的每条信息都要过守卫。这里列出每个角色的进入、放行、违规和离开；违规表示被封存的信息到了这个角色手里。"
+    },
+    "auditRoles.curator": {
+      "zh": "改造师"
+    },
+    "auditRoles.analyst": {
+      "zh": "分析师"
+    },
+    "auditRoles.partner": {
+      "zh": "员工"
+    },
+    "auditRoles.conversant": {
+      "zh": "对话方"
+    },
+    "auditRoles.counterpart": {
+      "zh": "对接人"
+    },
+    "auditEvents.enter": {
+      "zh": "进入"
+    },
+    "auditEvents.admit": {
+      "zh": "放行"
+    },
+    "auditEvents.violation": {
+      "zh": "违规"
+    },
+    "auditEvents.leave": {
+      "zh": "离开"
+    },
+    "auditViolations": {
+      "zh": "{0} 次违规"
+    },
+    "auditClean": {
+      "zh": "没有违规"
+    },
+    "auditMissing": {
+      "zh": "这次运行没有 boundaries.jsonl"
+    },
+    "auditLast": {
+      "zh": "显示 {1} 行中的最后 {0} 行"
+    },
+    "auditLines": {
+      "zh": "{0} 行"
+    },
+    "auditAll": {
+      "zh": "显示全部 {0} 行"
+    },
+    "kinds.norm": {
+      "zh": "规范"
+    },
+    "kinds.fact": {
+      "zh": "事实"
+    },
+    "kinds.exemplar": {
+      "zh": "范例"
+    },
+    "kinds.counterexample": {
+      "zh": "反例"
+    },
+    "origins.induced": {
+      "zh": "归纳"
+    },
+    "origins.researched": {
+      "zh": "调研"
+    },
+    "confirmed": {
+      "zh": "已确认"
+    },
+    "unconfirmed": {
+      "zh": "未确认"
+    },
+    "hintResearched": {
+      "zh": "调研阶段核实过的发现"
+    },
+    "hintInduced": {
+      "zh": "调研阶段从交接材料里归纳出的规则"
+    },
+    "hintConfirmed": {
+      "zh": "已经对接人确认"
+    },
+    "hintUnconfirmed": {
+      "zh": "对接人尚未确认，所以评审方不据此判定"
+    },
+    "inParens": {
+      "zh": "（{0}）"
+    },
+    "materialFiles": {
+      "zh": "{0} 个文件"
+    },
+    "latestVersion": {
+      "zh": "最新版本"
+    },
+    "liveBaseline": {
+      "zh": "Raven 干净基线"
+    },
+    "liveAssessing": {
+      "zh": "自动评审正在给本轮演练打分…"
+    },
+    "liveStartFailed": {
+      "zh": "会话启动失败：{0}"
+    },
+    "liveStepFailed": {
+      "zh": "「{0}」这一步没有完成：{1}"
+    },
+    "liveSteps.starting": {
+      "zh": "启动"
+    },
+    "liveSteps.onboard": {
+      "zh": "入职改造"
+    },
+    "liveSteps.trial": {
+      "zh": "演练"
+    },
+    "liveSteps.signal": {
+      "zh": "点评"
+    },
+    "liveSteps.assess": {
+      "zh": "自动评审"
+    },
+    "liveSteps.analyse": {
+      "zh": "分析"
+    },
+    "liveSteps.curate": {
+      "zh": "改造"
+    },
+    "liveSteps.skip": {
+      "zh": "跳过"
+    },
+    "liveSteps.finish": {
+      "zh": "结束"
+    },
+    "liveSteps.script": {
+      "zh": "脚本演练"
+    },
+    "liveSteps.exam": {
+      "zh": "考试"
+    },
+    "liveSteps.revert": {
+      "zh": "退回"
+    },
+    "liveDetached": {
+      "zh": "会话进程已经结束（比如服务重启过）。重新连接会在它最后保存的版本上重建员工，并从本轮停下的地方接着来。"
+    },
+    "liveStartedFrom": {
+      "zh": "从 {0} 开始"
+    },
+    "playScripts": {
+      "zh": "脚本演练"
+    },
+    "scriptsTitle": {
+      "zh": "播放脚本演练"
+    },
+    "scriptsNote": {
+      "zh": "每个脚本在员工当前状态的独立副本上播放：脚本里的消息（以及每条带的文件）逐条发进去，员工逐条回答。这些演练和你自己开的一样，计入本轮。"
+    },
+    "scriptSteps": {
+      "zh": "{0} 步"
+    },
+    "playN": {
+      "zh": "播放 {0} 个"
+    },
+    "scriptsCopying": {
+      "zh": "正在复制员工…"
+    },
+    "scriptsScoring": {
+      "zh": "所有脚本都播完了，评审正在打分…"
+    },
+    "scriptsStop": {
+      "zh": "这一轮结束后停止"
+    },
+    "examAction": {
+      "zh": "考试"
+    },
+    "examHint": {
+      "zh": "在已装上的版本上播放场景的考试脚本并打分；分析师永远读不到它们"
+    },
+    "examNow": {
+      "zh": "考试：{1} 项中 {0} 项不合格"
+    },
+    "examThen": {
+      "zh": "；上次改造前的版本：{1} 项中 {0} 项不合格（各只考一次，差距小可能只是偶然）。"
+    },
+    "examEnd": {
+      "zh": "。"
+    },
+    "examWorse": {
+      "zh": "比上一个版本差。"
+    },
+    "revertAction": {
+      "zh": "退回"
+    },
+    "revertHint": {
+      "zh": "换回上次改造前装着的版本；改造师会被告知它的改动已撤销"
+    },
+    "marks.right": {
+      "zh": "做对了"
+    },
+    "marks.fix": {
+      "zh": "应该是…"
+    },
+    "marks.wrong": {
+      "zh": "做错了"
+    },
+    "marks.missed": {
+      "zh": "漏了…"
+    },
+    "markAsk.right": {
+      "zh": "好在哪（可不填）"
+    },
+    "markAsk.fix": {
+      "zh": "应该怎么回答"
+    },
+    "markAsk.wrong": {
+      "zh": "错在哪"
+    },
+    "markAsk.missed": {
+      "zh": "漏了什么"
+    },
+    "markSend": {
+      "zh": "批注"
+    },
+    "markWords.right": {
+      "zh": "做对了"
+    },
+    "markWords.fix": {
+      "zh": "应该是"
+    },
+    "markWords.wrong": {
+      "zh": "做错了"
+    },
+    "markWords.missed": {
+      "zh": "漏了"
+    },
+    "markLine": {
+      "zh": "{0} 第 {1} 轮：{2}"
+    },
+    "marked": {
+      "zh": "你的批注会随本轮交给分析师"
+    },
+    "newFrom": {
+      "zh": "起点"
+    },
+    "newFromPlain": {
+      "zh": "干净的 Raven 基线"
+    },
+    "newFromTask": {
+      "zh": "它的岗位说明"
+    },
+    "dockReattach": {
+      "zh": "重新连接会话"
+    },
+    "liveGone": {
+      "zh": "会话进程在这里结束了，比如服务重启过。"
+    },
+    "liveRefused": {
+      "zh": "这一步没有执行：{0}"
+    },
+    "liveUnreachable": {
+      "zh": "会话进程没有及时响应；先显示它最后已知的状态"
+    },
+    "rawOutput": {
+      "zh": "查看原始输出"
+    },
+    "rawOutputHint": {
+      "zh": "改造师在每个阶段实际提交的原始内容"
+    },
+    "rawOutputTitle": {
+      "zh": "改造师原始输出 · {0}"
+    },
+    "rawOutputNote": {
+      "zh": "按阶段列出改造师在这个 Harness 的改造中实际提交的内容（取自改造记录的 trace）。卡片上的「理解 / 设计 / 改动」取自第一项「最终方案」。"
+    },
+    "outputLabel.candidate.plan": {
+      "zh": "最终方案"
+    },
+    "outputLabel.submit_diagnosis": {
+      "zh": "诊断提交"
+    },
+    "outputLabel.report_gap": {
+      "zh": "缺口报告"
+    },
+    "outputLabel.submit_selection": {
+      "zh": "选择提交"
+    },
+    "outputLabel.submit_plan": {
+      "zh": "方案提交"
+    },
+    "outputLabel.file.staged": {
+      "zh": "暂存文件"
+    },
+    "outputLabel.preflight": {
+      "zh": "预检"
+    },
+    "outputLabel.submit_artifact": {
+      "zh": "产物提交"
+    },
+    "outputLabel.validation": {
+      "zh": "校验"
+    },
+    "viewTree": {
+      "zh": "结构"
+    },
+    "viewText": {
+      "zh": "文本"
+    },
+    "copy": {
+      "zh": "复制"
+    },
+    "copied": {
+      "zh": "已复制"
+    },
+    "crashTitle": {
+      "zh": "页面渲染失败"
+    },
+    "crashNote": {
+      "zh": "下面是错误和出错的组件；截图发我就能定位。点「回到页面」继续。"
+    },
+    "crashRetry": {
+      "zh": "回到页面"
+    },
+    "crashReload": {
+      "zh": "重新加载"
+    },
+    "composerHint": {
+      "zh": "每条消息都是循环的一步：入职前它带入职材料，之后是本轮的点评；本轮有了演练后，发送即交给分析师。"
+    },
+    "send": {
+      "zh": "发送"
+    },
+    "attach": {
+      "zh": "附件"
+    },
+    "pickMaterial": {
+      "zh": "选择要附上的材料"
+    },
+    "curatorModel": {
+      "zh": "改造师"
+    },
+    "replayBar": {
+      "zh": "只读回放：这是一次自动运行的记录。"
+    },
+    "archivedBar": {
+      "zh": "已归档：这个智能体（模型 + Harness）已冻结，只能查看。"
+    },
+    "newTitle": {
+      "zh": "新建培养会话"
+    },
+    "newName": {
+      "zh": "名称"
+    },
+    "newTask": {
+      "zh": "岗位说明"
+    },
+    "newTaskPlaceholder": {
+      "zh": "例如：海澜旅行的在线旅行顾问，按旅行社的 SOP 服务客户、报价，并交付行程方案（PPT）。"
+    },
+    "curatorDefault": {
+      "zh": "同员工模型"
+    },
+    "settings": {
+      "zh": "场景 {0} · 改造师 {1} · 最多 {2} 轮"
+    },
+    "newFailed": {
+      "zh": "无法创建会话：{0}"
+    },
+    "create": {
+      "zh": "创建"
+    },
+    "cancel": {
+      "zh": "取消"
+    },
+    "archiveTitle": {
+      "zh": "归档当前智能体"
+    },
+    "archiveName": {
+      "zh": "名称"
+    },
+    "archiveBody": {
+      "zh": "把 {0}（模型 + Harness）冻结成一个有名字的快照。归档会结束这次运行，之后这个会话只能查看。"
+    },
+    "archiveDo": {
+      "zh": "归档"
+    },
+    "inspectorTitle": {
+      "zh": "输入检查器 · {0}"
+    },
+    "colAssessor": {
+      "zh": "评审持有"
+    },
+    "colAssessorNote": {
+      "zh": "私有的标准和打分，改造师看不到"
+    },
+    "colAnalyst": {
+      "zh": "分析师收到"
+    },
+    "colAnalystNote": {
+      "zh": "完整的信号：原话、逐条判定、附件"
+    },
+    "colCurator": {
+      "zh": "改造师听到"
+    },
+    "colCuratorNote": {
+      "zh": "由 hearing.py 转述：点评、是否满意、附件、要求、history"
+    },
+    "leakNone": {
+      "zh": "改造师的输入里没有发现逐条判定的 id"
+    },
+    "leakFound": {
+      "zh": "改造师的输入里发现 {0} 个逐条判定 id"
+    },
+    "noAssessorRecord": {
+      "zh": "本轮没有评审的私有记录"
+    },
+    "noCuratorInput": {
+      "zh": "本轮没有到达改造师"
+    },
+    "items": {
+      "zh": "{0} 条逐条判定"
+    },
+    "satisfied.true": {
+      "zh": "满意"
+    },
+    "satisfied.false": {
+      "zh": "不满意"
+    },
+    "satisfied.null": {
+      "zh": "无判定"
+    },
+    "looseFiles": {
+      "zh": "附属文件"
+    },
+    "unchangedLines": {
+      "zh": "{0} 行未改动"
+    },
+    "added": {
+      "zh": "新增"
+    },
+    "removed": {
+      "zh": "删除"
+    },
+    "unchanged": {
+      "zh": "未改动"
+    },
+    "ownsLabel": {
+      "zh": "负责"
+    },
+    "close": {
+      "zh": "关闭"
+    },
+    "expand": {
+      "zh": "全屏"
+    },
+    "shrink": {
+      "zh": "退出全屏"
+    },
+    "loadFailed": {
+      "zh": "加载失败"
+    },
+    "loadingRun": {
+      "zh": "正在加载运行记录…"
+    },
+    "pickSomething": {
+      "zh": "在左侧选一个会话或运行"
+    },
+    "statuses.running": {
+      "zh": "运行中"
+    },
+    "statuses.finished": {
+      "zh": "已完成"
+    },
+    "statuses.paused": {
+      "zh": "已暂停"
+    },
+    "statuses.error": {
+      "zh": "出错"
+    },
+    "statuses.stalled": {
+      "zh": "停滞"
+    },
+    "askWho.analyst": {
+      "zh": "分析师"
+    },
+    "askWho.curator": {
+      "zh": "改造师"
+    },
+    "askRole": {
+      "zh": "问谁"
+    },
+    "askPlaceholder": {
+      "zh": "问问这一步：为什么提这条要求、改了什么、为什么这么改…"
+    },
+    "askSend": {
+      "zh": "提问"
+    },
+    "askBusy": {
+      "zh": "正在按这一步的记录回答…"
+    },
+    "askFailed": {
+      "zh": "没有回答：{0}"
+    },
+    "askNote": {
+      "zh": "回答依据这一步的记录，提问不会改任何东西。想影响下一次改造，在改造前留话。"
+    },
+    "deleteSession": {
+      "zh": "删除会话"
+    },
+    "deleteConfirm": {
+      "zh": "删除「{0}」？它会从列表里消失，服务器把它移到回收目录，需要时可以恢复。"
+    },
+    "exportEmployee": {
+      "zh": "导出员工"
+    },
+    "exporting": {
+      "zh": "正在准备下载…"
+    },
+    "exportHint": {
+      "zh": "下载已保存的员工包"
+    },
+    "exportUnsaved": {
+      "zh": "还没有保存的员工；请先完成入职或一轮改造"
+    },
+    "exportBusy": {
+      "zh": "请等当前步骤或试用结束后再导出"
+    },
+    "exportInvalid": {
+      "zh": "服务器没有返回员工 ZIP 包"
+    },
+    "exportDone": {
+      "zh": "已开始下载。将员工包解压到 Raven 的 agents 目录；需要支持 Studio 导出的源码版 Raven，并使用宿主配置的模型服务和工具访问凭据。"
+    },
+    "collectorTitle": {
+      "zh": "入职前，AI 想先问你"
+    },
+    "collectorPlaceholder": {
+      "zh": "你的回答"
+    },
+    "collectorAnswer": {
+      "zh": "回答"
+    },
+    "collectorSkip": {
+      "zh": "跳过"
+    },
+    "collectorProposal": {
+      "zh": "它的建议：{0}"
+    },
+    "collectorAssumption": {
+      "zh": "跳过的话，按这个假设处理：{0}"
+    },
+    "newScenario": {
+      "zh": "场景"
+    },
+    "newScenarioBuild": {
+      "zh": "新场景…"
+    },
+    "buildTitle": {
+      "zh": "新场景"
+    },
+    "buildName": {
+      "zh": "名称"
+    },
+    "buildProfile": {
+      "zh": "岗位说明"
+    },
+    "buildProfileHint": {
+      "zh": "用你自己的话写：这个员工做什么、给谁干活、交什么东西"
+    },
+    "buildFiles": {
+      "zh": "资料（.md、.txt 或 .csv，合计 1 MB 以内）"
+    },
+    "buildFilesPicked": {
+      "zh": "已选：{0}"
+    },
+    "buildPractice": {
+      "zh": "练习需求，每行一条"
+    },
+    "buildExam": {
+      "zh": "考试需求，每行一条（练习时不会出现，用来给每个版本打分）"
+    },
+    "buildChecks": {
+      "zh": "验收项，每行一条（可以先不写，之后用「AI 提验收项」补）"
+    },
+    "buildDo": {
+      "zh": "建好场景"
+    },
+    "buildFailed": {
+      "zh": "没建成：{0}"
     }
   }
 }

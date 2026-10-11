@@ -405,3 +405,70 @@ async def test_reinstate_returns_exactly_to_a_kept_deployment_and_its_commitment
     assert not (home / "skills/extra/SKILL.md").exists()
     assert (root / "planning.json").read_text() == '{"version": "old"}'
     assert not (root / "action.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_saved_deployment_loads_into_a_new_worker_of_the_same_task_and_refuses_another(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from experimental.curator.harness import Commitment, Declaration
+    from experimental.curator.raven_adapter.deployment import load, save
+    from experimental.curator.raven_adapter.inspection import Inspection, fingerprint
+    from experimental.curator.raven_adapter.targets import catalogue
+
+    class Worker(SimpleNamespace):
+        @property
+        def revision_id(self):
+            return fingerprint(self.artifact.model_dump(mode="json"))
+
+    def worker(folder, task):
+        home, area = folder / "home", folder / "area"
+        area.mkdir(parents=True)
+        made = Worker(
+            baseline=baseline(home),
+            root=folder,
+            area=area,
+            children={},
+            artifact=Artifact(values={}),
+            prepared=PreparedHarness(content={}),
+            last_plan=None,
+            last_attribution=None,
+            last_selection=None,
+            last_children={},
+            commitments=(),
+            _lock=asyncio.Lock(),
+            _exchange=AsyncMock(return_value=True),
+            _inspect=AsyncMock(return_value=Inspection(Declaration("old", catalogue()), {}, {})),
+            _close=AsyncMock(),
+            _start=AsyncMock(),
+            _preview=None,
+        )
+        made.baseline.task = task
+        return made
+
+    task = Task(text="Work")
+    source = worker(tmp_path / "first", task)
+    source.artifact = Artifact(values={"action.strategy": {"factory": "gate:create"}}, files={"gate.py": "x = 1"})
+    source.prepared = PreparedHarness(content={"capability": {"skills/duty/SKILL.md": "kept"}})
+    source.commitments = (Commitment(id="H1", surface="action.strategy", statement="Gate", serves=("R1",)),)
+    (source.baseline.config.workspace_path / "skills/duty").mkdir(parents=True)
+    (source.baseline.config.workspace_path / "skills/duty/SKILL.md").write_text("kept")
+    (source.area / "planning.json").write_text('{"version": "kept"}')
+    path = tmp_path / "saved" / "deployment.json"
+    await save(source, path)
+
+    target = worker(tmp_path / "second", task)
+    (target.area / "action.json").write_text('{"gate": "stale"}')
+    await load(target, path)
+    assert target.artifact == source.artifact and target.commitments == source.commitments
+    assert (target.baseline.config.workspace_path / "skills/duty/SKILL.md").read_text() == "kept"
+    assert (target.area / "planning.json").read_text() == '{"version": "kept"}'
+    assert not (target.area / "action.json").exists()
+    assert target._start.await_count == 1
+
+    with pytest.raises(ValueError, match="another task"):
+        await load(worker(tmp_path / "third", Task(text="Work")), path)
+    path.write_text(path.read_text().replace("kept", "edited"))
+    with pytest.raises(ValueError, match="checksum"):
+        await load(worker(tmp_path / "fourth", task), path)

@@ -1,9 +1,11 @@
 """Serve the built page and the recorded runs under one directory as JSON; with `--live-config`, also the Studio's
-live cultivation sessions (`experimental.webui.live`), whose steps are the only requests that change anything."""
+live cultivation sessions (`experimental.webui.live`), whose steps are the only requests that change anything. With
+`--token-file`, every request needs the token in the file: opened once as `?token=...`, the page keeps it as a cookie."""
 
 import argparse
 import gzip
 import hashlib
+import hmac
 import importlib
 import json
 import os
@@ -15,10 +17,11 @@ import tempfile
 import threading
 import time
 from functools import lru_cache, partial
+from http.cookies import CookieError, SimpleCookie
 from http.server import SimpleHTTPRequestHandler, ThreadingHTTPServer
 from mimetypes import guess_type
 from pathlib import Path
-from urllib.parse import parse_qs, urlsplit
+from urllib.parse import parse_qs, urlencode, urlsplit
 
 from ..automation.employee import AREA, HOME, REPLICAS
 from ..iteration.records import runs
@@ -61,6 +64,8 @@ RECORD_UNAVAILABLE = "record builder not available"
 BUNDLE_ARCHIVES = (".zip", ".tar", ".tar.gz", ".tgz")
 MAX_BODY = 1_000_000
 LOOPBACK = ("127.0.0.1", "localhost", "::1")
+ACCESS_COOKIE = "studio_access"
+TOKEN = re.compile(r"[A-Za-z0-9_-]{16,128}")
 BUNDLE_LISTED = 400
 
 _locks: dict[Path, threading.Lock] = {}
@@ -1119,6 +1124,12 @@ def page(path: str) -> str:
 
 
 class Handler(SimpleHTTPRequestHandler):
+    # The connection stays open after a response: a relay that stops forwarding once the server half-closes drops the
+    # tail of a large file, which a browser reports as a content-length mismatch and a page that never starts. Every
+    # response states its length; an idle connection is closed after `timeout` seconds.
+    protocol_version = "HTTP/1.1"
+    timeout = 60
+
     def __init__(
         self,
         *args,
@@ -1128,8 +1139,10 @@ class Handler(SimpleHTTPRequestHandler):
         state_roots=(),
         builder=None,
         live: Live | None = None,
+        token: str | None = None,
         **kwargs,
     ):
+        self.token = token
         self.root = root
         self.scenario = scenario
         self.cache = cache
@@ -1142,7 +1155,37 @@ class Handler(SimpleHTTPRequestHandler):
         """A recorded run's paths, or a live session's run when live sessions are served."""
         return _run_paths(self.root, run_id) or (_run_paths(self.live.runs, run_id) if self.live else None)
 
+    def _refused(self) -> bool:
+        """Answer a request without the server's token, and return True; a request carrying it in the query is sent
+        on without it, with the cookie that carries it from then on."""
+        if not self.token:
+            return False
+        try:
+            kept = SimpleCookie(self.headers.get("Cookie", "")).get(ACCESS_COOKIE)
+        except CookieError:
+            kept = None
+        if kept is not None and hmac.compare_digest(kept.value.encode(), self.token.encode()):
+            return False
+        url = urlsplit(self.path)
+        query = parse_qs(url.query)
+        given = query.pop("token", [""])[0]
+        if given and hmac.compare_digest(given.encode(), self.token.encode()) and self.command in ("GET", "HEAD"):
+            self.send_response(303)
+            self.send_header("Set-Cookie", f"{ACCESS_COOKIE}={self.token}; Path=/; HttpOnly; SameSite=Strict")
+            self.send_header("Location", url.path + (f"?{urlencode(query, doseq=True)}" if query else ""))
+            self.send_header("Content-Length", "0")
+            self.end_headers()
+            return True
+        self._json({"error": "this Studio needs its access token: open it once with ?token=<token>"}, 401)
+        return True
+
+    def do_HEAD(self):
+        if not self._refused():
+            super().do_HEAD()
+
     def do_GET(self):
+        if self._refused():
+            return
         if self.path == "/api/runs":
             return self._json(index(self.root))
         url = urlsplit(self.path)
@@ -1256,6 +1299,19 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json({"error": "live sessions are off; the server was started without --live-config"}, 404)
         if not session:
             return self._json(self.live.info())
+        parts = session.split("/")
+        if len(parts) == 2 and parts[1] == "export":
+            status, body = self.live.export(parts[0])
+            if status != 200:
+                return self._json(body, status)
+            self.send_response(200)
+            self.send_header("Content-Type", "application/zip")
+            self.send_header("Content-Disposition", f'attachment; filename="{body.filename}"')
+            self.send_header("Content-Length", str(len(body.data)))
+            self.send_header("Cache-Control", "no-store")
+            self.send_header("X-Content-Type-Options", "nosniff")
+            self.end_headers()
+            return self.wfile.write(body.data)
         try:
             body = self.live.snapshot(session, query.get("stamp", [None])[0])
         except RecordError as exc:
@@ -1263,6 +1319,8 @@ class Handler(SimpleHTTPRequestHandler):
         return self._json(body if body is not None else {"error": "no such session"}, 200 if body else 404)
 
     def do_POST(self):
+        if self._refused():
+            return
         url = urlsplit(self.path)
         if self.live is None or not (url.path == "/api/studio/live" or url.path.startswith("/api/studio/live/")):
             return self._json({"error": "unknown endpoint"}, 404)
@@ -1275,7 +1333,9 @@ class Handler(SimpleHTTPRequestHandler):
         if body is None:
             return self._json({"error": f"the body must be a JSON object of at most {MAX_BODY} bytes"}, 400)
         parts = url.path.removeprefix("/api/studio/live").strip("/").split("/")
-        if parts == [""]:
+        if parts == ["scenarios"]:
+            status, value = self.live.build(body)
+        elif parts == [""]:
             status, value = self.live.create(body)
         elif len(parts) == 2:
             status, value = self.live.step(parts[0], parts[1], body)
@@ -1316,6 +1376,9 @@ class Handler(SimpleHTTPRequestHandler):
         if packed:
             body = gzip.compress(body, compresslevel=5)
         self.send_response(status)
+        if self.command == "POST":
+            # A step refused before its body is read leaves the body on the connection, so it serves no other.
+            self.send_header("Connection", "close")
         self.send_header("Content-Type", "application/json; charset=utf-8")
         if packed:
             self.send_header("Content-Encoding", "gzip")
@@ -1364,7 +1427,15 @@ def main():
         help="JSON configuration of live cultivation sessions (experimental.webui.live.LiveConfig); without it the "
         "server only replays recorded runs",
     )
+    parser.add_argument(
+        "--token-file",
+        type=Path,
+        help="File holding the access token (16-128 letters, digits, '-' or '_') every request must carry",
+    )
     args = parser.parse_args()
+    token = args.token_file.read_text().strip() if args.token_file else None
+    if token is not None and not TOKEN.fullmatch(token):
+        parser.error("the token file must hold 16-128 letters, digits, '-' or '_'")
     live = Live(LiveConfig.load(args.live_config)) if args.live_config else None
     if not DIST.is_dir():
         print(f"No built page at {DIST}; run `npm run build` in experimental/webui first. Serving the API only.")
@@ -1375,13 +1446,14 @@ def main():
         cache=args.thumbs_cache.resolve(),
         state_roots=tuple(path.resolve() for path in args.state_roots),
         live=live,
+        token=token,
     )
     server = ThreadingHTTPServer((args.host, args.port), handler)
     print(f"Serving {args.runs.resolve()} at http://{args.host}:{args.port}/")
     if live is not None:
         print(f"Live sessions are kept under {live.config.root}")
-        if args.host not in LOOPBACK:
-            print(f"Warning: live sessions spend the configured keys and are reachable at {args.host}")
+        if args.host not in LOOPBACK and token is None:
+            print(f"Warning: live sessions spend the configured keys and are reachable at {args.host} without a token")
         signal.signal(signal.SIGTERM, _interrupt)
     try:
         server.serve_forever()

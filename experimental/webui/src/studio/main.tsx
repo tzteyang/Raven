@@ -9,8 +9,11 @@ import { createRoot } from 'react-dom/client'
 import '../../../../ui-web/src/styles/page.css'
 import '../../../../ui-web/src/features/tasks/styles.css'
 import './studio.css'
+import { lang } from './copy'
 import { Crash } from './Crash'
 import { Studio } from './Studio'
+
+document.documentElement.lang = lang === 'zh' ? 'zh-CN' : 'en'
 
 createRoot(document.getElementById('root')!).render(
   <StrictMode>

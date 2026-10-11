@@ -1,5 +1,6 @@
 """A session performs the loop's steps one call each, records what `run` records, and resumes from its record."""
 
+import asyncio
 import json
 from types import SimpleNamespace
 
@@ -212,6 +213,36 @@ async def test_the_caller_decides_after_each_analysis(tmp_path, curations, analy
 
 
 @pytest.mark.asyncio
+async def test_a_remark_on_the_analysis_reaches_the_curator_and_the_next_analysis(tmp_path, curations, analyses):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    session = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3))
+    await session.onboard()
+    with pytest.raises(StepError, match="before its curation"):
+        session.remark(Signal("human", "Too early."))
+    await session.trial(student("Plan a trip"))
+    session.signal(Signal("human", "No budget question."))
+    assert await session.analyse() == Outcome("curate")
+    with pytest.raises(StepError, match="before its analysis"):
+        session.signal(Signal("human", "Not a round signal now."))
+    session.remark(Signal("human", "Keep the greeting as it is.", authority="external"))
+    resumed = Session.resume(FakeWorker(tmp_path), object(), session.path, limits=Limits(max_rounds=3))
+    assert [signal.text for signal in resumed.rounds[-1].signals] == [
+        "No budget question.",
+        "Keep the greeting as it is.",
+    ]
+    assert await resumed.curate()
+    assert [signal["text"] for signal in curations[1]["feedback"]["signals"]] == [
+        "No budget question.",
+        "Keep the greeting as it is.",
+    ]
+    with pytest.raises(StepError, match="before its curation"):
+        resumed.remark(Signal("human", "Too late."))
+    await resumed.trial(student("Plan again"))
+    await resumed.analyse()
+    assert analyses.calls[-1]["previous_signals"][-1].text == "Keep the greeting as it is."
+
+
+@pytest.mark.asyncio
 async def test_a_session_resumes_from_its_record_in_a_new_process(tmp_path, curations, analyses):
     analyses.scripted.extend([CURATE])
     first = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3))
@@ -396,6 +427,120 @@ async def test_an_assessor_failing_after_another_spoke_ends_the_run_with_the_spo
         ["Never asked the budget."]
     ]
     assert "pending" not in record
+
+
+@pytest.mark.asyncio
+async def test_assessment_failure_keeps_every_verdict_returned_before_cancellation(tmp_path):
+    released = asyncio.Event()
+    returned = []
+
+    class Immediate:
+        async def evaluate(self, sessions):
+            returned.append("Immediate verdict")
+            return failing(returned[-1])
+
+    class Completed:
+        async def evaluate(self, sessions):
+            await released.wait()
+            returned.append("The completed verdict must survive.")
+            return failing(returned[-1])
+
+    class Broken:
+        async def evaluate(self, sessions):
+            asyncio.get_running_loop().call_soon(released.set)
+            raise RuntimeError("the other judge failed")
+
+    session = Session.open(FakeWorker(tmp_path), object())
+    with pytest.raises(RuntimeError, match="other judge failed"):
+        await session.assess(Immediate(), Completed(), Broken())
+    assert returned[0] == "Immediate verdict"
+    record = json.loads(session.path.read_text())
+    assert [signal["text"] for signal in record["rounds"][0]["signals"]] == returned
+
+
+@pytest.mark.asyncio
+async def test_failed_holdout_assessment_keeps_answers_for_retry_after_resume(tmp_path, curations):
+    seen = []
+
+    class Judge:
+        async def evaluate(self, sessions):
+            seen.append(sessions)
+            if len(seen) == 1:
+                raise TimeoutError("judge deadline")
+            return passing()
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object())
+    await session.onboard()
+    judge = Judge()
+    trial = Conversation(Scripted("unseen", "Held-out question"), max_turns=1)
+    with pytest.raises(TimeoutError, match="judge deadline"):
+        await session.holdout([trial], [judge])
+    record = json.loads(session.path.read_text())
+    assert list(record["pending"]["holdout"]) == ["unseen"]
+    assert record["pending"]["holdout_assessment"]["sessions"] == ["unseen"]
+    resumed = Session.resume(worker, object(), session.path)
+    with pytest.raises(StepError, match="unfinished held-out assessment first"):
+        await resumed.holdout([trial], [judge])
+    revision = worker.artifact_id
+    worker.artifact_id = "different-revision"
+    with pytest.raises(StepError, match="employee or requirements changed"):
+        await resumed.holdout([], [judge], retry=True)
+    worker.artifact_id = revision
+    assert await resumed.holdout([], [judge], retry=True) == (passing(),)
+    assert len(worker.runs) == 1 and stepping.evidence_fingerprint(seen[0]) == stepping.evidence_fingerprint(seen[1])
+    assert resumed.pending_holdout is None and resumed.held_out_signals == [passing()]
+    assert "holdout_assessment" not in json.loads(session.path.read_text())["pending"]
+    with pytest.raises(StepError, match="only an unfinished"):
+        await resumed.holdout([], [judge], retry=True)
+
+
+class Meeting:
+    """Assessors that answer only once all of them are judging, each after its own delay; a failing one raises as
+    soon as it starts."""
+
+    def __init__(self, count):
+        self.count, self.started, self.finished, self.all = count, [], [], asyncio.Event()
+
+    def assessor(self, name, delay=0.0, fail=False):
+        meeting = self
+
+        class Judging:
+            async def evaluate(self, sessions):
+                meeting.started.append(name)
+                if fail:
+                    raise FileNotFoundError(f"{name}.md")
+                if len(meeting.started) == meeting.count:
+                    meeting.all.set()
+                await asyncio.wait_for(meeting.all.wait(), 5)
+                await asyncio.sleep(delay)
+                meeting.finished.append(name)
+                return Signal(name, f"{name} spoke")
+
+        return Judging()
+
+
+@pytest.mark.asyncio
+async def test_assessors_judge_at_once_and_the_round_holds_their_signals_in_their_order(tmp_path, curations, analyses):
+    meeting = Meeting(2)
+    session = Session.open(FakeWorker(tmp_path), object())
+    await session.onboard()
+    await session.trial(student("Hi"))
+    given = await session.assess(meeting.assessor("slow", 0.05), meeting.assessor("quick"))
+    assert meeting.finished == ["quick", "slow"] and [signal.source for signal in given] == ["slow", "quick"]
+    record = json.loads(session.path.read_text())
+    assert [signal["source"] for signal in record["pending"]["signals"]] == ["slow", "quick"]
+
+    held = Meeting(2)
+    signals = await stepping.assess((held.assessor("first", 0.05), held.assessor("second")), session.sessions)
+    assert held.finished == ["second", "first"] and [signal.source for signal in signals] == ["first", "second"]
+    stopped = Meeting(3)
+    with pytest.raises(FileNotFoundError, match="broken.md"):
+        await stepping.assess(
+            (stopped.assessor("waiting"), stopped.assessor("broken", fail=True), stopped.assessor("late")),
+            session.sessions,
+        )
+    assert stopped.started == ["waiting", "broken", "late"] and stopped.finished == []
 
 
 @pytest.mark.asyncio

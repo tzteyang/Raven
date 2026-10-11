@@ -1,11 +1,45 @@
-/* Every user-facing string of the RSI Studio, in English. Kept in this one
-   module so the views carry no copy of their own and a later move into ui-web
-   maps onto its i18n catalog. */
+/* Every user-facing string of the RSI Studio. The English is written here; the
+   Chinese lives in the shared catalogue, i18n/messages.json, under `studio`:
+   one entry per key below (a record's entries as `name.key`), where {0}, {1}…
+   stand for a function's arguments in order. A function that picks between
+   wordings reads its words through T, so a language words only the leaves and
+   the picking is written once, here. The language holds for the page's life:
+   the person's stored choice, else the browser's. */
+
+import { studio } from '../../../../i18n/messages.json'
+
+export type Lang = 'en' | 'zh'
+
+const CHOICE = 'studio.lang'
+
+function chosen(): Lang {
+  try {
+    const stored = localStorage.getItem(CHOICE)
+    if (stored === 'en' || stored === 'zh') return stored
+  } catch {
+    // Storage can be blocked; the browser's language decides then.
+  }
+  return navigator.language.toLowerCase().startsWith('zh') ? 'zh' : 'en'
+}
+
+export const lang: Lang = chosen()
+
+/** Keep the person's choice and load the page again in it. */
+export function switchLang(next: Lang): void {
+  localStorage.setItem(CHOICE, next)
+  location.reload()
+}
 
 const count = (n: number, one: string, many = `${one}s`): string => `${n} ${n === 1 ? one : many}`
 
-export const T = {
+const EN = {
   product: 'RSI Studio',
+  langName: 'English',
+  langShort: 'EN',
+  langTitle: 'Interface language',
+  detailSimple: 'Simple',
+  detailFull: 'Full',
+  detailTitle: "Show every step of the loop, or only what judging the employee needs",
   newSession: 'New cultivation',
   groupLive: 'Interactive sessions',
   groupRuns: 'Automated runs',
@@ -18,6 +52,7 @@ export const T = {
   modeLive: 'Interactive',
   modeReplay: 'Read-only replay',
   archivedTag: 'Archived',
+  versions: 'Versions',
 
   headTask: 'Job description',
   headBaseline: 'Starting Harness',
@@ -36,10 +71,15 @@ export const T = {
   stepDecide: 'Decision',
   stepCurate: (v: string) => `Curate → ${v}`,
   stepNoCurate: 'Not curated',
-  stepPaused: (stage: string | null, scope = 'root') => {
-    const child = scope !== 'root' ? `child Harness ${scope.replace(/^child\//, '')}` : ''
-    if (!stage) return child ? `Curation paused in ${child}` : 'Curation paused'
-    return child ? `Curation paused in ${child} at "${stage}"` : `Curation paused at "${stage}"`
+  pausedChild: (scope: string) => `child Harness ${scope}`,
+  pausedPlain: 'Curation paused',
+  pausedIn: (where: string) => `Curation paused in ${where}`,
+  pausedAt: (stage: string) => `Curation paused at "${stage}"`,
+  pausedInAt: (where: string, stage: string) => `Curation paused in ${where} at "${stage}"`,
+  stepPaused: (stage: string | null, scope = 'root'): string => {
+    const child = scope !== 'root' ? T.pausedChild(scope.replace(/^child\//, '')) : ''
+    if (!stage) return child ? T.pausedIn(child) : T.pausedPlain
+    return child ? T.pausedInAt(child, stage) : T.pausedAt(stage)
   },
   stepKept: 'Curation not applied',
   inspector: 'Input inspector',
@@ -61,13 +101,24 @@ export const T = {
   repeats: (id: string) => `Repeats ${id}`,
   situation: 'Situation',
   materials: 'Materials',
+  wrongExamples: (n: number) => count(n, 'wrong example'),
+  rightExamples: (n: number) => count(n, 'right example'),
+  examples: (wrong: number, right: number): string =>
+    [wrong ? T.wrongExamples(wrong) : '', right ? T.rightExamples(right) : ''].filter(Boolean).join(' · '),
+  exampleWrong: 'Wrong',
+  exampleRight: 'Right',
+  exampleInput: 'Input',
+  exampleOutput: 'Output',
+  exampleHandling: 'Handling',
+  exampleWhy: 'Why',
   held: { true: 'Held next round', false: 'Not held next round', null: 'Awaiting next round' } as Record<string, string>,
   heldHint: "Whether it held in the round after the revision: judged by the loop's rule (ledger.py) and recorded in history",
   expectation: { new: 'New requirement', unmet: 'Commitment unmet', met_but_rejected: 'Met but still unsatisfactory' } as Record<string, string>,
   observed: 'Observed',
   evidence: 'Evidence',
   acceptance: 'Acceptance',
-  recurrence: (n: number) => `Occurrence ${n + 1}`,
+  occurrence: (k: number) => `Occurrence ${k}`,
+  recurrence: (n: number): string => T.occurrence(n + 1),
   filtered: (n: number) => `${n} not adopted`,
   requirements: (n: number) => count(n, 'requirement'),
 
@@ -80,11 +131,17 @@ export const T = {
     repair: 'Repair',
     install: 'Installation',
   } as Record<string, string>,
-  stageCounts: (calls: number, queries: number) => [calls ? count(calls, 'call') : '', queries ? count(queries, 'query', 'queries') : ''].filter(Boolean).join(' · '),
+  calls: (n: number) => count(n, 'call'),
+  queries: (n: number) => count(n, 'query', 'queries'),
+  stageCounts: (calls: number, queries: number): string => [calls ? T.calls(calls) : '', queries ? T.queries(queries) : ''].filter(Boolean).join(' · '),
   scopeRoot: 'Root Harness',
-  progressScope: (scope: string) => `Curating ${scope === 'root' ? 'the root Harness' : `child Harness ${scope}`}`,
-  progressSpent: (diagnosing: boolean, calls: number, queries: number) =>
-    `${diagnosing ? 'Diagnosis' : 'Curation'} has used ${count(calls, 'call')} · ${count(queries, 'query', 'queries')}`,
+  progressRoot: 'Curating the root Harness',
+  progressChild: (scope: string) => `Curating child Harness ${scope}`,
+  progressScope: (scope: string): string => (scope === 'root' ? T.progressRoot : T.progressChild(scope)),
+  diagnosisSpent: (calls: string, queries: string) => `Diagnosis has used ${calls} · ${queries}`,
+  curationSpent: (calls: string, queries: string) => `Curation has used ${calls} · ${queries}`,
+  progressSpent: (diagnosing: boolean, calls: number, queries: number): string =>
+    (diagnosing ? T.diagnosisSpent : T.curationSpent)(T.calls(calls), T.queries(queries)),
   reads: (n: number, counts: string) => `Curator made ${count(n, 'lookup')}: ${counts}`,
   readTool: {
     read_source: 'Source',
@@ -92,18 +149,21 @@ export const T = {
     read_observation: 'Trial records',
   } as Record<string, string>,
   readsNote: 'The turns the Analyst cites in its requirements reach the Curator as observations (the record does not keep them; the Curator sees anonymous labels such as session-7ae78d, hashed from the trial name and stable across rounds). Listed here are the entries it actually read; a trial record opens its trial.',
-  readObserved: (o: { kind: string; session: string; turn: number; user: string; label: string }) =>
+  observedCurrent: "The child Harness's current execution",
+  observedTurn: (session: string, turn: number) => `${session} turn ${turn}`,
+  quoted: (text: string) => `"${text}"`,
+  readObserved: (o: { kind: string; session: string; turn: number; user: string; label: string }): string =>
     o.kind === 'current'
-      ? "The child Harness's current execution"
-      : `${o.label ? `${o.label} = ` : ''}${o.session} turn ${o.turn + 1}${o.user ? ` "${o.user.length > 24 ? `${o.user.slice(0, 24)}…` : o.user}"` : ''}`,
+      ? T.observedCurrent
+      : `${o.label ? `${o.label} = ` : ''}${T.observedTurn(o.session, o.turn + 1)}${o.user ? ` ${T.quoted(o.user.length > 24 ? `${o.user.slice(0, 24)}…` : o.user)}` : ''}`,
   readFailed: 'Read failed',
   observedHanded: (n: number, read: number) => `Also handed to the Curator: the ${count(n, 'trial turn')} the Analyst cited, as observations (not kept in the curation record). It read ${read} of them:`,
 
   diagnosis: 'Diagnosis',
   diagnosed: (n: number) => count(n, 'input'),
   diagnosisNote: 'Before changing anything, the Curator maps each input (a requirement, handed-over materials, a node requirement routed to a child Harness, or the task itself) onto a mechanism of the current Harness.',
-  attributorSpent: (calls: number | null, queries: number | null) =>
-    [calls !== null ? count(calls, 'call') : '', queries !== null ? count(queries, 'query', 'queries') : ''].filter(Boolean).join(' · '),
+  attributorSpent: (calls: number | null, queries: number | null): string =>
+    [calls !== null ? T.calls(calls) : '', queries !== null ? T.queries(queries) : ''].filter(Boolean).join(' · '),
   attributionPaused: (reason: string) => `Diagnosis paused: ${reason}`,
   attributionFailed: (reason: string) => `Diagnosis failed: ${reason}`,
   states: {
@@ -126,8 +186,11 @@ export const T = {
     model_ignored: 'The information was in the input, but the model did not follow it',
     uncovered: 'The mechanism exists, but does not reach this situation',
   } as Record<string, string>,
-  about: (about: string) =>
-    about === 'task' ? 'The task itself' : about.startsWith('material:') ? `Material ${about.slice(9)}` : about.startsWith('node:') ? `Node ${about.slice(5)}` : about,
+  aboutTask: 'The task itself',
+  aboutMaterial: (name: string) => `Material ${name}`,
+  aboutNode: (name: string) => `Node ${name}`,
+  about: (about: string): string =>
+    about === 'task' ? T.aboutTask : about.startsWith('material:') ? T.aboutMaterial(about.slice(9)) : about.startsWith('node:') ? T.aboutNode(about.slice(5)) : about,
   diagMechanism: 'Mechanism',
   diagEvidence: 'Evidence',
   diagEarlier: 'Earlier',
@@ -160,14 +223,19 @@ export const T = {
   prepared: 'Preparation',
   preparedNote: "What the candidate's prepare actually did in the host check",
   preparedOp: { profile: 'Wrote profile', pinned_skills: 'Pinned skills', playbook: 'Compiled playbook', prompt: 'Registered prompt', register: 'Registered' } as Record<string, string>,
+  nodes: (n: number, names: string) => `${n} nodes: ${names}`,
   nodeReasons: 'Playbook node decisions',
-  budget: (generation?: { calls: number; queries: number }, attribution?: { calls: number; queries: number }) =>
+  semi: '; ',
+  colon: ': ',
+  budgetCuration: (calls: string, queries: string) => `Curation ${calls} · ${queries}`,
+  budgetDiagnosis: (calls: string, queries: string) => `Diagnosis ${calls} · ${queries}`,
+  budget: (generation?: { calls: number; queries: number }, attribution?: { calls: number; queries: number }): string =>
     [
-      generation ? `Curation ${count(generation.calls, 'call')} · ${count(generation.queries, 'query', 'queries')}` : '',
-      attribution ? `Diagnosis ${count(attribution.calls, 'call')} · ${count(attribution.queries, 'query', 'queries')}` : '',
+      generation ? T.budgetCuration(T.calls(generation.calls), T.queries(generation.queries)) : '',
+      attribution ? T.budgetDiagnosis(T.calls(attribution.calls), T.queries(attribution.queries)) : '',
     ]
       .filter(Boolean)
-      .join('; '),
+      .join(T.semi),
   understanding: 'Understanding',
   design: 'Design',
   changes: (n: number) => count(n, 'change'),
@@ -191,8 +259,10 @@ export const T = {
   footer: {
     asked: (stage: string, question: string) =>
       `At the "${stage}" stage the Curator reported a gap it cannot close with the materials at hand, so this round has no revision. Its question: ${question}`,
-    paused: (stage: string | null, scope: string, reason: string) =>
-      `Curation paused${scope !== 'root' ? ` in child Harness ${scope.replace(/^child\//, '')}` : ''}${stage ? ` at the "${stage}" stage` : ''}; the next call resumes from the checkpoint.${reason ? ` Reason: ${reason}` : ''}`,
+    pausedResume: '; the next call resumes from the checkpoint.',
+    pausedReason: (reason: string) => ` Reason: ${reason}`,
+    paused: (stage: string | null, scope: string, reason: string): string =>
+      `${T.stepPaused(stage, scope)}${T.footer.pausedResume}${reason ? T.footer.pausedReason(reason) : ''}`,
     failed: (error: string) => `The curation failed and made no revision. ${error}`,
     curating: (v: string) => `Curating; the result will be ${v}`,
     review: (v: string) => `The Analyst asks for curation. Your call: start curating, or skip this round and stay on ${v}.`,
@@ -226,8 +296,35 @@ export const T = {
   trialEnd: 'End trial',
   trialSay: 'Say something as the conversant',
   trialThinking: 'The agent is working…',
-  turnTimedOut: (seconds: unknown) =>
-    `This turn ran past the worker's time limit${typeof seconds === 'number' ? ` (${seconds} s)` : ''} and was stopped; the conversant got no reply`,
+  timedOutLimit: (seconds: number) => ` (${seconds} s)`,
+  timedOut: (limit: string) => `This turn ran past the worker's time limit${limit} and was stopped; the conversant got no reply`,
+  turnTimedOut: (seconds: unknown): string => T.timedOut(typeof seconds === 'number' ? T.timedOutLimit(seconds) : ''),
+  trialHint:
+    'You play the one who hands the employee its work: send a message below and it answers each one. Stuck for what to say? Ask for an AI question. A trial you hold is not scored automatically; once it ends, mark each reply right or wrong for the Analyst.',
+  questionAsk: 'AI question',
+  questionBusy: 'Drafting a question…',
+  questionHint: 'The AI writes a message aimed at a weak spot, from the job, the materials handed over and the requirements raised so far',
+  questionAim: 'Tests',
+  questionGood: 'A good answer, as the AI sees it',
+  questionNote: 'The message is in the box below: edit it, then send. Only you see this note.',
+  questionFailed: (error: string) => `No question this time: ${error}`,
+  proposeAction: 'AI checks',
+  proposeHint: "The AI reads this round's replies and puts what you have not settled yet as two-way choices",
+  proposeBusy: "The AI is reading this round's replies…",
+  proposeFailed: (error: string) => `No proposals this time: ${error}`,
+  proposeNone: 'Nothing left for you to settle: the checks in force cover this round',
+  proposePick: 'This one',
+  proposeOwn: 'Neither: write the rule yourself',
+  proposeUseOwn: 'Use mine',
+  proposeChosen: (rule: string) => `Settled: ${rule}`,
+  adoptedTitle: 'Your checks: every automatic assessment from now on holds the trials to these',
+  compareAction: 'Side by side',
+  compareTitle: (name: string) => `Exam question ${name} across versions`,
+  compareAsk: 'What was asked',
+  compareVersion: 'Version',
+  compareFailed: (failed: number, total: number) => `${failed} of ${total} items failed`,
+  compareUnscored: 'Not scored',
+  compareNone: 'No version has sat this question yet',
   trialNone: 'No trials yet',
   trialTitle: (n: number) => `Trial ${n}`,
   trialFrom: (k: string) => `Drill ${k}`,
@@ -236,10 +333,13 @@ export const T = {
   trialsPending: (round: number, n: number) => `${count(n, 'trial')} in progress in round ${round}`,
   heldOutNote: 'Held-out trial: recorded and assessed, but the Analyst cannot read it and never cites it to the Curator; it measures whether a change generalizes',
   heldOutTag: 'Held out',
-  tools: (names: string[]) =>
-    `Called ${count(names.length, 'tool')}: ${[...new Set(names)].slice(0, 4).join(', ')}${new Set(names).size > 4 ? ', etc.' : ''}`,
+  called: (n: number, names: string) => `Called ${count(n, 'tool')}: ${names}`,
+  etc: ', etc.',
+  tools: (names: string[]): string =>
+    T.called(names.length, `${[...new Set(names)].slice(0, 4).join(', ')}${new Set(names).size > 4 ? T.etc : ''}`),
   modelCalls: (n: number) => count(n, 'model call'),
-  childRuns: (names: string[]) => `Child Harness: ${[...new Set(names)].join(', ')}`,
+  childHarnesses: (names: string) => `Child Harness: ${names}`,
+  childRuns: (names: string[]): string => T.childHarnesses([...new Set(names)].join(', ')),
   intercept: {
     gate: 'The check errored; call refused',
     permission: 'Permission denied',
@@ -260,8 +360,11 @@ export const T = {
   guidance: { action: "Action's hint to the model", planning: "Planning's guidance to the model" } as Record<string, string>,
   peer: (target: string, operation: string) => `Cross-strategy request → ${target}.${operation}`,
   selected: (n: number) => count(n, 'Capability selection'),
-  selectedTools: (names: string[]) => `Tools: ${names.join(', ') || 'none'}`,
-  selectedSkills: (names: string[]) => `Skills: ${names.join(', ') || 'none'}`,
+  none: 'none',
+  toolList: (names: string) => `Tools: ${names}`,
+  skillList: (names: string) => `Skills: ${names}`,
+  selectedTools: (names: string[]): string => T.toolList(names.join(', ') || T.none),
+  selectedSkills: (names: string[]): string => T.skillList(names.join(', ') || T.none),
   registered: (what: string, name: string) => `Registered ${what} ${name}`,
   memoryOp: {
     initialize: 'Context organization order',
@@ -271,7 +374,9 @@ export const T = {
   } as Record<string, string>,
   strategyError: 'Strategy error',
   modelInput: 'Actual model input',
-  contextTokens: (tokens: number, allowance: number | null) => `~${tokens} tokens${allowance ? ` / limit ${allowance}` : ''}`,
+  tokens: (n: number) => `~${n} tokens`,
+  tokenLimit: (n: number) => ` / limit ${n}`,
+  contextTokens: (tokens: number, allowance: number | null): string => `${T.tokens(tokens)}${allowance ? T.tokenLimit(allowance) : ''}`,
   rawInput: 'Raw model input',
   messages: (n: number) => count(n, 'message'),
   chars: (n: number) => count(n, 'char'),
@@ -284,7 +389,9 @@ export const T = {
   dockReview: (n: number) => `The Analyst raised ${count(n, 'requirement')} and asks for curation. What next?`,
   dockCurate: 'Start curation',
   dockSkip: 'Skip this round',
-  dockPaused: (step: string) => `${step === 'onboard' ? 'Onboarding curation' : 'Curation'} paused; resuming picks up from the checkpoint.`,
+  dockPausedOnboard: 'Onboarding curation paused; resuming picks up from the checkpoint.',
+  dockPausedCuration: 'Curation paused; resuming picks up from the checkpoint.',
+  dockPaused: (step: string): string => (step === 'onboard' ? T.dockPausedOnboard : T.dockPausedCuration),
   dockResume: 'Resume curation',
   dockRound: (trials: number, remarks: number) => `This round: ${count(trials, 'trial')} · ${count(remarks, 'remark')}`,
   dockAssess: 'Auto-assess',
@@ -302,7 +409,42 @@ export const T = {
   composerSupplement: 'Attach the missing materials, or say there are none',
   composerClarify: (q: string) => `Answer: ${q}`,
   composerTrials: (n: number) => `${count(n, 'trial')} not ended yet; end ${n === 1 ? 'it' : 'them'} before sending a curation request`,
-  composerReview: 'First decide above whether to curate',
+  newScenario: 'Scenario',
+  newScenarioBuild: 'New scenario…',
+  buildTitle: 'New scenario',
+  buildName: 'Name',
+  buildProfile: 'Job description',
+  buildProfileHint: 'What the employee is for, whom it works for and what it hands over, in your own words',
+  buildFiles: 'Materials (.md, .txt or .csv; 1 MB in all)',
+  buildFilesPicked: (names: string) => `Picked: ${names}`,
+  buildPractice: 'Practice requests, one per line',
+  buildExam: 'Exam requests, one per line (never shown in practice; they score each version)',
+  buildChecks: 'Acceptance checks, one per line (optional; without any, add them later with “AI checks”)',
+  buildDo: 'Build the scenario',
+  buildFailed: (error: string) => `Could not build it: ${error}`,
+  collectorTitle: 'Before onboarding, the AI asks you',
+  collectorPlaceholder: 'Your answer',
+  collectorAnswer: 'Answer',
+  collectorSkip: 'Skip',
+  collectorProposal: (proposal: string) => `Its suggestion: ${proposal}`,
+  collectorAssumption: (assumption: string) => `Skipped, it assumes: ${assumption}`,
+  deleteSession: 'Delete session',
+  deleteConfirm: (title: string) => `Delete “${title}”? It leaves the list, and the server moves it to its trash folder, from where it can be restored.`,
+  exportEmployee: 'Export employee',
+  exporting: 'Preparing download…',
+  exportHint: 'Download the saved employee package',
+  exportUnsaved: 'No saved employee yet; complete the onboarding or a curation first',
+  exportBusy: 'Wait for the current step or trial to finish before exporting',
+  exportInvalid: 'The server did not return an employee ZIP package',
+  exportDone: "Download started. Extract the employee package into Raven's agents directory. It needs a source checkout of Raven that supports Studio exports and uses the host's provider and tool configuration.",
+  askWho: { analyst: 'Analyst', curator: 'Curator' },
+  askRole: 'Who to ask',
+  askPlaceholder: 'Ask about this step: why this requirement, what changed and why…',
+  askSend: 'Ask',
+  askBusy: "Answering from this step's record…",
+  askFailed: (error: string) => `No answer: ${error}`,
+  askNote: "The answer comes from what this step recorded; asking changes nothing. To change the next curation, leave a remark before it.",
+  composerReview: 'Before curation, say what the Curator must keep or change (a requirement you reject, a part to leave alone); it hears this with the analysis',
   composerPaused: 'First resume the paused curation',
   composerBusy: {
     onboard: 'The Curator is running the onboarding curation…',
@@ -310,6 +452,9 @@ export const T = {
     assess: 'The auto-assessor is assessing this round…',
     analyse: 'The Analyst is analysing…',
     curate: 'Curation in progress; no new curation request until it finishes',
+    script: 'Scripted trials in progress…',
+    exam: 'The exam is in progress…',
+    revert: 'Going back to the earlier version…',
   } as Record<string, string>,
   stops: {
     analyst: 'The Analyst judged it can end',
@@ -318,7 +463,8 @@ export const T = {
     exhausted: 'Out of rounds',
   },
   runEnded: (why: string) => `Run ended: ${why}`,
-  runFailed: (error: string) => `Run failed: ${error.length > 160 ? `${error.slice(0, 160)}…` : error}`,
+  runFailedText: (error: string) => `Run failed: ${error}`,
+  runFailed: (error: string): string => T.runFailedText(error.length > 160 ? `${error.slice(0, 160)}…` : error),
   noCurationRecord: 'This round asked for curation but left no curation record',
 
   scoreTitle: 'Standard assessment',
@@ -351,7 +497,6 @@ export const T = {
   ledgerNone: '—',
   ledgerCols: { round: 'Round', requirement: 'Requirement', state: 'Diagnosis', changes: 'Changes', held: 'Held', treatment: 'Treatment', judged: 'Judged', ratio: 'Hold rate', attributor: 'Attributor' },
   ledgerMissing: "History records no diagnosis for this round, but this round's attribution record has one; the ledger counts from history, so diagnosis and changes are empty",
-  ledgerHoldout: 'Held-out assessment',
   ledgerRecorded: 'In the record: ',
   ledgerUncurated: 'Not curated',
   ledgerNoSummary: 'No requirement can be summarized yet: a requirement needs a diagnosis state and a verdict in the round after its revision.',
@@ -371,15 +516,23 @@ export const T = {
   auditViolations: (n: number) => count(n, 'violation'),
   auditClean: 'No violations',
   auditMissing: 'This run has no boundaries.jsonl',
-  auditShown: (n: number, total: number) => (n < total ? `Showing the last ${n} of ${total} lines` : count(total, 'line')),
+  auditLast: (n: number, total: number) => `Showing the last ${n} of ${total} lines`,
+  auditLines: (n: number) => count(n, 'line'),
+  auditShown: (n: number, total: number): string => (n < total ? T.auditLast(n, total) : T.auditLines(total)),
   auditAll: (n: number) => `Show all ${count(n, 'line')}`,
 
   kinds: { norm: 'Norm', fact: 'Fact', exemplar: 'Exemplar', counterexample: 'Counterexample' } as Record<string, string>,
   origins: { induced: 'Induced', researched: 'Researched' } as Record<string, string>,
-  originMark: (origin: string, confirmed: boolean) =>
-    `${({ induced: 'Induced', researched: 'Researched' } as Record<string, string>)[origin] ?? origin} · ${confirmed ? 'Confirmed' : 'Unconfirmed'}`,
-  originHint: (origin: string, items: string[], confirmed: boolean) =>
-    `${origin === 'researched' ? 'A finding verified in the research stage' : 'A rule the research stage induced from the handed-over materials'}${items.length ? ` (${items.join(', ')})` : ''}; ${confirmed ? 'confirmed by the counterpart' : 'not yet confirmed by the counterpart, so the evaluation side does not judge by it'}`,
+  confirmed: 'Confirmed',
+  unconfirmed: 'Unconfirmed',
+  originMark: (origin: string, confirmed: boolean): string => `${T.origins[origin] ?? origin} · ${confirmed ? T.confirmed : T.unconfirmed}`,
+  hintResearched: 'A finding verified in the research stage',
+  hintInduced: 'A rule the research stage induced from the handed-over materials',
+  hintConfirmed: 'confirmed by the counterpart',
+  hintUnconfirmed: 'not yet confirmed by the counterpart, so the evaluation side does not judge by it',
+  inParens: (text: string) => ` (${text})`,
+  originHint: (origin: string, items: string[], confirmed: boolean): string =>
+    `${origin === 'researched' ? T.hintResearched : T.hintInduced}${items.length ? T.inParens(items.join(', ')) : ''}${T.semi}${confirmed ? T.hintConfirmed : T.hintUnconfirmed}`,
   materialFiles: (n: number) => count(n, 'file'),
   latestVersion: 'Latest version',
   liveBaseline: 'Raven clean baseline',
@@ -396,8 +549,52 @@ export const T = {
     curate: 'Curation',
     skip: 'Skip',
     finish: 'Finish',
+    script: 'Scripted trials',
+    exam: 'Exam',
+    revert: 'Go back',
   } as Record<string, string>,
-  liveDetached: 'The session process has ended (for example, the service restarted). Reattaching means rebuilding the partner on its existing directory, a step the loop does not provide yet, so reattaching explains why; the records stay viewable as usual.',
+  liveDetached: 'The session process has ended (for example, the service restarted). Reattaching rebuilds the partner on the version it last saved and picks the round up where it stood.',
+  liveStartedFrom: (name: string) => `Started from ${name}`,
+  playScripts: 'Scripted trials',
+  scriptsTitle: 'Play scripted trials',
+  scriptsNote: "Each script plays on its own copy of the employee as it stands: its messages (and the files each one brings) go in one by one and the employee answers each. The trials join this round, like the ones you hold yourself.",
+  scriptSteps: (n: number) => count(n, 'step'),
+  playN: (n: number) => `Play ${n}`,
+  scriptsCopying: 'Copying the employee…',
+  scriptsScoring: 'every script has played; the assessor is scoring them…',
+  scriptsProgress: (rows: { name: string; done: number; steps: number }[]): string =>
+    !rows.length
+      ? T.scriptsCopying
+      : rows.every((row) => row.done >= row.steps)
+        ? T.scriptsScoring
+        : rows.map((row) => `${row.name} ${row.done}/${row.steps}`).join(' · '),
+  scriptsStop: 'Stop after this turn',
+  examAction: 'Exam',
+  examHint: "Play the scenario's exam scripts on the installed version and score them; the Analyst never reads them",
+  examNow: (failed: number, judged: number) => `Exam: ${failed} of ${judged} items failed`,
+  examThen: (failed: number, judged: number) => `; the version before the last curation: ${failed} of ${judged} (one exam each, so a small gap can be chance).`,
+  examEnd: '.',
+  examLine: (now: { failed: number; judged: number }, before: { failed: number; judged: number } | null): string =>
+    T.examNow(now.failed, now.judged) + (before ? T.examThen(before.failed, before.judged) : T.examEnd),
+  examWorse: 'Worse than the version before it.',
+  revertAction: 'Go back',
+  revertHint: 'Put back the version installed before the last curation; the Curator hears that its change was undone',
+  marks: { right: 'Right', fix: 'Should be…', wrong: 'Wrong', missed: 'Missed…' } as Record<string, string>,
+  markAsk: {
+    right: 'What it got right (optional)',
+    fix: 'How it should have answered',
+    wrong: 'What is wrong',
+    missed: 'What it missed',
+  } as Record<string, string>,
+  markSend: 'Mark',
+  markWords: { right: 'right', fix: 'should have been', wrong: 'wrong', missed: 'missed' } as Record<string, string>,
+  markLine: (trial: string, turn: number, word: string) => `${trial} turn ${turn}: ${word}`,
+  markText: (trial: string, turn: number, kind: string, note: string): string =>
+    `${T.markLine(trial, turn, T.markWords[kind] ?? kind)}${note ? ` -- ${note}` : ''}`,
+  marked: 'Your marks go to the Analyst with this round',
+  newFrom: 'Start from',
+  newFromPlain: 'The clean Raven baseline',
+  newFromTask: 'Its job description',
   dockReattach: 'Reattach session',
   liveGone: 'The session process ended here, for example because the service restarted.',
   liveRefused: (error: string) => `This step was not run: ${error}`,
@@ -434,12 +631,13 @@ export const T = {
   archivedBar: 'Archived: this agent (model + Harness) is frozen and view only.',
 
   newTitle: 'New cultivation session',
-  titleFrom: (task: string) => task.split(/[\uff1a:\uff0c,\u3002\n]/)[0].replace(/^#+\s*/, '').slice(0, 40) || 'New cultivation session',
+  titleFrom: (task: string): string => task.split(/[\uff1a:\uff0c,\u3002\n]/)[0].replace(/^#+\s*/, '').slice(0, 40) || T.newTitle,
   newName: 'Name',
   newTask: 'Job description',
   newTaskPlaceholder: "For example: an online travel consultant for Hailan Travel who serves customers by the agency's SOP, quotes prices and delivers itinerary decks (PPT).",
-  newSettings: (scenario: string, curator: string | null, rounds: number) =>
-    `Scenario ${scenario} · Curator ${curator ?? "on the partner's model"} · up to ${count(rounds, 'round')} · the partner starts from the clean Raven baseline`,
+  curatorDefault: "on the partner's model",
+  settings: (scenario: string, curator: string, rounds: number) => `Scenario ${scenario} · Curator ${curator} · up to ${count(rounds, 'round')}`,
+  newSettings: (scenario: string, curator: string | null, rounds: number): string => T.settings(scenario, curator ?? T.curatorDefault, rounds),
   newFailed: (error: string) => `Could not create the session: ${error}`,
   create: 'Create',
   cancel: 'Cancel',
@@ -462,7 +660,7 @@ export const T = {
   items: (n: number) => count(n, 'per-item verdict'),
   satisfied: { true: 'Satisfied', false: 'Not satisfied', null: 'No verdict' } as Record<string, string>,
 
-  diffTitle: (scope: string, target: string) => `${scope} · ${target === 'files' ? 'Supporting files' : target}`,
+  diffTitle: (scope: string, target: string): string => `${scope} · ${target === 'files' ? T.looseFiles : target}`,
   looseFiles: 'Supporting files',
   diffVersions: (a: string, b: string) => `${a} → ${b}`,
   unchangedLines: (n: number) => count(n, 'unchanged line'),
@@ -479,3 +677,27 @@ export const T = {
   pickSomething: 'Pick a session or run on the left',
   statuses: { running: 'Running', finished: 'Finished', paused: 'Paused', error: 'Error', stalled: 'Stalled' } as Record<string, string>,
 }
+
+type Words = Record<string, { zh: string }>
+
+const fill = (template: string, args: unknown[]): string => template.replace(/\{(\d+)\}/g, (_, i: string) => String(args[Number(i)]))
+
+/** `en` with every entry `words` carries replaced: a string by its words, a function by its template over the call's arguments. */
+function overlay<V extends object>(en: V, words: Words, prefix = ''): V {
+  return Object.fromEntries(
+    Object.entries(en).map(([key, value]) => {
+      const text = words[prefix + key]?.zh
+      if (typeof value === 'function') return [key, text === undefined ? value : (...args: unknown[]) => fill(text, args)]
+      if (value && typeof value === 'object') return [key, overlay(value, words, `${prefix}${key}.`)]
+      return [key, text ?? value]
+    }),
+  ) as V
+}
+
+export const T: typeof EN = lang === 'zh' ? overlay(EN, studio) : EN
+
+/** The languages the page speaks, each named in itself, in full and short. */
+export const LANGS: { code: Lang; name: string; short: string }[] = [
+  { code: 'en', name: EN.langName, short: EN.langShort },
+  { code: 'zh', name: studio.langName.zh, short: studio.langShort.zh },
+]

@@ -6,6 +6,7 @@ can follow it and a new process can resume it, and runs each model role inside i
 given. `Outcome` says after each analysis what the loop would do next, and the caller may do otherwise.
 """
 
+import asyncio
 import json
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
@@ -96,41 +97,48 @@ async def trial_sessions(worker, trials) -> Sessions:
 
 
 async def assess(assessors, sessions, history=(), external_requirements=(), verifications=None) -> tuple[Signal, ...]:
-    """Every assessor's signal on the sessions. An assessor that keeps a standard of its own is first handed the
-    history as the Analyst reads it (`sediment`, see `experimental.assessor.standard`), so the requirements raised so
-    far become its regression checks."""
-    signals = []
-    for assessor in assessors:
-        sediment = getattr(assessor, "sediment", None)
-        if sediment is not None:
-            sediment(project(tuple(history), "analyst"))
-        constrain = getattr(assessor, "constrain", None)
-        if constrain is not None:
-            constrain(external_requirements)
-        policy = (
-            deepcopy(getattr(assessor, "verification_policy", lambda: None)()) if verifications is not None else None
-        )
-        evidence = evidence_fingerprint(sessions) if policy is not None else None
-        signal = await assessor.evaluate(sessions)
-        if signal is not None:
-            signals.append(signal)
-        if policy is not None:
-            witness = {
-                "policy": fingerprint(policy),
-                "kind": policy.get("kind"),
-                "evidence": evidence,
-                "source": signal.source if signal is not None else "",
-                "satisfied": signal.satisfied if signal is not None else None,
-            }
-            if (
-                signal is None
-                or type(signal.satisfied) is not bool
-                or evidence_fingerprint(sessions) != evidence
-                or assessor.verification_policy() != policy
-            ):
-                witness["error"] = "The normal-task verifier or its frozen evidence is unresolved."
-            verifications.append(witness)
-    return tuple(signals)
+    """Every assessor's signal on the sessions, in the assessors' order; they judge at once, and the first to fail
+    stops the others and is raised. An assessor that keeps a standard of its own is first handed the history as the
+    Analyst reads it (`sediment`, see `experimental.assessor.standard`), so the requirements raised so far become its
+    regression checks."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [
+                group.create_task(_assessed(assessor, sessions, history, external_requirements, verifications))
+                for assessor in assessors
+            ]
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from failed
+    return tuple(signal for task in tasks if (signal := task.result()) is not None)
+
+
+async def _assessed(assessor, sessions, history, external_requirements, verifications) -> Signal | None:
+    sediment = getattr(assessor, "sediment", None)
+    if sediment is not None:
+        sediment(project(tuple(history), "analyst"))
+    constrain = getattr(assessor, "constrain", None)
+    if constrain is not None:
+        constrain(external_requirements)
+    policy = deepcopy(getattr(assessor, "verification_policy", lambda: None)()) if verifications is not None else None
+    evidence = evidence_fingerprint(sessions) if policy is not None else None
+    signal = await assessor.evaluate(sessions)
+    if policy is not None:
+        witness = {
+            "policy": fingerprint(policy),
+            "kind": policy.get("kind"),
+            "evidence": evidence,
+            "source": signal.source if signal is not None else "",
+            "satisfied": signal.satisfied if signal is not None else None,
+        }
+        if (
+            signal is None
+            or type(signal.satisfied) is not bool
+            or evidence_fingerprint(sessions) != evidence
+            or assessor.verification_policy() != policy
+        ):
+            witness["error"] = "The normal-task verifier or its frozen evidence is unresolved."
+        verifications.append(witness)
+    return signal
 
 
 class StepError(RuntimeError):
@@ -247,6 +255,7 @@ class Session:
         self.signals: list[Signal] = []
         self.held_out: Sessions = {}
         self.held_out_signals: list[Signal] = []
+        self.pending_holdout: dict | None = None
         self.verification: list[dict] = []
         self.record["promotion"] = {"status": "candidate", "reason": "Independent verification has not run."}
         self.review = None
@@ -296,6 +305,7 @@ class Session:
         session.signals = [_signal(signal) for signal in pending.get("signals", ())]
         session.held_out = _sessions(pending.get("holdout", {}))
         session.held_out_signals = [_signal(signal) for signal in pending.get("holdout_signals", ())]
+        session.pending_holdout = pending.get("holdout_assessment")
         session.verification = list(pending.get("verification", ()))
         for witness in session.verification:
             witness["error"] = "Resume requires a fresh verification with the current verifier policy."
@@ -343,6 +353,8 @@ class Session:
             record["pending"] = {"sessions": self.sessions, "signals": self.signals}
             if self.held_out:
                 record["pending"].update(holdout=self.held_out, holdout_signals=self.held_out_signals)
+            if self.pending_holdout is not None:
+                record["pending"]["holdout_assessment"] = self.pending_holdout
             if self.verification:
                 record["pending"]["verification"] = self.verification
             if self.review is not None:
@@ -517,13 +529,26 @@ class Session:
         self.save()
         return produced
 
-    async def holdout(self, trials, assessors) -> tuple[Signal, ...]:
+    async def holdout(self, trials, assessors, *, retry: bool = False) -> tuple[Signal, ...]:
         """Play held-out trials on the worker as it stands and assess them apart from the round: their sessions
         and signals join the round's record, never the Analyst's reading or the Curator's citations.
 
         The trials must leave nothing behind in the worker (play them on replicas the way the simulation plays its
-        cards), or what they said would reach the Curator through the worker's own state."""
+        cards), or what they said would reach the Curator through the worker's own state. With `retry`, only the
+        unfinished assessment is retried, on the saved answers and unchanged employee; no trials may be supplied."""
         self._require(self.onboarded and self.review is None, "a held-out trial runs before the round's analysis")
+        trials = tuple(trials)
+        revision, context = self._revision(), self._verification_context()
+        if retry:
+            pending = self.pending_holdout
+            self._require(pending is not None and not trials, "retry only an unfinished held-out assessment")
+            self._require(
+                pending["revision"] == revision and pending["context"] == context,
+                "the employee or requirements changed since the unfinished held-out assessment",
+            )
+            produced = {name: self.held_out[name] for name in pending["sessions"]}
+        else:
+            self._require(self.pending_holdout is None, "retry the unfinished held-out assessment first")
         assessors = tuple(assessors)
         policies = []
         for assessor in assessors:
@@ -532,11 +557,15 @@ class Session:
                 constrain(self.external_requirements)
             policy = deepcopy(getattr(assessor, "verification_policy", lambda: None)())
             policies.append(policy)
-        revision, context = self._revision(), self._verification_context()
-        produced = await trial_sessions(self.worker, trials)
-        if self.held_out.keys() & produced.keys():
-            raise ValueError(f"trials produced the same session key: {sorted(self.held_out.keys() & produced.keys())}")
-        self.held_out.update(produced)
+        if not retry:
+            produced = await trial_sessions(self.worker, trials)
+            if self.held_out.keys() & produced.keys():
+                raise ValueError(
+                    f"trials produced the same session key: {sorted(self.held_out.keys() & produced.keys())}"
+                )
+            self.held_out.update(produced)
+            self.pending_holdout = {"sessions": list(produced), "revision": revision, "context": context}
+            self.save()
         evidence = evidence_fingerprint(produced)
         signals = await assess(assessors, produced, self.history, self.external_requirements)
         self.held_out_signals.extend(signals)
@@ -585,6 +614,7 @@ class Session:
                             )
                         except (OSError, ValueError) as exc:
                             witness["learning_error"] = str(exc)
+        self.pending_holdout = None
         self.save()
         return signals
 
@@ -606,33 +636,46 @@ class Session:
         self.signals.append(signal)
         self.save()
 
+    def remark(self, signal: Signal) -> None:
+        """A person's words on the analysed round before its curation, such as a requirement they reject: the round
+        keeps them with its signals, so the Curator hears them with the rest and the next analysis reads them."""
+        self._require(
+            self.review is not None and self.rounds[-1].curated, "a remark on the analysis comes before its curation"
+        )
+        self.rounds[-1] = replace(self.rounds[-1], signals=(*self.rounds[-1].signals, signal))
+        self.previous_signals = self._acted(self.rounds[-1].signals)
+        self.save()
+
     async def assess(self, *assessors) -> tuple[Signal, ...]:
-        """Each assessor's signal joins the round and the record as soon as it is given, so one that fails after
-        others have spoken ends the run with their words kept in the round."""
+        """The assessors judge at once, and each one's signal joins the round and the record as soon as it is given,
+        so one that fails ends the run with the words given by then kept in the round; those still judging stop. Once
+        all have spoken, the round holds their signals in the assessors' order."""
         self._require(self.review is None, "assessment comes before the analysis")
-        given = []
         witnesses = [] if self.experience is not None else None
         for assessor in assessors:
             if not any(assessor is registered for registered in self.assessors):
                 self.assessors.append(assessor)
-            try:
-                signals = await assess(
-                    (assessor,),
-                    self.sessions,
-                    self.history,
-                    self.external_requirements,
-                    **({"verifications": witnesses} if witnesses is not None else {}),
-                )
-            except Exception as exc:
-                self._abort(exc, self.signals)
-                raise
-            given.extend(signals)
+        start = len(self.signals)
+
+        async def judged(assessor):
+            signal = await _assessed(assessor, self.sessions, self.history, self.external_requirements, witnesses)
+            signals = () if signal is None else (signal,)
             self.signals.extend(signals)
             self.save()
+            return signals
+
+        try:
+            async with asyncio.TaskGroup() as group:
+                tasks = [group.create_task(judged(assessor)) for assessor in assessors]
+        except ExceptionGroup as failed:
+            self._abort(failed.exceptions[0], self.signals)
+            raise failed.exceptions[0] from failed
+        given = tuple(signal for task in tasks for signal in task.result())
+        self.signals[start:] = given
         if self.experience is not None:
             await self._experience_outcomes(witnesses)
-            self.save()
-        return tuple(given)
+        self.save()
+        return given
 
     async def _experience_outcomes(self, witnesses):
         from ..experience.contracts import OutcomeReceipt
@@ -749,6 +792,7 @@ class Session:
         self.previous_signals, self.previous_feedback = acted, feedback
         # The round now holds its sessions and signals; only the review waits for the curation.
         self.sessions, self.signals, self.held_out, self.held_out_signals = {}, [], {}, []
+        self.pending_holdout = None
         self.verification = []
         self.review = review
         if curated:
@@ -872,6 +916,7 @@ class Session:
         )
         self.record["status"], self.record["error"] = "error", str(exc)
         self.sessions, self.signals, self.held_out, self.held_out_signals = {}, [], {}, []
+        self.pending_holdout = None
         self.save()
 
     def _last(self, name):
@@ -894,6 +939,7 @@ class Session:
         )
         self.sessions, self.signals, self.review = {}, [], None
         self.held_out, self.held_out_signals = {}, []
+        self.pending_holdout = None
 
 
 @dataclass(frozen=True)

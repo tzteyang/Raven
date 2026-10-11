@@ -1,5 +1,7 @@
 """Host-owned child baselines, immutable launch definitions and native registration bindings."""
 
+import base64
+import hashlib
 import json
 import os
 import shlex
@@ -294,6 +296,78 @@ async def reinstate(worker, kept: Kept):
         worker.commitments = kept.commitments
         worker._preview = None
         return installed
+
+
+def _digest(value) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+async def save(worker, path: Path) -> dict:
+    """Write the active deployment (`keep`) to `path` as JSON with its checksum, paths relative to the worker's home
+    and area, so `load` can put it back in this worker or in a new one hired on the same task."""
+    from .observe import plain
+
+    kept = await keep(worker)
+    home = worker.baseline.config.workspace_path
+
+    def encoded(content):
+        return None if content is None else base64.b64encode(content).decode()
+
+    value = {
+        "artifact": kept.artifact.model_dump(mode="json"),
+        "prepared": kept.prepared.model_dump(mode="json"),
+        "plan": kept.plan.model_dump(mode="json") if kept.plan else None,
+        "attribution": plain(kept.attribution),
+        "selection": plain(kept.selection),
+        "children": plain(kept.children),
+        "commitments": [item.model_dump(mode="json") for item in kept.commitments],
+        "content": {str(name.relative_to(home)): [encoded(data), mode] for name, (data, mode) in kept.content.items()},
+        "state": {str(name.relative_to(worker.area)): encoded(data) for name, data in kept.files.items()},
+        "revision": worker.revision_id,
+        "task": worker.baseline.task.model_dump(mode="json"),
+    }
+    value["sha256"] = _digest(value)
+    _write(Path(path), json.dumps(value, ensure_ascii=False).encode())
+    return value
+
+
+async def load(worker, path: Path) -> Kept:
+    """Put the deployment `save` wrote back into `worker` (`reinstate`); the worker must hold the same task, id and
+    text, since the saved strategy state is bound to it."""
+    from ..harness import Task
+    from .preparation import PreparedHarness
+
+    value = json.loads(Path(path).read_text())
+    if _digest({key: item for key, item in value.items() if key != "sha256"}) != value.get("sha256"):
+        raise ValueError("the saved deployment does not match its checksum")
+    if Task.model_validate(value["task"]) != worker.baseline.task:
+        raise ValueError("the saved deployment belongs to another task")
+    home = worker.baseline.config.workspace_path
+
+    def inside(root: Path, name: str) -> Path:
+        found = (root / name).resolve()
+        if not found.is_relative_to(root.resolve()):
+            raise ValueError(f"a saved path leaves its folder: {name}")
+        return found
+
+    def decoded(content):
+        return None if content is None else base64.b64decode(content)
+
+    kept = Kept(
+        artifact=Artifact.model_validate(value["artifact"]),
+        prepared=PreparedHarness.model_validate(value["prepared"]),
+        plan=Plan.model_validate(value["plan"]) if value["plan"] else None,
+        attribution=value["attribution"],
+        selection=value["selection"],
+        children=value["children"],
+        commitments=tuple(Commitment.model_validate(item) for item in value.get("commitments", ())),
+        content={inside(home, name): (decoded(data), mode) for name, (data, mode) in value["content"].items()},
+        files={inside(worker.area, name): decoded(data) for name, data in value["state"].items()},
+    )
+    await reinstate(worker, kept)
+    if worker.revision_id != value["revision"]:
+        raise ValueError("the loaded deployment is not the revision that was saved")
+    return kept
 
 
 def child_artifact(child, candidate, inspection, *, restoring=False):

@@ -157,11 +157,16 @@ def hire_task(
     withheld: Withheld = Withheld(),
     guard: Guard | None = None,
     confinement=None,
+    delegation: bool = True,
+    existing: bool = False,
 ) -> Worker:
     """Prepare the normal employee and child pool for either a scenario or a supplied expert.
 
     With `guard`, the partner's guard, every provider the employee's process makes is guarded: the guard travels
-    with the worker as plain data (`GuardedFactory`) into the process it spawns.
+    with the worker as plain data (`GuardedFactory`) into the process it spawns. Without `delegation` the employee
+    works alone: no child harness and no delegation, a single layer whose deployment can be kept and loaded again
+    (`raven_adapter.deployment.save`). With `existing` its home under `root` may already exist, as when the employee of
+    an earlier process is hired again.
 
     The host supplies available baselines. Curator chooses their customization
     and business decomposition; runtime agents choose actual delegation. This
@@ -170,17 +175,20 @@ def hire_task(
     area = Path(root) / AREA
     workspace = area / HOME
     if home is None:
-        workspace.mkdir(parents=True)
+        workspace.mkdir(parents=True, exist_ok=existing)
     else:
         shutil.copytree(home, workspace, ignore=shutil.ignore_patterns("sessions", ".lock"))
     baseline = prepare(config, workdir=workdir, task=task, home=workspace)
+    baseline.allow_delegation = delegation
     housed = house(baseline, model=subagent_model, deployment=area / "deployment")
     return Worker(
         baseline,
         root,
         provider_factory=None if guard is None else GuardedFactory(make_lazy_provider, guard),
         timeout=timeout,
-        children=lambda current: confined(prepare_children(current, area, ["Raven", *housed]), current),
+        children=(lambda current: confined(prepare_children(current, area, ["Raven", *housed]), current))
+        if delegation
+        else None,
         withheld=withheld,
         area=area,
         confinement=confinement,
@@ -214,8 +222,13 @@ def replicate(
     )
     shutil.copytree(employee.baseline.workdir, workdir, symlinks=True)
     baseline = prepare(config, workdir=workdir, task=employee.baseline.task, home=workspace)
+    baseline.allow_delegation = employee.baseline.allow_delegation
     housed = house(baseline, model=subagent_model, deployment=area / "deployment")
-    children = confined(prepare_children(baseline, area, ["Raven", *housed]), baseline)
+    children = (
+        confined(prepare_children(baseline, area, ["Raven", *housed]), baseline)
+        if employee.baseline.allow_delegation
+        else {}
+    )
     if children.keys() != employee.children.keys():
         raise ValueError(f"a replica has child harnesses {sorted(children)}, the employee {sorted(employee.children)}")
     for name, child in children.items():
