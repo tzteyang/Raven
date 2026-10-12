@@ -1,0 +1,25 @@
+{
+  "agents": {
+    "defaults": {
+      "model": "gpt-6-astra",
+      "provider": "custom",
+      "reasoningEffort": "high",
+      "temperature": 0.1,
+      "maxTokens": 8192,
+      "contextWindowTokens": 262144,
+      "llmCallTimeout": 1800,
+      "maxToolIterations": 40,
+      "enablePersonalization": false,
+      "llmFirstByteTimeout": 600,
+      "streamIdleTimeout": 600
+    }
+  },
+  "tools": {
+    "restrictToWorkspace": false
+  },
+  "permissions": {
+    "judgeTimeoutSeconds": 60,
+    "trustHarnessTools": true,
+    "mode": "full"
+  }
+}

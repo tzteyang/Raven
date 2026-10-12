@@ -1,0 +1,12 @@
+{
+  "name": "竞品对比表",
+  "kind": "acp",
+  "description": "SaaS 产品市场的竞品分析：交给它竞品对比的需求（团队人数），工作目录里放这家公司的竞品对比工作规则、竞品资料和汇率表，它按工作规则把各家价格折算到同一口径、照资料填功能格、写定位语，出一张能直接用的对比表。",
+  "owns": "负责按公司口径出竞品对比表和定位语。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

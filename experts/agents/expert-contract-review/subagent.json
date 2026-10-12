@@ -1,0 +1,12 @@
+{
+  "name": "合同留痕审稿",
+  "kind": "acp",
+  "description": "创意和设计工作室收到客户发来的服务合同（.docx）后的审稿：工作目录里放这家工作室的合同审稿工作规则和合同原件，它按规则在原文上用 Word 修订（插入、删除）改付款期、修改轮数、作品使用权、争议解决、违约金上限等条款，每处修订配一条署名批注写清问题和理由，只批注不改的条款只加批注，已合规的条款和别的段落、页眉、报价表、加粗格式、别人已有的修订批注都原样保留，按规定文件名交回审过的 Word 文件。",
+  "owns": "负责按工作室规则在 Word 合同原文上留痕审稿。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

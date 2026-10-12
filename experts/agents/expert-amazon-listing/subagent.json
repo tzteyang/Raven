@@ -1,0 +1,12 @@
+{
+  "name": "亚马逊英文 Listing",
+  "kind": "acp",
+  "description": "按每次工作规则把商品参数和认证材料写成英文标题与要点，核对认证来源和日期，换算公制/美制单位，控制长度、禁用措辞和美式拼写。",
+  "owns": "负责有材料依据的英文商品 Listing。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

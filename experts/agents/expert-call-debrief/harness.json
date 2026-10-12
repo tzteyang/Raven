@@ -1,0 +1,31 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "call_debrief_capability:create"
+   }
+  },
+  "files": {
+   "call_debrief_capability.py": "\"\"\"Supply current-call material guidance without changing native capabilities.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE = \"\"\"销售通话复盘：\n1. 撰写前确认本通电话的日期、记录及本次适用的工作规则、价目表、竞品名单。当前输入已完整提供的直接使用；引用附件或工作目录资料时取得原文，路径不明再查找、截断再续读，不重复读取已完整取得且未变化的资料。\n2. 内容、格式、优先级和处理口径取自当次规则，价格和名单取自当次材料；不沿用其他公司或其他通话的规则与事实。补充、更正属于哪通电话，以用户明确关联为准。\n3. 建议话术先确定当次句数上限、计数口径及全部标准动作，再安排每句承担什么动作，写成能直接对客户说的完整表达。对照结构例：若两句内需询问比价对象、报价范围，再说明后续讲差异，反例“您在和哪家比较？对方报价包含哪些服务？了解后我再说明差异。”是三句；正例“您方便说明正在和哪家比较，以及对方报价包含哪些服务吗？了解后我再针对这些项目说明差异。”是两句。若只许一句且需先问预算再谈回报，可写成“您方便先说明预算范围，让我据此和您讨论投入回报吗？”，不要拆成问句后再加说明。这些例子只示范组织方式，实际对象、范围、顺序和禁止事项仍按当次规则，不照搬例子替代标准动作。写完所有内容后，对完整建议话术按当次口径核对；若以“。”“！”“？”计句，就逐个计算句末标点，解释、过渡或后加内容也计入，引号、换行和段落不改变计数。超限就合并相关询问或重组句子，再核对整段和动作是否齐全；不删必需动作、不省句末标点或机械换标点凑数，不把两句上限一律改成一句。核对后如再追加或改写，重新核对整段。\n4. 具体事实逐项对照原文的主体、内容、条件和状态，再用于复盘和邮件。主体例：原文只给我方标价时，反例是把该金额称作“对方报价”；询问对方范围可写“对方报价包含哪些服务？”，不塞入没有依据的金额。状态例：原文只有客户请求先看方案，反例是“方案已整理好”；可按原文写“您希望先了解方案”，不要由请求推出已完成，也不要改成无依据的发送期限或承诺。客户请求、销售承诺、已完成事项分别保留原文状态；有依据的承诺按规则保留，不因尚未履行就删掉。建议话术中的拟议动作不写成客户已经同意的事实。交付前删改无依据的细节，保留原文的不确定性。\n5. 最终只交当次规则要求的主管复盘和可直接转发的邮件，不输出计数、核对过程或额外说明。缺失、冲突或读取失败按当次规则处理；规则未说明时，不编造或用历史口径补缺，在规定交付中保留有依据部分并简要标明影响结论的缺口，不用计划或进度说明代替交付。材料充分时直接完成，不额外追问。\"\"\"\n\n\nclass CallDebriefCapability(CapabilityStrategy):\n    \"\"\"Keep preparation empty and delegate all resource admission to the host.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        return CapabilitySelection(tools=None, skills=None, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> CallDebriefCapability:\n    \"\"\"Bind only the registrar; preserve task identity and the untouched checkpoint.\"\"\"\n    return CallDebriefCapability(registrar)\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogImVkOGQ0NDU3YzBlMTQyNGM5OTZkM2EyYWY4MmJjM2Q0In0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是 SaaS 公司销售团队的复盘助理。销售打完客户电话，你根据通话记录写一份给销售主管的复盘和一封给客户的跟进邮件。工作目录里有这次适用的通话复盘工作规则、我们的价目表和竞品名单。按这次给的工作规则写，主管看完会直接把邮件发给客户。只输出规则要求的内容。",
+  "id": "ed8d4457c0e1424c996d3a2af82bc3d4"
+ },
+ "revision": "483e4e1633b13b448b16ffd2194ec85edc2b9c48e4055326af165cc56a02e078",
+ "source": {
+  "case": "call-debrief",
+  "session": "live-20261011160338-48a052",
+  "deployment_sha256": "c1a8da137b75d26cc694c146f6fef4f62a59782ea3d04982379675e3d95c9ec9"
+ }
+}

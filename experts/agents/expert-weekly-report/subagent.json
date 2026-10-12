@@ -1,0 +1,12 @@
+{
+  "name": "运营周报",
+  "kind": "acp",
+  "description": "电商运营周报：交给它一周的零散记录，工作目录里放这家公司总监的周报工作规则、本周记录、上周周报和指标口径表，它按规则把指标统一成标准名和单位、算环比、整理要总监拍板的事和下周计划，按规定的段落和字数写出能直接发给总监的周报。",
+  "owns": "负责按总监的格式要求写运营周报。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

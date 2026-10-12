@@ -1,0 +1,12 @@
+{
+  "name": "咖啡新品文案",
+  "kind": "acp",
+  "description": "咖啡豆品牌的新品介绍文案：交给它一个新批次，工作目录里放这家品牌的产品文案工作规则、这一批的杯测表和风味词总表，它按规则用指定的自称、避开禁用词、只用杯测表风味栏里的风味词（不写成近亲词，不用备注里的词）、按字数和每段句数要求，写出官网和公众号通用的一段产品介绍，结尾按规定写法给出这一批的冲煮建议。",
+  "owns": "负责按品牌口径写咖啡新批次的产品介绍。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

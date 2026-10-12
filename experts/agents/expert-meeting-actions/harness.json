@@ -1,0 +1,32 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "meeting_capability:create"
+   }
+  },
+  "files": {
+   "meeting_capability.py": "\"\"\"Supply meeting guidance and a counting Skill; delegate native tool selection.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.preparation import PreparationRequest\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n    SkillContribution,\n    SkillSelection,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nSKILL_NAME = \"meeting-workday-counting\"\nSKILL_SOURCE = \"curator-capability\"\nCASE_ROUTE = \"计算前先对照下方‘工作日计数：先判资格’案例：从本场规则确定起算位置与允许计数的日历类型\"\nMISSING_CASE_ROUTE = \"工作日计数案例当前未能加载，不能声称已对照；仍须先从本场规则确定起算位置与允许计数的日历类型\"\n\nMEETING_GUIDANCE = f\"\"\"处理会议待办时，先确认本次会议名称、召开日期及对应材料。读取本次工作规则、会议记录、参会人名单和公司日历；当前上下文已完整取得的本次材料直接使用，只补读缺失、截断或更新部分。\n事项取舍、人员、期限解释、拆分合并及输出形式均服从本次规则，不沿用其他会议的业务规则。\n遇到‘N 个工作日内’，{CASE_ROUTE}，再按公司日历逐日取第 N 个合格日期。‘调休上班’是否计入只能由本场规则决定，不能凭‘上班’二字判断。交付前同时核对类型资格和计数序号，再按本场格式写日期及需要的星期；不要只检查截止日是不是工作日。案例正文已随输入提供时无需再读取；不为本次整理读取无关 Skill。\n回复前对照本次材料核对事项、人员与日期。读取失败或依据不足时说明具体缺口，不补造事实，按本次规则交付有依据的部分和需确认事项，不用进度或计划替代结果。没有实际会议材料不虚构待办。只在回复中按本次规则交付，不交付文件，不附案例、计数表或内部核验说明。\"\"\"\n\n\nclass MeetingCapability(CapabilityStrategy):\n    \"\"\"Prepare one method Skill and select its body from actual runtime views.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def _prepare_skills(self, request: PreparationRequest) -> tuple[SkillContribution, ...]:\n        \"\"\"Consume the complete asset; missing input remains a preparation error.\"\"\"\n        return (\n            SkillContribution(\n                name=SKILL_NAME,\n                owner=\"capability\",\n                package=None,\n                files={\"SKILL.md\": request.assets[\"meeting_workday_counting/SKILL.md\"]},\n                source=\"meeting-workday-counting-method\",\n            ),\n        )\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        \"\"\"Preserve the host registrar's receipts and visible failures.\"\"\"\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        \"\"\"Select only available identities; never interpret meeting data in code.\"\"\"\n        identities = [(skill.source, skill.name) for skill in request.skills]\n        target = [\n            skill for skill in request.skills\n            if (skill.source, skill.name) == (SKILL_SOURCE, SKILL_NAME)\n        ]\n        if len(identities) != len(set(identities)):\n            reason = \"Skill 目录身份重复，无法安全选择案例正文。\"\n        elif not target:\n            reason = \"Skill 目录缺少工作日计数案例。\"\n        elif not target[0].available:\n            reason = \"工作日计数案例在当前目录中不可用。\"\n        else:\n            return CapabilitySelection(\n                tools=None,\n                skills=tuple(\n                    SkillSelection(\n                        name=skill.name,\n                        source=skill.source,\n                        delivery=\"body\"\n                        if (skill.source, skill.name) == (SKILL_SOURCE, SKILL_NAME)\n                        else \"catalog\",\n                    )\n                    for skill in request.skills if skill.available\n                ),\n                guidance=MEETING_GUIDANCE,\n            )\n        return CapabilitySelection(\n            tools=None,\n            skills=None,\n            guidance=reason + \"\\n\" + MEETING_GUIDANCE.replace(CASE_ROUTE, MISSING_CASE_ROUTE),\n        )\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> MeetingCapability:\n    \"\"\"Bind an inert dependency without resetting task or session progress.\"\"\"\n    return MeetingCapability(registrar)\n",
+   "meeting_workday_counting/SKILL.md": "---\nname: meeting-workday-counting\ndescription: 按本场起算规则和公司日历类型换算 N 个工作日内；含调休上班计入与排除的对照\n---\n\n# 工作日计数：先判资格\n\n仅用于会议事项的“N 个工作日内”；其他期限按本场规则处理。以下是日历类型序列的示意，不是任何新会议的真实日历，不能拿来补日期。\n\n## 先确定两个条件，再编号\n\n从本场规则分别确定：从会议当天还是次日起算；哪些日历类型允许计数。起算位置包含当天，不等于当天必计数，当天也必须满足类型条件。从起算位置按公司日历的日期先后检查，合格才编号 1、2……，不合格跳过。每件事项取其 N 对应的日期，不能先按通常的“上班”概念数完再补看规则。\n\n## 对照一：本场只允许“工作日”\n\n规则片段：“只有类型是‘工作日’的算工作日”。假定从下列序列第一项开始：\n\n- 日历类型：工作日、工作日、调休上班、休息日、工作日、工作日。\n- 错误做法：因为第三项也上班，就给它编号 3。\n- 正确做法：依次为 1、2、跳过、跳过、3、4。\n\n资格取决于规则允许的类型，不取决于当天是否上班。若期限为第 4 个合格日，必须取编号 4，不能取编号 3；后者虽然也属于工作日，计数仍不对。\n\n## 对照二：本场允许“工作日及调休上班”\n\n沿用上面的类型序列和起算位置，但本场规则明确允许两种类型：\n\n- 错误做法：套用上一类案例，一律跳过调休上班。\n- 正确做法：依次为 1、2、3、跳过、4、5。\n\n允许的类型变了，计数也随之改变；排除调休的案例不是固定政策。实际日期始终从当前会议的公司日历读取。\n\n## 对照三：当天与次日起算\n\n- 错误做法：看到“工作日内”就默认从下一天数，或看到会议当天合格就总是算第 1 个。\n- 正确做法：本场规定“从会议当天”，才从当天起检查资格；规定“从会议次日”，当天即使合格也不能编号。先确定起算位置，再判断类型。\n\n休息日、节假日是否合格也由当前规则决定，不能用星期或其他会议的规则替代日历类型。\n\n## 采用日期前核对两点\n\n所取日期属于本场允许的类型；从规定起点数到它，恰为第 N 个合格日期。两点都成立才采用，不要只检查截止日是不是工作日。无依据或日历覆盖不足时，按本场规则处理不确定处，交付仍有依据的部分，不能靠示意序列补日期。\n\n无需额外写中间记录。最终仅按本场规则的日期格式及需要的星期呈现业务结果，保持规定的两段，不附案例、计数表或核验说明。\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjc2YzkwNTdkNjBjNDQxOGViYjRlZGYzMWEyNWY1MTExIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是公司的会议助理，会开完后从会议记录里整理待办。每次任务会告诉你开的是哪场会、哪天开的，工作目录里有四份文件：这次适用的会议待办整理工作规则、会议记录（转写）、参会人名单（姓名、常用称呼、部门、职位）和公司日历（每天是工作日、休息日、节假日还是调休上班）。按这次给的工作规则把待办和需要确认的事项整理出来，直接在回复里交出。",
+  "id": "76c9057d60c4418ebb4edf31a25f5111"
+ },
+ "revision": "51921603a07c003f1c971093525834122bee4a91ccd405f8acde5e2223376efa",
+ "source": {
+  "case": "meeting-actions",
+  "session": "live-20261011155829-a4cb4c",
+  "deployment_sha256": "e3b0efbb87c1f65efe46d6b24c3e08067005c90900eb0af2ad6ff98a47502291"
+ }
+}

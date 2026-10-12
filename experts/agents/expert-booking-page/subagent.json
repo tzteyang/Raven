@@ -1,0 +1,12 @@
+{
+  "name": "预约交互页面",
+  "kind": "acp",
+  "description": "为门店制作离线团课预约HTML页，按工作规则处理筛选、名额、时间冲突、存储与键盘交互。",
+  "owns": "负责单文件团课预约页面，实现并用浏览器验证交互。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

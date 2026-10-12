@@ -1,0 +1,12 @@
+{
+  "name": "电商售后投诉处理",
+  "kind": "acp",
+  "description": "电商售后客服：交给它客户的投诉消息和现在的时间，工作目录里放这家店的售后工作规则、订单记录、本月 CRM 投诉记录和问题分类表，它按规则判断能不能换能退、算迟到补券和补偿额度、数本月同款同问题第几起并决定要不要标记，按规则要求的分段交出处理结果。",
+  "owns": "负责按店铺售后规则处理投诉、算补偿、做 CRM 更新。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

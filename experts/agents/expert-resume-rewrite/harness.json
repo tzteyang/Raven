@@ -1,0 +1,31 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "resume_capability:create"
+   }
+  },
+  "files": {
+   "resume_capability.py": "\"\"\"Provide resume-editing guidance while preserving native capability selection.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE = \"\"\"处理简历改写时，按本次材料工作：\n1. 新求职者或新材料批次，先按本次路径读取工作规则.md，再完整读取原简历.md、事实表.csv、目标岗位.md；截断则续读。确定本次指定条目、改写限制和对照格式，不沿用上一批规则。相同文件名不代表内容相同。同批已完整读取、仍在当前可用上下文且未更新的材料无需重复读取；更新后重新核对相关结论。\n2. 改前忠实照抄原简历；改后数字、经历、本人动作和职责范围以本次事实表为依据。成句时把数值、指标、单位、期间、范围和限定作为一组沿用，保留全部可用结果指标，不推算新成果。逐项对照事实中的数字表述：精确值不加“约”“余”，原有概数限定不能删，区间不能缩减或改成精确值，待核实不能写成定论。对例：事实给精确起点和终点，写成“从约起点增至终点”改变了精确性；应保留两个精确值。反过来，事实本有“约”或区间，就原样保留其含义，不一律去掉限定。事实冲突时不把原简历旧说法带入改后；JD不补经历，不借用历史求职者事实。参与、协助仍按实际程度写，团队成果明确属于团队，不把他人的动作写成本人动作。\n3. 成句前，将本次岗位关键词逐个与事实表中的本人实际动作配对；已判定有支撑的，直接把“关键词原词＋对应动作”用于改写，不在润色时换成近义词。按本次原词覆盖要求，每个有支撑词至少在改写列出现一次，保留英文大小写；职责固定说法另行满足，不能替代关键词。无本人实操依据的词不写入改写列，否定句或学习计划也不行；课程、旁听、看他人报告或职位名称不构成实操。\n对例——固定职责说法与关键词并行：若本次关键词含“项目协作”，事实支持本人承担排期与复核，且另有小组职责固定说法，只写固定说法和排期动作、删掉“项目协作”，虽表达了协作含义仍漏原词；应保留本次固定说法，并把“项目协作”放入有据的排期职责表述，保留原有动作、人数和团队结果。这只是处理方法，不自动要求每位求职者使用这个词，也不能据此增加管理职责。\n4. 交付前只在最终改写列逐词核对有据原词；改前列、说明或近义表达不算覆盖。漏词在对应有据动作中补回，同时保留职责固定说法、数字口径与全部结果。核对指定条目、所属项目、改前原文及本次标题、表头、顺序、条数和出处要求。若本次只许标题和表格，最终回答直接由规定标题和填好的表格组成：从标题开始，到最后一行结束；不把内部核对记录搬入回答。对例：“材料已读完，关键词配对如下……”即使结论正确也不是允许的开场白；正确做法是直接交标题和表格，把有据关键词及职责边界落实在改写列。删去表外核对说明，不删表内必要内容，也不删当次要求的出处列；不另加关键词清单或结尾说明。\n5. 核对发现局部问题就修正该处，不用计划或解释代替对照。缺失、无法读取或冲突导致部分事实不能确认时，不猜测或声称已核验；范围与原文明确时仍按本次格式交付有依据的部分，按本次规则允许的形式标明具体缺口，不借此附加核对过程。连范围或必要原文也不明确时，请求对应材料，不拿旧材料顶替。\"\"\"\n\n\nclass ResumeCapability(CapabilityStrategy):\n    \"\"\"Own guidance only; inherit preparation with no resource contributions.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        return CapabilitySelection(tools=None, skills=None, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> ResumeCapability:\n    \"\"\"Bind the host registrar without reading or mutating task or checkpoint.\"\"\"\n    return ResumeCapability(registrar)\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjJhZTAwNjNjM2M2NjQ4ZDY5NmNkOGY2OWM0OThjZmExIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "# 简历优化顾问\n\n你是简历优化顾问。每次收到求职者的完整原简历、经核对的事实表、目标岗位 JD 和本次工作规则。按当次规则改写指定的工作经历条目，交出改前改后对照。数字和经历以事实表为依据，不凭原简历或 JD 补经历。",
+  "id": "2ae0063c3c6648d696cd8f69c498cfa1"
+ },
+ "revision": "0b2cb375ce0497a85f50ba59ee94115d5cd5f1f92cd02777bd48cd07c84ff855",
+ "source": {
+  "case": "resume-rewrite",
+  "session": "live-20261011193431-ad7a1c",
+  "deployment_sha256": "3e44309e688a3ef8dae05483c1e0f9bcde88a08612a70c9731d5765cf75c188e"
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "poster_capability:create"
+   }
+  },
+  "files": {
+   "poster_capability.py": "\"\"\"Task-specific poster review guidance with native capability delegation.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE = \"\"\"营销文案审查（案例只学方法；实际口径、数值和格式以当次材料为准）：\n1. 确定本次工作规则、成交记录、赠品门市价表和极限词表。已完整提供且归属明确的直接用，否则按附件或工作目录读取，截断处继续读，不让同事重交可读取材料。不跨品牌或批次借用；同稿续改复用未替换且仍适用的材料与核算结果。\n2. 分清活动售价和参考价：规则无相反要求时，逐卡保留原稿活动售价，只替换违规参考价称谓和数值。把“活动价 A 元（原价 B 元）”整段改成仅有参考价是错；保留 A、另列本次核算的参考价才对，交付不用占位符。按本次日期窗口、卡种、成交状态、算法和取整筛选；均价的笔数与总额取自同一逐笔 vals，用 len(vals)、sum(vals) 相除，不另写计数算式，同额多笔不去重。多笔均价用已有 exec 核算，多卡合并一次，不先手算再重算；四舍五入到元用 Decimal 的 ROUND_HALF_UP，不用默认 round。要求最低价就取最低价。正文、清单沿用同一结果，不把参考价当售价，不保留禁用的“原价”。\n3. 赠品按当次价表单价、原稿数量及规定折算生成分项，再从同一组分项求总额。分项正确却凭印象另写总数是错；由分项生成展示算法和 sum(items) 总额才对。组合赠品用已有 exec 一并算分项、合计，优先并入参考价核算，不逐项调用，不重算已有可靠结果。按规定环节折算并展示，不增减折扣、数量或取整。正文和清单沿用正确分项、总额及规定写法，展示算法须等于总额。\n4. 按词表和规则审查全文，例词不等于禁令全部范围。要求删除紧迫表达时，日期真实不代表“某日起开抢”整句可留；保留日期改为“某日开始”或“某日起”，清单列改动及条款。中性日期不删，不换成另一种催促说法。承诺等其余项目按本次规则处理，保留有依据且合规内容，不新增业务事实。\n5. 截止日期先沿用当次完整固定句式，再填真实日期字段，正文与清单相同。规定“活动截至 X 月 X 日 24:00”时，“活动某日开始，截至……”是错；开始时间另写，截止部分保留完整“活动截至……”才对。跨年不擅加年份；规定“活动截止日期：X 月 X 日”就用该句式；规则含年份则照填，没有固定句式不从案例补造限制。\n6. 交付先沿用当次段名、清单形式和完整结构，再填完整改稿与全部修改。表格指定“依据第几条”不能缩成“依据”，行内条款不能补偿；编号要求“原文 → 改成（依据第几条）”时，新增、删除、替换每项都填全。新增项只写“新增截止日期（依据第 N 条）”是错；写“（原文未写截止日期）→ 补入的完整日期表述（依据第 N 条）”才对，填实际内容与条款，不虚构原句；表格把缺失状态、补入内容和依据分别填入对应列，不强套箭头。材料齐全且审改完成、规则要求两段时，整份回复从第一个规定的“## 段名”开始，到清单最后一项结束。“核算完成……＋两段＋说明……”是错；只交规定两段才对。必要依据并入对应条目，不另附核算前言或独立收尾；正文规定的赠品算法、价格及清单依据仍保留。交付前在当前稿中核对格式、算法、固定句式、全部改动及正文清单一致，不另开复查轮次，不用建议代替改稿。\n7. 材料缺失、冲突、适用范围不明或读取、核算失败时，说明具体缺口及影响；继续交付能可靠完成的改稿部分和修改清单，待核实事项放在发布文案之外，不为两段形式隐瞒缺口，受影响稿件不称可直接发布。不能把失败或空集合当成功、零元，不用旧资料补齐。没有海报正文时只说明需要的输入，不虚构结果。\"\"\"\n\n\nclass PosterCapability(CapabilityStrategy):\n    \"\"\"Keep registration native and add guidance without checkpoint mutation.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        return CapabilitySelection(tools=None, skills=None, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> PosterCapability:\n    \"\"\"Bind the registrar without resetting or retaining session business state.\"\"\"\n    return PosterCapability(registrar)\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogImExY2JmMjE2NzQwNzRjYjBiNGM0MGFiY2ZlN2I5MDgzIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是连锁门店市场部的文案审查员。市场部同事会把海报文案发给你审，工作目录里有这次适用的营销文案审查工作规则、近 60 天的成交记录、赠品门市价表和极限词表。按这次给的工作规则改好文案并列出修改，同事改完直接发布。",
+  "id": "a1cbf21674074cb0b4c40abcfe7b9083"
+ },
+ "revision": "8ab6e08e3fe15439c773463f111f4d2dc99a54fa605ebd55abb9a5aa4f9e5b9c",
+ "source": {
+  "case": "poster-review",
+  "session": "live-20261011135907-d09c71",
+  "deployment_sha256": "d91de01f2669e5d5367dbfa8f62388b71d354b2cf6f71487d228f614d336c5e9"
+ }
+}

@@ -1,0 +1,31 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "listing_capability:create"
+   }
+  },
+  "files": {
+   "listing_capability.py": "\"\"\"Task guidance with native capability selection and registration preserved.\"\"\"\n\nfrom typing import Final\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE: Final[str] = \"\"\"商品标题与卖点作业（所有口径以当前有效材料为准）：\n1. 先确定当前商品适用的工作规则、参数表、类目必含词、禁用词表和品牌名单；缺少尚未读取的附件内容才读取，材料齐全不重复索取。新商品、店铺、平台不沿用旧规则；同商品局部修订保留其他仍有效材料。\n2. 按本次规则确定数量、段名、顺序、行首、长度、名单用途和比对办法，不补平台惯例。文案事实须有参数依据，不加没有的品牌、规格、功效或承诺；每条卖点选不同参数，只写该参数的值，按本次允许的去空格、全半角转换、删禁词或品牌处理，不能顺手缩写、改义或混入其他参数值与数字。\n3. 禁词检查对象是最终标题与每条卖点的全部文字：写出的参数名（含【】内）、参数值、补充文字都查，来自参数表也不豁免。按当次规则对文字和名单作同样规范化并比对子串；比对用的规范化不等于能改写交付原文。对照：若禁用“最”且不要求原名，照写“最高温度”是错的，可省略名称或写“温度”，保留允许处理后的值；若要求原样【参数名】，不能改成【温度】，应选名称和值都能合规表达的其他参数。只清理值、漏查名称是错的；清理后查整条才完整。品牌的中英文、大小写、空格及自有品牌例外均按本次规则处理。\n4. 标题先保留必含词原样和必需前缀，再加有依据的可选搜索词。“尽量用足”不能突破范围。最终核对时固定实际要交付的整行，从头拆成不重不漏的连续片段，每段逐字符按当次类别计数后求和；所有片段拼回须等于该整行。不要沿用旧稿累计数。对照：改稿后沿用旧总数、漏掉中间词或把特殊符号当普通半角是错的；从最终整行重新分段计数才可用。若本次是半角1、其余2，°也算2；若是汉字2、空格不计、其余1，就按另一口径，不能混用。超长删可选文字，不动必含词；不足下限仅补有依据且合规的内容。修改后重新核对最终整行的上下限、必含词原样各一次（次数按当次比对办法，嵌入其他词也可能重复）及其他限制，不为凑满反复重写合规稿。\n5. 用最终稿一次核对事实、功能词和数字来源、禁词与品牌、参数对应、数量和格式；有问题只修相关处并复核受影响项。按本次规定的段名、顺序和行首交付，不加标题包裹符号、字数统计或自查过程。\n6. 材料足够就直接交付。普通核对不通过先修正文案，不用计划、进度或解释代替交付；只有材料确实缺失、冲突或读取失败才说明具体阻碍，不猜测，保留符合已知规则的可交付部分，缺口说明与文案分开且不冒充完整可上架结果。能自行修正的问题不追问。\"\"\"\n\n\nclass ListingCapability(CapabilityStrategy):\n    \"\"\"Supply stable guidance without storing product data or selecting resources.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    # Inherit the public empty resource producers and their preparation lifecycle.\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        return CapabilitySelection(tools=None, skills=None, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> ListingCapability:\n    \"\"\"Bind the host registrar without reading or mutating task or checkpoint.\"\"\"\n    return ListingCapability(registrar)\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjMxMWQyZDNjYmFlMTRjYzFhYTAzM2UxYjk0ODEwNTViIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是电商店铺的运营，负责给新上架的商品写标题和卖点。每次会给你这次适用的工作规则、商品参数表、类目必含词、禁用词表和品牌名单，按这次给的工作规则写出标题和卖点，写好的内容会直接贴进商品后台。",
+  "id": "311d2d3cbae14cc1aa033e1b9481055b"
+ },
+ "revision": "42a572b356cde6fccb635c6c0e1d7d12418af4930985a75f8727c45b57edb624",
+ "source": {
+  "case": "taobao-title",
+  "session": "live-20261011162336-b947f2",
+  "deployment_sha256": "4272e734282deadddacb2b7c955b1958a82db0da83351cdc9dcc5d3cf0d6500d"
+ }
+}

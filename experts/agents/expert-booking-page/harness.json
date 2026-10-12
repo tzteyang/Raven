@@ -1,0 +1,32 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "capability_impl:create"
+   }
+  },
+  "files": {
+   "capability_impl.py": "\"\"\"Delivery examples and task guidance with native tool selection preserved.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.preparation import PreparationRequest\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n    SkillContribution,\n    SkillSelection,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE = \"\"\"预约页开发与交付\n\n1. 开始本次预约页任务时，先读取当前工作目录中本次工作规则和完整课表；路径已给出就直接读，未知才列目录，内容截断则续读。本轮已读全且未变化的材料不要反复读取。按当期原文确定课程字段、筛选条件、名额口径、冲突边界、持久化范围及键盘要求，不套用其他门店或旧任务的规则。缺失或矛盾只记录具体缺口，不自行补业务事实、数值或政策。\n\n2. 实现供会员在前台平板直接使用的离线单文件页面，所需样式、脚本和数据随页面自包含，不依赖联网加载。以当前材料逐项对应展示、筛选、名额与冲突判断、持久化、键盘操作的实现和验证；以会员能读懂状态、能直接操作为目的，不因平板场景额外引入身份系统或后台功能。交付前对照原文和实际代码，使用现有可用能力核验材料要求的正常、拒绝及边界情形，并检查适用的刷新恢复和键盘路径；验证失败先修复，不通过也不隐瞒。没有执行的验证不得说已通过。\n\n3. 收尾时先对照上下文中的 booking-delivery-contract 案例，把“成品交付”和“最终回复”分开。本次只交成品时，磁盘上的指定 HTML 必须用 deliver_files 实际交付，不交测试脚本；成功回执后，只用当期规则允许的空回复、仅文件名或仅真实交付链接，允许文件名时直接回复本次指定文件名，不加“已交付”等完成宣告，不编造链接。不能交文件且规则允许兜底时，才只给一个标注 html 的完整代码块，无省略、前后无说明；显式要求代码形式时照当期要求。两条分支二选一，文件名不代替实际交付。不要先写总结：不附加实现介绍、操作步骤、自测结果或其他代码块，也不把报告搬进 HTML、额外文件或 deliver_files 的 message/description。普通质量检查受阻或材料局部缺失时，仍在本轮交付有依据的已完成部分，仅在成品中简明标明真正影响使用的缺口，不放开发日志，不用进度说明代替成品，不将不确定内容写成已实现或已验证。\n\"\"\"\n\n\nclass BookingPageCapability(CapabilityStrategy):\n    \"\"\"Supply guidance without storing business facts or changing permissions.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    # Inherited prepare registers this resource and propagates refusals.\n    def _prepare_skills(self, request: PreparationRequest) -> tuple[SkillContribution, ...]:\n        return (\n            SkillContribution(\n                name=\"booking-delivery-contract\",\n                owner=\"capability\",\n                package=None,\n                files={\"SKILL.md\": request.assets[\"skills/booking-delivery-contract/SKILL.md\"]},\n                source=\"booking-delivery-examples\",\n            ),\n        )\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        matches = [skill for skill in request.skills if skill.name == \"booking-delivery-contract\"]\n        if len(matches) != 1 or not matches[0].available:\n            return CapabilitySelection(\n                tools=None,\n                skills=None,\n                guidance=GUIDANCE + \"\\n本次未能供给交付案例正文；按上述规则和当期材料继续完成，\"\n                \"不声称已参考案例，不另行搜索或重读来补这个内部资源。\"\n                \"此内部资源状态不写进用户回复。\",\n            )\n\n        # Count all views: even an unavailable duplicate makes a key ambiguous.\n        counts: dict[tuple[str, str], int] = {}\n        for skill in request.skills:\n            key = (skill.source, skill.name)\n            counts[key] = counts.get(key, 0) + 1\n        selections = tuple(\n            SkillSelection(\n                name=skill.name,\n                source=skill.source,\n                delivery=\"body\" if skill.name == \"booking-delivery-contract\" else \"catalog\",\n            )\n            for skill in request.skills\n            if skill.available and counts[(skill.source, skill.name)] == 1\n        )\n        return CapabilitySelection(tools=None, skills=selections, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> BookingPageCapability:\n    \"\"\"Bind the host registrar without mutating the checkpoint or task.\"\"\"\n    return BookingPageCapability(registrar)\n",
+   "skills/booking-delivery-contract/SKILL.md": "---\nname: booking-delivery-contract\ndescription: 当期规则要求只交一个 HTML 成品时的收尾案例：区分实际交付与最终回复，不附加实现或自测报告。\n---\n\n# 只交成品时怎样收尾\n\n## 适用边界\n当期用户或工作规则要求只交指定 HTML，禁止前后解释、自测说明时，先按当期要求选择文件或完整代码分支；两者互斥。这是交付形式案例，不是课表、页面内容或新增测试要求。正文已在上下文时直接对照，无需再读取。\n\n## 同类正反例：页面完成并验证后\n输入摘要：只交指定页面，禁止前后解释和自测说明。\n\n- 错误形态：已经实际交出页面，最后又写完成宣告、功能介绍和测试通过报告。文件数量正确，最终回复仍然违反约束。\n- 正确形态：保留已经完成的实际文件交付；当期允许仅文件名时，最终回复就只有本次指定文件名，不添加完成宣告。若选择其他回复形式，也只能采用当期允许的空回复或该成品的真实交付链接，不编造链接。\n- 原因：测试通过不扩大输出许可。继续做好内部验证，但不把验证记录或功能总结附在回复中，也不搬进页面、额外附件、工具附言或其他代码块。\n\n## 分支对照与收尾动作\n生成最终回复前，直接按已选分支组装，不先写一段总结再润色：\n\n- 文件分支：用 deliver_files 实际交出指定 HTML，并查看成功回执，然后只给当期允许的回复形式。未实际交付时，单写文件名、路径或链接不算完成。不要把测试脚本或报告一起交付。\n- 代码分支：确认不能交文件且当期允许兜底时，只给一个标注 html 的完整代码块，不附文件、解释或第二个代码块；显式要求完整代码时照当期要求执行。这是规则规定的兜底，不把它当成已经实测成功的文件交付。\n\n普通质量检查受阻或材料局部缺失，仍交有依据的已完成成品；仅在成品内简明标明真正影响使用的缺口，不隐瞒、不编造，不将内部资源状态或开发日志塞进页面。计划、进度或报告不能代替成品。\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjI0YTViNzgwYmQ0MTRjNGFhYTNmNDhhYzI0NzI4YTQxIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是前端开发工程师，为门店制作可直接离线使用的单文件团课预约页。每次任务的工作规则和课表都在工作目录。按当次规则实现课程展示、筛选、名额与冲突判断、持久化和键盘操作，只交要求的HTML文件或完整代码块。",
+  "id": "24a5b780bd414c4aaa3f48ac24728a41"
+ },
+ "revision": "8f4bd586e294e7cd57c6f56d09427c1a4af1cf4fe1d0f58e7ccfbf81439bed96",
+ "source": {
+  "case": "booking-page",
+  "session": "live-20261011193431-2c14a0",
+  "deployment_sha256": "0cf733edec3c084b58e2aae5bdbe70e83eff6414239bf5147d1c3acf6c0eea18"
+ }
+}

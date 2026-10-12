@@ -1,0 +1,32 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "review_capability:create"
+   }
+  },
+  "files": {
+   "review_capability.py": "\"\"\"Supply per-article guidance and delivery examples through native capabilities.\"\"\"\n\nfrom typing import Final\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.preparation import PreparationRequest\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n    SkillContribution,\n    SkillSelection,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE: Final[str] = \"\"\"交付当篇实际改好的完整推文及规定的修改说明，不只交建议。起稿和记录时按已供给的 post-review-delivery 案例操作，不输出内部核对过程。\n1. 从本次消息、附件和工作目录取得原稿、发布日期及对应的工作规则、配图清单、医生名册、审查证明表。上下文中已有完整材料直接用，截断才续读，不混用篇目或重复索要；案例正文已在上下文时不再读取。\n2. 按当次规则处理禁词、图片、价格句、证明覆盖项目、发布日有效期及写法；事实取当次来源，不自创标准、不多删合规内容。\n3. 按当次标题、顺序及表格或编号形式建立交付结构，只填规定内容。资料齐全且禁止段外文字时，第一行就是规定首标题，最后一行就是最后规定内容；材料确认、证明选择过程和配图保留解释不另写在结构前后，也不搬进推文。\n4. 每位医生先用姓名＋原稿科室匹配完整职称，再按允许发布字段组成整个新介绍。新稿的医生位置只填这个新句，不留原科室前缀再接新句；要求科室时写入，禁止时整句及引导语都不带。多位医生逐位处理，正文及说明沿用各自同一结果。\n5. 说明从最终正文取结果，优先将完整原句或相关原句组对应完整改写，避免拆散漏项。保留项目名的合句是改写，不能只将原句记为整句删除；拆细也可，但合起来要覆盖实际删除、保留后的改写及新增连接语。所引文字和标点与正文一致。覆盖全部实际增删改、新增证明及每张弃图，均按当次格式；未改内容及配图行按当次豁免处理，通常不另列保留说明。正文再改，记录同步取最新结果；补漏或撤去非必要新增，不编造事实。需要文件时实际交付，不用路径代替。\n6. 材料不足、读取失败或依据不明时，仍交有依据的已完成部分，在正文外、尽量在规定说明内注明具体缺口和受影响核验，只问必要问题；不虚称已核验或可直接发布，不用进度或问题列表代替可完成稿件。没有原稿时简要确认约定，不虚构结果。\"\"\"\n\nSKILL_NAME: Final[str] = \"post-review-delivery\"\nSKILL_SOURCE: Final[str] = \"curator-capability\"\nSKILL_ASSET: Final[str] = \"skills/post-review-delivery/SKILL.md\"\nMISSING_CASES: Final[str] = (\n    \"本次未取得可用的审查交付案例；不要声称已对照案例，\"\n    \"按当前材料和上述步骤完成可完成的交付，不为查找案例反复读取。\"\n    \"这是内部资源状态，不是客户须复述的内容。\"\n)\n\n\nclass ReviewCapability(CapabilityStrategy):\n    \"\"\"Admit one example skill and select its body without retaining article state.\n\n    The inherited prepare registers the complete contribution and rejects refusal.\n    Native tools and all execution permissions remain unchanged.\n    \"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def _prepare_skills(self, request: PreparationRequest) -> tuple[SkillContribution, ...]:\n        return (\n            SkillContribution(\n                name=SKILL_NAME,\n                owner=\"capability\",\n                package=None,\n                files={\"SKILL.md\": request.assets[SKILL_ASSET]},\n                source=\"authored:post-review-delivery\",\n            ),\n        )\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        matches = [\n            skill for skill in request.skills\n            if skill.name == SKILL_NAME and skill.source == SKILL_SOURCE\n        ]\n        if len(matches) != 1 or not matches[0].available:\n            return CapabilitySelection(\n                tools=None, skills=None, guidance=GUIDANCE + \"\\n\" + MISSING_CASES\n            )\n\n        selected: list[SkillSelection] = []\n        seen: set[tuple[str, str]] = set()\n        for skill in request.skills:\n            identity = (skill.source, skill.name)\n            if not skill.available or identity in seen:\n                continue\n            seen.add(identity)\n            selected.append(\n                SkillSelection(\n                    name=skill.name,\n                    source=skill.source,\n                    delivery=\"body\" if identity == (SKILL_SOURCE, SKILL_NAME) else \"catalog\",\n                )\n            )\n        return CapabilitySelection(tools=None, skills=tuple(selected), guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> ReviewCapability:\n    \"\"\"Construct an inert policy without reading or mutating task or state.\"\"\"\n    return ReviewCapability(registrar)\n",
+   "skills/post-review-delivery/SKILL.md": "---\nname: post-review-delivery\ndescription: 取得本篇材料后，用允许字段的新句、规定结构和实际改写结果组成交付。\n---\n\n# 用已确定的结果组成交付\n\n取得本篇材料后，起稿和记录时对照以下案例。方括号是教学占位，不可照抄；字段、标题、依据取当次规则，不另交检查报告。\n\n## 医生：整处填新句\n\n原稿形如‘[科室甲][姓名甲][简称]从业……。[科室乙][姓名乙][简称]完成……。’。逐位按姓名＋原稿科室查名册，取各自完整职称；引导语也须当次允许。\n- 只许姓名、职称且允许“主诊医生：”：对，整个医生位置填‘主诊医生：[姓名甲] [完整职称甲]。主诊医生：[姓名乙] [完整职称乙]。’，说明复用各自新句；错，在原科室后补新句，写成‘[科室甲]主诊医生：[姓名甲] [完整职称甲]。’，职称对也仍带禁用字段。\n- 要求科室、姓名、职称：对，每句写‘主诊医生：[对应科室] [姓名] [完整职称]。’；错，照上一类一律删科室。\n新句替换整个旧介绍，不留前缀，不套同名另一科室的职称。\n\n## 边界：只填规定结构\n\n资料齐全且限定段落、禁止额外文字时，先按当次标题、顺序和说明形式建空结构，不固定两段。\n- 错：‘材料齐全，按规则改写如下。’＋规定结构＋‘说明：[证明核对、可用图解释]’。准确也不例外。\n- 对：第一行直接为‘## [当次首段名]’，依序填内容；说明是表格就止于最后表格行，是编号就止于最后规定条目。实际新增证明及弃图在条目中交代，核对过程不另写，也不搬进推文。\n真有材料缺口时，在正文外、尽量于规定说明内写明受影响部分，不为格式隐瞒缺口。\n\n## 记录：原句组对应实际结果\n\n先定最终文字，再从正文取文填说明。\n- 合句：原文‘[项目甲][违规说法]！[项目乙][违规说法]！’，正文采用‘[项目甲]与[项目乙]。’。错，两条完整原句均记“删除”，或只列部分删词；对，两句作为一组原文，对应实际合句及当次依据。拆细也可，但各片段合起来须覆盖全部删除、保留后的改写和新连接。\n- 新增连接：正文采用‘[有依据的新连接语]，[规定费用句]，[未改预约语]’。错，结果只记费用句，漏新连接语；对，相关原文对应完整实际结果，或完整覆盖的真实片段。也可撤去非必要新增，不可编造事实。\n- “删除”只用于所引内容确实删除；部分保留重组要记录改写结果，真整句删掉且无重组结果才记整句删除。所引连接词和标点照正文；未引用边界标点的真实片段不因此出错。\n按当次结构记录全部实际变化。编号若要求‘原文 → 改成（第 X 条）’，新增证明写‘原无此行 → [实际新增的完整证明行]（第 X 条）’；表格填相应列，不倒置，X 取当次依据。每张弃图用实际文件名对应“不用”及条款。未改内容及配图行按当次豁免，通常省去保留条目；“不用列”不是禁列，若列仍写实际文字结果及依据。正文再改，记录同步。\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjk3YjkwYTczMmUyNTQ0MGQ5NDUzZWUwZjdiNDQ4M2Y4In0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是医疗机构市场部的推文审查员。市场同事会把准备发布的公众号推文和发布日期发给你，工作目录里有这次适用的推文审查工作规则、推文的配图清单、医生名册和医疗广告审查证明表。按这次给的工作规则改好推文，交代改了什么，同事拿去直接发布。",
+  "id": "97b90a732e25440d9453ee0f7b4483f8"
+ },
+ "revision": "f220b0b0f4f5667b97695557853f1811f14b2c623ea311b0235734636746d690",
+ "source": {
+  "case": "dental-post",
+  "session": "live-20261011153837-14c53a",
+  "deployment_sha256": "cf15fd17acdbcacab12af571e9fb82172f5db7164d4b30573e39b4010a8c8e06"
+ }
+}

@@ -1,0 +1,32 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "capability_impl:create"
+   }
+  },
+  "files": {
+   "capability_impl.py": "\"\"\"Supply current-material guidance and state-fidelity examples; delegate tools.\"\"\"\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.preparation import PreparationRequest\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n    SkillContribution,\n    SkillSelection,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nSKILL_NAME = \"comparison-state-fidelity\"\nSKILL_SOURCE = \"curator-capability\"\nSKILL_ASSET = \"skills/comparison-state-fidelity/SKILL.md\"\n\nGUIDANCE = \"\"\"以当前请求指定的本次工作规则、竞品资料和汇率表为准，不沿用旧任务口径。先定位并读适用规则，路径不明时用已有目录发现能力查找，再据其范围使用资料；截断时续读所需部分，同次完整且仍适用的内容直接复用。表格对象、方向、取值、价格换算、单位精度、定位称呼及位置都从当次规则确定，事实与汇率只取当次材料，需要计算时使用已有能力。\n填写功能格及选择定位项时，先对照随本次输入提供的 comparison-state-fidelity 案例正文；正文已给出，不另行读取。先按产品名×功能名保留原值并作允许映射，再据同一组状态按当次定义逐家判断定位资格。交付前将每个功能格对回原资料，并核对定位与这些状态一致；修正差异，不为突出定位而改格或删掉其他功能。只陈列有依据的事实，不评价竞品好坏。\n缺项依本次规则处理，不猜填；保留有依据的内容，不用计划、进度或省略解释代替规定交付。最终只输出本次要求的表格和一句定位正文，不附开场白、过程说明、案例或核对记录。\"\"\"\n\n\nclass CurrentMaterialCapability(CapabilityStrategy):\n    \"\"\"Prepare one example skill and select it without storing session progress.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def _prepare_skills(self, request: PreparationRequest) -> tuple[SkillContribution, ...]:\n        text = request.assets.get(SKILL_ASSET)\n        if text is None or not text.strip():\n            raise ValueError(f\"Missing or empty required skill asset: {SKILL_ASSET}\")\n        return (\n            SkillContribution(\n                name=SKILL_NAME,\n                owner=\"capability\",\n                package=None,\n                files={\"SKILL.md\": text},\n                source=\"task-feedback:R1-R2\",\n            ),\n        )\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        matches = [\n            skill for skill in request.skills\n            if skill.name == SKILL_NAME and skill.source == SKILL_SOURCE\n        ]\n        if len(matches) != 1:\n            raise ValueError(f\"Required skill is missing or ambiguous: {SKILL_SOURCE}/{SKILL_NAME}\")\n        target = matches[0]\n        if not target.available:\n            raise ValueError(f\"Required skill is unavailable: {target.source}/{target.name}\")\n        # Body content is loaded by the host after selection, not in this request.\n        selected = (SkillSelection(name=target.name, source=target.source, delivery=\"body\"),)\n        selected += tuple(\n            SkillSelection(name=skill.name, source=skill.source, delivery=\"catalog\")\n            for skill in request.skills\n            if skill.available and (skill.source, skill.name) != (target.source, target.name)\n        )\n        return CapabilitySelection(tools=None, skills=selected, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> CurrentMaterialCapability:\n    \"\"\"Bind the registrar without mutating the task or session checkpoint.\"\"\"\n    return CurrentMaterialCapability(registrar)\n",
+   "skills/comparison-state-fidelity/SKILL.md": "---\nname: comparison-state-fidelity\ndescription: 依据当次竞品功能资料保真填表，并按当次定义选择与表格一致的定位项。\n---\n\n# 功能状态从资料到交付的保真\n\n适用于填写竞品功能格、选择定位项。当次工作规则优先；下列甲、乙、丙和“某功能”仅为方法占位，不是本次业务事实。例子不规定本次表头、状态词、定位位置或前缀。正文已在上下文时无需再次读取。\n\n## A．按产品与功能对应填格\n\n以（产品名称，功能名称）确定原格，只作当次规则允许的词语转换。方向和顺序不变时尽量直接沿用原行；转置或重排时按名称重新对应，不按旧列号或相邻格猜写。定位资格不影响表中是否保留该功能。交付前逐格按相同名称对回原资料，发现不符只修正该格。\n\n- 输入形态：某功能在甲、乙、丙的原始状态依次为“部分、无、有”。\n- 错误：把乙写成“有”，或让甲、丙的状态覆盖乙。\n- 正确：乙与该功能的交叉格仍为“无”。其他产品支持、或乙的其他功能支持，都不改变这个对应格。\n- 依据：保留原资料对应格，只执行当次允许的映射。若规则仅允许将资料未公开的符号换成规定的未知词，这项映射不能改变“有、无、部分”，也不能把未知改成无。\n\n## B．按当次定义逐家判断定位资格\n\n先从当次规则明确我方需要的状态及每家竞品允许的状态。检查每个功能：先核我方，再逐家核全部竞品；所有条件同时成立才合格。写定位时沿用该合格功能及其状态，不另凭“唯一”的日常含义重判。\n\n- 输入形态：仅在规则定义为“我方有，各竞品均无或部分”时，某功能我方为“有”，竞品甲、乙、丙依次为“部分、无、部分”。\n- 错误：因为竞品部分支持，就否认该功能符合定义，改交“没有合格项”或省略定位的解释。\n- 正确：甲的部分、乙的无、丙的部分分别都在允许状态内，故该功能合格；按当次写法陈述我方支持该功能。\n- 边界：若其中一家为“有”或“未知”，则不能按这一示例定义认定合格。若当次定义不同，重新按当次定义判断，不能套用本例允许集合。\n\n准备声称不存在合格项前，重新检查每个我方状态达标的功能是否确有一家竞品违反条件；没有反例的功能不能排除。真实无合格项或证据不全时依当次规则处理，不虚构合格项。\n\n## 交付沿用已核对的状态\n\n定位与表格采用同一组已核对的状态。若描述竞品，保留其部分支持与不支持的实际差异，不能扩大成所有竞品均不支持。只交付当次规定的表格及定位；是否提价格、禁词、位置和开头均依当次规则。案例、判断步骤和内部核对不进入正文；存在合格项时不能用省略解释替代规定定位。\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjc1NGIyZWE3ZTBjZDQwMzk5NGExZjYxMzUxMDc5ODY2In0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是 SaaS 公司产品市场部的竞品分析助手。销售、官网、标书和渠道的同事会发来竞品对比的需求，工作目录里有这次适用的工作规则、竞品资料和汇率表。按这次给的工作规则出一张竞品对比表，配一句话的定位（叫法和写法以工作规则为准），同事会直接拿去用；只输出工作规则要求的内容本身，不要附加任何说明。",
+  "id": "754b2ea7e0cd403994a1f61351079866"
+ },
+ "revision": "0150fa86cde9f76b036450fa70805618763e99bd4c3b4240f5b540542b282b5d",
+ "source": {
+  "case": "compete-table",
+  "session": "live-20261011132451-42b3d5",
+  "deployment_sha256": "48d16601fe72a151377877e9bf58e23b781c78a8f9dd1801f3af144aef0896ad"
+ }
+}

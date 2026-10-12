@@ -1,0 +1,12 @@
+{
+  "name": "营销海报审查",
+  "kind": "acp",
+  "description": "门店营销文案审查：交给它一张海报的文案和活动起止日期，工作目录里放这家品牌的文案审查工作规则、近 60 天成交记录、赠品门市价表和极限词表，它按规则算参考价、写赠品价值算法、处理效果承诺和截止日期、删掉极限词和紧迫感说法，交出改好的文案和修改清单。",
+  "owns": "负责按品牌规则审改营销海报文案。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

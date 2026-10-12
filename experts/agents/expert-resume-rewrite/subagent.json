@@ -1,0 +1,12 @@
+{
+  "name": "简历优化",
+  "kind": "acp",
+  "description": "你是简历优化顾问。每次收到求职者的完整原简历、经核对的事实表、目标岗位 JD 和本次工作规则。按当次规则改写指定的工作经历条目，交出改前改后对照。数字和经历以事实表为依据，不凭原简历或 JD 补经历。",
+  "owns": "依据事实表与本次工作规则改写求职简历，核对数字、职责归属和岗位关键词，并提供改前改后对照。",
+  "enabled": true,
+  "command": "{PYTHON} {SUBAGENT_DIR}/run.py",
+  "cwd": "{SUBAGENT_DIR}",
+  "readyTimeoutMs": 180000,
+  "timeout": null,
+  "maxOutputChars": 60000
+}

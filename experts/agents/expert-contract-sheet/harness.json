@@ -1,0 +1,31 @@
+{
+ "artifact": {
+  "values": {
+   "capability.strategy": {
+    "factory": "procurement_capability:create"
+   }
+  },
+  "files": {
+   "procurement_capability.py": "\"\"\"Task-specific guidance with native capability selection and registration.\"\"\"\n\nfrom typing import Final\n\nfrom pydantic import JsonValue\n\nfrom experimental.curator.harness.resources import (\n    CapabilityContribution,\n    CapabilityRegistrar,\n    CapabilitySelection,\n    RegistrationReceipt,\n    SelectionRequest,\n)\nfrom experimental.curator.harness.state import Task\nfrom experimental.curator.harness.strategies import CapabilityStrategy\n\n\nGUIDANCE: Final[str] = \"\"\"适用于本任务及续办的采购合同审查。沿用已完成工作；材料未变且已完整读取时直接继续，不反复从头读取。\n1. 完整读取当次工作规则及合同原件，截断处补读。范围、标准、清单结构、作者、命名和回复形式均以当次规则为准，不套用其他品牌或上次合同；适用版本不明时指出歧义并询问。\n2. 按当次范围逐项对照，保留规则、原文位置与结论的对应；区分原文事实、风险判断、建议和待确认内容，无依据不写成事实。同一编号的问题合为一行，两份成果沿用同一结论，不加内部栏目。填写等级时按该行清单编号取当次规则明确指定的等级，不凭严重程度或其他品牌印象判断。对照：规则指定‘中风险’，条款整条缺失时仍报该项并填‘中’，不是因缺失升为‘高’；另一份规则指定不同等级时随当次规则取值，不能记成某类条款固定为中。位置、摘录及其他列仍按当次规则。\n3. 生成真正的 .xlsx 风险清单及 .docx 批注副本，保留原件，不改正文、格式或加入修订。每个风险行按已有编号、位置和问题找到当前合同对应原文，再选该条款已有的非空文字作批注范围；正文、附件均如此，整条缺失按当次规则选标题文字。不要将条款编号当段落下标，不新添空 run 承载批注；使用现有含原文的 runs 或在原文范围两端放置标记，不用文末汇总代替批注。\n4. 保存后一次批量核验所有批注，先读取真实范围，再对照意见：按文档顺序解析正文（含表格、附件），每个批注ID从自己的 commentRangeStart 起建立空的文字收集结果，只收集到同ID commentRangeEnd 之前实际遇到的 w:t；多个范围同时打开时分别收集。起止缺失或不成对是读取异常，不算通过。保留并查看每个ID实际读出的原始文字：空就输出空，不能拿所在段落全文、目标文字、Excel摘录或批注内容填补。然后将批注编号、实读文字与对应风险行的位置和问题逐一对照；必须实际覆盖对应条款的非空原文，缺失项必须覆盖标题。数量、标记存在、段落相同、文件能打开均不能代替范围核验。\n对照：‘付款原文 [开始][空run][结束]’的实读结果是空，即使处在付款段落也不合格；应改为‘[开始]已有付款原文[结束]’，保存后重读。实读非空却是总价条款，也不合格，应按付款原文修正关联，不改正确风险行。多个缺失风险共用标题时，每个ID都须独立读出标题文字，不能用另一条的结果代替。\n发现空范围、错位或读取异常，局部修正关联或读取方法；保持正确意见、正文及格式，重新保存后按同一方法核验最终稿所有批注，不沿用修正前结果。无风险行时不虚构批注。核验记录仅内部使用，不外发或增加成果栏目。\n5. 交付前在已有批量回读中检查最终 Excel：逐行用清单编号对照当次规则的指定等级，不符只改错值，保留正确的识别、位置、问题和建议。更正后重存重读，再从这份拟实际交付的清单统计风险行总数和等级为‘高’的行数，不计表头、空行或汇总行；没有风险行则两数均为零。汇总和最终一句话沿用这次统计，不另凭印象重算。对照：早期摘要说有多项高风险，但最终清单仅一行为‘高’，应据清单报告一项，不沿用摘要或改正确等级迁就回复。之后若清单再改，旧统计作废，重读重算；不要为统计反复读取整份规则或逐行调用。\n仍核对两份成果的一致性、规定结构、命名和可打开性；实际生成后调用 deliver_files，依据结果确认交付，只交规定两份成果并按当次规则用一句话回复。普通质量问题先局部修复；确实无法读取、确认、生成或交付时如实说明缺口及未完成范围，继续交付已有有效成果，不用计划或占位替代，不把已知错误、缺失或损坏成果说成完成。内部核验、统计和调试记录不外发、不增加成果栏目。\"\"\"\n\n\nclass ProcurementCapabilities(CapabilityStrategy):\n    \"\"\"Add guidance only; the host retains resources, permissions and progress.\"\"\"\n\n    def __init__(self, registrar: CapabilityRegistrar) -> None:\n        self._registrar = registrar\n\n    def register(self, contribution: CapabilityContribution) -> RegistrationReceipt:\n        return self._registrar.register(contribution)\n\n    async def select(self, request: SelectionRequest) -> CapabilitySelection:\n        return CapabilitySelection(tools=None, skills=None, guidance=GUIDANCE)\n\n\ndef create(\n    state: dict[str, JsonValue],\n    task: Task,\n    *,\n    registrar: CapabilityRegistrar,\n) -> ProcurementCapabilities:\n    \"\"\"Bind the registrar without mutating the host-owned task or checkpoint.\"\"\"\n    return ProcurementCapabilities(registrar)\n"
+  },
+  "remove": [],
+  "remove_files": []
+ },
+ "state": {
+  "assembly/content-state.json": "eyJmaWxlcyI6IHt9LCAicmVsZWFzZWQiOiB7fX0=",
+  "memory.json": null,
+  "planning.json": null,
+  "capability.json": "eyJkYXRhIjoge30sICJ0YXNrX2lkIjogIjk1ZWRmZDMzMjIzYzQ2ZjQ5MjA2NDYxZjBiNWE0OTViIn0=",
+  "action.json": null
+ },
+ "task": {
+  "text": "你是连锁品牌法务部的合同审查助理。供应商发来的采购合同（.docx）在工作目录里，按这次适用的采购合同审查工作规则审，交付 Excel 风险清单和 Word 批注稿两份文件。工作目录里有工作规则和合同原件。",
+  "id": "95edfd33223c46f49206461f0b5a495b"
+ },
+ "revision": "0f2eaf8f25a48dc634b866a9f0b667f82dc07bf8d4e1829a9753b9b3c1511b4f",
+ "source": {
+  "case": "contract-sheet",
+  "session": "live-20261011193431-d8ab30",
+  "deployment_sha256": "e5d6a3c2e54650f9d7f3f5271db3d187d8e01bfd2be86e1350e0946052e1f35f"
+ }
+}
