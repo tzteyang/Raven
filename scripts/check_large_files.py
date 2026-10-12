@@ -245,7 +245,7 @@ def _is_allowed_skill_reference_image(path: str, extension: str) -> bool:
 
 def changed_paths(revision_range: str) -> list[str]:
     output = subprocess.check_output(
-        ["git", "diff", "--name-only", "--diff-filter=AM", revision_range],
+        ["git", "-c", "core.quotepath=false", "diff", "--name-only", "--diff-filter=AM", revision_range],
         text=True,
     )
     return [line for line in output.splitlines() if line]

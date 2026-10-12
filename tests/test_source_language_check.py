@@ -131,6 +131,12 @@ def test_a_fixture_importing_zh_machinery_via_from_keeps_the_exemption(tmp_path,
 # --- the passes: virgin file, relocation, carrier -------------------------------
 
 
+def test_a_markdown_file_with_a_non_ascii_name_keeps_its_suffix_exemption(tmp_path, monkeypatch) -> None:
+    """Git quotes such a path in its diff headers unless told not to; the quoted form hid the .md suffix."""
+    name = "".join(chr(code) for code in (0x8BF4, 0x660E)) + ".md"
+    assert _gate_verdict(tmp_path, monkeypatch, f"docs/{name}", f"{CJK_SAMPLE}\n") == 0
+
+
 def test_virgin_file_cjk_addition_fails_naming_file_and_line(tmp_path, monkeypatch, capsys) -> None:
     repo = _repo(tmp_path)
     _write(repo, "raven/agent/existing.py", "x = 1\n")
