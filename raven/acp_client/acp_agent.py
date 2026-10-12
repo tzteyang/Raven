@@ -885,6 +885,10 @@ def _prompt_meta(skey: Any) -> dict[str, Any]:
     from raven.token_wise import usage_context
 
     meta: dict[str, Any] = {"raven.usage": usage_context.delegation(skey)}
+    from raven.observability.execution import carrier
+
+    if execution := carrier():
+        meta["raven.execution"] = execution
     charter = outbound_charter()
     if charter:
         meta["raven.playbook"] = dict(charter)

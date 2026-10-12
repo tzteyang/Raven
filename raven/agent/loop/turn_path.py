@@ -92,6 +92,7 @@ from raven.agent.window import shrink
 from raven.agent.window.images import ATTACHED_IMAGE_KEY, IMAGE_SOURCES_KEY, filed_image_note, image_sources
 from raven.contracts.harness import ActionRequest, CapabilityRequest, PlanningRequest, WindowPressure, WindowState
 from raven.contracts.loop_hooks import HookDecision
+from raven.observability import execution
 from raven.permissions.turn import set_current_tool_call_id
 from raven.providers import usage_record
 from raven.providers.base import bound_llm_detail, canonical_llm_error, llm_error_summary, parse_llm_error
@@ -933,15 +934,17 @@ class TurnPathMixin:
             # Compaction rebinds ``messages``, which is why it sits above the
             # autofill publish: a snapshot published before the rebind would go
             # quietly stale.
-            ahead = await self.harness.memory.shrink(
-                messages, pressure=WindowPressure.PROACTIVE, state=window, model=effective_model
-            )
+            with execution.scope("harness.memory.shrink"):
+                ahead = await self.harness.memory.shrink(
+                    messages, pressure=WindowPressure.PROACTIVE, state=window, model=effective_model
+                )
             messages = ahead.messages
             # The standing image window: the notes it writes are the transcript
             # from here on rather than a per-request rewrite.
-            standing = await self.harness.memory.shrink(
-                messages, pressure=WindowPressure.STANDING, state=window, model=effective_model
-            )
+            with execution.scope("harness.memory.shrink"):
+                standing = await self.harness.memory.shrink(
+                    messages, pressure=WindowPressure.STANDING, state=window, model=effective_model
+                )
             messages = standing.messages
 
             # Same seam and the same reason as the drain above: only the loop's
@@ -961,7 +964,10 @@ class TurnPathMixin:
                 # building, and a snapshot of it would go quietly stale.
                 auto.set_snapshot(messages)
 
-            capability = await self.harness.capability.select(CapabilityRequest(messages=messages, iteration=iteration))
+            with execution.scope("harness.capability.select"):
+                capability = await self.harness.capability.select(
+                    CapabilityRequest(messages=messages, iteration=iteration)
+                )
             tool_defs = capability.tools
             iter_msg_base = len(messages)
 
@@ -1060,27 +1066,28 @@ class TurnPathMixin:
                 usage_record.bind(self.strategies),
                 usage_context.bind(session_key) if session_key else contextlib.nullcontext(),
             ):
-                response = await self.harness.action.decide(
-                    ActionRequest(
-                        provider=self.provider,
-                        messages=call_messages,
-                        tools=call_tools,
-                        model=call_model,
-                        fallback_models=fallback_models,
-                        stream_call=self._llm_call_stream,
-                        # Spliced here rather than inside the module: both gates are
-                        # the shell's own, and which sink a delta reaches is not a
-                        # strategy decision. The module reads the field it is handed,
-                        # so the stream/retry branch stays exactly the one the loop
-                        # took -- neither gate is built unless ``on_token_delta``
-                        # already is, so the spliced value is None on exactly the
-                        # turns the raw sink was, and a reasoning sink alone still
-                        # streams.
-                        on_token_delta=draft or gate or on_token_delta,
-                        on_reasoning_delta=on_reasoning_delta,
-                        generation_overrides=gen_overrides,
+                with execution.scope("harness.action.decide"):
+                    response = await self.harness.action.decide(
+                        ActionRequest(
+                            provider=self.provider,
+                            messages=call_messages,
+                            tools=call_tools,
+                            model=call_model,
+                            fallback_models=fallback_models,
+                            stream_call=self._llm_call_stream,
+                            # Spliced here rather than inside the module: both gates are
+                            # the shell's own, and which sink a delta reaches is not a
+                            # strategy decision. The module reads the field it is handed,
+                            # so the stream/retry branch stays exactly the one the loop
+                            # took -- neither gate is built unless ``on_token_delta``
+                            # already is, so the spliced value is None on exactly the
+                            # turns the raw sink was, and a reasoning sink alone still
+                            # streams.
+                            on_token_delta=draft or gate or on_token_delta,
+                            on_reasoning_delta=on_reasoning_delta,
+                            generation_overrides=gen_overrides,
+                        )
                     )
-                )
                 # Read inside the bind: the count belongs to it and ends with it.
                 recorded_at_seam = usage_record.recorded_inbound()
             # Assigned, not latched: the fact this carries is that the turn's
@@ -1186,17 +1193,19 @@ class TurnPathMixin:
             refused = response.finish_reason == "error" and cls_ is not None
             retry_model = call_model or effective_model
             if refused and cls_.should_compress:
-                shrunk = await self.harness.memory.shrink(
-                    messages, pressure=WindowPressure.OVERFLOW, state=window, model=retry_model
-                )
+                with execution.scope("harness.memory.shrink"):
+                    shrunk = await self.harness.memory.shrink(
+                        messages, pressure=WindowPressure.OVERFLOW, state=window, model=retry_model
+                    )
                 messages = shrunk.messages
                 if shrunk.changed:
                     iteration -= 1
                     continue
             if refused and cls_.should_drop_tool_images:
-                demoted = await self.harness.memory.shrink(
-                    messages, pressure=WindowPressure.TOOL_IMAGES_REFUSED, state=window, model=retry_model
-                )
+                with execution.scope("harness.memory.shrink"):
+                    demoted = await self.harness.memory.shrink(
+                        messages, pressure=WindowPressure.TOOL_IMAGES_REFUSED, state=window, model=retry_model
+                    )
                 messages = demoted.messages
                 if demoted.changed:
                     # Cached so the rest of the process stops paying for the
@@ -1206,9 +1215,10 @@ class TurnPathMixin:
                     iteration -= 1
                     continue
             if refused and cls_.strip_images:
-                withdrawn = await self.harness.memory.shrink(
-                    messages, pressure=WindowPressure.IMAGES_TOO_LARGE, state=window, model=retry_model
-                )
+                with execution.scope("harness.memory.shrink"):
+                    withdrawn = await self.harness.memory.shrink(
+                        messages, pressure=WindowPressure.IMAGES_TOO_LARGE, state=window, model=retry_model
+                    )
                 messages = withdrawn.messages
                 if withdrawn.changed:
                     iteration -= 1
@@ -2109,7 +2119,8 @@ class TurnPathMixin:
                     mode_overlay=None,
                     phase="user_inbound",
                 )
-                answer = await self.harness.memory.ask_intake(content, step, participants)
+                with execution.scope("harness.memory.ask_intake"):
+                    answer = await self.harness.memory.ask_intake(content, step, participants)
                 intake = answer if answer is None or isinstance(answer, Intake) else read_intake(answer, text=content)
                 if intake is not None:
                     if intake.reply is not None:
@@ -2357,9 +2368,10 @@ class TurnPathMixin:
         # what Raven has always done -- planning is the model's own, and the
         # position *ahead* of the turn was measured to be the wrong one for a
         # harness to take it (see ``harness/planning.py``).
-        planning = await self.harness.planning.prepare(
-            PlanningRequest(task=content, session_key=key, messages=initial_messages)
-        )
+        with execution.scope("harness.planning.prepare"):
+            planning = await self.harness.planning.prepare(
+                PlanningRequest(task=content, session_key=key, messages=initial_messages)
+            )
         initial_messages = planning.messages
         # Surface the skills SkillForge injected this turn to the web UI's skill
         # panel (populated into _last_injected_skill_ids by the assemble above).
@@ -2679,13 +2691,14 @@ class TurnPathMixin:
 
         self._save_turn(session, all_msgs, persist_from)
         self.sessions.save(session)
-        await self.harness.memory.after_turn(
-            key,
-            {
-                "final_content": final_content,
-                "messages": all_msgs[turn_start_idx:],
-            },
-        )
+        with execution.scope("harness.memory.after_turn"):
+            await self.harness.memory.after_turn(
+                key,
+                {
+                    "final_content": final_content,
+                    "messages": all_msgs[turn_start_idx:],
+                },
+            )
         # Plugin-side indexing (third peer step in the after-turn pipeline).
         self._dispatch_backend_store(key, session.messages[prev_len:])
         # Forward source-qualified skill-usage feedback. Only

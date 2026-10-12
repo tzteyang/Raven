@@ -15,7 +15,7 @@ from raven.agent import workdir
 from raven.agent.tools.params import cast_params, validate_params
 from raven.contracts.llm_provider import RunMeta, TruncationInfo
 from raven.contracts.tool import RAW_ARGUMENTS_KEY, Continuation, Tool, ToolOutput, ToolResult
-from raven.observability import semconv
+from raven.observability import execution, semconv
 from raven.tracing import trace
 
 if TYPE_CHECKING:
@@ -853,6 +853,7 @@ class ToolRegistry:
             return tool.to_schema()
         return copy.deepcopy(spec.schema)
 
+    @execution.stage("tool", argument="name", failed=call_failed)
     @trace.instrument("tool.call", extract=semconv.tool_call)
     async def execute(
         self,

@@ -8,6 +8,8 @@ from typing import Any
 
 import httpx
 
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers.base import (
     ErrorClassification,
     LLMProvider,
@@ -110,38 +112,47 @@ class OpenAIResponsesProvider(LLMProvider):
         headers = {"Accept": "text/event-stream", **self.extra_headers}
         raw_usage: dict[str, Any] = {}
         try:
-            async with httpx.AsyncClient(timeout=httpx_timeout(self.generation) or self.generation.timeout) as client:
-                async with client.stream(
-                    "POST",
-                    url,
-                    headers={"Authorization": f"Bearer {self.api_key}", **headers},
-                    json=body,
-                ) as response:
-                    if response.status_code >= 400:
-                        detail = (await response.aread()).decode("utf-8", "replace")
-                        raise RuntimeError(f"HTTP {response.status_code}: {detail[:2000]}")
-                    # The per-event watchdog runs on the stream-idle budget, not
-                    # the call budget: with llmCallTimeout 600 and
-                    # streamIdleTimeout 7 this adapter still waited 600 s on a
-                    # silent stream and the setting did nothing here (reviewed
-                    # 2026-09-07). getattr: a GenerationSettings from before the
-                    # field falls back to the call budget, as it always did.
-                    idle_timeout = getattr(self.generation, "stream_idle_timeout", None) or self.generation.timeout
-                    # And the first event on the first-byte bound, which is the
-                    # one a stream that never starts needs: the idle cap is for a
-                    # stream that stopped mid-answer, minutes further out.
-                    content, tool_calls, finish_reason = await _consume_sse(
-                        response,
-                        idle_timeout,
-                        usage_sink=raw_usage,
-                        first_byte=stream_first_byte_budget(self.generation),
-                    )
-            return LLMResponse(
-                content=content or None,
-                tool_calls=tool_calls,
-                finish_reason=finish_reason,
-                usage=responses_usage(raw_usage),
-            )
+            with execution.attempt(self._provider_name, stored_model) as accounting:
+                async with httpx.AsyncClient(
+                    timeout=httpx_timeout(self.generation) or self.generation.timeout
+                ) as client:
+                    async with client.stream(
+                        "POST",
+                        url,
+                        headers={"Authorization": f"Bearer {self.api_key}", **headers},
+                        json=body,
+                    ) as response:
+                        accounting.status(response.status_code)
+                        if response.status_code >= 400:
+                            detail = (await response.aread()).decode("utf-8", "replace")
+                            provider_usage.capture_error(accounting, response, responses_usage)
+                            raise RuntimeError(f"HTTP {response.status_code}: {detail[:2000]}")
+                        # The per-event watchdog runs on the stream-idle budget, not
+                        # the call budget: with llmCallTimeout 600 and
+                        # streamIdleTimeout 7 this adapter still waited 600 s on a
+                        # silent stream and the setting did nothing here (reviewed
+                        # 2026-09-07). getattr: a GenerationSettings from before the
+                        # field falls back to the call budget, as it always did.
+                        idle_timeout = getattr(self.generation, "stream_idle_timeout", None) or self.generation.timeout
+                        # And the first event on the first-byte bound, which is the
+                        # one a stream that never starts needs: the idle cap is for a
+                        # stream that stopped mid-answer, minutes further out.
+                        content, tool_calls, finish_reason = await _consume_sse(
+                            response,
+                            idle_timeout,
+                            usage_sink=raw_usage,
+                            **({"accounting": accounting} if accounting else {}),
+                            first_byte=stream_first_byte_budget(self.generation),
+                        )
+                accounting.status(finish_reason)
+                return LLMResponse(
+                    content=content or None,
+                    tool_calls=tool_calls,
+                    finish_reason=finish_reason,
+                    usage=responses_usage(raw_usage),
+                )
+        except LedgerError:
+            raise
         except Exception as exc:
             classification = self.classify_error(exc)
             if any(

@@ -43,6 +43,7 @@ from raven.acp.modes import SessionModes, build_session_modes
 from raven.acp.replay import replay
 from raven.acp.updates import AcpSession, TurnAlreadyRunningError, UpdateTranslator
 from raven.config import load_config
+from raven.observability import execution
 from raven.security import redact
 
 # Methods in the stable manifest that raven does not serve yet. Answered with
@@ -672,6 +673,7 @@ class AcpMethods:
         option = await model_option(self._call, session_id=session_key)
         return [] if option is None else [option]
 
+    @execution.acp_prompt
     async def _session_prompt(self, params: dict[str, Any]) -> dict[str, Any]:
         """Run one turn and answer with its stop reason, plus what its hooks filed.
 
@@ -734,6 +736,9 @@ class AcpMethods:
                     if callable(binder) and isinstance(meta, dict):
                         binder(session.session_key, meta.get("raven.playbook"))
                 self._apply_mode(session)
+                accounting = getattr(self._agent_loop, "bind_execution_context", None)
+                if callable(accounting):
+                    accounting(session.session_key, execution.carrier())
                 # channel and chat_id are the pair that rebuilds this session key
                 # (``<channel>:<chat_id>``). Tools record them as the turn's live
                 # route, and a wake scheduled from this turn is later run on
@@ -750,6 +755,9 @@ class AcpMethods:
                     },
                 )
             except AcpMethodError as exc:
+                clear_accounting = getattr(self._agent_loop, "bind_execution_context", None)
+                if callable(clear_accounting):
+                    clear_accounting(session.session_key, None)
                 # The turn never started, so no terminating event is coming and
                 # awaiting the future would hang. Say why, then end the turn:
                 # the rule is that a prompt is answered with a stopReason, and

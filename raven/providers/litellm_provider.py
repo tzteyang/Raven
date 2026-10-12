@@ -6,6 +6,7 @@ import json
 import os
 import secrets
 import string
+import sys
 import uuid
 import warnings
 from collections.abc import AsyncIterator
@@ -14,6 +15,8 @@ from typing import Any
 import json_repair
 from loguru import logger
 
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers import call_record, prompt_cache
 from raven.providers.base import (
     ChatDelta,
@@ -634,8 +637,27 @@ class LiteLLMProvider(LLMProvider):
             kwargs["tool_choice"] = tool_choice or "auto"
 
         try:
-            response = await asyncio.wait_for(acompletion(**kwargs), self.generation.timeout)
-            return self._parse_response(response, sent_chars=prompt_chars(messages))
+            if execution.current():
+                kwargs.update(num_retries=0, max_retries=0)
+            with execution.attempt(self._provider_name or "litellm", model or self.default_model) as accounting:
+                try:
+                    response = await asyncio.wait_for(acompletion(**kwargs), self.generation.timeout)
+                except Exception as exc:
+                    provider_usage.capture_error(accounting, getattr(exc, "response", None), self._normalize_usage)
+                    raise
+                raw = getattr(response, "usage", None)
+                accounting.usage(
+                    self._normalize_usage(raw) if raw is not None else {},
+                    raw=provider_usage.mapping(raw),
+                    response_id=getattr(response, "id", None),
+                    served_model=getattr(response, "model", None),
+                    complete=True,
+                )
+                result = self._parse_response(response, sent_chars=prompt_chars(messages))
+                accounting.status(result.finish_reason)
+                return result
+        except LedgerError:
+            raise
         except Exception as e:
             # Return error as content for graceful handling, but classify the
             # live exception here (status_code + type) before it's lost to a
@@ -775,6 +797,9 @@ class LiteLLMProvider(LLMProvider):
 
         first_byte = stream_first_byte_budget(self.generation)
         stream: Any = None
+        accounting = None
+        if execution.current():
+            kwargs.update(num_retries=0, max_retries=0)
 
         async def _open_and_first() -> Any:
             """Open the stream and take its first chunk under one first-byte deadline.
@@ -786,7 +811,8 @@ class LiteLLMProvider(LLMProvider):
             the moment the open returns, so the caller's ``finally`` can still
             close the connection when the first chunk is what never came.
             """
-            nonlocal stream
+            nonlocal stream, accounting
+            accounting = execution.attempt(self._provider_name or "litellm", model or self.default_model)
             loop = asyncio.get_running_loop()
             started = loop.time()
             phase = "opening the stream"
@@ -797,6 +823,7 @@ class LiteLLMProvider(LLMProvider):
             except StopAsyncIteration:
                 return done
             except TimeoutError as exc:
+                accounting.finish(exc)
                 waited = loop.time() - started
                 logger.warning(
                     "LLM first byte: nothing from {} after {:.1f}s while {} (bound {}={:g}s); "
@@ -808,6 +835,10 @@ class LiteLLMProvider(LLMProvider):
                     first_byte,
                 )
                 raise FirstByteTimeoutError(phase=phase, budget=first_byte, waited=waited) from exc
+            except BaseException as exc:
+                provider_usage.capture_error(accounting, getattr(exc, "response", None), self._normalize_usage)
+                accounting.finish(exc)
+                raise
 
         try:
             # The open and the first pull are one unit, and the `except` has to
@@ -840,25 +871,29 @@ class LiteLLMProvider(LLMProvider):
             # provider/model are the request's, and a gateway that names its
             # serving backend does it in the chunk body.
             record = call_record.from_stream(stream, None if first is done else first)
+            accounting.usage({}, response_id=record.response_id, served_model=record.served_model)
             record_sent = False
 
             # LiteLLM rebuilds its final usage and drops API monetary fields.
             # Its retained chunks precede that rebuild and contain reported usage.
             sdk_stream = isinstance(stream, litellm.CustomStreamWrapper)
             usage_cursor = 0
+            reported = {}
 
             def reported_usage() -> dict[str, Any] | None:
-                nonlocal usage_cursor
+                nonlocal usage_cursor, reported
                 usage = None
                 for original in stream.chunks[usage_cursor:]:
                     raw = _usage_field(original, "usage")
                     if raw is not None:
+                        reported = merge_usage(reported, provider_usage.mapping(raw), preserve_nulls=True)
                         usage = merge_usage(usage, self._normalize_usage(raw))
                 usage_cursor = len(stream.chunks)
                 return usage
 
             chunk = first
             delivered = False
+            terminal = False
             while chunk is not done:
                 delta = self._normalize_stream_chunk(chunk)
                 if sdk_stream:
@@ -876,6 +911,7 @@ class LiteLLMProvider(LLMProvider):
                     # reply cut mid-thought must not read as a finished one.
                     if delta.finish_reason and _finish_was_made_up(stream):
                         delta.finish_synthesized = True
+                    terminal = terminal or bool(delta.finish_reason and not delta.finish_synthesized)
                     delivered = delivered or bool(delta.content or delta.tool_call_delta)
                     # The terminal delta of a stream that delivered nothing is the
                     # one failure the deltas cannot describe: every field they
@@ -889,6 +925,15 @@ class LiteLLMProvider(LLMProvider):
                     elif not record_sent:
                         delta.call_record = record
                         record_sent = True
+                    if delta.usage:
+                        original = reported if sdk_stream else provider_usage.mapping(_usage_field(chunk, "usage"))
+                        accounting.usage(
+                            delta.usage,
+                            raw=original,
+                            response_id=_usage_field(chunk, "id"),
+                            served_model=_usage_field(chunk, "model"),
+                        )
+                    accounting.status(delta.finish_reason)
                     yield delta
                 try:
                     chunk = await asyncio.wait_for(stream.__anext__(), self.generation.stream_idle_timeout)
@@ -896,10 +941,17 @@ class LiteLLMProvider(LLMProvider):
                     raise StreamIdleTimeoutError(idle=float(self.generation.stream_idle_timeout)) from exc
                 except StopAsyncIteration:
                     if sdk_stream and (usage := reported_usage()) is not None:
+                        accounting.usage(usage, raw=reported)
                         yield ChatDelta(content=None, usage=usage, call_record=None if record_sent else record)
+                    accounting.usage({}, complete=terminal)
                     break
         finally:
-            await _close(stream)
+            failure = sys.exc_info()[1]
+            try:
+                await _close(stream)
+            finally:
+                if accounting is not None:
+                    accounting.finish(failure)
 
     def _normalize_usage(self, usage: Any) -> dict[str, Any]:
         """Read protocol usage.cost as reported USD, independently of the endpoint."""

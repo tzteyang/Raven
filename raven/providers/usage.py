@@ -65,14 +65,18 @@ def responses_usage(usage: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def merge_usage(current: dict[str, Any] | None, incoming: dict[str, Any]) -> dict[str, Any]:
+def merge_usage(
+    current: dict[str, Any] | None, incoming: dict[str, Any], *, preserve_nulls: bool = False
+) -> dict[str, Any]:
     """Merge cumulative reports, preserving known fields across partial frames."""
     result = dict(current or {})
     for key, value in incoming.items():
         if isinstance(value, dict):
             previous = result.get(key)
-            result[key] = merge_usage(previous if isinstance(previous, dict) else None, value)
-        elif value is not None:
+            result[key] = merge_usage(
+                previous if isinstance(previous, dict) else None, value, preserve_nulls=preserve_nulls
+            )
+        elif value is not None or preserve_nulls:
             result[key] = value
     return result
 

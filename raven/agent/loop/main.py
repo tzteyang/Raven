@@ -48,6 +48,7 @@ from raven.agent.loop.turn_path import TurnPathMixin
 from raven.agent.loop.wiring import WiringMixin
 from raven.agent.subagent.charter import charter_scope
 from raven.agent.subagent.delegate import delegate_scope
+from raven.observability.execution import turn as observed_turn
 
 if TYPE_CHECKING:
     from raven.agent.hook import CompositeHook
@@ -809,6 +810,7 @@ class AgentLoop(TurnPathMixin, WiringMixin, McpGlueMixin, OrganGlueMixin):
         self._running = False
         logger.info("Agent loop stopping")
 
+    @observed_turn
     async def run_turn(
         self,
         req: TurnRequest,
