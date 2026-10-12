@@ -147,7 +147,7 @@ JSON 保存结构化记录；上下文采用简洁的 Markdown 指导或角色�
 
 ## 现有实现与接入路径
 
-公共实现位于 experimental/experience/governance.py；Governance 管理候选、生效和停用，Diagnosis 绑定允许修改的字段与当前基线，Decision 绑定独立证据和策略。GuidanceStore 将它嵌入既有 JSON；CuratorExperience 通过 GovernanceFile 接入已有 SQLite 证据库。SQLite 的 supported 是领域资格，公共记录才是实际采用的权威；两个记录承担不同职责。
+公共实现位于 experimental/harness/experience/governance.py；Governance 管理候选、生效和停用，Diagnosis 绑定允许修改的字段与当前基线，Decision 绑定独立证据和策略。GuidanceStore 将它嵌入既有 JSON；CuratorExperience 通过 GovernanceFile 接入已有 SQLite 证据库。SQLite 的 supported 是领域资格，公共记录才是实际采用的权威；两个记录承担不同职责。
 
 | 接入部分 | 公共职责与领域职责 |
 | --- | --- |

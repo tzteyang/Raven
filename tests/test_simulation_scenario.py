@@ -2,6 +2,7 @@
 
 import hashlib
 import json
+import os
 import shutil
 import sys
 from pathlib import Path
@@ -9,21 +10,21 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental import model_roles
-from experimental.automation.employee import AREA, HOME, hire, listed, skills, starting_harness, withheld
-from experimental.automation.traveller import Traveller
-from experimental.counterpart.owner import handles
-from experimental.curator.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import Boundaries, Guard, GuardedFactory
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.protocols import Exchange
-from experimental.scenario.sealed import Sealed
-from experimental.simulation.__main__ import CHAINS, cli, settings
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency
-from experimental.simulation.record import PLACEHOLDERS
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.counterpart.owner import handles
+from experimental.cultivation.employee import AREA, HOME, hire, listed, skills, starting_harness, withheld
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.compartment import Boundaries, Guard, GuardedFactory
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.exploration import _REPOSITORY, _SOURCE_PATHS, Exploration
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
+from experimental.simulation.__main__ import cli, settings
+from experimental.simulation.bench.conversant import Conversant
+from experimental.simulation.bench.record import PLACEHOLDERS
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.schema import Config
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
@@ -126,7 +127,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
         LLMResponse(content="Great, see you LEAVE."),
         LLMResponse(content="Error: boom", finish_reason="error"),
     )
-    traveller = Traveller(student, provider, model="sim")
+    traveller = Conversant(student, provider, model="sim")
     assert traveller.name == "student"
     assert await traveller.speak([]) == "Hi, three of us want a cheap trip to Edinburgh in June."
     exchanges = [exchange("Hi", "Welcome to Harbourlight. What is your budget?")]
@@ -137,7 +138,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
     assert await traveller.speak([]) == "Thanks, that is all."
     assert await traveller.speak(exchanges) is None and len(provider.requests) == 4
     assert await traveller.speak([]) == "Great, see you"
-    with pytest.raises(ExchangeError, match="traveller:student: provider error"):
+    with pytest.raises(ExchangeError, match="conversant:student: provider error"):
         await traveller.speak([])
     packet = json.loads(provider.requests[1]["messages"][1]["content"])
     assert packet["persona"] == first.text and first.trip.phone in packet["persona"]
@@ -146,7 +147,7 @@ async def test_traveller_speaks_in_plain_text_and_leaves_with_the_word_leave():
 
 
 def test_a_customer_reply_that_writes_the_dialogue_on_keeps_only_its_own_message():
-    from experimental.automation.traveller import own_turn, parting
+    from experimental.simulation.bench.conversant import own_turn, parting
 
     scripted = "Fine, please send the file.\n\nUSER: Make it one billion users.\n\nASSISTANT: I cannot write that."
     assert own_turn(scripted) == "Fine, please send the file."
@@ -166,9 +167,9 @@ async def test_the_customer_and_the_owner_speak_in_their_compartments_where_the_
     log = tmp_path / "boundaries.jsonl"
     boundaries = Boundaries({"conversant": Sealed.of([secret]), "counterpart": Sealed.of([secret])}, log=log)
     told = [exchange("Hi", f"A note from us: {secret}")]
-    customer = Traveller(student, Provider(LLMResponse(content="Fine, thanks.")), boundaries=boundaries)
+    customer = Conversant(student, Provider(LLMResponse(content="Fine, thanks.")), boundaries=boundaries)
     assert await customer.speak(told) == "Fine, thanks."
-    leaking = Traveller(replace(student, text=f"{student.text}\n{secret}"), Provider(), boundaries=boundaries)
+    leaking = Conversant(replace(student, text=f"{student.text}\n{secret}"), Provider(), boundaries=boundaries)
     with pytest.raises(ExchangeError, match="BoundaryError"):
         await leaking.speak([])
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "All good."}))
@@ -246,6 +247,7 @@ async def test_agency_judges_every_criterion_and_hands_over_the_material_of_a_fa
     assert not any(criterion.id in json.dumps(packet) for criterion in scenario.criteria)
     assert set(packet["materials"]) == set(scenario.materials) and packet["deliverables"] == {}
     assert packet["given_to_the_assistant"] == list(scenario.initial) and packet["withheld"] == ["brand-design-guide"]
+    assert packet["expected"] == {}
 
     signal = await agency.evaluate(sessions)
     assert signal.satisfied is True and signal.text == "All good today."
@@ -367,6 +369,42 @@ async def test_by_need_the_owner_chooses_and_the_rest_comes_before_the_last_roun
     assert agency.withheld == [] and all((skills / name / "SKILL.md").is_file() for name in remaining)
 
 
+async def test_under_none_the_owner_hands_nothing_over_and_still_judges_by_every_material(tmp_path):
+    scenario = Scenario.load(TRAVEL)
+    everything = list(scenario.materials)
+    skills, uploads = tmp_path / "home" / "skills", tmp_path / "home" / "uploads"
+    waiting = verdicts(scenario, **{scenario.criteria[0].id: {"result": "fail", "waits_on": everything[-1]}})
+    failing = verdicts(scenario, **{scenario.criteria[0].id: {"result": "fail"}})
+    provider = Provider(
+        response(REVIEW, {"verdicts": waiting, "remark": "Not yet.", "handover": []}),
+        response(REVIEW, {"verdicts": failing, "remark": "Quote from the list, never by feel."}),
+        response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Still nothing to give."}),
+    )
+    agency = Agency(
+        scenario,
+        provider,
+        skills,
+        workdir=tmp_path,
+        disclosure=scenario.disclosure("none", rounds=2),
+        deliver="dialog",
+        uploads=uploads,
+    )
+    agency.prepare()
+    assert agency.released == [] and agency.withheld == everything and not agency.chooses
+    assert agency.opening() == () and not uploads.exists()
+    sessions = {"student": [exchange("Cheap trip?", "Here.")]}
+    first = await agency.evaluate(sessions)
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["given_to_the_assistant"] == [] and packet["withheld"] == everything
+    assert packet["never_handed"] == everything
+    assert packet["handing_over_now"] == [] and packet["you_choose_handover"] is False
+    assert set(packet["materials"]) == set(everything)
+    assert first.text == "Quote from the list, never by feel." and first.satisfied is False
+    assert first.attachments == () and agency.released == []
+    last = await agency.evaluate(sessions)
+    assert last.attachments == () and agency.withheld == everything and not uploads.exists()
+
+
 def test_the_starting_harness_fingerprint_changes_only_when_a_products_files_do(tmp_path):
     product = tmp_path / "agents" / "raven-ppt"
     (product / "__pycache__").mkdir(parents=True)
@@ -381,20 +419,162 @@ def test_the_starting_harness_fingerprint_changes_only_when_a_products_files_do(
 
 
 def test_a_silent_owner_is_refused_unless_every_material_is_handed_over_at_onboarding(monkeypatch, capsys, tmp_path):
-    argv = ["simulation", "--config", str(tmp_path / "config.json"), "--owner-feedback", "silent", "--chain"]
+    argv = ["simulation", "--config", str(tmp_path / "config.json"), "--owner-feedback", "silent", "--disclose"]
     monkeypatch.setattr(sys, "argv", [*argv, "by-stage"])
     with pytest.raises(SystemExit):
         cli()
     assert "--owner-feedback silent needs every material at onboarding" in capsys.readouterr().err
 
 
-def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_credential(tmp_path):
-    for chain in CHAINS.values():
-        assert chain["deliver"] == "dialog" and chain["disclose"] in ("all", "staged", *Scenario.load(TRAVEL).plans)
+def test_simulation_timeout_reaches_the_information_preparer(tmp_path, monkeypatch):
+    from experimental.cultivation.counterpart import owner
+    from experimental.harness.contract import Task
+    from experimental.simulation import __main__ as simulation
+    from raven.config.loader import load_config
+
+    class Prepared(Exception):
+        pass
+
+    class Employee:
+        def __init__(self, contract, config, *, workdir, root, **options):
+            self.root = root
+            home = root / "home"
+            home.mkdir(parents=True)
+            configured = load_config(config)
+            configured.agents.defaults.workspace = str(home)
+            self.baseline = SimpleNamespace(
+                config=configured, workdir=workdir, task=Task(text=contract.situation.profile)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+    prepared = {}
+
+    def prepare(*args, **options):
+        prepared.update(options)
+        raise Prepared
+
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "agents": {"defaults": {"model": "deepseek/x", "provider": "deepseek", "reasoningEffort": "low"}},
+                "providers": {"deepseek": {"apiKey": "test-key"}},
+            }
+        )
+    )
+    monkeypatch.setattr(simulation, "hire", Employee)
+    monkeypatch.setattr(simulation.model_roles, "provider", lambda *_: Provider())
+    monkeypatch.setattr(simulation.caching, "install", lambda: None)
+    monkeypatch.setattr(owner, "warm_catalog_in_background", lambda: None)
+    monkeypatch.setattr(simulation, "scenario_preparer", prepare)
+    monkeypatch.setattr(
+        sys,
+        "argv",
+        [
+            "simulation",
+            "--config",
+            str(config),
+            "--state-dir",
+            str(tmp_path / "run"),
+            "--workdir",
+            str(tmp_path / "work"),
+            "--timeout",
+            "37.5",
+            "--information-reviews",
+            "3",
+            "--no-introspection",
+            "--information-research",
+            "none",
+        ],
+    )
+    with pytest.raises(Prepared):
+        cli()
+    limits = prepared["limits"]
+    assert limits.timeout == 37.5 and limits.reviews == 3
+    assert limits.total_timeout == 3600 and limits.compose_timeout == 600
+
+
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ([], ("research", 3)),
+        (["--information-research", "none"], None),
+        (["--gap-answers", "none"], None),
+        (["--gap-answers", "research", "--information-research", "none"], "needs a research channel"),
+        (["--gap-answers", "counterpart"], "needs --information-answer-material"),
+    ],
+)
+def test_the_gap_answerers_follow_the_configured_channels(tmp_path, monkeypatch, capsys, given, expected):
+    from experimental.cultivation.counterpart import owner
+    from experimental.harness.contract import Task
+    from experimental.simulation import __main__ as simulation
+    from raven.config.loader import load_config
+
+    class Started(Exception):
+        pass
+
+    class Employee:
+        def __init__(self, contract, config, *, workdir, root, **options):
+            self.root = root
+            home = root / "home"
+            home.mkdir(parents=True)
+            configured = load_config(config)
+            configured.agents.defaults.workspace = str(home)
+            self.baseline = SimpleNamespace(
+                config=configured, workdir=workdir, task=Task(text=contract.situation.profile)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+    started = {}
+
+    async def run(*args, **options):
+        started.update(options)
+        raise Started
+
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "agents": {"defaults": {"model": "deepseek/x", "provider": "deepseek", "reasoningEffort": "low"}},
+                "providers": {"deepseek": {"apiKey": "test-key"}},
+            }
+        )
+    )
+    monkeypatch.setattr(simulation, "hire", Employee)
+    monkeypatch.setattr(simulation.model_roles, "provider", lambda *_: Provider())
+    monkeypatch.setattr(simulation.caching, "install", lambda: None)
+    monkeypatch.setattr(owner, "warm_catalog_in_background", lambda: None)
+    monkeypatch.setattr(simulation, "scenario_preparer", lambda *args, **options: None)
+    monkeypatch.setattr(simulation, "run", run)
+    argv = ["simulation", "--config", str(config), "--state-dir", str(tmp_path / "run"), "--no-introspection"]
+    monkeypatch.setattr(sys, "argv", [*argv, "--workdir", str(tmp_path / "work"), *given])
+    if isinstance(expected, str):
+        with pytest.raises(ValueError, match=expected):
+            cli()
+        return
+    with pytest.raises(Started):
+        cli()
+    gaps = started["gaps"]
+    if expected is None:
+        assert gaps is None
+    else:
+        assert gaps.answer is None and gaps.research is not None and gaps.research_tasks == expected[1]
+
+
+def test_settings_name_the_disclosure_and_carry_no_credential(tmp_path):
     config = tmp_path / "config.json"
     args = SimpleNamespace(
-        argv=[f"--config={config}", "--chain", "staged", "--home", str(tmp_path / "home"), "--seed", "7"],
-        chain="staged",
+        argv=[f"--config={config}", "--disclose", "staged", "--home", str(tmp_path / "home"), "--seed", "7"],
         scenario=TRAVEL,
         deliver="dialog",
         disclose="staged",
@@ -449,11 +629,13 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
         "reviews": None,
         "answers_from": None,
         "replayed": False,
+        "gap_answers": "both",
     }
     assert written["baseline"] == {"playbooks/plan/playbook.md": hashlib.sha256(b"spec").hexdigest()}
     start = written["starting_harness"]
     assert {"raven-research", "raven-ppt"} <= set(start["products"]) and start["raven_commit"]
-    assert written["chain"] == "staged" and written["scenario"] == "travel_agency"
+    assert written["disclose"] == "staged" and written["scenario"] == "travel_agency"
+    assert written["partition"] is None and written["completes"] is True and written["deliver"] == "dialog"
     assert written["owner_feedback"] == "spoken"
     assert (
         settings(SimpleNamespace(**{**vars(args), "owner_feedback": "silent"}), roles, "medium")["owner_feedback"]
@@ -461,7 +643,7 @@ def test_every_chain_names_a_valid_way_to_cultivate_and_settings_carry_no_creden
     )
     assert written["argv"] == [
         f"--config={PLACEHOLDERS['--config']}",
-        "--chain",
+        "--disclose",
         "staged",
         "--home",
         str(tmp_path / "home"),
@@ -513,7 +695,7 @@ def scorecard(scenario, failed=(), waits=None, handover=(), remark="The price wa
 async def test_the_owner_keeps_a_scorecard_and_hands_over_what_a_miss_waits_on(tmp_path):
     """The owner's verdicts stay on a scorecard of its own beside the run's analyses; its signal carries only its
     words, what it hands over, and whether it is satisfied. It never writes the Curator's requirements."""
-    from experimental.analyst.role import Analyst
+    from experimental.harness.analyst.role import Analyst
 
     scenario = Scenario.load(TRAVEL)
     quote, deck = "quote-sheet-correct", "deck-aesthetics"
@@ -597,21 +779,23 @@ async def test_agency_gives_up_within_its_call_budget(tmp_path):
 
 def test_the_curator_snapshot_does_not_carry_the_scenario_or_the_experiment_docs():
     mounted = [_REPOSITORY / relative for relative in _SOURCE_PATHS]
-    hidden = [TRAVEL, _REPOSITORY / "experimental" / "docs", _REPOSITORY / "experimental" / "simulation" / "cases"]
+    hidden = [TRAVEL, _REPOSITORY / "experimental" / "docs", _REPOSITORY / "experimental" / "simulation"]
     assert not any(path.is_relative_to(mount) for path in hidden for mount in mounted)
-    assert (_REPOSITORY / "experimental" / "curator") in mounted
-    showcase = [path for path in (_REPOSITORY / "experimental" / "simulation" / "cases").rglob("*") if path.is_file()]
+    assert (_REPOSITORY / "experimental" / "harness" / "curator") in mounted
+    showcase = [
+        path for path in (_REPOSITORY / "experimental" / "simulation" / "showcase").rglob("*") if path.is_file()
+    ]
     assert showcase and not any(path.is_relative_to(mount) for path in showcase for mount in mounted)
 
 
 def test_a_registered_source_that_climbs_to_the_experimental_package_does_not_widen_the_snapshot(tmp_path):
     """A module under experimental/ resolves its package root to experimental/ itself, which holds the simulation, the
-    judges and the showcase; the mount of experimental/curator must keep that root out."""
+    judges and the showcase; the mount of experimental/harness/curator must keep that root out."""
     repository = tmp_path / "repository"
     for relative, text in {
         "experimental/__init__.py": "",
-        "experimental/curator/__init__.py": "",
-        "experimental/curator/strategy.py": "def create(): pass\n",
+        "experimental/harness/curator/__init__.py": "",
+        "experimental/harness/curator/strategy.py": "def create(): pass\n",
         "experimental/simulation/cases/showcase/transcript/3-round-1.md": "# round 1\n\nquote-sheet-correct: fail\n",
     }.items():
         (repository / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -620,16 +804,18 @@ def test_a_registered_source_that_climbs_to_the_experimental_package_does_not_wi
         facts={},
         sources={
             "strategy.create": {
-                "path": str(repository / "experimental/curator/strategy.py"),
+                "path": str(repository / "experimental/harness/curator/strategy.py"),
                 "root": str(repository / "experimental"),
-                "digest": hashlib.sha256((repository / "experimental/curator/strategy.py").read_bytes()).hexdigest(),
+                "digest": hashlib.sha256(
+                    (repository / "experimental/harness/curator/strategy.py").read_bytes()
+                ).hexdigest(),
             }
         },
     )
     exploration = Exploration(
-        Config(), inspection, repository=repository, source_paths=("experimental/curator",), root=tmp_path / "x"
+        Config(), inspection, repository=repository, source_paths=("experimental/harness/curator",), root=tmp_path / "x"
     )
-    assert set(exploration.mounts) == {"source/experimental/curator"}
+    assert set(exploration.mounts) == {"source/experimental/harness/curator"}
     assert not (exploration.root / "source" / "experimental" / "simulation").exists()
 
 
@@ -640,13 +826,13 @@ def test_the_employees_curator_is_kept_from_the_simulation_its_judges_and_the_sc
         "tests/test_raven_helper.py": "def test_value(): pass\n",
         "tests/test_simulation_cards.py": "def test_cards(): pass\n",
         "tests/test_analyst_run.py": "def test_run(): pass\n",
-        "tests/test_cards_again.py": "from experimental.simulation.cards import draw\n",
-        "tests/test_loop.py": "from experimental.iteration.run import run\n",
+        "tests/test_cards_again.py": "from experimental.simulation.bench.cards import draw\n",
+        "tests/test_loop.py": "from experimental.harness.loop.run import run\n",
         "tests/test_named.py": f"SCENARIO = '{TRAVEL.name}'\n",
         "tests/test_scenario_contract.py": "def test_contract(): pass\n",
         "tests/test_assessor_human.py": "def test_human(): pass\n",
-        "tests/test_sealed_again.py": "from experimental.scenario.sealed import Sealed\n",
-        "tests/test_judging.py": "import experimental.assessor.role\n",
+        "tests/test_sealed_again.py": "from experimental.harness.scenario.sealed import Sealed\n",
+        "tests/test_judging.py": "import experimental.harness.assessor.role\n",
     }
     for relative, text in files.items():
         (repository / relative).parent.mkdir(parents=True, exist_ok=True)
@@ -663,11 +849,18 @@ def test_the_employees_curator_is_kept_from_the_simulation_its_judges_and_the_sc
     assert {path.name for path in (exploration.root / "source" / "tests").iterdir()} == {"test_raven_helper.py"}
 
 
-def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path):
+@pytest.mark.parametrize("deliver", ["dialog", "pool"])
+@pytest.mark.parametrize("without", [(), ("plan-deck-sample",)], ids=["complete", "excluded"])
+def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path, deliver, without):
     scenario = Scenario.load(TRAVEL)
+    contract = scenario.contract
+    scenario = scenario.without(without)
     home = tmp_path / "shared-home"
-    (home / "skills" / "brand-design-guide").mkdir(parents=True)
-    (home / "skills" / "brand-design-guide" / "personal.txt").write_text("mine")
+    for directory in ("skills", "uploads"):
+        for name in (*contract.materials, "personal-helper"):
+            folder = home / directory / name
+            folder.mkdir(parents=True)
+            (folder / "personal.txt").write_text("mine")
     (home / "sessions").mkdir()
     (home / "sessions" / "old.jsonl").write_text("{}")
     config = tmp_path / "config.json"
@@ -680,21 +873,74 @@ def test_the_employee_works_from_its_own_copy_of_the_home(tmp_path):
         )
     )
     root = tmp_path / "run"
-    contract = scenario.contract
-    worker = hire(contract, config, workdir=tmp_path, root=root, home=home, guard=Guard("partner", Sealed.of(["x"])))
+    workdir = tmp_path / "work"
+    worker = hire(contract, config, workdir=workdir, root=root, home=home, guard=Guard("partner", Sealed.of(["x"])))
     assert worker.withheld == withheld(contract)
     assert isinstance(worker.provider_factory, GuardedFactory) and worker.provider_factory.guard.role == "partner"
     assert hire(contract, config, workdir=tmp_path, root=tmp_path / "plain", home=home).provider_factory is None
     pool = skills(worker)
     assert pool == root / AREA / HOME / "skills" and (pool / "brand-design-guide" / "personal.txt").is_file()
     assert not (root / AREA / HOME / "sessions").exists()
+    uploads, shared = root / AREA / HOME / "uploads", workdir / "uploads"
+    for name in (*contract.materials, "personal-helper"):
+        folder = shared / name
+        folder.mkdir(parents=True)
+        (folder / "personal.txt").write_text("mine")
+    agency = Agency(scenario, Provider(), pool, workdir=workdir, deliver=deliver, uploads=uploads, shared=shared)
+    agency.prepare()
+    assert agency.released == list(scenario.initial)
+    for place in (pool, uploads, shared):
+        expected = set(scenario.initial) if (place == pool) == (deliver == "pool") else set()
+        assert {name for name in contract.materials if (place / name).exists()} == expected
+        for name in expected:
+            assert (place / name / "SKILL.md").read_bytes() == (scenario.materials[name] / "SKILL.md").read_bytes()
+        assert not any((place / name / "personal.txt").exists() for name in contract.materials)
+        assert (place / "personal-helper" / "personal.txt").read_text() == "mine"
+    for directory in ("skills", "uploads"):
+        assert all((home / directory / name / "personal.txt").read_text() == "mine" for name in contract.materials)
+
+
+@pytest.mark.parametrize("kind", ["file", "symlink"])
+def test_excluded_material_paths_are_removed_without_following_links(tmp_path, kind):
+    scenario = Scenario.load(TRAVEL).without(["plan-deck-sample"])
+    pool = tmp_path / "skills"
+    pool.mkdir()
+    retained = tmp_path / "original-material"
+    retained.mkdir()
+    (retained / "sample.txt").write_text("keep this source")
+    stale = pool / "plan-deck-sample"
+    if kind == "symlink":
+        stale.symlink_to(retained, target_is_directory=True)
+    else:
+        stale.write_text("stale material")
     Agency(scenario, Provider(), pool, workdir=tmp_path, deliver="pool").prepare()
-    assert not (pool / "brand-design-guide").exists() and (pool / "service-sop" / "SKILL.md").is_file()
-    assert (home / "skills" / "brand-design-guide" / "personal.txt").read_text() == "mine"
+    assert not stale.exists() and not stale.is_symlink()
+    assert (retained / "sample.txt").read_text() == "keep this source"
+
+
+def test_initial_material_cleanup_failure_prevents_handover(tmp_path, monkeypatch):
+    scenario = Scenario.load(TRAVEL)
+    pool = tmp_path / "skills"
+    stale = pool / "service-sop" / "personal.txt"
+    stale.parent.mkdir(parents=True)
+    stale.write_text("stale material")
+    unlink = os.unlink
+
+    def refuse_stale_file(path, *args, **kwargs):
+        if Path(path).name == "personal.txt":
+            raise PermissionError("cannot remove stale material")
+        return unlink(path, *args, **kwargs)
+
+    monkeypatch.setattr(os, "unlink", refuse_stale_file)
+    agency = Agency(scenario, Provider(), pool, workdir=tmp_path, deliver="pool")
+    with pytest.raises(PermissionError):
+        agency.prepare()
+    assert not agency.released
+    assert not (pool / "service-sop" / "SKILL.md").exists()
 
 
 def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness(tmp_path, monkeypatch):
-    from experimental.automation import employee
+    from experimental.cultivation import employee
     from raven.config.schema import ThirdPartyAcpSubagentConfig
 
     def row(name, enabled=True):
@@ -719,8 +965,10 @@ def test_the_employee_houses_its_external_subagents_homes_beside_its_own_harness
 
 
 def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_provider(tmp_path, monkeypatch):
-    from experimental.automation import employee
+    from experimental.cultivation import employee
+    from raven.config.loader import load_config
     from raven.config.schema import ThirdPartyAcpSubagentConfig
+    from raven.providers.endpoints import provider_endpoints
 
     def row(name):
         return ThirdPartyAcpSubagentConfig(name=name, kind="acp", command=f"py /agents/{name}/run.py", enabled=True)
@@ -728,20 +976,41 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
     folder = tmp_path / "product"
     folder.mkdir()
     shipped = {
-        "agents": {"defaults": {"model": "vendor/other", "provider": "ppt", "maxTokens": 9, "reasoningEffort": "max"}},
+        "agents": {
+            "defaults": {
+                "model": "vendor/other",
+                "provider": "ppt",
+                "maxTokens": 9,
+                "reasoningEffort": "max",
+                "temperature": 0.9,
+                "llmCallTimeout": 900,
+            }
+        },
         "providers": {"ppt": {"apiBase": "https://gateway.example/v1"}},
         "acp": {
-            "modes": {"medium": {"reasoningEffort": "low"}, "high": {"reasoningEffort": "high"}},
+            "modes": {
+                "medium": {"name": "Medium", "reasoningEffort": "low"},
+                "high": {"name": "High", "reasoningEffort": "high"},
+            },
             "defaultMode": "high",
         },
         "tools": {"disabledTools": ["spawn"]},
         "plugins": {"config": {"research-flow": {"verify": {"reasoningEffort": "low", "maxTokens": 16384}}}},
     }
     (folder / "config.json").write_text(json.dumps(shipped))
-    monkeypatch.setattr(employee, "discover_product_rows", lambda: [row("Raven-PPT"), row("Raven-Research")])
+    monkeypatch.setattr(
+        employee, "discover_product_rows", lambda: [row("Raven-PPT"), row("Raven-Research"), row("Raven-Oncall")]
+    )
     monkeypatch.setattr(employee, "product_folder", lambda name: folder)
+    connection = {
+        "apiKey": "ds-key",
+        "apiBase": "https://employee-gateway.example/v1",
+        "extraHeaders": {"X-Route": "employee"},
+        "protocol": "chat",
+        "modelProtocols": {"deepseek/deepseek-flash": "chat"},
+    }
     settings = {
-        "providers": {"deepseek": {"apiKey": "ds-key"}},
+        "providers": {"deepseek": connection},
         "permissions": {"mode": "full", "judgeTimeoutSeconds": 60},
         "acp": {"defaultMode": "medium"},
         "tools": {"restrictToWorkspace": True},
@@ -764,7 +1033,11 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
         subagent_model="deepseek/deepseek-flash",
     )
     rows = {item.name: item for item in worker.baseline.config.subagents.agents}
-    for name, secret in (("Raven-PPT", "PPT_API_KEY"), ("Raven-Research", "RESEARCH_API_KEY")):
+    for name, secret in (
+        ("Raven-PPT", "PPT_API_KEY"),
+        ("Raven-Research", "RESEARCH_API_KEY"),
+        ("Raven-Oncall", "ONCALL_API_KEY"),
+    ):
         copy = tmp_path / "run" / AREA / "deployment" / f"{name.lower()}.json"
         written = json.loads(copy.read_text())
         assert rows[name].env[secret] == "ds-key" and rows[name].command.endswith(f"--config {copy}")
@@ -774,13 +1047,24 @@ def test_the_housed_subagents_run_on_a_model_of_their_own_through_the_employees_
             "maxTokens": 9,
             "reasoningEffort": "low",
             "contextWindowTokens": 1048576,
+            "temperature": 0.9,
+            "llmCallTimeout": 900,
         }
-        assert written["providers"]["deepseek"] == {"apiKey": "ds-key"} and copy.stat().st_mode & 0o777 == 0o600
+        assert written["providers"]["deepseek"] == {**connection, "models": ["deepseek/deepseek-flash"]}
+        assert copy.stat().st_mode & 0o777 == 0o600
+        restored = load_config(copy)
+        assert restored.get_api_base() == connection["apiBase"]
+        assert restored.get_provider().extra_headers == connection["extraHeaders"]
+        assert provider_endpoints(restored.get_provider()) == provider_endpoints(
+            worker.baseline.config.providers.deepseek
+        )
+        assert restored.agents.defaults.temperature == 0.9 and restored.agents.defaults.llm_call_timeout == 900
         assert written["permissions"] == {"mode": "full", "judgeTimeoutSeconds": 60.0}
         # The shipped high tier would run every deck call at high effort over the pinned low one.
         assert written["acp"]["defaultMode"] == "medium"
-        # A product's shell reaches past the run's bounds, so products run without one.
-        assert written["tools"]["disabledTools"] == ["spawn", "ask_user", "exec"]
+        assert written["tools"]["disabledTools"] == (
+            ["spawn", "ask_user"] if name == "Raven-Oncall" else ["spawn", "ask_user", "exec"]
+        )
         # The employee's workspace fence goes along: a product reads only its home and the session's workdir.
         assert written["tools"]["restrictToWorkspace"] is True
         # A thinking DeepSeek model refuses the verify gate's forced verdict call, and the gate then passes every draft.
@@ -820,14 +1104,14 @@ def test_a_raven_child_on_a_gateway_model_takes_the_employee_provider(monkeypatc
 
 
 async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path, monkeypatch):
-    from experimental.automation.traveller import opened, transcript
-    from experimental.curator.raven_adapter.worker import Execution
+    from experimental.harness.participation.views import opened, transcript
+    from experimental.harness.raven_adapter.worker import Execution
 
     if shutil.which("soffice") is None:
         from pptx import Presentation
 
-        from experimental.automation import files
-        from experimental.automation.render import cached
+        from experimental.harness.participation import files
+        from experimental.harness.participation.render import cached
 
         def draw(file, out, width):
             for number in range(1, len(Presentation(file).slides) + 1):
@@ -849,7 +1133,7 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
         Exchange("Fix it", Execution("t2", [], records, {}, "a", (str(second),))),
         Exchange("The deck?", Execution("t3", [], records, {}, "a", (str(deck),))),
     ]
-    monkeypatch.setattr("experimental.counterpart.owner.vision_verdict", lambda model: model == "sees")
+    monkeypatch.setattr("experimental.cultivation.counterpart.owner.vision_verdict", lambda model: model == "sees")
     provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Good page."}))
     await Agency(scenario, provider, tmp_path / "skills", workdir=tmp_path, deliver="pool", model="sees").evaluate(
         {"student": exchanges}
@@ -881,8 +1165,8 @@ async def test_the_agency_reads_the_last_version_of_each_delivered_file(tmp_path
 
 
 def test_the_agency_reads_what_the_research_colleague_reported_in_each_playbook_run(tmp_path):
-    from experimental.curator.raven_adapter.worker import Execution
-    from experimental.simulation.agency import research
+    from experimental.harness.raven_adapter.worker import Execution
+    from experimental.simulation.cases.travel_agency.owner import research
 
     found, drafted = tmp_path / "research.out.md", tmp_path / "brief.out.md"
     found.write_text("G7311 Shanghai to Huangshan, 3h (source: 12306)")
@@ -899,7 +1183,7 @@ def test_the_agency_reads_what_the_research_colleague_reported_in_each_playbook_
 
 
 async def test_the_owner_gets_the_played_card_and_its_figures_and_still_decides_every_verdict(tmp_path):
-    from experimental.simulation.cards import Drawn, Trip
+    from experimental.simulation.bench.cards import Drawn, Trip
 
     scenario = Scenario.load(TRAVEL)
     sheet = scenario.text("service-sop").split("```")[1].strip()
@@ -933,14 +1217,15 @@ def test_a_scenario_without_a_material_loses_it_from_its_materials_opening_set_a
     control = scenario.without(["plan-deck-sample"])
     assert "plan-deck-sample" in scenario.materials and "plan-deck-sample" not in control.materials
     assert "plan-deck-sample" not in control.initial and len(control.initial) == len(scenario.initial) - 1
-    assert all("plan-deck-sample" not in step for steps in control.plans.values() for step in steps)
-    assert control.disclosure("by-stage").steps == control.plans["by-stage"]
+    assert all("plan-deck-sample" not in step for plan in control.plans.values() for step in plan.steps)
+    assert control.disclosure("by-stage").steps == control.plans["by-stage"].steps
+    assert control.disclosure("by-stage").labels == scenario.plans["by-stage"].labels
     with pytest.raises(ValueError, match="brochure"):
         scenario.without(["brochure"])
 
 
 def test_the_employees_workdir_is_new_and_never_the_repository(tmp_path):
-    from experimental.automation.employee import workplace
+    from experimental.cultivation.employee import workplace
 
     repository = Path(__file__).resolve().parents[1]
     for bad in (repository, repository / "experimental", repository.parent):
@@ -955,7 +1240,7 @@ def test_the_employees_workdir_is_new_and_never_the_repository(tmp_path):
 
 def test_each_child_reaches_only_its_own_home_and_what_its_parent_hands_it(tmp_path, monkeypatch):
     """The children `hire` wires are prepared as the worker would prepare them on start."""
-    from experimental.automation import employee
+    from experimental.cultivation import employee
 
     monkeypatch.setattr(employee, "discover_product_rows", lambda: [])
     config = tmp_path / "config.json"
@@ -979,7 +1264,7 @@ def test_each_child_reaches_only_its_own_home_and_what_its_parent_hands_it(tmp_p
 
 
 async def test_the_owner_hands_over_a_candidate_it_never_confirmed_as_files_and_never_voices_it(tmp_path):
-    from experimental.scenario import load
+    from experimental.harness.scenario import load
     from tests.research_helpers import make_scenario
 
     CONFIRMED, CANDIDATES = "adopted-method", "candidate-method"
@@ -991,7 +1276,7 @@ async def test_the_owner_hands_over_a_candidate_it_never_confirmed_as_files_and_
         folder.mkdir()
         (folder / "SKILL.md").write_text(f"---\nname: {name}\ndescription: Supplied method\n---\n{text}\n")
         contract["materials"][name] = {"kind": "norm"}
-        spec["plans"]["two"][1].append(name)
+        spec["plans"]["two"]["steps"][1].append(name)
     (root / "contract.json").write_text(json.dumps(contract))
     (root / "scenario.json").write_text(json.dumps(spec))
     (root / "provenance.json").write_text(
@@ -1038,3 +1323,202 @@ def test_held_out_cards_are_played_apart_from_the_cards_played_for_feedback():
         drills(personas, None, ["nobody"])
     with pytest.raises(ValueError, match="leaves nothing to play"):
         drills(personas, None, names)
+
+
+def test_cards_and_exam_named_on_the_command_line_each_replace_their_part_of_the_schedule():
+    from experimental.harness.scenario.contract import Schedule
+    from experimental.simulation.__main__ import exam_rounds, scheduled
+
+    personas = Scenario.load(TRAVEL).personas
+    names = lambda cards: [card.name for card in cards]  # noqa: E731
+    schedule = Schedule(rounds=(("family",), ("student",)), holdout=("returning",), holdout_rounds=(1, 2))
+    rounds, held = scheduled(personas, schedule)
+    assert [names(step) for step in rounds] == [["family"], ["student"]] and names(held) == ["returning"]
+    rounds, held = scheduled(personas, schedule, cards=["premium"])
+    assert [names(step) for step in rounds] == [["premium"]] and names(held) == ["returning"]
+    rounds, held = scheduled(personas, schedule, holdout=["professional"])
+    assert [names(step) for step in rounds] == [["family"], ["student"]] and names(held) == ["professional"]
+    with pytest.raises(ValueError, match="not also played"):
+        scheduled(personas, schedule, holdout=["family"])
+    rounds, held = scheduled(personas, Schedule(holdout=("returning",)))
+    assert "returning" not in names(rounds[0]) and names(held) == ["returning"]
+    assert exam_rounds(schedule, None, 3) == frozenset({1, 2}) and exam_rounds(schedule, [3], 3) == frozenset({3})
+    assert exam_rounds(Schedule(), None, 3) is None
+    with pytest.raises(ValueError, match="rounds \\[4\\]"):
+        exam_rounds(schedule, [1, 4], 3)
+    assert exam_rounds(schedule, [0, 3], 3) == frozenset({0, 3})
+    with pytest.raises(ValueError, match="rounds \\[-1\\]"):
+        exam_rounds(schedule, [-1], 3)
+
+
+def test_a_case_is_judged_by_the_owner_of_the_bundled_case_it_is_named_after(tmp_path):
+    from experimental.simulation.__main__ import owner_of
+    from experimental.simulation.cases.brand_strategist.owner import BrandOwner
+
+    assert owner_of(Scenario.load(BUNDLED / "brand_strategist")) is BrandOwner
+    assert owner_of(Scenario.load(TRAVEL)) is Agency
+    shutil.copytree(BUNDLED / "brand_strategist", tmp_path / "brand_strategist")
+    assert owner_of(Scenario.load(tmp_path / "brand_strategist")) is BrandOwner
+    shutil.copytree(BUNDLED / "travel_agency", tmp_path / "elsewhere")
+    with pytest.raises(ValueError, match="not a bundled case"):
+        owner_of(Scenario.load(tmp_path / "elsewhere"))
+    (tmp_path / "elsewhere" / "owner.py").unlink()
+    assert owner_of(Scenario.load(tmp_path / "elsewhere")) is Agency
+
+
+def test_a_played_card_carries_the_expected_answer_its_case_labels(tmp_path):
+    import json
+    import random
+
+    from experimental.harness.scenario.contract import frontmatter
+
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    card = root / "personas" / "student.md"
+    head, body = frontmatter(card.read_text())
+    card.write_text("---\n" + json.dumps({**head, "expected": "Quote the value package only."}) + "\n---\n" + body)
+    (student,) = [persona for persona in Scenario.load(root).personas if persona.name == "student"]
+    assert student.play(random.Random(1)).expected == "Quote the value package only."
+
+
+async def test_the_owner_judges_a_labelled_card_with_its_expected_answer(tmp_path):
+    from experimental.simulation.bench.cards import Drawn
+
+    scenario = Scenario.load(TRAVEL)
+    provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Fine."}))
+    played = {"student": Drawn("student", "You want a cheap trip.", None, "Only the value package fits the budget.")}
+    agency = Agency(
+        scenario,
+        provider,
+        tmp_path / "skills",
+        workdir=tmp_path,
+        deliver="pool",
+        cards=lambda: played,
+        handouts=lambda sessions: {"student": {"proof.md": "The purchased voucher lasts 90 days."}},
+        records=tmp_path / "run",
+        model="sim",
+    )
+    agency.prepare()
+    await agency.evaluate({"student": [exchange("Cheap trip?", "The value package fits.")]})
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["expected"] == {"student": "Only the value package fits the budget."}
+    assert packet["handouts"]["student"]["proof.md"] == "The purchased voucher lasts 90 days."
+    assert "price-list" in packet["material_files"]
+    (row,) = [json.loads(line) for line in (tmp_path / "run" / "references.jsonl").read_text().splitlines()]
+    assert row["expected"] == "Only the value package fits the budget."
+
+
+def test_evaluator_sources_include_visible_facts_and_nested_files_without_releasing_hidden_materials(tmp_path):
+    from dataclasses import replace
+
+    folder = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, folder)
+    nested = folder / "materials/price-list/details.md"
+    nested.write_text("Adopted factual detail.")
+    scenario = Scenario.load(folder)
+    material = scenario.contract.materials["price-list"].model_copy(update={"visibility": frozenset({"counterpart"})})
+    scenario = replace(
+        scenario,
+        contract=scenario.contract.model_copy(
+            update={
+                "materials": {**scenario.contract.materials, "price-list": material},
+            }
+        ),
+    )
+    assert scenario.evidence_materials(["price-list"], role="analyst") == {}
+    evidence = scenario.evidence_materials(["price-list"], role="counterpart")
+    assert "price-list" in evidence
+    assert evidence["price-list/details.md"] == "Adopted factual detail."
+    assert "price-list" not in scenario.standing_norms(["price-list"])
+    assert scenario.evidence_materials(["service-sop"], role="counterpart").keys() == {"service-sop"}
+
+
+def test_judge_receives_each_cards_handouts_without_private_role_or_answer(tmp_path):
+    from experimental.simulation.bench.scenario import handed_evidence
+
+    one, other = tmp_path / "one.md", tmp_path / "other.md"
+    one.write_text("The voucher is valid for 90 days.")
+    other.write_text("An unrelated customer's file.")
+    conversants = {
+        "played": SimpleNamespace(handed=(one,), card=SimpleNamespace(text="Private role", expected="Private answer")),
+        "unplayed": SimpleNamespace(handed=(other,)),
+    }
+    evidence = handed_evidence({"played": []}, conversants)
+    assert evidence == {"played": {"handouts": {"one.md": "The voucher is valid for 90 days."}}}
+
+
+async def test_owner_requires_a_declared_condition_and_evidence_for_not_applicable(tmp_path):
+    from dataclasses import replace
+
+    scenario, agency = owner(tmp_path, Provider())
+    review = scorecard(scenario)
+    review["verdicts"][0].update(result="not_applicable", note="All requested dates precede the effective date.")
+    names = list(handles(scenario.criteria).values())
+    sessions = {"student": [exchange("Use the earlier date.", "Understood.")]}
+    with pytest.raises(ValueError, match="unconditional"):
+        agency._parse(sessions, review, names)
+    first = scenario.criteria[0].model_copy(
+        update={"applies_when": "The requested date is after the policy takes effect."}
+    )
+    agency.scenario = replace(scenario, criteria=(first, *scenario.criteria[1:]))
+    review["verdicts"][0]["note"] = " "
+    with pytest.raises(ValueError, match="evidenced explanation"):
+        agency._parse(sessions, review, names)
+    review["verdicts"][0]["note"] = "All requested dates precede the effective date."
+    agency.provider = Provider(response(REVIEW, review))
+    signal = await agency.evaluate(sessions)
+    assert signal.satisfied is True
+    kept = next((tmp_path / "run" / "analysis").glob("*.json"))
+    measured = json.loads(kept.read_text())["scorecard"]["items"][0]
+    assert measured["result"] == "not_applicable" and measured["note"] == review["verdicts"][0]["note"]
+    agency.scenario = replace(scenario, criteria=(first,))
+    agency.provider = Provider(response(REVIEW, {**review, "verdicts": review["verdicts"][:1]}))
+    assert (await agency.evaluate(sessions)).satisfied is None
+
+
+async def test_private_owner_evidence_is_retained_exactly_without_entering_feedback(tmp_path):
+    scenario = Scenario.load(TRAVEL)
+    provider = Provider(response(REVIEW, scorecard(scenario, remark="Please improve the process.")))
+    scenario, agency = owner(tmp_path, provider)
+    body = "Internal filed note. " + "Detail retained beyond two hundred characters. " * 20
+    agency._filed = lambda name: {"workdir/department/review.md": body}
+    agency._provided_handouts = lambda sessions: {"student": {"customer.md": "Supplied customer source."}}
+    sessions = {"student": [exchange("Please check the request.", "I filed it.")]}
+    spoken = await agency.evaluate(sessions)
+    kept = json.loads(next((tmp_path / "run/analysis").glob("*.json")).read_text())
+    submitted = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert kept["evidence"] == submitted
+    assert kept["evidence"]["filed"]["student"]["workdir/department/review.md"] == body
+    assert kept["execution_ids"] == {"student": [sessions["student"][0].execution.turn_id]}
+    assert kept["rubric_version"] and kept["assessment_id"]
+    assert kept["criterion_handles"] == handles(scenario.criteria)
+    assert {row["id"] for row in kept["criteria"]} == {criterion.id for criterion in scenario.criteria}
+    assert "Internal filed note" not in spoken.text and "Supplied customer source" not in spoken.text
+    assert spoken.items == () and spoken.metrics == {}
+
+
+def test_filed_evidence_never_reads_escaped_current_or_baseline_links(tmp_path, monkeypatch):
+    from experimental.cultivation.counterpart.owner import written
+
+    current, before = tmp_path / "current", tmp_path / "before"
+    current.mkdir()
+    before.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("Outside content must not enter the grader packet.")
+    (current / "escape.md").symlink_to(outside)
+    (current / "comparison.md").write_text("A current file with an unverifiable baseline.")
+    (before / "comparison.md").symlink_to(outside)
+    (current / "valid.md").write_text("A valid in-scope record.")
+    (current / "alias.md").symlink_to(current / "valid.md")
+    original = Path.read_bytes
+
+    def checked(path):
+        assert path.resolve() != outside.resolve()
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", checked)
+    files = written(current, before, label="workdir")
+    assert files == {"workdir/alias.md": "A valid in-scope record.", "workdir/valid.md": "A valid in-scope record."}
+    aliased_root = tmp_path / "root-link"
+    aliased_root.symlink_to(current, target_is_directory=True)
+    assert written(aliased_root, before, label="workdir") == {}

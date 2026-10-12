@@ -5,7 +5,7 @@ import json
 
 import pytest
 
-from experimental.research.web import READ, SEARCH, Web
+from experimental.cultivation.collector.web import READ, SEARCH, Web
 from raven.config.schema import Config
 
 
@@ -64,7 +64,7 @@ def test_the_web_is_built_from_the_configured_vendors_and_searching_needs_a_key(
 
 @pytest.mark.asyncio
 async def test_verification_expands_a_truncated_view_before_refusing_a_later_passage():
-    from experimental.research.inquiry import Inquiry, verify
+    from experimental.cultivation.collector.inquiry import Inquiry, verify
     from tests.test_research_inquiry import FOUND, PAGE, TEXT
 
     class TruncatedFetch(Fetch):

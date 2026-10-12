@@ -4,17 +4,17 @@ import json
 
 import pytest
 
-from experimental.iteration.compartment import BoundaryError
-from experimental.research.scenario import (
+from experimental.cultivation.collector.scenario import (
     opening_feedback,
     release_guard,
     released_materials,
     scenario_request,
     stage_released,
 )
-from experimental.scenario import load
-from experimental.scenario.digest import digest
-from experimental.simulation.scenario import Scenario
+from experimental.harness.participation.compartment import BoundaryError
+from experimental.harness.scenario import load
+from experimental.harness.scenario.digest import digest
+from experimental.simulation.bench.scenario import Scenario
 from tests.research_helpers import CHECK, make_scenario
 
 
@@ -53,8 +53,8 @@ def test_given_reference_is_not_automatically_a_standing_norm(tmp_path):
 
 
 def test_offline_opening_matches_the_actual_dialog_handover(tmp_path):
-    from experimental.iteration.hearing import heard
-    from experimental.simulation.agency import Agency
+    from experimental.harness.participation.hearing import heard
+    from experimental.simulation.cases.travel_agency.owner import Agency
 
     source = load(make_scenario(tmp_path / "shop"))
     owner = Agency(

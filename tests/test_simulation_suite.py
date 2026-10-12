@@ -10,9 +10,9 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.scenario import Disclosure
+from experimental.harness.scenario import Disclosure
 from experimental.simulation import suite
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
 
 
 def span(cost, session=None):
@@ -37,7 +37,7 @@ def arguments(tmp_path, **overrides):
         "effort": [],
         "cards": ["family", "student"],
         "scenario": BUNDLED / "travel_agency",
-        "chains": [],
+        "discloses": [],
         "partitions": None,
         "random_partitions": 0,
         "seed": 7,
@@ -84,6 +84,7 @@ def test_a_call_its_provider_did_not_price_is_priced_from_its_tokens():
     cached = {**usage, "llm.usage.input_tokens": 0, "llm.usage.cache_read_tokens": 1_000_000}
     assert round(suite.call_cost({"llm.model": "deepseek-flash", **cached}), 6) == round(0.006 + 0.60, 6)
     assert suite.call_cost({"llm.model": "deepseek/deepseek-flash", "llm.usage.cost_total": 0.5, **usage}) == 0.5
+    assert suite.call_cost({"llm.model": "deepseek/deepseek-flash", "llm.usage.cost_total": 0, **usage}) == 0
     assert suite.call_cost({"llm.model": "unknown/model", **usage}) == 0
 
 
@@ -143,7 +144,7 @@ def test_scrub_also_redacts_a_credential_a_harness_read_out_of_a_configuration_c
 def test_scrub_reaches_the_product_configurations_pinned_for_the_employee_and_its_replicas(tmp_path, monkeypatch):
     from types import SimpleNamespace
 
-    from experimental.automation import employee
+    from experimental.cultivation import employee
     from raven.config.schema import Config
 
     folder = tmp_path / "product"
@@ -172,7 +173,7 @@ def test_scrub_reaches_the_product_configurations_pinned_for_the_employee_and_it
 
 def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     argv = suite.command(
-        ["--chain", "documents"],
+        ["--disclose", "all"],
         arguments(tmp_path),
         config=tmp_path / "c.json",
         workdir=tmp_path / "w",
@@ -180,7 +181,12 @@ def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     )
     assert argv[:3] == [sys.executable, "-m", "experimental.simulation"]
     flat = " ".join(argv[3:])
-    assert "--chain documents" in flat and "--rounds 4" in flat and "--cards family student" in flat
+    assert (
+        "--disclose all" in flat
+        and "--deliver dialog" in flat
+        and "--rounds 4" in flat
+        and "--cards family student" in flat
+    )
     assert "--curator " not in flat and "--targets" not in flat
     assert "--model sub-harness=z-ai/glm-5.3-flash" in flat and "analyst=" not in flat
     assert "--model curator=z-ai/glm-5.3 --model counterpart=z-ai/glm-5.3" in flat
@@ -197,7 +203,7 @@ def test_the_command_names_every_setting_so_a_run_can_be_reproduced(tmp_path):
     assert "--analysis" not in budgets and "--analysis" not in flat
     efforts = " ".join(
         suite.command(
-            ["--chain", "staged"],
+            ["--disclose", "staged"],
             arguments(tmp_path, effort=["curator=high", "conversant=low"]),
             config=tmp_path / "c.json",
             workdir=tmp_path / "w",
@@ -235,7 +241,7 @@ def test_a_stopped_run_is_marked_in_its_record_and_finished_with_its_evidence(tm
     (state / "run.log").write_text("started with sk-or-v1-" + "a" * 40 + ", Bearer tok.en\n")
     orphan = "import subprocess, sys, time; subprocess.Popen([sys.executable, '-c', 'import time; time.sleep(60)'], start_new_session=True); time.sleep(60)"
     process = subprocess.Popen([sys.executable, "-c", orphan], start_new_session=True)
-    run = suite.Run("staged", ["--chain", "staged"], "staged-1", state, records, process=process, started=1.0)
+    run = suite.Run("staged", ["--disclose", "staged"], "staged-1", state, records, process=process, started=1.0)
     deadline = time.time() + 10
     while not suite.descendants(process.pid) and time.time() < deadline:
         time.sleep(0.1)
@@ -256,7 +262,7 @@ def test_a_stopped_run_is_marked_in_its_record_and_finished_with_its_evidence(tm
     assert (records / "run.log").read_text() == "started with <redacted>, <redacted>\n"
     assert not (records / "config.json").exists()
     written = json.loads((records / suite.SUMMARY).read_text())
-    assert written["name"] == "staged-1" and written["plan"] == ["--chain", "staged"] and "value" in written
+    assert written["name"] == "staged-1" and written["plan"] == ["--disclose", "staged"] and "value" in written
     assert "secret" not in Path(records / "gen" / "config.json").read_text()
 
 
@@ -280,11 +286,12 @@ def test_random_partitions_cover_every_material_and_fit_before_the_last_round():
         suite.random_partition(materials, 4, rng, materials)
 
 
-def test_candidates_join_chains_given_partitions_and_seeded_random_ones(tmp_path):
+def test_candidates_join_disclosure_plans_given_partitions_and_seeded_random_ones(tmp_path):
     given = tmp_path / "partitions.json"
     given.write_text(json.dumps([[["service-sop"], ["price-list"]]]))
-    args = arguments(tmp_path, chains=["staged", "by-stage"], partitions=given, random_partitions=2)
+    args = arguments(tmp_path, discloses=["none", "by-stage"], partitions=given, random_partitions=2)
     found = suite.candidates(args)
-    assert [label for label, _ in found] == ["staged", "by-stage", "p1", "r7-1", "r7-2"]
+    assert [label for label, _ in found] == ["none", "by-stage", "p1", "r7-1", "r7-2"]
+    assert found[0][1] == ["--disclose", "none"] and found[1][1] == ["--disclose", "by-stage"]
     assert found[2][1] == ["--partition", json.dumps([["service-sop"], ["price-list"]])]
     assert suite.candidates(args) == found

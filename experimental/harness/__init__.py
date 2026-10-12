@@ -1,0 +1,1 @@
+"""A Harness and the generic machinery that improves it round by round: its contract, its binding to the Raven runtime, the Curator that revises it, the assessors and analyst that measure it, the governed experience, the loop and what every participant shares. Nothing here knows an employee, a counterpart or a case."""

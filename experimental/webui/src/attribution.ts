@@ -5,7 +5,7 @@
    which attributor made them and what it spent, the selection that grounded
    each target on them, and whether each requirement held in the round after
    its revision. `held` is the loop's own reading, kept in the typed history
-   (experimental/iteration/ledger.py decides it); this page only shows it. */
+   (experimental/harness/loop/ledger.py decides it); this page only shows it. */
 
 import type { AttributionRecord, AttributorIdentity, Curation, Diagnosis, DiagnosisState, Generated, HistoryEntry, Run, Selection } from './model'
 

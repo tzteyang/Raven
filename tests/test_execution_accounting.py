@@ -379,6 +379,22 @@ async def test_a_returned_model_error_is_an_error_at_both_levels(tmp_path, monke
     assert next(row for row in report["spans"] if row["name"] == "llm.call")["status"] == "error"
 
 
+def test_experimental_cost_readers_share_the_ledger_and_never_add_legacy_totals(tmp_path):
+    from experimental.simulation.bench.record import _cost
+    from experimental.simulation.suite import spend
+    from raven.observability.report import cost
+
+    (tmp_path / "suite-summary.json").write_text(json.dumps({"spend": {"total": 999}}))
+    with execution.run(tmp_path):
+        with execution.attempt("test", "model") as request:
+            request.usage({"cost_usd": 0})
+        with execution.attempt("test", "model"):
+            pass
+    expected = cost(read(tmp_path))
+    assert _cost(tmp_path, None) == spend(tmp_path)["accounting"] == expected
+    assert expected["total"] == 0 and expected["missing_calls"] == 1
+
+
 def test_every_request_is_attributed_to_one_part_by_the_session_it_ran_under(tmp_path):
     from raven.observability.report import cost
 
@@ -395,6 +411,19 @@ def test_every_request_is_attributed_to_one_part_by_the_session_it_ran_under(tmp
     assert sorted(row["part"] for row in report["attempts"]) == ["employee", "research", "simulation", "subagents"]
     assert cost(report)["by_part"] == {"simulation": 1, "employee": 2, "subagents": 4}
     assert cost(report)["quota"] == {"research": 8}
+
+
+def test_a_budget_estimate_never_becomes_reported_spend(tmp_path):
+    from experimental.simulation.suite import over_budget, spend
+
+    with execution.run(tmp_path), execution.attempt("test", "deepseek/deepseek-flash") as request:
+        request.usage({"prompt_tokens": 1_000_000, "completion_tokens": 500_000})
+    amount = spend(tmp_path)
+    assert amount["total"] is None
+    assert amount["budget_total"] == pytest.approx(0.9)
+    assert amount["accounting"]["missing_calls"] == 1
+    assert amount["budget_pricing"]["rates"] and amount["budget_pricing"]["version"]
+    assert over_budget([SimpleNamespace(state=tmp_path, records=tmp_path, started=1)], 0.8)
 
 
 @pytest.mark.asyncio
@@ -519,6 +548,21 @@ async def test_usage_in_an_http_error_is_retained(adapter, tmp_path, monkeypatch
     assert report["totals"]["cost_usd"] == 0.2
     assert report["totals"]["output_tokens"] == 4
     assert report["attempts"][0]["status"] == "error"
+
+
+def test_web_reader_selects_only_the_indexed_execution_run(tmp_path):
+    from experimental.webui.serve import execution_report
+
+    root = tmp_path / "worker"
+    (root / "iteration").mkdir(parents=True)
+    (root / "iteration" / "record.json").write_text(json.dumps({"execution_run_id": "selected"}))
+    for name, output in (("selected", 5), ("other", 100)):
+        with execution.run(root, run_id=name), execution.attempt("test", "model") as request:
+            request.usage({"completion_tokens": output})
+    report = execution_report(tmp_path, "worker/record")
+    assert report["totals"]["output_tokens"] == 5
+    assert execution_report(tmp_path, "../record") is None
+    assert execution_report(tmp_path, "worker/missing") is None
 
 
 @pytest.mark.asyncio

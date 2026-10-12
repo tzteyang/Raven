@@ -1,28 +1,29 @@
-"""Scope, provenance, read-only boundaries and partial failure across live strategy owners."""
+"""Scope, provenance, read-only boundaries and atomic failure across live strategy owners."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.context import ContextRequest, ContextSource
-from experimental.curator.harness.interaction import InteractionScope, InteractionTool
-from experimental.curator.harness.resources import EffectiveCapabilities
-from experimental.curator.raven_adapter.action.contracts import ActionBinding
-from experimental.curator.raven_adapter.action.runtime import BoundAction
-from experimental.curator.raven_adapter.calls import OperationGroup, owner_operation
-from experimental.curator.raven_adapter.context_sources import ContextFrame, SourceContext
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.memory.context import ProjectionOverflowError
-from experimental.curator.raven_adapter.memory.contracts import MemoryBinding
-from experimental.curator.raven_adapter.memory.runtime import BoundMemory
-from experimental.curator.raven_adapter.memory.window import MemoryWindow
-from experimental.curator.raven_adapter.model_input import ModelInput
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.peers import RuntimePeers
-from experimental.curator.raven_adapter.strategy import SESSION
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.context import ContextRequest, ContextSource
+from experimental.harness.contract.interaction import InteractionScope, InteractionTool
+from experimental.harness.contract.resources import EffectiveCapabilities
+from experimental.harness.raven_adapter.action.contracts import ActionBinding
+from experimental.harness.raven_adapter.action.runtime import BoundAction
+from experimental.harness.raven_adapter.calls import OperationGroup, owner_operation
+from experimental.harness.raven_adapter.context_sources import ContextFrame, SourceContext
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.memory.context import ProjectionOverflowError
+from experimental.harness.raven_adapter.memory.contracts import MemoryBinding
+from experimental.harness.raven_adapter.memory.runtime import BoundMemory
+from experimental.harness.raven_adapter.memory.window import MemoryWindow
+from experimental.harness.raven_adapter.model_input import ModelInput
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.peers import RuntimePeers
+from experimental.harness.raven_adapter.strategy import SESSION
 from raven.contracts.assembled import TokenBudget
 from raven.contracts.harness import ShrinkResult, WindowPressure, WindowState
 
@@ -95,11 +96,12 @@ async def test_parallel_children_cannot_bypass_the_current_strategy_chain():
             await asyncio.create_task(child())
 
 
-CODE = """from pydantic import BaseModel
-from experimental.curator.harness.strategies import MemoryStrategy, ActionStrategy
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView, CompactionRequest
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.action import ActionInteraction, ActionResponse
+CODE = """import asyncio
+from pydantic import BaseModel
+from experimental.harness.contract.strategies import MemoryStrategy, ActionStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView, CompactionRequest
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.action import ActionInteraction, ActionResponse
 
 class Command(BaseModel):
     text: str
@@ -138,6 +140,10 @@ class Action(ActionStrategy[Command, Reply]):
         receipt = await self.peers.interact_memory({"text": request.command.text})
         if request.command.text == "partial":
             raise ValueError("the later action step failed")
+        if request.command.text == "cancelled":
+            raise asyncio.CancelledError
+        if request.command.text == "invalid":
+            return {"invalid": True}
         return ActionResponse(reply=Reply(count=receipt["count"]))
 
 def memory(state, task, *, shared, peers):
@@ -222,17 +228,132 @@ def test_skill_source_projection_targets_the_assembled_user_message_after_a_corr
 
 
 @pytest.mark.asyncio
-async def test_peer_calls_use_one_owner_and_a_later_failure_does_not_undo_another_owner(owners):
+@pytest.mark.parametrize(
+    "failure,error", [("partial", ValueError), ("cancelled", asyncio.CancelledError), ("invalid", ValueError)]
+)
+async def test_peer_chain_failure_restores_all_managed_state_and_checkpoint(owners, failure, error):
     await owners.memory.initialize_context("session:a", owners.frame)
     result = await owners.action.request({"text": "retained"}, origin="strategy")
     assert result["reply"]["count"] == 1
     assert owners.memory.scopes.shared["notes"] == ["retained"]
     assert owners.action.state["calls"] == 1
-    with pytest.raises(ValueError, match="later action step failed"):
-        await owners.action.request({"text": "partial"}, origin="strategy")
+    before = owners.action.path.read_bytes()
+    with pytest.raises(error):
+        await owners.action.request({"text": failure}, origin="strategy")
     assert owners.action.state["calls"] == 1
-    assert owners.memory.scopes.shared["notes"] == ["retained", "partial"]
+    assert owners.memory.scopes.shared["notes"] == ["retained"]
+    assert owners.memory.state["calls"] == 1
+    assert owners.action.path == owners.memory.path
+    assert owners.action.path.read_bytes() == before
+    saved = json.loads(before)["owners"]
+    assert saved["memory"]["shared"]["notes"] == ["retained"]
+    assert saved["action"]["sessions"]["session:a"]["calls"] == 1
     assert any(row["kind"] == "strategy.peer_result" and row["target"] == "memory" for row in owners.recorder.rows)
+
+
+@pytest.mark.asyncio
+async def test_commit_failure_and_caught_inner_error_cannot_leave_partial_progress(owners, monkeypatch):
+    from experimental.harness.raven_adapter import checkpoints
+
+    await owners.memory.initialize_context("session:a", owners.frame)
+    before = owners.memory.path.read_bytes()
+
+    def fail(*args):
+        raise OSError("checkpoint unavailable")
+
+    with monkeypatch.context() as patch:
+        patch.setattr(checkpoints, "_write", fail)
+        with pytest.raises(OSError, match="checkpoint unavailable"):
+            await owners.action.request({"text": "not-committed"}, origin="strategy")
+    assert owners.memory.scopes.shared["notes"] == []
+    assert "calls" not in owners.action.state
+    assert owners.memory.path.read_bytes() == before
+    with pytest.raises(RuntimeError, match="invalidated the peer chain"):
+        async with owners.peers.operations.enter():
+            try:
+                await owners.action.request({"text": "partial"}, origin="strategy")
+            except ValueError:
+                pass
+    assert owners.memory.scopes.shared["notes"] == []
+    assert owners.memory.path.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_failed_chain_discards_new_session_initialization(owners):
+    await owners.memory.initialize_context("session:a", owners.frame)
+    before = owners.memory.path.read_bytes()
+    token = SESSION.set("session:b")
+    try:
+        with pytest.raises(ValueError, match="later action step failed"):
+            async with owners.peers.operations.enter():
+                await owners.memory.initialize_context("session:b", owners.frame)
+                await owners.action.request({"text": "partial"}, origin="strategy")
+        assert "session:b" not in owners.memory.initialized
+        assert "session:b" not in owners.memory.scopes.open
+        assert "session:b" not in owners.action.scopes.open
+        assert owners.memory.path.read_bytes() == before
+        await owners.memory.initialize_context("session:b", owners.frame)
+        assert (await owners.action.request({"text": "retried"}, origin="strategy"))["reply"]["count"] == 1
+    finally:
+        SESSION.reset(token)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("initialized", [False, True])
+async def test_planning_projection_is_provisional_until_whole_chain_commits(owners, tmp_path, initialized):
+    from experimental.harness.raven_adapter.planning.runtime import BoundPlanning
+    from tests.test_harness_curator_planning_binding import binding, files
+
+    package = write_package(tmp_path / "planning-package", Artifact(values={}, files=files()))
+    planning = BoundPlanning(
+        binding(),
+        Task(id="task", text="Verify"),
+        tmp_path / "planning.json",
+        package,
+        owners.recorder,
+        peers=owners.peers,
+        scope=owners.scope,
+    )
+    if initialized:
+        await planning.prepare()
+    before = planning.read()
+    checkpoint = planning.path.read_bytes() if planning.path.exists() else None
+
+    async def outside_view():
+        return planning.read()
+
+    with pytest.raises(ValueError, match="outer failure"):
+        async with owners.peers.operations.enter():
+            await planning.interact({"operation": "complete", "item": "Verify"})
+            assert planning.read()["items"]["Verify"]
+            assert await asyncio.create_task(outside_view()) == before
+            raise ValueError("outer failure")
+    assert planning.read() == before
+    assert ("session:a" in planning.initialized) is initialized
+    assert (planning.path.read_bytes() if planning.path.exists() else None) == checkpoint
+    await planning.interact({"operation": "complete", "item": "Verify"})
+    assert await asyncio.create_task(outside_view()) == {"items": {"Verify": True}, "guarded": False}
+
+
+@pytest.mark.asyncio
+async def test_queued_action_control_is_discarded_when_outer_operation_fails(owners):
+    from experimental.harness.contract.action import ActionDecision
+
+    await owners.memory.initialize_context("session:a", owners.frame)
+    output = owners.action.types["handle_request"][1]
+    reply = output.model_fields["reply"].annotation
+    owners.action.strategy.handle_request = AsyncMock(
+        return_value=output(reply=reply(count=0), decision=ActionDecision(control="finish", reply="Done"))
+    )
+    before = owners.action.path.read_bytes()
+    with pytest.raises(ValueError, match="outer failure"):
+        async with owners.peers.operations.enter():
+            result = await owners.action.request({"text": "finish"}, origin="strategy")
+            assert result["control"]["status"] == "requested"
+            assert owners.action.pending
+            raise ValueError("outer failure")
+    assert owners.action.pending == {}
+    assert owners.action.path.read_bytes() == before
 
 
 @pytest.mark.asyncio
@@ -286,7 +407,7 @@ async def test_a_command_sent_as_a_json_string_reaches_its_owner(owners):
 @pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["read", "attempted-write"])
 async def test_planning_query_propagates_readonly_to_memory(owners, tmp_path, text):
-    from experimental.curator.raven_adapter.planning.runtime import BoundPlanning
+    from experimental.harness.raven_adapter.planning.runtime import BoundPlanning
     from tests.test_harness_curator_planning_binding import binding, files
 
     await owners.memory.initialize_context("session:a", owners.frame)

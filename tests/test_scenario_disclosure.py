@@ -5,9 +5,9 @@ import shutil
 
 import pytest
 
-from experimental.scenario import Disclosure, load
-from experimental.scenario.disclosure import partition
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.scenario import Disclosure, Plan, load
+from experimental.harness.scenario.disclosure import partition
+from experimental.simulation.bench.scenario import BUNDLED
 
 TRAVEL = BUNDLED / "travel_agency"
 
@@ -21,18 +21,44 @@ def test_every_choice_gives_its_opening_and_the_rest_is_due_before_the_last_roun
     later = [name for name in materials if name not in initial]
     assert staged.opening == initial and staged.chooses
     assert staged.due(1, initial) == [] and staged.due(2, [*initial, later[0]]) == later[1:]
-    stage = plans["by-stage"]
+    stage = plans["by-stage"].steps
     named = Disclosure.of("by-stage", materials=materials, plans=plans, rounds=4)
     assert (named.plan, named.opening, named.steps, named.chooses) == ("by-stage", stage[0], stage, False)
+    assert named.labels == plans["by-stage"].labels and len(named.labels) == len(stage)
     assert named.due(1, stage[0]) == list(stage[1]) and named.due(3, [*stage[0], *stage[1]]) == list(stage[2])
+    assert named.step_of(stage[2][0]) == 2 and named.step_of("not-a-material") is None
     assert named.record() == {
         "plan": "by-stage",
         "opening": list(stage[0]),
         "steps": [list(step) for step in stage],
+        "labels": list(plans["by-stage"].labels),
         "chooses": False,
         "rounds": 4,
+        "completes": True,
     }
-    assert Disclosure.of(stage, materials=materials).plan == "partition"
+    given = Disclosure.of(stage, materials=materials)
+    assert given.plan == "partition" and given.labels == ()
+
+
+def test_none_hands_nothing_over_and_a_schedule_may_be_asked_not_to_complete():
+    materials = tuple(load(TRAVEL).materials)
+    nothing = Disclosure.of("none", materials=materials, rounds=3)
+    assert nothing.opening == () and nothing.steps == () and not nothing.chooses and not nothing.completes
+    assert nothing.due(0) == [] and nothing.due(2) == [] and nothing.due(5) == []
+    assert nothing.record()["plan"] == "none" and nothing.record()["completes"] is False
+    kept = Disclosure.of("staged", materials=materials, initial=materials[:2], rounds=3, completes=False)
+    assert kept.chooses and not kept.completes and kept.due(2, materials[:2]) == []
+    completed = Disclosure.of("staged", materials=materials, initial=materials[:2], rounds=3)
+    assert completed.completes and completed.due(2, materials[:2]) == list(materials[2:])
+
+
+def test_a_plan_labels_every_step_or_none():
+    plan = Plan((("a", "b"), ("c",)), ("first", "second"))
+    assert plan.without(["b"]).steps == (("a",), ("c",)) and plan.without(["b"]).labels == ("first", "second")
+    assert plan.record() == {"steps": [["a", "b"], ["c"]], "labels": ["first", "second"]}
+    assert Plan((("a",), ("b",))).labels == ()
+    with pytest.raises(ValueError, match="labels every step or none"):
+        Plan((("a",), ("b",)), ("only one",))
 
 
 def test_a_schedule_gives_every_material_once_from_onboarding_and_finishes_before_the_last_round():
@@ -51,11 +77,17 @@ def test_a_schedule_gives_every_material_once_from_onboarding_and_finishes_befor
         Disclosure.of("staged", materials=materials[1:], initial=materials[:1])
 
 
-def test_the_contract_refuses_a_plan_that_is_not_a_schedule(tmp_path):
+def test_the_contract_refuses_a_plan_that_is_not_a_schedule_or_mislabels_its_steps(tmp_path):
     root = tmp_path / "travel_agency"
     shutil.copytree(TRAVEL, root)
     spec = json.loads((root / "scenario.json").read_text())
-    spec["plans"]["by-stage"] = spec["plans"]["by-stage"][1:]
+    spec["plans"]["by-stage"]["steps"] = spec["plans"]["by-stage"]["steps"][1:]
+    spec["plans"]["by-stage"]["labels"] = spec["plans"]["by-stage"]["labels"][1:]
     (root / "scenario.json").write_text(json.dumps(spec))
     with pytest.raises(ValueError, match="plan by-stage: .*onboarding|plan by-stage: .*exactly once"):
+        load(root)
+    spec = json.loads((TRAVEL / "scenario.json").read_text())
+    spec["plans"]["by-stage"]["labels"] = spec["plans"]["by-stage"]["labels"][:1]
+    (root / "scenario.json").write_text(json.dumps(spec))
+    with pytest.raises(ValueError, match="labels every step or none"):
         load(root)

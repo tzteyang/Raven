@@ -6,11 +6,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.automation.employee import hire, hire_task
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.simulation.experts import Expert
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.employee import hire, hire_task
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.simulation.bench.experts import Expert
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config, ThirdPartyAcpSubagentConfig
 from tests.test_research_collection import accepted, snapshot
@@ -46,7 +46,7 @@ def expert_package(root: Path) -> Expert:
 def test_complete_package_is_staged_without_installing_expert_behavior(tmp_path):
     expert = expert_package(tmp_path / "input")
     home = tmp_path / "home"
-    from experimental.research.curator import stage_materials
+    from experimental.cultivation.collector.curator import stage_materials
 
     (staged,) = stage_materials((expert.root,), home)
     for original in expert.root.rglob("*"):
@@ -111,7 +111,7 @@ def test_expert_and_scenario_share_deployment_capabilities(tmp_path):
 
 @pytest.mark.asyncio
 async def test_failed_child_preparation_keeps_configuration_without_claiming_availability(tmp_path, monkeypatch):
-    from experimental.simulation import experts
+    from experimental.simulation.bench import experts
 
     expert = expert_package(tmp_path / "input")
     config = tmp_path / "config.json"
@@ -148,8 +148,8 @@ async def test_failed_child_preparation_keeps_configuration_without_claiming_ava
 async def test_initial_construction_reviews_information_before_curator_and_separates_material_purposes(
     tmp_path, monkeypatch, approved, package_input
 ):
-    from experimental.research.information import Result, Review
-    from experimental.simulation import experts
+    from experimental.cultivation.collector.information import Result, Review
+    from experimental.simulation.bench import experts
 
     expert = expert_package(tmp_path / "input")
     config = tmp_path / "config.json"
@@ -229,7 +229,7 @@ async def test_initial_construction_reviews_information_before_curator_and_separ
 def test_cli_accepts_a_task_with_no_product_interaction_input(tmp_path, monkeypatch, capsys):
     import sys
 
-    from experimental.simulation import experts
+    from experimental.simulation.bench import experts
 
     mission = tmp_path / "mission.md"
     mission.write_text("Review project evidence.")

@@ -7,10 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.planning.contracts import TARGET
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter.planning.contracts import TARGET
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.fixtures.harness_curator.authoring import capability, combine
 from tests.integration.test_harness_curator_e2e import ReplayProvider, plan_for, replay_provider, submitted
@@ -59,6 +59,10 @@ class CuratorProvider(ReplayProvider):
 
     async def chat(self, messages, **kwargs):
         self.requests.append(deepcopy(messages))
+        from tests.test_harness_curator_generation import consistency_review_response
+
+        if (reviewed := consistency_review_response(messages)) is not None:
+            return reviewed
         return await super().chat(messages, **kwargs)
 
 
@@ -116,12 +120,12 @@ async def test_curator_runs_and_revises_a_real_planning_strategy(baseline, tmp_p
         inspected = await worker.inspect()
         assert inspected.facts["planning"]["view"]["items"] == {"Verify": False}
         assert inspected.facts["planning"]["sessions"]["curator:task"]["seen"] == ["planning_probe"]
-        before = (worker.root / "planning.json").read_bytes()
+        before = json.loads((worker.area / "strategies.json").read_text())["owners"]["planning"]
         pid = worker._process.pid
         continuation = await worker.run("Continue without changing the Harness.")
         assert not continuation.errors and worker._process.pid == pid
-        assert (worker.root / "planning.json").read_bytes() == before
-        assert len(curator.requests) == 5
+        assert json.loads((worker.area / "strategies.json").read_text())["owners"]["planning"] == before
+        assert len(curator.requests) == 6
         revised = deepcopy(proposed)
         revised["values"] = {TARGET: revised["values"][TARGET]}
         revised["files"]["task_planning.py"] = revised["files"]["task_planning.py"].replace(
@@ -152,7 +156,7 @@ async def test_curator_runs_and_revises_a_real_planning_strategy(baseline, tmp_p
         after = await worker.inspect()
         assert after.facts["planning"]["view"]["guarded"]
         assert after.facts["planning"]["view"]["items"] == {"Verify": False}
-        assert (worker.root / "planning.json").read_bytes() == before
+        assert json.loads((worker.area / "strategies.json").read_text())["owners"]["planning"] == before
         second = await worker.run("Try the revised behavior.")
         assert any("verified execution evidence" in str(row) for row in second.records)
         assert (await worker.inspect()).facts["planning"]["view"]["items"] == {"Verify": False}

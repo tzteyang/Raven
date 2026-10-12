@@ -14,15 +14,15 @@ from pathlib import Path
 
 from pydantic import BaseModel, ConfigDict, Field
 
-from ..assessor.standard import TEXT_FILES
-from ..automation import caching
-from ..automation.employee import Together, hire_task, starting_harness, withheld, workplace
-from ..automation.employee import replicate as replica_of
-from ..curator.raven_adapter import deployment
-from ..experience.model import ModelClient, ModelLimits
-from ..iteration.protocols import Handover
-from ..simulation.agency import attached
-from ..simulation.scenario import Scenario
+from experimental.cultivation.counterpart.owner import attached
+from experimental.cultivation.employee import Together, hire_task, starting_harness, withheld, workplace
+from experimental.cultivation.employee import replicate as replica_of
+from experimental.harness.assessor.standard import TEXT_FILES
+from experimental.harness.experience.model import ModelClient, ModelLimits
+from experimental.harness.participation.protocols import Handover
+from experimental.harness.raven_adapter import deployment
+from experimental.simulation.bench import caching
+from experimental.simulation.bench.scenario import Scenario
 
 REPOSITORY = Path(__file__).resolve().parents[2]
 MATERIAL_FILE = 20_000
@@ -116,12 +116,12 @@ class Question(BaseModel):
 
 def prepare() -> None:
     """Set up the session's process before anything is hired, as an automated run does: the gateway cache
-    breakpoints (`experimental.automation.caching`)."""
+    breakpoints (`experimental.simulation.bench.caching`)."""
     caching.install()
 
 
 def starting() -> dict:
-    """Which code every harness of the session starts from (`experimental.automation.employee.starting_harness`)."""
+    """Which code every harness of the session starts from (`experimental.cultivation.employee.starting_harness`)."""
     return starting_harness(REPOSITORY)
 
 
@@ -204,7 +204,7 @@ def references(contract, names, home: Path) -> dict[str, str]:
     """What the checks of a scenario without an examiner of its own are judged against: the text files of the
     handed-over `names` and the information the preparation handed the employee under `home`, as the employee holds
     them, so a verdict on a fact rests on what the employee was given."""
-    from ..research.curator import INFORMATION_FILE
+    from experimental.cultivation.collector.curator import INFORMATION_FILE
 
     scenario = Scenario.of(contract, judged=False)
     out = {}
@@ -248,10 +248,10 @@ async def question(provider, packet: dict, *, model, effort, timeout) -> dict:
 
 
 def preparer(contract, released, material_root: Path, *, records: Path, model, effort, ask, research: bool):
-    """The information preparation run before the onboarding curation (`experimental.research.scenario`): it reads the
+    """The information preparation run before the onboarding curation (`experimental.cultivation.collector.scenario`): it reads the
     handed materials, asks the person once through `ask` and, with `research`, searches the web, then hands the
     reviewed description to the Curator."""
-    from ..research.scenario import scenario_preparer
+    from experimental.cultivation.collector.scenario import scenario_preparer
 
     return scenario_preparer(
         contract,

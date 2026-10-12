@@ -1,0 +1,78 @@
+{
+  "materials": {
+    "meeting-pack-rules": {
+      "kind": "norm"
+    },
+    "page-procedure": {
+      "kind": "norm"
+    },
+    "vi-excerpt": {
+      "kind": "norm"
+    },
+    "room-equipment": {
+      "kind": "fact"
+    },
+    "kpi-q3": {
+      "kind": "fact"
+    },
+    "ceo-comments": {
+      "kind": "norm"
+    },
+    "good-page": {
+      "kind": "exemplar"
+    },
+    "kpi-oct": {
+      "kind": "fact"
+    }
+  },
+  "checks": {
+    "figures-from-finance": {
+      "derived_from": [
+        "meeting-pack-rules"
+      ]
+    },
+    "fits-the-projector": {
+      "derived_from": [
+        "meeting-pack-rules"
+      ]
+    },
+    "readable-size": {
+      "derived_from": [
+        "ceo-comments"
+      ]
+    },
+    "title-and-points": {
+      "derived_from": [
+        "meeting-pack-rules"
+      ]
+    },
+    "company-look": {
+      "derived_from": [
+        "meeting-pack-rules",
+        "vi-excerpt"
+      ]
+    },
+    "source-file-version": {
+      "derived_from": [
+        "meeting-pack-rules",
+        "page-procedure"
+      ]
+    },
+    "gap-reason-recovery": {
+      "derived_from": [
+        "ceo-comments"
+      ]
+    },
+    "revise-only-the-point": {
+      "derived_from": [
+        "page-procedure",
+        "ceo-comments"
+      ]
+    },
+    "reconciliation-and-delivery-note": {
+      "derived_from": [
+        "page-procedure"
+      ]
+    }
+  }
+}

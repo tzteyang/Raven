@@ -2,16 +2,16 @@
 that fails to load is a clear error rather than a traceback, with each round's verdicts; the opaque label each of its
 sessions goes by where the Curator sees it; each sub-harness execution's work as steps; what a run keeps beside its iteration record that no role reads: the
 standard assessor's record (`standard.json`), the compartment log (`boundaries.jsonl`, see
-`experimental.iteration.compartment`) and where each material came from (the `provenance` of `settings.json`); and
+`experimental.harness.participation.compartment`) and where each material came from (the `provenance` of `settings.json`); and
 how a curation in progress stands (its progress file) or where a paused one stopped (its checkpoint)."""
 
 import json
 from functools import lru_cache
 from pathlib import Path
 
-from ..iteration.hearing import opaque
-from ..iteration.records import load
-from .process import redact
+from experimental.harness.loop.records import load
+from experimental.harness.participation.hearing import opaque
+from experimental.webui.process import redact
 
 BOUNDARY_ROWS = 2000
 ERROR_KEEP = 1500
@@ -34,7 +34,7 @@ def _reason(exc: Exception) -> str:
 def verdicts(round_: dict, analysis) -> list[dict]:
     """The round's verdicts by assessor: each signal that carries its items, and for an assessor whose signal carries
     none the scorecard it kept among the round's `analysis` records. An assessor that only speaks, such as the
-    simulated owner (`experimental.simulation.agency`), keeps its verdicts there, where no role reads them; a scorecard
+    simulated owner (`experimental.simulation.cases.travel_agency.owner`), keeps its verdicts there, where no role reads them; a scorecard
     whose every item names one of the round's held-out drills belongs to their assessment, not the round's."""
     carried = [signal for signal in round_.get("signals") or () if isinstance(signal, dict) and signal.get("items")]
     spoken = {signal.get("source") for signal in carried}
@@ -110,7 +110,7 @@ def joined(path: Path) -> dict:
 def labels(run: dict) -> dict[str, str]:
     """Each session the record names (a round's trials and held-out trials, and the round in progress) with the opaque
     label it goes by in the cited turns, the activity rows, its session key and its replica folder
-    (`experimental.iteration.hearing.opaque`)."""
+    (`experimental.harness.participation.hearing.opaque`)."""
     names = set()
     for holder in (*(run.get("rounds") or ()), run.get("pending")):
         for part in ("sessions", "holdout"):
@@ -166,7 +166,7 @@ def _criterion_view(row: dict) -> dict:
 def standard(worker_root: Path) -> dict | None:
     """The standard the automatic assessor held the rounds to, as the simulation wrote it when the run ended: each
     criterion with its source, strength, provenance and, for a derived one, the norm passage it quotes; the norms the
-    rubric builder read; the builder's numbered revisions (`experimental.assessor.builder`), each with the changes it
+    rubric builder read; the builder's numbered revisions (`experimental.harness.assessor.builder`), each with the changes it
     applied and the passages it found nothing checkable in; and the model calls by label. None when the run kept no
     standard (yet)."""
     path = Path(worker_root) / "standard.json"
@@ -427,7 +427,7 @@ def _waves(folder: Path) -> list[dict]:
 
 def _researchers(folder: Path) -> list[dict]:
     """The research agents the collector ran, from the `run.json` each agent call keeps
-    (`experimental.research.researchers`): per agent, model asked for and effort, the models it reported answering
+    (`experimental.cultivation.collector.researchers`): per agent, model asked for and effort, the models it reported answering
     with and how many calls it made."""
     found: dict[tuple[str, str, str], dict] = {}
     for path in sorted(folder.rglob("run.json")):
@@ -542,7 +542,7 @@ def _actions(path: str, mtime_ns: int, size: int) -> dict:
 
 
 def research(worker_root: Path) -> dict | None:
-    """The research stage's records beside the run (`experimental/research/`, written under `information/`): how the
+    """The research stage's records beside the run (`experimental/cultivation/collector/`, written under `information/`): how the
     collection ended (status, stop reason, seconds), the review's verdict with its reason and issues, the description's
     title and each dimension's coverage with its text, reason, evidence count and the channels that evidence came
     through, the resources and open questions, per stage the model calls, queries and whether it submitted, with every

@@ -1,0 +1,82 @@
+"""Durable two-level progress with budgets derived from each generation's own checkpoint, and what every scope's
+attribution spent on its own.
+
+Calls, queries and checks are one budget the scopes share, so the whole curation costs no more than one would.
+Repairs are counted per scope: a root that spends its repairs must not leave a child it gave node requirements
+unable to correct a single failed check, and a composite repair is one more repair of the root."""
+
+from dataclasses import asdict
+from pathlib import Path
+
+from pydantic import BaseModel, ConfigDict, Field
+
+from experimental.harness.contract import Validation
+from experimental.harness.curator.attribution.state import AttributionState
+from experimental.harness.curator.generation.run import Generated, GenerationPausedError, Limits
+from experimental.harness.curator.generation.state import GenerationState
+
+COUNTERS = ("calls", "queries", "checks", "repairs")
+SHARED = ("calls", "queries", "checks")
+COMPOSITION = "composition.json"
+SCOPE = "attribution-scope"
+
+
+def pending(directory: Path) -> bool:
+    """Only active composite or standalone attribution state owns inputs; abandoned scopes do not."""
+    return (directory / COMPOSITION).is_file() or (directory / SCOPE / "root/curation/pending.json").is_file()
+
+
+class Progress(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    input_id: str
+    directory: str
+    feedback: object = None
+    model: str | None = None
+    model_events: list[dict] = Field(default_factory=list)
+    observations: list[dict] | None = None
+    root: Generated | None = None
+    children: dict[str, Generated] = Field(default_factory=dict)
+    inputs: dict[str, str] = Field(default_factory=dict)
+    scopes: dict[str, str] = Field(default_factory=dict)
+    repair: Validation | None = None
+    error: str | None = None
+
+    def consumed(self):
+        return {
+            str(path.parents[1].relative_to(self.directory)): GenerationState.model_validate_json(path.read_text())
+            for path in Path(self.directory).glob("*/progress/generation.json")
+        }
+
+    def totals(self):
+        return {name: sum(getattr(state, name) for state in self.consumed().values()) for name in COUNTERS}
+
+    def attribution_totals(self):
+        """What every scope's attribution spent so far, each on its own budget beside the shared one above."""
+        spent = [
+            AttributionState.model_validate_json(path.read_text())
+            for path in Path(self.directory).glob("*/progress/attribution.json")
+        ]
+        return {"calls": sum(state.calls for state in spent), "queries": sum(state.queries for state in spent)}
+
+    def limits_for(self, scope, limits):
+        spent = self.totals()
+        own = self.consumed().get(scope)
+        # A scope may spend one call past the budget correcting a refused submission (see `generation.run`), and a
+        # resumption may lower the limits: either way nothing is left, and a scope without a call pauses.
+        remaining = {name: max(getattr(limits, f"max_{name}") - spent[name], 0) for name in SHARED}
+        if remaining["calls"] == 0:
+            raise self.paused(own.stage if own else "select")
+        return Limits(
+            **{
+                **asdict(limits),
+                **{f"max_{name}": remaining[name] + (getattr(own, name) if own else 0) for name in SHARED},
+            }
+        )
+
+    def root_repairs(self):
+        own = self.consumed().get("root")
+        return own.repairs if own else 0
+
+    def paused(self, stage="select"):
+        return GenerationPausedError(GenerationState(input_id=self.input_id, stage=stage, **self.totals()))

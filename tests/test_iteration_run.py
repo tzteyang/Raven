@@ -6,26 +6,26 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst import role
-from experimental.analyst.feedback import Feedback
-from experimental.assessor.dataset import Case, Dataset, contains
-from experimental.assessor.human import Human
-from experimental.curator.generation.run import GenerationPausedError
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.curator.harness import Attributed, Attribution, Diagnosis, Task
-from experimental.curator.raven_adapter.worker import Execution, TurnTimeoutError
-from experimental.iteration import session as stepping
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.hearing import opaque
-from experimental.iteration.history import Diagnosed, Raised
-from experimental.iteration.protocols import Exchange, Handover, Item, Signal
-from experimental.iteration.records import load, runs
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits, satisfied, trial_sessions
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst import role
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.assessor.dataset import Case, Dataset, contains
+from experimental.harness.assessor.human import Human
+from experimental.harness.contract import Attributed, Attribution, Diagnosis, Task
+from experimental.harness.curator.generation.run import GenerationPausedError
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.loop import session as stepping
+from experimental.harness.loop.history import Diagnosed, Raised
+from experimental.harness.loop.records import load, runs
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits, satisfied, trial_sessions
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange, Handover, Item, Signal
+from experimental.harness.raven_adapter.worker import Execution, TurnTimeoutError
 
 
 class FakeWorker:
-    def __init__(self, root, task=Task(text="Serve the agency's travellers")):
+    def __init__(self, root, task=Task(text="Serve the agency's conversants")):
         self.baseline = SimpleNamespace(task=task)
         self.root = root
         self.last_plan = None
@@ -178,7 +178,7 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     )
     assert earlier.diagnoses == (Diagnosed(about="task", state="absent"),)
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
-    assert record["task"] == "Serve the agency's travellers" and len(record["rounds"]) == 2
+    assert record["task"] == "Serve the agency's conversants" and len(record["rounds"]) == 2
     assert record["status"] == "finished"
     assert record["rounds"][0]["signals"][0]["items"][0]["result"] == "fail"
     joined = load(runs(tmp_path)[0])
@@ -430,7 +430,7 @@ async def test_a_round_is_recorded_before_its_curation_and_a_paused_curator_leav
             (worker.root / "curation" / "pending.json").write_text("{}")
             state = SimpleNamespace(trace=[], calls=0, model_copy=lambda deep: None)
             if transport:
-                from experimental.curator.generation.run import GenerationInterruptedError
+                from experimental.harness.curator.generation.run import GenerationInterruptedError
 
                 raise GenerationInterruptedError("provider unavailable", state)
             raise GenerationPausedError(state)
@@ -591,3 +591,55 @@ async def test_the_curator_never_receives_the_reference_answers_it_could_copy_in
     assert observed[0]["turn_id"] == "turn-1" and observed[0]["artifact_id"] == "artifact-1"
     assert observed[0]["records"][0]["kind"] == "runner.event"
     assert {row["session"] for row in observed} == {opaque("case:capital")}
+
+
+class Once:
+    """Asks one thing per conversation, so the same conversant can be played in several rounds."""
+
+    def __init__(self, name):
+        self.name = name
+
+    async def speak(self, exchanges):
+        return None if exchanges else f"ask {self.name}"
+
+
+@pytest.mark.asyncio
+async def test_each_round_plays_its_own_trials_and_the_exam_only_in_the_rounds_named(tmp_path, curations, analyses):
+    worker = FakeWorker(tmp_path)
+    analyses.scripted.extend([CURATE, CURATE, CURATE])
+    by_round = {1: [Conversation(Once("first"))], 2: [Conversation(Once("second"))]}
+    exam = ([Conversation(Once("exam"))], [Verifier(passing(), passing())])
+    rounds = await run(
+        worker,
+        object(),
+        lambda index: by_round[min(index, 2)],
+        [Verifier(failing(), failing(), failing())],
+        holdout=exam,
+        holdout_rounds=frozenset({1, 3}),
+        limits=Limits(max_rounds=3),
+    )
+    assert len(rounds) == 3
+    assert [text for _, text in worker.runs] == ["ask first", "ask exam", "ask second", "ask second", "ask exam"]
+
+
+@pytest.mark.asyncio
+async def test_round_zero_plays_the_exam_once_before_onboarding_and_keeps_it_apart(tmp_path, curations, analyses):
+    worker = FakeWorker(tmp_path)
+    analyses.scripted.extend([CURATE, CURATE])
+    exam = ([Conversation(Once("exam"))], [Verifier(passing(), passing())])
+    rounds = await run(
+        worker,
+        object(),
+        [Conversation(Once("drill"))],
+        [Verifier(failing(), failing())],
+        holdout=exam,
+        holdout_rounds=frozenset({0, 2}),
+        limits=Limits(max_rounds=2),
+    )
+    assert len(rounds) == 2
+    assert [text for _, text in worker.runs] == ["ask exam", "ask drill", "ask drill", "ask exam"]
+    path = next((tmp_path / "iteration").glob("*.json"))
+    record = json.loads(path.read_text())
+    assert list(record["baseline"]["sessions"]) and record["baseline"]["signals"][0]["satisfied"] is True
+    assert "exam" not in json.dumps(record["rounds"][0]["sessions"])
+    assert [row["round"] for row in load(path)["ledger"]["holdout"]] == [0, 2]

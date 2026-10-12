@@ -9,12 +9,12 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.curator import workflow
-from experimental.curator.generation.run import GenerationPausedError, Limits
-from experimental.curator.harness import Artifact, Declaration, Validation
-from experimental.curator.raven_adapter.exploration import Exploration, Withheld
-from experimental.curator.raven_adapter.inspection import Inspection
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Artifact, Declaration, Validation
+from experimental.harness.curator import workflow
+from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+from experimental.harness.raven_adapter.exploration import Exploration, Withheld
+from experimental.harness.raven_adapter.inspection import Inspection
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.config.schema import Config
 from tests.test_harness_curator_generation import Provider, diagnosis, plan, response, selection
 
@@ -72,12 +72,12 @@ async def test_workflow_resumes_preflight_with_same_files_and_cleans_up_after_in
     (workspace / "scratch.txt").write_text("retained scratch")
     worker.install.assert_not_awaited()
     resumed = Provider(response("read_file", {"path": "scratch.txt"}), response("submit_artifact", draft))
-    result = await workflow.improve(worker, resumed, limits=Limits(max_calls=6))
+    result = await workflow.improve(worker, resumed, limits=Limits(max_calls=7))
     assert "retained scratch" in str(result.trace)
     assert "Keep evidence" in resumed.requests[0]["messages"][1]["content"]
     assert worker.check.await_count == 2 and worker.install.await_count == 1
     assert not path.exists() and not workspace.exists()
-    assert [event["call"] for event in result.trace if event["event"] == "model.call"] == list(range(1, 7))
+    assert [event["call"] for event in result.trace if event["event"] == "model.call"] == list(range(1, 8))
     progress = json.loads((worker.root / "progress" / "curation.json").read_text())
     assert progress["finished"] is True and progress["error"] is None and progress["updated"] >= progress["started"]
 
@@ -145,15 +145,15 @@ async def test_proposal_retains_its_candidate_and_investigation_without_installi
     workspace = Path(held["workspace"])
     assert (workspace / "snapshot.json").is_file()
     state = json.loads((worker.root / "progress/generation.json").read_text())
-    assert state["calls"] == 3
+    assert state["calls"] == 4
     repaired = await workflow.propose(
         worker,
         Provider(response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_3"}}})),
         repair=Validation(["Another scope requires a compatible sampling choice"], []),
-        limits=Limits(max_calls=4),
+        limits=Limits(max_calls=6),
     )
     assert repaired.candidate.artifact.values["action.strategy"]["factory"] == "rules:policy_0_3"
-    assert json.loads((worker.root / "progress/generation.json").read_text())["calls"] == 4
+    assert json.loads((worker.root / "progress/generation.json").read_text())["calls"] == 6
     worker.install.assert_not_awaited()
     shutil.rmtree(workspace)
 
@@ -161,7 +161,7 @@ async def test_proposal_retains_its_candidate_and_investigation_without_installi
 @pytest.mark.asyncio
 async def test_provider_interruption_retains_investigation_and_resumes_the_current_stage(worker):
     """The continuation runs on a new worker object over the same root: everything it needs is on disk."""
-    from experimental.curator.generation.run import GenerationInterruptedError
+    from experimental.harness.curator.generation.run import GenerationInterruptedError
     from raven.contracts.llm_provider import LLMResponse
 
     first = Provider(
@@ -183,8 +183,82 @@ async def test_provider_interruption_retains_investigation_and_resumes_the_curre
         response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:policy_0_2"}}}),
     )
     again = SimpleNamespace(**{**vars(worker), "install": AsyncMock()})
-    result = await workflow.improve(again, resumed, limits=Limits(max_calls=5))
-    assert len(resumed.requests) == 2 and again.install.await_count == 1
+    result = await workflow.improve(again, resumed, limits=Limits(max_calls=6))
+    assert len(resumed.requests) == 3 and again.install.await_count == 1
     assert "retained" in str(result.trace)
-    assert [row["call"] for row in result.trace if row["event"] == "model.call"] == [1, 2, 3, 4, 5]
+    assert [row["call"] for row in result.trace if row["event"] == "model.call"] == [1, 2, 3, 4, 5, 6]
     assert not path.exists() and not workspace.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stage", ["diagnose", "design", "consistency_review"])
+async def test_unavailable_model_can_be_replaced_without_replaying_accepted_work(worker, stage):
+    from experimental.harness.curator.generation.run import GenerationInterruptedError
+    from raven.contracts.llm_provider import LLMResponse
+
+    steps = [
+        response("submit_diagnosis", diagnosis()),
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "rules:create"}}}),
+    ]
+    stop = {"diagnose": 0, "design": 2, "consistency_review": 4}[stage]
+    first = Provider(
+        *steps[:stop],
+        LLMResponse(content="Model temporarily unavailable", finish_reason="error"),
+        auto_consistency_review=False,
+    )
+    with pytest.raises(GenerationInterruptedError):
+        await workflow.improve(worker, first, model="old-model")
+    checkpoint = worker.root / "curation/pending.json"
+    assert checkpoint.is_file()
+    worker.install.assert_not_awaited()
+    resumed = Provider(*steps[stop:])
+    result = await workflow.improve(worker, resumed, model="new-model")
+    assert result.consistency_review and worker.install.await_count == 1 and worker.check.await_count == 1
+    assert all(request["model"] == "new-model" for request in resumed.requests)
+    assert not checkpoint.exists()
+    attribution = result.candidate.attribution
+    assert attribution.identity["model"] == ("new-model" if stage == "diagnose" else "old-model")
+    trace = (
+        json.loads((worker.root / "attribution" / attribution.record).read_text())["trace"]
+        if stage == "diagnose"
+        else result.trace
+    )
+    changes = [row for row in trace if row["event"] == "model.changed"]
+    assert len(changes) == 1
+    assert changes[0]["previous_model"] == "old-model" and changes[0]["model"] == "new-model"
+    assert "temporarily unavailable" in changes[0]["reason"]
+    assert "# Remaining generation budget" not in resumed.requests[0]["messages"][2]["content"]
+
+
+@pytest.mark.asyncio
+async def test_model_recovery_never_bypasses_input_identity_or_budget_pause(worker):
+    from experimental.harness.curator.generation.run import GenerationInterruptedError
+    from raven.contracts.llm_provider import LLMResponse
+
+    first = Provider(
+        response("submit_diagnosis", diagnosis()), LLMResponse(content="Unavailable", finish_reason="error")
+    )
+    with pytest.raises(GenerationInterruptedError):
+        await workflow.improve(worker, first, model="old-model")
+    path = worker.root / "curation/pending.json"
+    before = path.read_bytes()
+    untouched = Provider()
+    with pytest.raises(ValueError, match="inputs changed"):
+        await workflow.improve(worker, untouched, model="new-model", feedback="Changed task")
+    assert path.read_bytes() == before and not untouched.requests
+    with pytest.raises(GenerationPausedError):
+        await workflow.improve(
+            worker,
+            Provider(
+                response("submit_diagnosis", diagnosis()), response("submit_selection", selection("action.strategy"))
+            ),
+            model="old-model",
+            resume=False,
+            limits=Limits(max_calls=1),
+        )
+    before = path.read_bytes()
+    with pytest.raises(ValueError, match="recorded failed provider call"):
+        await workflow.improve(worker, untouched, model="new-model")
+    assert path.read_bytes() == before and not untouched.requests

@@ -1,0 +1,20 @@
+{
+  "materials": {
+    "owner-habits": {"kind": "norm"},
+    "review-routine": {"kind": "norm"},
+    "price-history": {"kind": "fact"},
+    "channel-notes": {"kind": "fact"},
+    "last-year-page": {"kind": "exemplar"},
+    "first-draft-feedback": {"kind": "counterexample"}
+  },
+  "checks": {
+    "yh-headline": {"derived_from": ["owner-habits"]},
+    "yh-errors-listed": {"derived_from": ["owner-habits"]},
+    "yh-single-page": {"derived_from": ["owner-habits"]},
+    "yh-page-form": {"derived_from": ["owner-habits"]},
+    "yh-asked-first": {"derived_from": ["owner-habits", "review-routine"]},
+    "yh-checked-kept": {"derived_from": ["owner-habits", "review-routine"]},
+    "yh-follow-up": {"derived_from": ["review-routine", "owner-habits"]},
+    "yh-update-kind": {"derived_from": ["owner-habits"]}
+  }
+}

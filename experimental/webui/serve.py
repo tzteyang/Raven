@@ -23,11 +23,11 @@ from mimetypes import guess_type
 from pathlib import Path
 from urllib.parse import parse_qs, urlencode, urlsplit
 
-from ..automation.employee import AREA, HOME, REPLICAS
-from ..iteration.records import runs
-from .live import Live, LiveConfig
-from .process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
-from .rundir import (
+from experimental.cultivation.employee import AREA, HOME, REPLICAS
+from experimental.harness.loop.records import runs
+from experimental.webui.live import Live, LiveConfig
+from experimental.webui.process import SUBHARNESS_SECRET, node_process, redact, state_root, subharness_homes
+from experimental.webui.rundir import (
     RecordError,
     annex,
     curator_progress,
@@ -39,10 +39,10 @@ from .rundir import (
     standard,
     verdicts,
 )
-from .studio import event_summary, raw_record, studio_index, studio_run
+from experimental.webui.studio import event_summary, raw_record, studio_index, studio_run
 
 DIST = Path(__file__).resolve().parent / "dist"
-SCENARIO = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency" / "scenario.json"
+SCENARIO = Path(__file__).resolve().parents[1] / "simulation" / "cases" / "travel_agency" / "scenario.json"
 DECKS = {".pptx", ".ppt", ".odp", ".pdf"}
 TEXTS = {".md", ".markdown", ".txt", ".csv", ".json", ".yaml", ".yml"}
 # Upload thumbnails live outside the run: the uploads folder is the employee's own, and a cache there would be
@@ -107,7 +107,7 @@ def _glanced(path: str, mtime_ns: int, size: int) -> dict:
         return {"status": "error", "error": f"the run record could not be read: {type(exc).__name__}: {exc}"}
     pending = run.get("pending") if isinstance(run.get("pending"), dict) else {}
     return {
-        **{key: run[key] for key in ("task", "curator", "status", "error", "stop", "chain") if key in run},
+        **{key: run[key] for key in ("task", "curator", "status", "error", "stop", "disclose") if key in run},
         **({"initial_curation": True} if "initial_curation" in run else {}),
         **({"pending": {part: _names(pending.get(part)) for part in ("sessions", "holdout")}} if pending else {}),
         "rounds": [
@@ -191,25 +191,25 @@ def _small_json(path: Path) -> dict:
 
 
 def setup(worker_root: Path, record_path: Path, run: dict) -> dict:
-    """How the run was set up and how it ended, for the run list: its chain, models and efforts from `settings.json`,
-    and the suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields are read out of
-    either file; a cultivation record already built here fills a chain neither file names."""
+    """How the run was set up and how it ended, for the run list: its disclosure plan, models and efforts from
+    `settings.json`, and the suite's stop reason, spend and value verdict from `suite-summary.json`. Only these fields
+    are read out of either file; a cultivation record already built here fills a plan neither file names."""
     settings = _small_json(worker_root / "settings.json")
     summary = _small_json(worker_root / "suite-summary.json")
     models, efforts = (
         {key: value for key, value in named.items() if isinstance(value, str)} if isinstance(named, dict) else {}
         for named in (settings.get("models"), settings.get("efforts"))
     )
-    chain = settings.get("chain") or run.get("chain")
-    if not chain:
+    disclose = settings.get("disclose") or run.get("disclose")
+    if not disclose:
         cached = _records.get(record_path.resolve())
-        chain = (cached[1].get("run") or {}).get("chain") if cached else None
+        disclose = (cached[1].get("run") or {}).get("disclose") if cached else None
     total = (summary.get("spend") or {}).get("total") if isinstance(summary.get("spend"), dict) else None
     stopped = summary.get("stopped")
     value = summary.get("value") if isinstance(summary.get("value"), dict) else {}
     return redact(
         {
-            "chain": chain if isinstance(chain, str) else None,
+            "disclose": disclose if isinstance(disclose, str) else None,
             "models": models,
             "efforts": efforts,
             "stopped": stopped if isinstance(stopped, str) else None,
@@ -428,7 +428,7 @@ def scenario(path: Path | None) -> dict:
 
 
 def run_scenario(root: Path, run_id: str, fallback: Path | None) -> Path | None:
-    """The scenario.json a run was cultivated in: the copy its records keep (`experimental.simulation.record.
+    """The scenario.json a run was cultivated in: the copy its records keep (`experimental.simulation.bench.record.
     keep_scenario`), else the scenario directory its `settings.json` names while that still holds one, else
     `fallback` (the server's own); a run id naming no run also falls back."""
     paths = _run_paths(root, run_id) if run_id else None
@@ -558,6 +558,17 @@ def _run_paths(root: Path, run_id: str) -> tuple[Path, Path] | None:
     return path.parent.parent, path
 
 
+def execution_report(root: Path, run_id: str) -> dict | None:
+    """Execution accounting only for an indexed run, including its worker shards."""
+    from raven.observability.report import read
+
+    paths = _run_paths(root, run_id)
+    if paths is None:
+        return None
+    record = json.loads(paths[1].read_text())
+    return read(paths[0], run_id=record.get("execution_run_id", paths[1].stem))
+
+
 def node(root: Path, run_id: str, state_roots, dag: str, node_id: str, **options) -> dict | None:
     """One playbook node's process in a run (see `process.node_process`); None refuses the run or the node."""
     paths = _run_paths(root, run_id)
@@ -576,7 +587,7 @@ def _builder():
     """`build_record` of the simulation, imported on each call until it succeeds, so a builder that lands while the
     server runs is picked up; None with the reason while it cannot be imported."""
     try:
-        from ..simulation.record import build_record
+        from experimental.simulation.bench.record import build_record
     except Exception as exc:  # noqa: BLE001 -- any import failure means the page shows the builder as unavailable
         importlib.invalidate_caches()
         return None, f"{type(exc).__name__}: {exc}"
@@ -1203,6 +1214,14 @@ class Handler(SimpleHTTPRequestHandler):
             return self._json(scenario(run_scenario(self.root, query.get("run", [""])[0], self.scenario)))
         if url.path == "/api/live":
             body = live(self.root, query.get("run", [""])[0], cursors(query.get("logs", [""])[0]))
+            return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
+        if url.path == "/api/execution":
+            from raven.observability.ledger import LedgerError
+
+            try:
+                body = execution_report(self.root, query.get("run", [""])[0])
+            except (LedgerError, OSError, ValueError):
+                return self._json({"error": "Execution accounting is unavailable; records could not be read."}, 503)
             return self._json(body if body is not None else {"error": "no such run"}, 200 if body is not None else 404)
         if url.path == "/api/phase":
             body = run_phase(self.root, query.get("run", [""])[0])

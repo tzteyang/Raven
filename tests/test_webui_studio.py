@@ -8,7 +8,7 @@ from dataclasses import asdict
 
 import pytest
 
-from experimental.assessor.rubric import (
+from experimental.harness.assessor.rubric import (
     AssessmentPlan,
     Basis,
     Criterion,
@@ -17,7 +17,7 @@ from experimental.assessor.rubric import (
     ProgramCheck,
     Reference,
 )
-from experimental.iteration.hearing import opaque
+from experimental.harness.participation.hearing import opaque
 from experimental.webui import studio
 from experimental.webui.rundir import RecordError, annex, joined, labels, verdicts
 

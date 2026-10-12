@@ -6,9 +6,9 @@ the loop observer's control row); the other fixtures follow the same shapes by h
 
 import pytest
 
-from experimental.analyst.activity import activity
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.protocols import Exchange
+from experimental.harness.analyst.activity import activity
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.worker import Execution
 
 FEEDBACK = "This message asks three questions; keep at most two."
 REFUSED_STEP = [
@@ -39,7 +39,7 @@ def rows_of(records):
 async def test_a_resample_counts_once_though_the_host_applies_it_and_the_loop_rolls_back(tmp_path):
     from types import SimpleNamespace
 
-    from experimental.curator.raven_adapter.observe import LoopObserver
+    from experimental.harness.raven_adapter.observe import LoopObserver
     from raven.contracts.llm_provider import LLMResponse
     from raven.contracts.loop_hooks import AgentHookContext
     from tests.test_harness_curator_strategies import make

@@ -68,8 +68,8 @@ experimental/
 
 ### 阶段一（已完成，已提交）
 
-- `experimental/scenario/`：契约、默认可见性、加载与完备性检查；`scenarios/travel_agency/contract.json`。
-- `experimental/iteration/session.py`：`Session`、`Outcome`、`StepError`。
+- `experimental/harness/scenario/`：契约、默认可见性、加载与完备性检查；`scenarios/travel_agency/contract.json`。
+- `experimental/harness/loop/session.py`：`Session`、`Outcome`、`StepError`。
 - `tests/test_scenario_contract.py`、`tests/test_iteration_session.py`、`tests/test_simulation_scenario.py` 两条快照测试。
 - `docs/rsi-iteration.md` 第 6 节。
 
@@ -105,7 +105,7 @@ experimental/
 - 2.2 的 hearing 一半：`heard` 是 `project(signals, "curator")`，`Remark` 删除；`cited(sessions, feedback)` 取要求的证据或观察点名的回合，会话键换成不透明标签（按试炼名的短哈希，`hearing.opaque`）；`heard_observations` 只送这些回合，`run()` 与 `Session` 都改走它，对方新增的全量 `execution_observations` 由此退掉。测试 `tests/test_iteration_hearing.py`。
 - 按出处豁免：`Sealed.without(texts)`；`Boundaries.compartment(role, spoken=…)` 给 Curator 隔间减去引用回合里工作对象的话；`Guard.check_request` 对伙伴减去 user 消息的文本。
 - 伙伴守卫：`hire(guard=…)` 把 `GuardedFactory(make_lazy_provider, guard)` 作为 `provider_factory` 交给 Worker，随 spawn 进子进程；`simulation/__main__.py` 从契约推出各角色封印，装配 `Boundaries`，日志在运行目录的 `boundaries.jsonl`。
-- 2.4 的路径部分：`employee.EVALUATION_PATHS` 覆盖 `iteration`、`assessor`、`analyst`、`scenario`、`simulation` 五个包与它们的测试，内容标记同步加上 `experimental.scenario`、`experimental.assessor` 及斜杠写法。
+- 2.4 的路径部分：`employee.EVALUATION_PATHS` 覆盖 `iteration`、`assessor`、`analyst`、`scenario`、`simulation` 五个包与它们的测试，内容标记同步加上 `experimental.harness.scenario`、`experimental.harness.assessor` 及斜杠写法。
 
 2.3 已完成（2026-09-29）：`Requirement` 加 `id`（闭环按历史顺序分配，`repeats` 时沿用）、`situation`、`grounds`（受众 counterpart、analyst）、`materials`；`analyst.run.vet` 在提交时把反馈投影到 curator 受众后扫描（本轮条目 id、会话键、target 名、短的参考答案与备注，加运行的 Curator 封印），并要求每条要求点名本轮回合、写明情境；`Signal.attachments` 改为 `Handover(name, kind, files)`，模拟老板从契约读种类，记录按名字识别资料。长的参考文本只由运行封印负责：要求会合法复述检查项复述的规范，只有差分封印分得清。
 
@@ -115,7 +115,7 @@ C6 已完成（同日）：`Change`、`Selection`、`Plan`、`StateUse`、`Execu
 
 2.7、C5、2.8 的实施细化（2026-09-29，已完成，下面各条已落地；2.7 的"披露日程成为管线输入"随后完成，见 2.7 一行）。三项互相咬合：历史要表达（要求、诊断、改动、是否守住），"是否守住"要有唯一的计算规则，预测要退出所有提示词。
 
-- 受众模块上移为 `experimental/audience.py`：Curator 的类型已在自己身上声明受众，却因依赖方向不能调用 `project`；上移后 Curator 与闭环共用一份角色与投影，`declare` 已无调用方，删除。
+- 受众模块上移为 `experimental/harness/participation/audience.py`：Curator 的类型已在自己身上声明受众，却因依赖方向不能调用 `project`；上移后 Curator 与闭环共用一份角色与投影，`declare` 已无调用方，删除。
 - 2.7：Curator 材料里的 `previous_expectations` 改为按 curator 受众投影的 `previous_plan`（不含 `expected`/`verification`）；Analyst 材料去掉 `previous_expectations`；模拟老板不再收 `reply`，提示词去掉 `curator_reply`。
 - C5：历史条目改为 `iteration/history.py` 的类型（`Entry`、`Raised`、`Diagnosed`、`Revised`），字段声明受众，Curator 与 Analyst 各读自己的投影；`Revised.addresses` 取自选择的 `grounds`，为此候选带上 `selection`，激活时记到 `worker.last_selection`；`Raised.held` 在下一轮分析后由台账的规则填入。
 - 2.8：`iteration/ledger.py` 给出"是否守住"的唯一规则（下一轮没有沿用它 id 的要求，且它依据的检查项与回归检查没有失败；都判未知则不下结论），以及从历史展开的台账行与按归因器身份、（状态，处置）的聚合；留出集是 `Session.trial(..., holdout=True)` 的会话，只被评价与记录，不给 Analyst、不被引用给 Curator，信号记在 `Round.holdout`。
@@ -131,7 +131,7 @@ C6 已完成（同日）：`Change`、`Selection`、`Plan`、`StateUse`、`Execu
 
 对方提交对本规划的影响：
 
-- `iteration/hearing.py` 新增 `execution_observations`，把本轮全部回合（含会话键、工作对象原话、全部记录）交给 Curator，即 4.2 里"全量"一项。2.2 的投影逻辑同样作用于它：会话键不透明、只传 Analyst 引用的回合。
+- `harness/participation/hearing.py` 新增 `execution_observations`，把本轮全部回合（含会话键、工作对象原话、全部记录）交给 Curator，即 4.2 里"全量"一项。2.2 的投影逻辑同样作用于它：会话键不透明、只传 Analyst 引用的回合。
 - `simulation/employee.py` 新增通用入口 `hire_task`，去掉了 `Fresh`（副本每轮从本体复制，天然干净）。2.6 上提后它在 `automation/employee.py`。
 - `simulation/scenario.py` 的上传改为整包复制（`SKILL.md` 原样），2.5 消费契约时沿用。
 - 对方把 "preparation" 用作候选准备（`harness/preparation.py`、`StrategyPreparation.prepare`，已登记到 `CONTEXT.md`）。本规划的离线阶段改名为调研阶段 research，模块 `research/`，避免同名两义。
@@ -141,12 +141,12 @@ C6 已完成（同日）：`Change`、`Selection`、`Plan`、`StateUse`、`Execu
 | 编号 | 交付 | 改动 | 测试 |
 |---|---|---|---|
 | 2.1（已完成） | `run()` 改写为 Session 的自动编排：`Limits`、`Round`、`history_entry` 等移入 `session.py`，`run()` 只剩按 `Outcome` 取步；`run(boundaries=…)` 让 Analyst 与 Curator 进隔间，`simulation/__main__.py` 传入契约推出的 `Boundaries` | `iteration/run.py`、`iteration/session.py` | `test_iteration_run.py` 全部通过；`test_iteration_session.py` 的形状比较保留为两条路径同形的证据 |
-| 2.2（已完成） | 字段受众声明与投影；隔间与守卫：`project`、`Compartment`、provider 代理、`records/boundaries.jsonl`；封印集合由契约推出；hearing 改为投影加三项逻辑（会话键不透明、只传引用回合、先验过滤） | `iteration/protocols.py`、`requirements.py`、`analyst/feedback.py`、新 `iteration/compartment.py`、`scenario/sealed.py`、`iteration/hearing.py` | 新 `tests/test_iteration_compartment.py`：所有字段有受众；投影不含他人字段；守卫拒绝未投影值与封印片段；差分封印不误报规范文本；守卫工厂可 pickle。新 `tests/test_iteration_hearing.py`（今天 hearing 的测试散在 `test_iteration_run.py` 里，随之迁入） |
+| 2.2（已完成） | 字段受众声明与投影；隔间与守卫：`project`、`Compartment`、provider 代理、`records/boundaries.jsonl`；封印集合由契约推出；hearing 改为投影加三项逻辑（会话键不透明、只传引用回合、先验过滤） | `iteration/protocols.py`、`requirements.py`、`analyst/feedback.py`、新 `iteration/compartment.py`、`scenario/sealed.py`、`harness/participation/hearing.py` | 新 `tests/test_iteration_compartment.py`：所有字段有受众；投影不含他人字段；守卫拒绝未投影值与封印片段；差分封印不误报规范文本；守卫工厂可 pickle。新 `tests/test_iteration_hearing.py`（今天 hearing 的测试散在 `test_iteration_run.py` 里，随之迁入） |
 | 2.3（已完成） | 带类别的交接项 `Handover(name, kind, files)`；`Requirement` 加闭环分配的 `id`、`repeats`、`situation`、按受众拆开的 `grounds` 与 `materials`；Analyst 提交时的结构检查（投影到 curator 受众后扫封印与 target 名；每条要求点名本轮回合） | `iteration/protocols.py`、`requirements.py`、`analyst/run.py`、`analyst/prompts/analyst.md`、`simulation/agency.py`、`simulation/record.py`、`iteration/session.py` | `test_analyst_run.py`：含条目 id、期望答案原文、target 名或不点名回合的要求被拒后模型重交；`test_simulation_scenario.py`：交接项带种类。契约定义见设计文档 5.1.2 |
 | 2.4（已完成） | `Withheld` 路径模式；每个角色在每个隔间里的 provider 都被守卫的契约测试；对夹具运行的隔间记录做断言。契约测试没有另开文件，分在各角色所在模块的测试里：`tests/test_iteration_compartment.py`（隔间、守卫、按说话人豁免、同角色预绑定的 provider）、`tests/test_iteration_session.py`（Curator 与 Analyst 的隔间、先验扫描）、`tests/test_simulation_replicas.py`（每个演练副本在伙伴的守卫之后）、`tests/test_simulation_scenario.py`（客人与老板的隔间）、`tests/test_assessor_standard.py`（自动 Assessor 在 Analyst 的隔间里） | `automation/employee.py`（`withheld()`）、`automation/` 装配 | 集成 `tests/integration/test_iteration_boundaries_e2e.py` 用 DeepSeek 跑入职与一轮并断言无违规：2026-09-29 通过（35 分钟）；此前一次在默认的 48 次 Curator 调用下于入职暂停、没走到 Analyst，测试因此改用真实入职需要的预算，并先按运行状态失败 |
 | 2.5（已完成） | `simulation/scenario.py` 消费契约：`Scenario.load` 经 `scenario.load` 读目录，`Scenario.of` 从契约构建，带上材料种类与契约本身；Agency 与模拟入口不再各读一遍 | `simulation/scenario.py`、`agency.py`、`__main__.py` | `test_simulation_scenario.py` 通过；重复 id 的用例改为先见契约的拒绝 |
 | 2.6（已完成） | 通用机制上提到 `automation/`：雇佣、副本、并行演练、Curator 不能读的评测侧（`withheld` 的路径与标记同时覆盖 `automation/` 与 `research/`，搬出 `simulation/` 的代码不因此变得可读）、起点指纹与工作目录检查（`baseline`、`starting_harness`、`workplace`）、渠道上客人收到的内容、交付物读取与页图、越界检查、网关缓存断点，以及模拟客人（按题卡协议 `Card` 取人设，不再依赖旅行社的题卡类型）。按"带场景键的留在 `simulation/`"的规则留下：题卡数值的抽取规则（`cards.py` 的行程字段）、交互方视角的场景（它的题卡按这套规则抽取）、模拟老板（读 `reference.md` 的尺子，记录题卡的行程事实）与尺子本身、价值判定与记录导出。把模拟老板上提需要两处反转：尺子由实例注入（算参考值与记录抽到的事实两件事），题卡的通用抽取与行程推导拆开；下一个非旅行社的实例需要自己的老板时再做 | 新包 `automation/`；`simulation/` 的各模块与测试改为从它导入；`hire` 改收契约场景 | 现有测试只改导入与 `hire` 的参数；不新增行为 |
-| 2.7（已完成） | 披露日程成为输入对象；模拟老板不再读 Curator 计划；预期字段从两侧提示词收回。日程放在 `scenario/disclosure.py`：`Disclosure.of` 把运行选的 `all`、`staged`、契约里的具名计划或显式分批变成唯一的规则（开场交什么、第 k 次评审交什么、交互方是否自选、最后一轮前交齐），分批的合法性由契约与它共用一个 `partition`；模拟老板按它交出，运行设置记下解析后的日程。三种放法比较过：放进闭环（Session 按日程代为交出）会与 Studio 里自己决定交什么的人冲突，留在模拟老板里则与契约的校验重复、Studio 用不上；所以日程归交互方，闭环只搬运交出的东西（`Signal.attachments`），不读日程 | `scenario/disclosure.py`、`scenario/contract.py`、`simulation/agency.py`、`simulation/scenario.py`、`__main__.py`、`analyst/materials.py`、`iteration/hearing.py` | 新 `tests/test_scenario_disclosure.py`；`test_simulation_scenario.py`：`Agency` 不接收 `reply`、按日程交出；`test_analyst_run.py`：材料无 `previous_expectations` |
+| 2.7（已完成） | 披露日程成为输入对象；模拟老板不再读 Curator 计划；预期字段从两侧提示词收回。日程放在 `scenario/disclosure.py`：`Disclosure.of` 把运行选的 `all`、`staged`、契约里的具名计划或显式分批变成唯一的规则（开场交什么、第 k 次评审交什么、交互方是否自选、最后一轮前交齐），分批的合法性由契约与它共用一个 `partition`；模拟老板按它交出，运行设置记下解析后的日程。三种放法比较过：放进闭环（Session 按日程代为交出）会与 Studio 里自己决定交什么的人冲突，留在模拟老板里则与契约的校验重复、Studio 用不上；所以日程归交互方，闭环只搬运交出的东西（`Signal.attachments`），不读日程 | `scenario/disclosure.py`、`scenario/contract.py`、`simulation/agency.py`、`simulation/scenario.py`、`__main__.py`、`analyst/materials.py`、`harness/participation/hearing.py` | 新 `tests/test_scenario_disclosure.py`；`test_simulation_scenario.py`：`Agency` 不接收 `reply`、按日程交出；`test_analyst_run.py`：材料无 `previous_expectations` |
 | 2.8（已完成） | 留出集（模拟入口 `--holdout CARD...`：留出的题卡每轮演练，只由按声明检查项评分的自动 Assessor 评，老板不评、不交接，Analyst 与 Curator 看不到）；`iteration/ledger.py`；`record.py` 消费台账。设计里的 `origin` 标签落成类型化历史里的 id（要求 id、`grounds`、`addresses`、诊断的 `about`），不另设 origin 字段。`record.py` 只按这些 id 连接：要求经 `grounds` 里的 `check:<检查项 id>` 连到检查项，`case:` 记作它的案例，没有 check 依据的要求不连；改动经本轮历史条目里同一 target 的 `addresses` 找到它回应的要求，再取这些要求的检查项，只回应资料、节点或任务的改动（入职即如此）不连，没有历史条目的 curation（未安装、子 harness 自己的改动）也不连。记录新增 `requirements_ledger`（闭环自己的台账：rows、summary、holdout），transcript 加"要求台账"一节；"是否守住"只取自历史，`record.py` 不重算。原来的字符串启发式（文本里出现检查项 id、引用会话加共享引文、SOP 章节标记、整轮兜底）全部删除；资料何时交出改按信号里交接项的名字读，不再在评语里匹配 SKILL.md 的开头；`value.py` 没有归因记录时不再退回按规则 id 与章节标记判定。模拟老板的逐项判定对 Analyst 保密，要求多半只以 `assessor:agency` 为依据，显式规则下连不到检查项；为此运行结束时评价侧先读一次要求（`simulation/attribution.read_requirements`：模型把没有 check 依据的要求对到它复述的规则，结果与干预理由的归属一起记进 `attribution.json`），记录按它以 `reading` 连接，改动经 `addresses` 找到要求后同样取这些规则；闭环自己的台账仍只按 id 连接，这次阅读只服务评价侧的挖掘判定 | `scenario/contract.py`（holdout 声明）、`iteration/run.py`、新 `iteration/ledger.py`、`simulation/record.py`、`simulation/value.py`、`simulation/attribution.py` | 新 `tests/test_iteration_ledger.py`：要求到改动到下轮判定按 id 连接；`tests/test_simulation_record.py` 在无启发式下通过，其中文本点名检查项而 `grounds` 没有的要求不连；`tests/test_simulation_value.py`：没有归因记录时不计任何干预 |
 
 | 2.9（已完成） | Curator 的显式归因作为独立组件：每条输入一条 `Diagnosis`（状态闭集八种），选择阶段每个 target 引用一条，设计阶段对点名机制说明修改、替换还是新增；`Plan.understanding` 只面向反馈者；Analyst 的归因停在行为层（`Requirement` 加 `situation`），两层归因经台账连接 | 新 `curator/attribution/`（协议、模型归因器、给定归因器、状态、提示词）、`harness/attribution.py`、`harness/artifact.py`、`harness/declaration.py`、`generation/run.py`、`generation/stages/select.py`、`design.py`、`workflow.py`、`composition/run.py` | 新 `tests/test_harness_curator_attribution.py`：覆盖与闭集、依据与处置、独立对话与模型、暂停续跑、提示词版本、缺口、给定诊断、记录与单独入口 |

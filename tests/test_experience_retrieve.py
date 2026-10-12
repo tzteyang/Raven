@@ -4,10 +4,10 @@ import json
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.contracts import digest, for_model
-from experimental.experience.retrieve import ExperienceRetriever, GuidanceQuery, RetrievalLimits, export_bundle
-from experimental.experience.store import ExperienceStore, StoreError
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.contracts import digest, for_model
+from experimental.harness.experience.retrieve import ExperienceRetriever, GuidanceQuery, RetrievalLimits, export_bundle
+from experimental.harness.experience.store import ExperienceStore, StoreError
 from tests.experience_helpers import event, proposal, reviewed
 
 POLICY = AdmissionPolicy(critic_digest=digest({"rule": "test-critic"}))

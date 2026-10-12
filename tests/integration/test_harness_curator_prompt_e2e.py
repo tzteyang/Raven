@@ -5,18 +5,18 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker, WorkerError
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from tests.integration.test_harness_curator_e2e import baseline as baseline
 from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
 from tests.test_harness_curator_generation import response
 
 ACTION = """from pydantic import BaseModel, ConfigDict
-from experimental.curator.harness.prompts import Prompt
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import ActionEvent, ActionDecision
+from experimental.harness.contract.prompts import Prompt
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
 
 class Inputs(BaseModel):
     goal: str
@@ -44,8 +44,8 @@ class Action(ActionStrategy[None, None]):
 def create(state, task, *, infer, host):
     return Action(state, task, infer, host)
 """
-MEMORY = """from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView, CompactionRequest
+MEMORY = """from experimental.harness.contract.strategies import MemoryStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView, CompactionRequest
 
 class Memory(MemoryStrategy[bool, str, bool]):
     async def initialize(self, initial: InitialContext) -> bool:
@@ -165,10 +165,10 @@ async def test_strategy_inference_is_distinct_from_worker_model_decision(baselin
 
 SEMANTIC_ACTION = """from typing import Literal
 from pydantic import BaseModel, ConfigDict
-from experimental.curator.harness.action import ActionEvent, ActionDecision
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.prompts import Prompt
-from experimental.curator.harness.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionEvent, ActionDecision
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.prompts import Prompt
+from experimental.harness.contract.strategies import ActionStrategy
 
 class Criteria(BaseModel):
     goal: str
@@ -270,7 +270,7 @@ async def test_semantic_result_resamples_the_main_loop_with_one_attempt_per_prop
         "invalid judgment JSON",
     ],
 )
-async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_tool(baseline, tmp_path, judgment):
+async def test_semantic_dispatch_distinguishes_refusal_from_an_unverified_check(baseline, tmp_path, judgment):
     destination = baseline.workdir / "unapproved.txt"
     baseline.task = Task(text="Write only to an established destination.")
     baseline.config.permissions.tools["write_file"] = "allow"
@@ -279,7 +279,7 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
         responses=[
             response("write_file", {"path": str(destination), "content": "must not be written"}),
             LLMResponse(content=judgment),
-            LLMResponse(content="No file was written."),
+            LLMResponse(content="The tool result is recorded."),
         ],
     )
     async with Worker(baseline, tmp_path / "runtime", provider_factory=provider, timeout=45) as worker:
@@ -287,9 +287,9 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
         inspection = await worker.inspect()
         await worker.install(inspection.declaration.accept(plan_for(*proposed["values"]), proposed))
         execution = await worker.run("Prepare the requested output.")
-        assert not destination.exists()
         assert len([row for row in execution.records if row["kind"] == "strategy.inference"]) == 1
         if judgment.startswith("{"):
+            assert not destination.exists()
             assert any(
                 row["kind"] == "action.control"
                 and row["receipt"]["control"] == "reject"
@@ -297,6 +297,8 @@ async def test_semantic_dispatch_refusal_and_failed_check_do_not_execute_the_too
                 for row in execution.records
             )
         else:
+            assert destination.read_text() == "must not be written"
+            assert any(row["kind"] == "action.unverified" for row in execution.records)
             assert any(
                 row["kind"] == "strategy.inference.error" and row["error_kind"] == "result" for row in execution.records
             )

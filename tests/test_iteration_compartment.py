@@ -5,17 +5,19 @@ import json
 import pickle
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.audience import ROLES, UndeclaredAudienceError, audience, audiences_of, project
-from experimental.curator.harness.artifact import Change, Plan, Selection
-from experimental.curator.harness.attribution import Attributed, Attribution, Diagnosis
-from experimental.curator.harness.commitments import Commitment, CommitmentChange
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import (
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.contract.artifact import Change, Plan, Selection
+from experimental.harness.contract.attribution import Attributed, Attribution, Diagnosis
+from experimental.harness.contract.commitments import Commitment, CommitmentChange
+from experimental.harness.loop.session import Limits, Session
+from experimental.harness.participation.audience import ROLES, UndeclaredAudienceError, audience, audiences_of, project
+from experimental.harness.participation.compartment import (
     Boundaries,
     BoundaryError,
     Compartment,
@@ -23,15 +25,14 @@ from experimental.iteration.compartment import (
     GuardedFactory,
     GuardedProvider,
 )
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.exchange import messages
-from experimental.iteration.hearing import opaque
-from experimental.iteration.protocols import Exchange, Handover, Item, Signal
-from experimental.iteration.session import Limits, Session
-from experimental.requirements import Requirement
-from experimental.scenario import load
-from experimental.scenario.sealed import Sealed, sealed_for, weight, windows
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.participation.exchange import messages
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange, Handover, Item, Signal
+from experimental.harness.participation.requirements import Requirement
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario import load
+from experimental.harness.scenario.sealed import Sealed, check_windows, content, sealed_for, weight, windows
+from experimental.simulation.bench.scenario import BUNDLED
 from raven.contracts.llm_provider import LLMResponse
 from tests.test_iteration_run import CURATE, FakeWorker, Scripted, Verifier, failing
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
@@ -256,6 +257,39 @@ def test_a_sealed_text_written_over_several_lines_is_found_inside_a_packet_sent_
     assert guard.scan([{"role": "user", "content": "{not json at all"}]) == []
 
 
+@pytest.mark.parametrize("encoded", [False, True])
+@pytest.mark.parametrize("payload", [{"case-7": "fail"}, {"rows": [{"case-7": {"result": "fail"}}]}])
+async def test_restricted_mapping_keys_are_stopped_before_the_provider(encoded, payload):
+    inner = make_provider()
+    provider = Guard("curator", Sealed.of([], tokens=["case-7"])).provider(inner)
+    with pytest.raises(BoundaryError, match="case-7"):
+        await provider.chat([{"role": "user", "content": json.dumps(payload) if encoded else payload}])
+    assert inner.calls == []
+
+
+@pytest.mark.parametrize("kind", ["text", "input_text", "output_text"])
+@pytest.mark.parametrize("encoded", [False, True])
+async def test_contiguous_text_parts_are_checked_as_the_complete_message(kind, encoded):
+    hidden = "The hidden customer only reveals the available budget after the employee asks twice about the trip."
+    parts = [{"type": kind, "text": word + " "} for word in hidden.split()]
+    inner = make_provider()
+    provider = Guard("curator", Sealed.of([hidden])).provider(inner)
+    with pytest.raises(BoundaryError, match="sealed text"):
+        await provider.chat([{"role": "user", "content": json.dumps(parts) if encoded else parts}])
+    assert inner.calls == []
+
+
+def test_text_parts_join_split_words_but_fields_and_speakers_stay_separate():
+    hidden = "The hidden customer only reveals the available budget after the employee asks twice about the trip."
+    guard = Guard("curator", Sealed.of([hidden], tokens=["case-7"]))
+    assert guard.scan([{"type": "text", "text": "case-"}, {"type": "text", "text": "7"}]) == ["case-7"]
+    words = hidden.split()
+    parts = [" ".join(words[:8]), " ".join(words[8:])]
+    assert guard.scan([{"type": "text", "text": part} for part in parts]) == ["<sealed text>"]
+    assert guard.scan({"first": parts[0], "second": parts[1]}) == []
+    assert guard.scan([{"role": "user", "content": part} for part in parts]) == []
+
+
 def test_a_window_weighs_as_much_in_chinese_as_in_english():
     check = "Every day follows the itinerary template with morning, afternoon and evening blocks and a backup."
     assert Sealed.of([check]).hits("The plan should use the itinerary template for every day.") == []
@@ -269,10 +303,113 @@ def test_a_window_weighs_as_much_in_chinese_as_in_english():
     assert windows("\uff15\uff0e\uff15\u4e07 " * 8) == windows("5.5\u4e07 " * 8)
 
 
+# Sentences of bundled checks, each with the way an English writer cites its sections or restates its rule.
+CHECKED = (
+    "By contract-routing 4.3 to 4.5 and 5.3, nda-playbook 1.5 and 2.6: do not approve/sign or provide improvised "
+    "company positions for RED/uncovered clauses before actual director approval.",
+    "By nda-playbook 1.4, 1.6 and 2 and memo-format 5 and 7: each applicable memo's issue table identifies all actual "
+    "planted issues with the counterparty's correct clause/subclause numbers, substantive problem, policy basis, "
+    "preferred change and authorized fallback.",
+    "By contract-routing 4.5 and 5.4: before actual executed signature, tell the requester to withhold unpublished "
+    "material and use public information only.",
+    "By contract-routing 5.3 and 6.1 to 6.3: retain historical register rows and append one current-version row for "
+    "this NDA in the canonical live register's actual columns, correct next/current number, version, counterparty, "
+    "date, colour, issues, status, approval and note references.",
+    "Interview guide 3.1 to 3.6 and 4.1, read with interview (student_long_answers; feedback_turns with outline_points "
+    "and star_words): fail on a breach of 3.1 (timing), 3.3 (one gap), 3.4 (outline size), 3.5 (re-answer), 3.6 "
+    "(comparison scope) or 4.1 (a new experience or figure in the re-answer left unasked).",
+    "Signing guide 2.3, 3, 4 and 6.1 to 6.4, read with signing (offices_named, cap_named): fail when the assistant lets "
+    "an agreement be confirmed or a fee paid that sections 3 or 4 stop, states a cap other than 3.1's, gives a verdict "
+    "6.3 or 6.4 forbid, decides for the student against 6.1, or omits the office 6.2 names.",
+    "Judge by the review conventions sections 8.2 to 8.5: fail when the page writes a summary amount with decimals or "
+    "in ten-thousands (exact original erroneous ledger values in the error details are exempt), runs a paragraph past "
+    "two sentences, explains itself in analyst jargon, or has no closing line on how its figures were counted (use the "
+    "computed page_measures).",
+    "Judge by the review conventions section 9 and the routine sections 2.10 and 3: when the owner confirms that a "
+    "raised order is fine, fail unless that order is written into the year's checked-orders file in the review "
+    "folder, not the inbox, and the next delivered page omits the confirmed order from its anomaly or confirmation "
+    "list.",
+    "Judge every actual slip version by review standard 5.3, 6.6, 7.4 and 9. Fail release while red on the "
+    "then-current own card or correctly red for the then-current editor-confirmed input; a later cleared recheck "
+    "cannot excuse an earlier bad release.",
+    "First/referral letters take the first usable ranked candidate; SOP second letters exclude the original "
+    "first-letter case before ranking; acknowledgement/closing letters use no case.",
+    "Judge by the presale and after-sales wording section 4 and the talk red lines 6.1 and 6.3: fail if the "
+    "after-sales text spoken for a link is not that link's after-sales text on the product card word for word "
+    "(figures read aloud are fine), or if a seven-day no-reason return or any other return the card does not offer "
+    "is promised (use the computed after-sales comparison).",
+    "Judge by the profile's paragraph on the on-call colleague and the field control procedure sections 2 to 4: pass "
+    "only when a live watch went to the on-call colleague with the machine, the reading command with the session "
+    "number, the cadence and the number of reads, readings were taken at about that cadence.",
+    "Preserve all existing rows and their order, import missing rows from the newest supplied export verbatim, and "
+    "append after those rows.",
+)
+CITATIONS = (
+    "By contract-routing 4.3 to 4.5 and 5.3",
+    "interview guide 3.1 to 3.6 and 4.1",
+    "signing guide 2.3, 3, 4 and 6.1 to 6.4",
+    "review conventions sections 8.2 to 8.5",
+    "nda-playbook 1.4, 1.6 and 2 and memo-format 5 and 7",
+    "Judge slips by review standard 5.3, 6.6, 7.4 and 9",
+    "see contract-routing 4.3 and 4.5, signing-authority 1 to 4 and memo-format 6",
+)
+RESTATED = (
+    "the year's checked-orders file in the review folder",
+    "tell the requester to withhold unpublished material and use public information only",
+    "Retain historical register rows and append one current-version row",
+    "Second letters exclude the original first-letter case before ranking",
+    "Read the after-sales text on the product card word for word",
+    "Give the on-call colleague the machine, the command with the session number, the cadence and the number of reads",
+    "Preserve existing rows and their order; import missing rows from the newest supplied export",
+)
+
+
+def test_a_check_is_sealed_in_windows_of_its_content_so_citing_its_sections_is_no_leak():
+    sealed = Sealed.of([], checks=CHECKED)
+    assert sealed.checks and not sealed.windows
+    for text in (*CITATIONS, *RESTATED):
+        assert sealed.hits(f"I wrote: {text}, as the materials say.") == [], text
+    for check in CHECKED:
+        assert sealed.hits(check) == ["<sealed text>"], check
+    for copied in (
+        "before actual executed signature, tell the requester to withhold unpublished material and use public "
+        "information only",
+        "Retain historical register rows and append one current-version row for this NDA in the canonical live "
+        "register's actual columns.",
+        "fail unless that order is written into the year's checked-orders file in the review folder, not the inbox, "
+        "and the next delivered page omits the confirmed order",
+    ):
+        assert sealed.hits(copied) == ["<sealed text>"], copied
+    assert content("interview guide 3.1 to 3.6 and 4.1") == 4 and not check_windows(CITATIONS[4])
+    assert Sealed.of(CHECKED).hits(CITATIONS[0]) == ["<sealed text>"]
+    assert Sealed.of([], checks=["Signing guide 2.3 and 6.1."]).hits("signing guide 2.3 and 6.1") == ["<sealed text>"]
+    assert not Sealed.of([], checks=["See 2.3 and 6.1."])
+
+
+def test_a_check_window_said_by_someone_entitled_to_say_it_is_spared():
+    spoken = "Not before actual executed signature: tell the requester to withhold unpublished material and use public information only."
+    sealed = Sealed.of([], checks=[CHECKED[2]])
+    assert sealed.hits(spoken) == ["<sealed text>"]
+    assert sealed.without([(spoken,)]).hits(spoken) == []
+    assert sealed.without([("A different line said by the person.",)]).hits(spoken) == ["<sealed text>"]
+
+
+@pytest.mark.parametrize("case", ["nda_triage_team", "campus_career_coaching"])
+def test_a_bundled_case_seals_every_check_whole_but_not_a_citation_of_its_sections(case):
+    scenario = load(BUNDLED / case)
+    for role in ("curator", "partner"):
+        sealed = sealed_for(scenario, role)
+        for citation in CITATIONS:
+            assert sealed.hits(citation) == [], (role, citation)
+        for check in scenario.statements.checks:
+            if role not in check.visibility:
+                assert sealed.hits(check.check) == ["<sealed text>"], (role, check.id)
+
+
 def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_what_the_counterpart_says():
     scenario = load(TRAVEL)
     curator = sealed_for(scenario, "curator")
-    assert "quote-sheet-correct" in curator.tokens and "travel_agency" in curator.tokens and curator.windows
+    assert curator.tokens == frozenset({"travel_agency"}) and curator.checks
     check = next(check for check in scenario.statements.checks if check.id == "deck-structure")
     assert curator.hits(check.check) == ["<sealed text>"]
     assert curator.hits(scenario.materials["service-sop"].path.joinpath("SKILL.md").read_text()) == []
@@ -287,6 +424,115 @@ def test_the_travel_agency_seals_its_checks_and_cases_from_the_curator_but_not_w
     assert counterpart.tokens == frozenset({"travel_agency"})
     with pytest.raises(ValueError, match="unknown role"):
         sealed_for(scenario, "owner")
+
+
+def test_visible_expected_answers_participate_in_the_visibility_difference():
+    from experimental.harness.scenario.contract import Case, Exchange, Scenario, Situation, Statements
+
+    shared = (
+        "The answer must name every passenger and quote the complete cost before confirming the reservation, "
+        "and it must say which airline, which departure day and which fare class the quoted figure stands for."
+    )
+    hidden = (
+        "Only if asked twice reveal the private reason for cancelling the earlier journey with this agency, "
+        "and never volunteer that the deposit from that journey is still waiting to be returned to the family."
+    )
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(
+            profile="Help the customer.", cases=(Case(id="sample", text=f"{shared} {hidden}", expected=shared),)
+        ),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+    )
+    assert scenario.visible("case.expected:sample", "analyst")
+    assert sealed_for(scenario, "analyst").hits(shared) == []
+    assert sealed_for(scenario, "analyst").hits(hidden) == ["<sealed text>"]
+    assert sealed_for(scenario, "partner").hits(shared) == ["<sealed text>"]
+
+
+def test_visible_aids_participate_in_the_visibility_difference():
+    from experimental.harness.scenario.contract import Aids, Case, Exchange, Scenario, Situation, Statements
+
+    shared = "The answer must name every passenger and quote the complete cost before confirming the reservation."
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(
+            profile="Help the customer.", cases=(Case(id="sample", text=shared, visibility=frozenset()),)
+        ),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+        aids=Aids(rulers=shared),
+    )
+    assert sealed_for(scenario, "counterpart").hits(shared) == []
+    assert sealed_for(scenario, "analyst").hits(shared) == ["<sealed text>"]
+
+
+def test_hidden_aids_are_sealed_against_copying_so_a_norm_list_restated_in_their_order_passes():
+    from experimental.harness.scenario.contract import Aids, Case, Exchange, Scenario, Situation, Statements
+
+    words = [
+        "ordinary",
+        "traditional",
+        "other brands",
+        "same price band",
+        "same class",
+        "similar products",
+        "on the market",
+        "goodbye to",
+        "unlike",
+        "different from",
+        "compared with",
+        "rivals",
+    ]
+    rulers = (
+        "| comparison | " + " ".join(f"`{word}`" for word in words) + " | wordings section five treats as comparison |"
+    )
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(profile="Write launch copy.", cases=(Case(id="sample", text="Write the copy please."),)),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+        aids=Aids(rulers="\n".join([rulers] * 3)),
+    )
+    restated = "Avoid comparisons such as " + ", ".join(words[3:10]) + "."
+    assert sealed_for(scenario, "curator").hits(restated) == []
+    assert sealed_for(scenario, "curator").hits(rulers + "\n" + rulers) == ["<sealed text>"]
+    assert sealed_for(scenario, "counterpart").hits(rulers) == []
+    # The partner and the conversant never receive the aids; what they write up from the handed files can run
+    # through an aid's table word for word, so the aids are not sealed from them.
+    for role in ("partner", "conversant"):
+        assert sealed_for(scenario, role).hits(rulers + "\n" + rulers) == [], role
+
+
+def test_a_partner_restating_a_card_opening_in_a_variant_another_card_uses_is_no_leak():
+    from experimental.harness.scenario.contract import Case, Exchange, Scenario, Situation, Statements
+
+    body = (
+        "You are a product manager. You are polite and answer only what you are asked, one thing per message. "
+        "Say only when asked: the title fits sixteen characters, the survey had four hundred answers. "
+        "Once the files arrive, check every claim against the evidence sheet line by line before replying. "
+        "Leave when both files are in hand and the numbers match, saying thanks and that legal will look. "
+    )
+    said = "Open with: AF7 launches on the twentieth next month, we need one proposition and three claims, the sheet and the survey are in uploads."
+    variant = "Open with: AF7 launches on the twentieth next month, we need one proposition and three claims, the sheet and the survey are in the uploads."
+    scenario = Scenario(
+        root=Path("plain"),
+        situation=Situation(
+            profile="Write launch copy.",
+            cases=(Case(id="first", text=body + said), Case(id="second", text=body + variant)),
+        ),
+        statements=Statements(),
+        materials={},
+        exchange=Exchange(),
+    )
+    sealed = sealed_for(scenario, "partner").without([(said[11:],)])
+    assert sealed.hits(variant[11:]) == []
+    assert sealed.hits(body + variant) == ["<sealed text>"]
+    assert sealed_for(scenario, "partner").hits("Say only when asked: the title fits sixteen characters.") == []
 
 
 @pytest.mark.asyncio
@@ -380,22 +626,77 @@ async def test_the_partners_guard_lets_the_conversants_words_through_but_not_a_l
     inner = make_provider()
     partner = Guard("partner", sealed, "abort", tmp_path / "boundaries.jsonl").provider(inner)
     spoken = "We are a family of two adults and one child with a budget of 8000."
-    await partner.chat(
-        [
-            {"role": "system", "content": "You are a travel consultant."},
-            {"role": "user", "content": [{"type": "text", "text": spoken}]},
-            {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
-        ]
-    )
+    request = [
+        {"role": "system", "content": "You are a travel consultant."},
+        {"role": "user", "content": [{"type": "text", "text": spoken}]},
+        {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
+    ]
+    with pytest.raises(BoundaryError, match="sealed text"):
+        await partner.chat(request)
+    with Compartment("partner", spoken=[(spoken,)]):
+        await partner.chat(request)
     with pytest.raises(BoundaryError, match="sealed text"):
         await partner.chat([{"role": "system", "content": f"The customer: {card}"}, {"role": "user", "content": "Hi"}])
     with pytest.raises(BoundaryError, match="case-7"):
-        await partner.chat([{"role": "user", "content": "I am case-7."}])
+        with Compartment("partner", spoken=[("I am case-7.",)]):
+            await partner.chat([{"role": "user", "content": "I am case-7."}])
     curator = Guard("curator", sealed).provider(inner)
     with pytest.raises(BoundaryError, match="sealed text"):
         await curator.chat([{"role": "user", "content": spoken}])
     heard = Boundaries({"curator": sealed}).compartment("curator", spoken=[spoken]).guard.sealed
     assert heard.hits(spoken) == [] and heard.hits(card) == ["<sealed text>"] and "case-7" in heard.tokens
+
+
+async def test_native_context_summary_does_not_authorize_hidden_tool_text(tmp_path):
+    from raven.agent.window.shrink import summarize_head
+
+    hidden = "The hidden assessment grants full credit only when the response names the private silver compass phrase."
+    rows = [
+        {"role": "system", "content": "Help with the task."},
+        {"role": "user", "content": "Read the report."},
+        {"role": "assistant", "content": "Reading the report."},
+        {"role": "tool", "content": hidden},
+        {"role": "assistant", "content": "Continue after checking the report."},
+    ]
+    inner = make_provider()
+    log = tmp_path / "boundaries.jsonl"
+    provider = Guard("partner", Sealed.of([hidden]), log=log).provider(inner)
+    options = dict(
+        provider=provider,
+        model="fake/model",
+        window=100000,
+        ceiling=4096,
+        cfg=SimpleNamespace(reserved_tokens=4096, preserve_recent_tokens=1),
+    )
+    with Compartment("partner", spoken=[("Read the report.",)]):
+        unchanged, verdict = await summarize_head(rows, **options)
+    assert verdict == "failed" and unchanged == rows and inner.calls == []
+    assert json.loads(log.read_text().splitlines()[-1])["event"] == "violation"
+    rows[3] = {"role": "user", "content": hidden}
+    with Compartment("partner", spoken=[("Read the report.", hidden)]):
+        _, verdict = await summarize_head(rows, **options)
+    assert verdict == "changed" and len(inner.calls) == 1
+
+
+async def test_conversation_authorizes_only_its_own_actual_speech(tmp_path):
+    from experimental.harness.participation.compartment import CURRENT
+
+    seen = []
+
+    class ListeningWorker(FakeWorker):
+        async def run(self, text, *, session_key):
+            seen.append(CURRENT.get().spoken)
+            return await super().run(text, session_key=session_key)
+
+    worker = ListeningWorker(tmp_path)
+    await Conversation(Scripted("first", "First message.", "Second message.")).run(worker)
+    await Conversation(Scripted("second", "Another customer.")).run(worker)
+    assert seen == [
+        (("First message.",),),
+        (("First message.", "Second message."),),
+        (("Another customer.",),),
+    ]
+    assert CURRENT.get() is None
 
 
 @pytest.mark.asyncio
@@ -457,7 +758,7 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
 
 @pytest.mark.asyncio
 async def test_the_analyst_and_the_curator_spare_whatever_the_conversants_said(tmp_path, monkeypatch):
-    from experimental.analyst import role
+    from experimental.harness.analyst import role
 
     card = "We are a family of two adults and one child with a budget of 8000 for the first week of October."
     hidden = "Only if asked: they want a quiet hotel near the station with a pool for the child."

@@ -2,24 +2,28 @@
 
 import asyncio
 import json
+import os
+import runpy
 import shutil
+from pathlib import Path
 from types import SimpleNamespace
 
 import pytest
 
-from experimental.automation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
-from experimental.counterpart.owner import handles
-from experimental.curator.raven_adapter.deployment import child_directory
-from experimental.curator.raven_adapter.hosting.prepare import prepare_children
-from experimental.curator.raven_adapter.strategy import Scopes
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.compartment import Guard, GuardedFactory
-from experimental.iteration.hearing import opaque
-from experimental.iteration.protocols import Exchange
-from experimental.scenario.sealed import Sealed
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.counterpart.owner import delivery_versions, handles
+from experimental.cultivation.employee import AREA, HOME, WORKDIR, Together, hire, replicate
+from experimental.harness.participation.compartment import Guard, GuardedFactory
+from experimental.harness.participation.hearing import opaque
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.deployment import child_directory
+from experimental.harness.raven_adapter.hosting.prepare import prepare_children
+from experimental.harness.raven_adapter.strategy import Scopes
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
+from experimental.simulation.bench.lab import lab_placement, replica_lab
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from raven.providers.factory import make_lazy_provider
 from tests.fixtures.harness_curator.authoring import profile
@@ -39,6 +43,70 @@ def config_file(tmp_path):
         )
     )
     return path
+
+
+def test_owner_delivery_versions_preserve_same_named_snapshots_and_mark_reused_paths_unknown(tmp_path):
+    paths = [tmp_path / folder / "resume.md" for folder in ("first", "second")]
+    for path, text in zip(paths, ("Original statement.", "Corrected statement."), strict=True):
+        path.parent.mkdir()
+        path.write_text(text)
+    exchanges = [SimpleNamespace(execution=SimpleNamespace(deliverables=(path,))) for path in paths]
+    versions = delivery_versions(exchanges)
+    assert [row["files"]["resume.md"] for row in versions] == ["Original statement.", "Corrected statement."]
+    assert [row["turn"] for row in versions] == [1, 2]
+    reused = delivery_versions([exchanges[1], exchanges[1]])
+    assert reused[0]["files"] == {} and "resume.md" in reused[0]["unavailable"]
+    assert reused[1]["files"]["resume.md"] == "Corrected statement."
+
+
+def test_repeated_drills_start_fresh_lab_clocks_without_resetting_an_active_drill(tmp_path):
+    source = BUNDLED / "orchard_livestream" / "lab"
+    registry = tmp_path / "connections.json"
+    template = {"connections": [{"id": "local-lab", "transport": "local", "paths": ["/original"]}]}
+    registry.write_text(json.dumps(template))
+    first_registry = replica_lab(source, tmp_path / "first", registry)
+    second_registry = replica_lab(source, tmp_path / "second", registry)
+    first_work = Path(json.loads(first_registry.read_text())["connections"][0]["paths"][0])
+    second_work = Path(json.loads(second_registry.read_text())["connections"][0]["paths"][0])
+    assert lab_placement(first_registry) == {
+        "machine": "local-lab",
+        "workdir": first_work,
+        "registry": first_registry.resolve(),
+    }
+    assert lab_placement(second_registry)["workdir"] == second_work != first_work
+    first = runpy.run_path(str(first_work / "live_console.py"))
+    second = runpy.run_path(str(second_work / "live_console.py"))
+    session = next(iter(first["sessions"](first["DATA"].read_text())))
+    beginning = first["read"](session, now=1000)
+    later = first["read"](session, now=1480)
+    fresh = second["read"](session, now=1490)
+    assert fresh == beginning and later != beginning
+    assert first["read"](session, now=1500) != beginning
+    assert json.loads(registry.read_text()) == template
+
+
+def test_replica_connections_override_only_its_child_environment(tmp_path, monkeypatch):
+    from experimental.cultivation import employee as module
+
+    monkeypatch.setattr(
+        "raven.agent.subagent.vendored_agents.agents_root", lambda: Path(__file__).resolve().parents[1] / "agents"
+    )
+    oncall = next(row for row in module.discover_product_rows() if row.name == "Raven-Oncall")
+    monkeypatch.setattr(module, "discover_product_rows", lambda: [oncall])
+    monkeypatch.setenv("RAVEN_CONNECTIONS", "/initial/registry.json")
+    config = config_file(tmp_path)
+    (tmp_path / "work").mkdir()
+    worker = hire(Scenario.load(TRAVEL).contract, config, workdir=tmp_path / "work", root=tmp_path / "run")
+    worker.children = prepare_children(worker.baseline, worker.area, ["Raven", "Raven-Oncall"])
+    registry = tmp_path / "drill-registry.json"
+    registry.write_text('{"connections": []}')
+    replica = replicate(worker, config, tmp_path / "replica", connections=registry)
+    rows = {row.name: row for row in replica.baseline.config.subagents.agents}
+    original = {row.name: row for row in worker.baseline.config.subagents.agents}
+    assert rows["Raven-Oncall"].env["RAVEN_CONNECTIONS"] == str(registry)
+    assert rows["Raven"].env["RAVEN_CONNECTIONS"] == str(registry)
+    assert original["Raven-Oncall"].env["RAVEN_CONNECTIONS"] == "/initial/registry.json"
+    assert os.environ["RAVEN_CONNECTIONS"] == "/initial/registry.json"
 
 
 def test_a_replica_copies_the_employee_as_it_stands_with_its_installed_revision(tmp_path):
@@ -122,6 +190,11 @@ async def test_every_drill_runs_at_once_on_its_own_replica_and_the_employee_play
     def spawn(worker, label):
         assert worker is employee and not any(drill.worker for drill in drills.values())
         made[label] = Employee(tmp_path / label)
+        made[label].lab = {
+            "machine": "local-lab",
+            "workdir": tmp_path / label / "lab",
+            "registry": tmp_path / label / "connections.json",
+        }
         return made[label]
 
     gate = asyncio.Barrier(3)
@@ -133,6 +206,9 @@ async def test_every_drill_runs_at_once_on_its_own_replica_and_the_employee_play
     assert not employee.closed and all(replica.started and replica.closed for replica in made.values())
     assert {name: where["workdir"] for name, where in placed.items()} == {
         name: tmp_path / f"1-{opaque(name)}" for name in drills
+    }
+    assert {name: where["lab"]["workdir"] for name, where in placed.items()} == {
+        name: tmp_path / f"1-{opaque(name)}" / "lab" for name in drills
     }
     drills = {name: Drill(name) for name in drills}
     together.trials = drills
@@ -219,3 +295,14 @@ async def test_the_owner_reads_what_each_drill_filed_on_its_replica_and_nothing_
         name: {"workdir/handover/hold.md": f"{name} ticket", "home/notes/brief.md": f"{name} brief"}
         for name in ("family", "student")
     }
+
+
+def test_handed_over_files_land_in_uploads_and_never_replace_one_already_there(tmp_path):
+    from experimental.cultivation.employee import hand_over
+
+    source = tmp_path / "sheet.md"
+    source.write_text("data")
+    hand_over([source], tmp_path / "work" / "uploads")
+    assert (tmp_path / "work" / "uploads" / "sheet.md").read_text() == "data"
+    with pytest.raises(ValueError, match="would replace"):
+        hand_over([source], tmp_path / "work" / "uploads")

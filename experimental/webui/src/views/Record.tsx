@@ -1,4 +1,4 @@
-/* The record view: a run's cultivation record as experimental/simulation/record.py
+/* The record view: a run's cultivation record as experimental/simulation/bench/record.py
    builds it. It leads with the knowledge-sedimentation ledger (each of the
    owner's rules by round: did it fail, what did the Analyst ask for, what did the
    Curator land in which harness, did a mechanism fire, did the employee then
@@ -11,7 +11,7 @@ import { useEffect, useMemo, useState } from 'react'
 
 import { RECORD_UNAVAILABLE, loadBundle, loadMining, loadRecord } from '../api'
 import {
-  chainLabel, changesOf, completed, costLabel, diffLines, facetOf, groupCurations, handedAfter, inForce, isOnboarding,
+  disclosureLabel, changesOf, completed, costLabel, diffLines, facetOf, groupCurations, handedAfter, inForce, isOnboarding,
   isRoot, ledgerMatrix, mechanismOf, modelLine, researchLine, roleChoices, quotesOf, requirementsOf, revisionLabel, roundAt, roundSummaries, scopeLabel,
   VERDICT_LABEL,
 } from '../record'
@@ -103,7 +103,7 @@ interface Place {
 
 function Header({ record, entry, bundle }: { record: CultivationRecord; entry: RunEntry | undefined; bundle: { folder: string; bundle: Bundle | null } | null }): JSX.Element {
   const { run, cost } = record
-  const chain = chainLabel(run.chain) || entry?.chain || ''
+  const plan = disclosureLabel(run.disclose) || entry?.disclose || ''
   const models = modelLine(run.settings.models) || modelLine(entry?.models)
   const roles = roleChoices(run.settings.models, run.settings.efforts)
   const research = researchLine(run.settings.research)
@@ -124,7 +124,7 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
       </p>
       <dl className="rstats">
         <div><dt>status</dt><dd><span className={`dot ${run.status ?? ''}`} />{run.status ?? 'unknown'}</dd></div>
-        <div><dt>chain</dt><dd>{chain ? <code className="chainv">{chain}</code> : <span className="dim">not recorded</span>}</dd></div>
+        <div><dt>disclosure</dt><dd>{plan ? <code className="chainv">{plan}</code> : <span className="dim">not recorded</span>}</dd></div>
         <div><dt>rounds</dt><dd>{completed(record)}{typeof run.settings.rounds === 'number' ? ` of ${run.settings.rounds}` : ''} judged</dd></div>
         <div>
           <dt>versions</dt>
@@ -133,11 +133,12 @@ function Header({ record, entry, bundle }: { record: CultivationRecord; entry: R
         <div>
           <dt>cost</dt>
           <dd title={parts.map(([part, amount]) => `${part} ${costLabel(amount)}`).join(' · ')}>
-            {cost ? costLabel(cost.total) : entry?.spend != null ? costLabel(entry.spend) : <span className="dim">not recorded</span>}
+            {cost ? cost.total === null ? <span className="dim">unknown</span> : costLabel(cost.total) : entry?.spend != null ? costLabel(entry.spend) : <span className="dim">not recorded</span>}
           </dd>
         </div>
         {run.record_id ? <div><dt>record</dt><dd><code>{run.record_id.slice(0, 12)}</code></dd></div> : null}
       </dl>
+      {cost?.missing_calls ? <p className="quiet">Partial cost: {cost.missing_calls} calls have no classified reported price.</p> : null}
       {models ? <p className="rline"><span className="k">models</span>{models}</p> : null}
       {research ? <p className="rline"><span className="k">research</span>{research}</p> : null}
       {roles.length ? (
@@ -762,7 +763,7 @@ export function RecordView({
             {reply.error === RECORD_UNAVAILABLE ? 'The record builder is not available on this server.' : reply.status === 404 ? 'The server knows no such run.' : `The record could not be built: ${reply.error}`}
           </p>
           {reply.detail ? <p className="quiet small">{reply.detail}</p> : null}
-          {reply.error === RECORD_UNAVAILABLE ? <p className="quiet small">It lands as experimental/simulation/record.py; the view reads it as soon as the server can import it.</p> : null}
+          {reply.error === RECORD_UNAVAILABLE ? <p className="quiet small">It lands as experimental/simulation/bench/record.py; the view reads it as soon as the server can import it.</p> : null}
         </div>
       </div>
     )

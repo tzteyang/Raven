@@ -3,7 +3,7 @@
    heard while it held, the trials played on it and the process that ended it
    (the Analyst's decision and the curation). Each version's Harness
    commitments are replayed from the plans' commitment operations the way the
-   host applies them (experimental/curator/harness/commitments.py), so the
+   host applies them (experimental/harness/contract/commitments.py), so the
    ribbon's strands are the list the Curator itself kept. A run recorded before
    commitments existed has none; its strands fall back to the installed targets. */
 

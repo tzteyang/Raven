@@ -4,11 +4,11 @@ import shutil
 
 from pptx import Presentation
 
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.protocols import Exchange
-from experimental.simulation.cards import Trip
-from experimental.simulation.reference import Rules, deck, prices, quoted, references
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.simulation.bench.cards import Trip
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.reference import Rules, deck, prices, quoted, references
 
 TRAVEL = BUNDLED / "travel_agency"
 

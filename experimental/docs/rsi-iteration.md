@@ -33,7 +33,7 @@ flowchart TD
 
 三条边界：
 
-- **Assessor 的标准是它的私有状态。** 准则、材料、参考、留出样例由 Assessor 自己持有，闭环只看到 `Signal`；Assessor 决定 Analyst 看到多少（旅行社只给评语，数据集给逐例结果）。逐项判定、分数、参考答案止于 Analyst；Assessor 的评语、是否满意和交接材料由闭环原样转述给 Curator，Analyst 的要求随之送达。这条由 `iteration/hearing.py` 保证，不依赖 Assessor 自己删减。
+- **Assessor 的标准是它的私有状态。** 准则、材料、参考、留出样例由 Assessor 自己持有，闭环只看到 `Signal`；Assessor 决定 Analyst 看到多少（旅行社只给评语，数据集给逐例结果）。逐项判定、分数、参考答案止于 Analyst；Assessor 的评语、是否满意和交接材料由闭环原样转述给 Curator，Analyst 的要求随之送达。这条由 `harness/participation/hearing.py` 保证，不依赖 Assessor 自己删减。
 - **Analyst 停在诊断层。** 它说明哪个行为没达到、证据是什么、和上一轮预期差在哪；不说改哪个策略面、怎样实现。机制归因是 Curator 的事，只有 Curator 能读源码和装配事实。
 - **要求可观察、不写答案。** 每条要求写情境与期望行为、实际行为、证据、验收方式，不写"加一个 intake 清单"这类机制建议。
 
@@ -95,7 +95,7 @@ sequenceDiagram
 
 ## 6. 场景的输入类别与可见边界
 
-一个场景的输入落在一组封闭的类别里（`experimental/scenario/`）。类别从闭环的参与者推出：伙伴、它工作的世界、交互方、机制；场景输入只能描述前三者、交互怎样进行、以及之前发生过什么。加载器读场景目录时要求每个文件都属于一个类别，否则拒绝。
+一个场景的输入落在一组封闭的类别里（`experimental/harness/scenario/`）。类别从闭环的参与者推出：伙伴、它工作的世界、交互方、机制；场景输入只能描述前三者、交互怎样进行、以及之前发生过什么。加载器读场景目录时要求每个文件都属于一个类别，否则拒绝。
 
 | 类别 | 内容 | 默认可见 |
 |---|---|---|
@@ -120,4 +120,4 @@ sequenceDiagram
 | `assessor.role.Assessor.evaluate(sessions) -> Signal` | 谁持有标准、怎样评价、怎样说话；交出的材料放在 `Signal.attachments`。通用实现在 `assessor/`（真人、数据集） |
 | 任务说明与材料 | 员工的岗位说明，以及何时交出哪些资料 |
 
-Analyst 是通用的，场景不必提供。真人入口是 `python -m experimental.iteration`：真人既是对话方也是 Assessor。旅行社模拟在 `experimental/simulation/`，见上一级 [README](../README.md)。
+Analyst 是通用的，场景不必提供。真人入口是 `python -m experimental.cultivation`：真人既是对话方也是 Assessor。旅行社模拟在 `experimental/simulation/`，见上一级 [README](../README.md)。

@@ -6,16 +6,16 @@ from pathlib import Path
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.build import ExperiencePipeline
-from experimental.experience.builder import ModelExperienceBuilder
-from experimental.experience.contracts import BuildRequest, ExperienceCondition, RecordOrigin, digest
-from experimental.experience.critic import ModelExperienceCritic
-from experimental.experience.model import ModelLimits
-from experimental.experience.records import RecordAccess, RecordRejectedError, read_record
-from experimental.experience.retrieve import ExperienceRetriever, GuidanceQuery
-from experimental.experience.state import BuildState
-from experimental.experience.store import ExperienceStore
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.build import ExperiencePipeline
+from experimental.harness.experience.builder import ModelExperienceBuilder
+from experimental.harness.experience.contracts import BuildRequest, ExperienceCondition, RecordOrigin, digest
+from experimental.harness.experience.critic import ModelExperienceCritic
+from experimental.harness.experience.model import ModelLimits
+from experimental.harness.experience.records import RecordAccess, RecordRejectedError, read_record
+from experimental.harness.experience.retrieve import ExperienceRetriever, GuidanceQuery
+from experimental.harness.experience.state import BuildState
+from experimental.harness.experience.store import ExperienceStore
 from raven.core.config_stack import load_runtime_config
 from raven.providers.factory import make_lazy_provider
 from tests.experience_helpers import event, process_checked, proposal

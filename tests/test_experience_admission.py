@@ -2,9 +2,9 @@
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.contracts import EvidenceLink, ExperienceEvent, digest
-from experimental.experience.store import ExperienceStore, StoreConflictError
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.contracts import EvidenceLink, ExperienceEvent, digest
+from experimental.harness.experience.store import ExperienceStore, StoreConflictError
 from tests.experience_helpers import event, process_checked, proposal, reviewed
 
 POLICY = AdmissionPolicy(critic_digest=digest({"rule": "test-critic"}))

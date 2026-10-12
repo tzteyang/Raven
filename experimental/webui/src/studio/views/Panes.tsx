@@ -258,7 +258,7 @@ function Scope({ scope }: { scope?: string }): JSX.Element | null {
   return <span className="st-scope" title={T.childScopeHint}>{T.childScope(scope)}</span>
 }
 
-/* The ledger is the loop's own join (experimental/iteration/ledger.py) and is
+/* The ledger is the loop's own join (experimental/harness/loop/ledger.py) and is
    shown as recorded. Where the history left a requirement undiagnosed but the
    round's attribution record diagnosed it, the record's state is shown beside
    the empty cell, since the ledger counts only the history. */

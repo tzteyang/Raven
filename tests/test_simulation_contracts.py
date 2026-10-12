@@ -9,22 +9,22 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst.activity import activity
-from experimental.analyst.role import Analyst
-from experimental.analyst.run import NAME as FEEDBACK
-from experimental.automation.channel import seen
-from experimental.counterpart.owner import back_office, handles
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.action.runtime import REFUSED
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.history import entry
-from experimental.iteration.protocols import Exchange
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits
-from experimental.simulation.agency import NAME as REVIEW
-from experimental.simulation.agency import Agency, reports
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.cultivation.conversation import Conversation
+from experimental.cultivation.counterpart.owner import back_office, handles
+from experimental.harness.analyst.activity import activity
+from experimental.harness.analyst.role import Analyst
+from experimental.harness.analyst.run import NAME as FEEDBACK
+from experimental.harness.contract import Task
+from experimental.harness.loop.history import entry
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits
+from experimental.harness.participation.channel import seen
+from experimental.harness.participation.protocols import Exchange
+from experimental.harness.raven_adapter.action.runtime import REFUSED
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.owner import NAME as REVIEW
+from experimental.simulation.cases.travel_agency.owner import Agency, reports
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from raven.security.trust import wrap_untrusted
 
@@ -151,6 +151,48 @@ def test_the_owner_sees_a_call_the_action_strategy_refused_as_failed():
     ]
 
 
+@pytest.mark.parametrize("completion,expected", [({}, None), ({"ok": None}, None), ({"ok": True}, True)])
+def test_a_completed_tool_without_a_reported_success_remains_unknown(completion, expected):
+    rows = [
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {
+                "name": "write_file",
+                "phase": "start",
+                "tool_call_id": "one",
+                "arguments": {"path": "record.md"},
+            },
+        },
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"phase": "complete", "tool_call_id": "one", **completion},
+        },
+    ]
+    assert back_office([played(rows)]) == [
+        {"turn": 1, "action": "write_file", "target": "record.md", "ok": expected},
+    ]
+
+
+@pytest.mark.parametrize("first,second", [(True, False), (False, True)])
+def test_reused_tool_ids_keep_each_call_outcome_in_chronological_order(first, second):
+    rows = []
+    for name, path, ok in [
+        ("read_file", "input.md", True),
+        ("write_file", "a.md", first),
+        ("write_file", "b.md", second),
+    ]:
+        for event in [
+            {"phase": "start", "tool_call_id": "reused", "name": name, "arguments": {"path": path}},
+            {"phase": "complete", "tool_call_id": "reused", "ok": ok, "result_preview": "denied" if not ok else ""},
+        ]:
+            rows.append({"kind": "runner.event", "event_type": "ToolEvent", "event": event})
+    result = back_office([played(rows)])
+    assert [(row["target"], row["ok"]) for row in result] == [("a.md", first), ("b.md", second)]
+    assert [row.get("error") for row in result] == [None if first else "denied", None if second else "denied"]
+
+
 def test_the_owner_reads_what_each_colleague_was_asked_and_answered_once():
     """A delegation result, and a playbook step's account after a skill catalog that quotes the start of the
     report's marker."""
@@ -228,7 +270,7 @@ def test_a_gate_that_sent_work_back_reaches_the_curator_once_with_its_reason():
 
 class Worker:
     def __init__(self, root):
-        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's travellers"))
+        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's conversants"))
         self.root, self.last_plan, self.artifact_id = root, None, "artifact-0"
 
     async def run(self, text, *, session_key):
@@ -238,7 +280,7 @@ class Worker:
         return SimpleNamespace(sources={"skill.builtin/weather": {}}, facts={})
 
 
-class Traveller:
+class Conversant:
     name = "family"
 
     def __init__(self):
@@ -264,7 +306,7 @@ class Owner:
 
 
 def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut():
-    from experimental.simulation.agency import back_office, cut
+    from experimental.simulation.cases.travel_agency.owner import back_office, cut
 
     rows = [
         {
@@ -328,7 +370,7 @@ def test_the_owner_sees_a_failed_write_as_failed_and_knows_when_a_text_was_cut()
 
 def test_the_owner_reads_what_the_employee_filed_and_not_the_hosts_bookkeeping(tmp_path):
     """Raven's `.raven` checkpoint files and a deck engine's dot files are bookkeeping, not something filed."""
-    from experimental.simulation.agency import written
+    from experimental.simulation.cases.travel_agency.owner import written
 
     before, after = tmp_path / "before", tmp_path / "after"
     before.mkdir()
@@ -404,7 +446,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
     await run(
         worker,
         owner,
-        [Conversation(Traveller(), max_turns=2)],
+        [Conversation(Conversant(), max_turns=2)],
         (agency,),
         analyst=Analyst(owner, model="analyst-model"),
         curator=curator,

@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.counterpart.drills import enlist, grouped
+from experimental.simulation.bench.drills import enlist, grouped
 
 
 class Card:

@@ -4,11 +4,11 @@ import random
 
 import pytest
 
-from experimental.automation.traveller import Traveller
-from experimental.scenario.contract import frontmatter
-from experimental.simulation.cards import draw
-from experimental.simulation.reference import Rules
-from experimental.simulation.scenario import BUNDLED, Scenario
+from experimental.harness.scenario.contract import frontmatter
+from experimental.simulation.bench.cards import draw
+from experimental.simulation.bench.conversant import Conversant
+from experimental.simulation.bench.scenario import BUNDLED, Scenario
+from experimental.simulation.cases.travel_agency.reference import Rules
 from raven.contracts.llm_provider import LLMResponse
 
 TRAVEL = BUNDLED / "travel_agency"
@@ -67,12 +67,12 @@ def test_one_seed_draws_the_same_facts_and_a_card_without_values_plays_as_writte
 async def test_the_traveller_plays_its_card_afresh_each_conversation_and_one_seed_repeats_the_rounds():
     scenario = Scenario.load(TRAVEL)
     student = next(persona for persona in scenario.personas if persona.name == "student")
-    traveller = Traveller(student, Provider(), seed=3)
+    traveller = Conversant(student, Provider(), seed=3)
     await traveller.speak([])
     first = traveller.card
     await traveller.speak([])
     assert traveller.card != first and traveller.played == 2
-    again = Traveller(student, Provider(), seed=3)
+    again = Conversant(student, Provider(), seed=3)
     await again.speak([])
     assert again.card == first
     assert first.trip.end == (first.trip.start[0], first.trip.start[1] + 3)

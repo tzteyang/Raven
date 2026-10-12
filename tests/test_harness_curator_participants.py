@@ -2,11 +2,11 @@
 
 import pytest
 
-from experimental.curator.raven_adapter.bind import conform
-from experimental.curator.raven_adapter.calls import strategy_method
-from experimental.curator.raven_adapter.inference import supplied
-from experimental.curator.raven_adapter.planning.contracts import PlanReader
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.raven_adapter.bind import conform
+from experimental.harness.raven_adapter.calls import strategy_method
+from experimental.harness.raven_adapter.inference import supplied
+from experimental.harness.raven_adapter.planning.contracts import PlanReader
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.contracts.tool_gate import ToolGate
 
 

@@ -1,0 +1,79 @@
+{
+  "materials": {
+    "wecom-service-norms": {
+      "kind": "norm"
+    },
+    "claims-redlines": {
+      "kind": "norm"
+    },
+    "escalation-guide": {
+      "kind": "norm"
+    },
+    "queue-patrol-brief": {
+      "kind": "norm"
+    },
+    "repurchase-sop": {
+      "kind": "norm"
+    },
+    "product-handbook": {
+      "kind": "fact"
+    },
+    "customer-records": {
+      "kind": "fact"
+    },
+    "campaign-calendar": {
+      "kind": "fact"
+    },
+    "message-examples": {
+      "kind": "exemplar"
+    }
+  },
+  "checks": {
+    "outreach-wording-rules": {
+      "derived_from": [
+        "wecom-service-norms",
+        "claims-redlines",
+        "repurchase-sop"
+      ]
+    },
+    "health-and-aftersales-routing": {
+      "derived_from": [
+        "claims-redlines",
+        "escalation-guide"
+      ]
+    },
+    "send-date-reckoning": {
+      "derived_from": [
+        "repurchase-sop",
+        "wecom-service-norms"
+      ]
+    },
+    "held-members-not-queued": {
+      "derived_from": [
+        "wecom-service-norms",
+        "repurchase-sop",
+        "escalation-guide"
+      ]
+    },
+    "approval-before-queue": {
+      "derived_from": [
+        "wecom-service-norms"
+      ]
+    },
+    "queue-and-ledger-records": {
+      "derived_from": [
+        "wecom-service-norms"
+      ]
+    },
+    "patrol-handed-to-oncall": {
+      "derived_from": [
+        "queue-patrol-brief"
+      ]
+    },
+    "customer-reply-content": {
+      "derived_from": [
+        "wecom-service-norms"
+      ]
+    }
+  }
+}

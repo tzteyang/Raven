@@ -14,7 +14,7 @@ from urllib.request import urlopen
 
 import pytest
 
-from experimental.iteration.hearing import opaque
+from experimental.harness.participation.hearing import opaque
 from experimental.webui import serve
 from experimental.webui.serve import (
     Handler,
@@ -1063,7 +1063,7 @@ def test_the_run_list_carries_the_verdict_and_mining_summaries_rank_their_runs(s
                 "ranking": [
                     {
                         "label": "staged",
-                        "plan": ["--chain", "staged"],
+                        "plan": ["--disclose", "staged"],
                         "name": "hoh-staged-0925",
                         "status": "finished",
                         "rounds": 4,
@@ -1085,7 +1085,7 @@ def test_the_run_list_carries_the_verdict_and_mining_summaries_rank_their_runs(s
     assert session["ranking"] == [
         {
             "label": "staged",
-            "plan": ["--chain", "staged"],
+            "plan": ["--disclose", "staged"],
             "name": "hoh-staged-0925",
             "status": "finished",
             "rounds": 4,

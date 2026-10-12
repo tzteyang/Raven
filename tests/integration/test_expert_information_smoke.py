@@ -6,15 +6,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.harness import Declaration, Task
-from experimental.curator.raven_adapter.exploration import Exploration, Withheld
-from experimental.curator.raven_adapter.inspection import Inspection, file_source
-from experimental.curator.raven_adapter.targets import catalogue
-from experimental.research import curator
-from experimental.research.collection import ASSESS, PLAN, REVIEW, SUBMIT
-from experimental.research.guidance import SUBMIT as SUBMIT_GUIDANCE
-from experimental.research.information import Request, Result, Review, Snapshot
-from experimental.research.inquiry import Inquiry
+from experimental.cultivation.collector import curator
+from experimental.cultivation.collector.collection import ASSESS, PLAN, REVIEW, SUBMIT
+from experimental.cultivation.collector.guidance import SUBMIT as SUBMIT_GUIDANCE
+from experimental.cultivation.collector.information import Request, Result, Review, Snapshot
+from experimental.cultivation.collector.inquiry import Inquiry
+from experimental.harness.contract import Declaration, Task
+from experimental.harness.raven_adapter.exploration import Exploration, Withheld
+from experimental.harness.raven_adapter.inspection import Inspection, file_source
+from experimental.harness.raven_adapter.targets import catalogue
 from raven.config.schema import Config
 from tests.research_helpers import Provider, response
 from tests.test_harness_curator_exploration import Executor
@@ -337,9 +337,9 @@ async def test_frozen_result_replays_without_model_calls_but_refuses_changed_inp
 async def test_offline_entry_returns_reviewed_information_without_curation(tmp_path, monkeypatch, model):
     from argparse import Namespace
 
-    from experimental.research import __main__ as entry
-    from experimental.scenario import load
-    from experimental.scenario.digest import digest
+    from experimental.cultivation.collector import __main__ as entry
+    from experimental.harness.scenario import load
+    from experimental.harness.scenario.digest import digest
     from tests.research_helpers import make_scenario
 
     worker, _, _, _ = host(tmp_path, monkeypatch)
@@ -405,9 +405,9 @@ async def test_offline_entry_returns_reviewed_information_without_curation(tmp_p
 @pytest.mark.asyncio
 @pytest.mark.parametrize("blocked", [False, True])
 async def test_scenario_onboarding_uses_the_shared_flow_and_release_boundary(tmp_path, monkeypatch, blocked):
-    from experimental.iteration.session import Session
-    from experimental.research.scenario import scenario_preparer, stage_released
-    from experimental.scenario import load
+    from experimental.cultivation.collector.scenario import scenario_preparer, stage_released
+    from experimental.harness.loop.session import Session
+    from experimental.harness.scenario import load
     from tests.research_helpers import CHECK, make_scenario
 
     worker, _, _, explorations = host(tmp_path, monkeypatch)
@@ -456,7 +456,7 @@ async def test_scenario_onboarding_uses_the_shared_flow_and_release_boundary(tmp
 
 
 def test_environment_binding_ignores_run_locations_but_not_permissions(tmp_path):
-    from experimental.research.curator import _environment
+    from experimental.cultivation.collector.curator import _environment
 
     first = SimpleNamespace(
         root=tmp_path / "a", baseline=SimpleNamespace(workdir=tmp_path / "a/work", task=Task(text="Review evidence."))
@@ -488,7 +488,7 @@ def test_environment_binding_ignores_run_locations_but_not_permissions(tmp_path)
 def test_environment_binding_follows_a_childs_definition_not_the_version_its_run_paths_give_it(tmp_path, model):
     import hashlib
 
-    from experimental.research.curator import _environment
+    from experimental.cultivation.collector.curator import _environment
 
     def worker(name, child_model):
         root = tmp_path / model / name
@@ -511,7 +511,7 @@ def test_environment_binding_follows_a_childs_definition_not_the_version_its_run
 
 @pytest.mark.asyncio
 async def test_replay_cannot_ignore_new_answers(tmp_path, monkeypatch):
-    from experimental.research.information import Question
+    from experimental.cultivation.collector.information import Question
 
     worker, material, _, _ = host(tmp_path, monkeypatch)
     base = snapshot()

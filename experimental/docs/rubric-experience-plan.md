@@ -17,7 +17,7 @@
 | 公共经验协议接入 | 已实现，共享 Governance、实际指令绑定及旧记录隔离迁移 |
 | 标准化经验评审和归因修订 | 已实现类型说明、持久诊断、受限替换、来源撤销和验证后回滚 |
 
-既有实现位于 experimental/assessor/guidance.py、reviewer.py、validation.py 和 standard.py。已有记录及测试继续保留，不能因为抽取公共模块而把现有闭环视为未实现，或把公共设计草案描述为已接入。
+既有实现位于 experimental/harness/assessor/guidance.py、reviewer.py、validation.py 和 standard.py。已有记录及测试继续保留，不能因为抽取公共模块而把现有闭环视为未实现，或把公共设计草案描述为已接入。
 
 ## 闭环角色与运行时序
 

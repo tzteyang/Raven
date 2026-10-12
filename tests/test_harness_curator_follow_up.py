@@ -4,7 +4,7 @@ their announcements as follow-up turns; a conversant who is away only for a whil
 import asyncio
 from dataclasses import dataclass
 
-from experimental.curator.raven_adapter.worker import follow_up, trial_turn
+from experimental.harness.raven_adapter.worker import follow_up, trial_turn
 from raven.spine.turn import AnswerlessTurnError
 
 
@@ -25,6 +25,25 @@ class Background:
             self.announcements.put_nowait(self.results.pop(0))
             return True
         return False
+
+
+async def test_delayed_announcement_keeps_the_stage_that_created_it(tmp_path):
+    from raven.observability import execution
+    from raven.observability.report import read
+
+    announcements = asyncio.Queue()
+
+    async def run_turn(request):
+        with execution.attempt("test", "model") as attempt:
+            attempt.usage({"completion_tokens": 5})
+
+    with execution.run(tmp_path):
+        with execution.scope("trial", round_index=1):
+            announcements.put_nowait((Announcement("ready"), execution.current()))
+        with execution.scope("trial", round_index=2):
+            await follow_up(lambda: False, announcements, run_turn, poll=0)
+    (row,) = read(tmp_path)["attempts"]
+    assert row["attributes"]["round_index"] == 1
 
 
 async def test_announcements_run_in_order_and_the_turn_ends_when_nothing_is_left():

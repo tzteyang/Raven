@@ -17,6 +17,7 @@ import type { Curation, Diagnosis, Feedback, Handover, Question, Run, Selection,
 
 export type Entry =
   | { kind: 'onboarding'; task: string; opening: Signal[] }
+  | { kind: 'baseline'; signals: Signal[]; heldOut: string[] }
   | { kind: 'remark'; round: number; version: string; signals: Signal[]; holdout: Signal[]; heldOut: string[] }
   | { kind: 'requirements'; round: number; feedback: Feedback; held: Record<string, boolean | null> }
   | { kind: 'reply'; reply: Reply }
@@ -198,6 +199,7 @@ export function timeline(run: Run, all: Revision[]): Entry[] {
   const opening = run.opening ?? []
   const questions = run.questions ?? []
   const entries: Entry[] = [{ kind: 'onboarding', task: run.task, opening }]
+  if (run.baseline) entries.push({ kind: 'baseline', signals: run.baseline.signals, heldOut: Object.keys(run.baseline.sessions) })
   let current = 'v0'
   const push = (revision: Revision, signals: Signal[]) => {
     entries.push({ kind: 'reply', reply: reply(run, revision, current, versions, signals) })

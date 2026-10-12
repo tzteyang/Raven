@@ -7,11 +7,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.raven_adapter.capability.leaf import LeafRegistry, bind_leaf
-from experimental.curator.raven_adapter.hosting.acp import PAGE_BYTES, ROW_BYTES, bounded, page
-from experimental.curator.raven_adapter.hosting.connection import connection
-from experimental.curator.raven_adapter.hosting.evidence import inspect as inspect_child
-from experimental.curator.raven_adapter.hosting.transport import serve
+from experimental.harness.raven_adapter.capability.leaf import LeafRegistry, bind_leaf
+from experimental.harness.raven_adapter.hosting.acp import PAGE_BYTES, ROW_BYTES, bounded, page
+from experimental.harness.raven_adapter.hosting.connection import connection
+from experimental.harness.raven_adapter.hosting.evidence import inspect as inspect_child
+from experimental.harness.raven_adapter.hosting.transport import serve
 from raven.acp.methods import AcpMethodError
 from raven.agent.subagent.manager import SubagentManager
 from raven.agent.subagent.role import SUBAGENT_ENV_VAR
@@ -197,3 +197,39 @@ async def test_inspect_fetches_every_page_from_an_offset_and_otherwise_carries_n
     report = await inspect_child(Client(), offset=1)
     assert report["records"] == [row for row in rows[1:] if row["kind"] != "provider.delta"]
     assert report["omitted"] == {"provider.delta": 1} and len(requests) >= 4
+
+
+async def test_child_evidence_keeps_between_turn_work_once_and_restarts_at_a_new_process(monkeypatch):
+    from experimental.harness.raven_adapter.hosting import evidence
+
+    rows = [{"kind": "hosting.ready"}]
+    process = {"pid": 7}
+
+    class Client:
+        async def request(self, method, params, timeout):
+            report = {**process, "log": "observations.jsonl", "total": len(rows), "revision": "same"}
+            return {**report, **page(rows, params["offset"])} if "offset" in params else report
+
+    connection = SimpleNamespace(client=Client(), launch_key="launch")
+    monkeypatch.setattr(evidence, "get_pool", lambda: SimpleNamespace(live=lambda name: [connection]))
+    monkeypatch.setattr(evidence, "get_registry", lambda: SimpleNamespace(list_instances=lambda conversation: []))
+    kept = []
+    recorder = SimpleNamespace(add=lambda kind, **values: kept.append({"kind": kind, **values}))
+    before = await evidence.snapshots(["Oncall"])
+    rows.append({"kind": "runner.event", "event": {"result_preview": "first patrol"}})
+    await evidence.record_children(["Oncall"], before, recorder, "drill", [])
+    rows.append({"kind": "runner.event", "event": {"result_preview": "between turns"}})
+    rows.append({"kind": "provider.delta", "delta": {}})
+    rows.append({"kind": "runner.event", "event": {"result_preview": "next turn"}})
+    await evidence.record_children(["Oncall"], before, recorder, "drill", [])
+    await evidence.record_children(["Oncall"], before, recorder, "drill", [])
+    assert [[row["event"]["result_preview"] for row in item["records"]] for item in kept] == [
+        ["first patrol"],
+        ["between turns", "next turn"],
+    ]
+    assert kept[1]["omitted"] == {"provider.delta": 1}
+    process["pid"] = 8
+    rows[:] = [{"kind": "runner.event", "event": {"result_preview": "new process"}}]
+    await evidence.record_children(["Oncall"], before, recorder, "drill", [])
+    assert kept[-1]["pid"] == 8
+    assert kept[-1]["records"] == rows

@@ -5,9 +5,9 @@ import json
 
 import pytest
 
-from experimental.research.information import FindingVerdict, ResearchBrief, ResearchReview
-from experimental.research.inquiry import Inquiry
-from experimental.research.review import review_research
+from experimental.cultivation.collector.information import FindingVerdict, ResearchBrief, ResearchReview
+from experimental.cultivation.collector.inquiry import Inquiry
+from experimental.cultivation.collector.review import review_research
 from tests.research_helpers import research_brief
 from tests.test_research_inquiry import FOUND, PAGE, TEXT, Pages
 

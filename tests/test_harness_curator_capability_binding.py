@@ -5,14 +5,14 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.resources import SkillContribution, SkillPackage, ToolContribution
-from experimental.curator.raven_adapter.capability.catalog import CapabilityCatalog, inspect_package
-from experimental.curator.raven_adapter.capability.contracts import CapabilityBinding
-from experimental.curator.raven_adapter.capability.runtime import BoundCapability
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.observe import Recorder
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.resources import SkillContribution, SkillPackage, ToolContribution
+from experimental.harness.raven_adapter.capability.catalog import CapabilityCatalog, inspect_package
+from experimental.harness.raven_adapter.capability.contracts import CapabilityBinding
+from experimental.harness.raven_adapter.capability.runtime import BoundCapability
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.observe import Recorder
 from raven.agent.tools.registry import ToolRegistry
 from raven.config.raven import RavenConfig
 from raven.contracts.tool import Tool
@@ -80,12 +80,12 @@ def test_missing_annotations_report_the_actual_strategy_operation(tmp_path, meth
 
 @pytest.mark.parametrize("adopt", [False, True])
 def test_strategy_preparation_controls_whether_packaged_skill_assets_become_active(tmp_path, adopt):
-    code = f"""from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.resources import (
+    code = f"""from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.resources import (
     CapabilityContribution, CapabilitySelection, RegistrationReceipt,
     SelectionRequest, SkillContribution,
 )
-from experimental.curator.harness.strategies import CapabilityStrategy
+from experimental.harness.contract.strategies import CapabilityStrategy
 
 class Policy(CapabilityStrategy):
     def __init__(self, registrar):
@@ -143,8 +143,8 @@ def create(state, task, *, registrar):
 
 @pytest.mark.parametrize("status", ["unchanged", "staged"])
 def test_policy_receipts_cannot_forge_registration_or_bypass_closure(tmp_path, status):
-    code = f"""from experimental.curator.harness.strategies import CapabilityStrategy
-from experimental.curator.harness.resources import (
+    code = f"""from experimental.harness.contract.strategies import CapabilityStrategy
+from experimental.harness.contract.resources import (
     CapabilityContribution, RegistrationReceipt, SelectionRequest, CapabilitySelection,
 )
 class Policy(CapabilityStrategy):

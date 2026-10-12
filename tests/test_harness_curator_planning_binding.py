@@ -6,11 +6,11 @@ from pathlib import Path
 import pytest
 from pydantic_core import PydanticSerializationError
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.observe import Recorder
-from experimental.curator.raven_adapter.planning.contracts import PlanningBinding, PlanningObservation
-from experimental.curator.raven_adapter.planning.runtime import BoundPlanning
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.observe import Recorder
+from experimental.harness.raven_adapter.planning.contracts import PlanningBinding, PlanningObservation
+from experimental.harness.raven_adapter.planning.runtime import BoundPlanning
 
 FIXTURES = Path(__file__).parent / "fixtures/harness_curator"
 
@@ -183,7 +183,7 @@ async def test_changed_policy_rejects_unverified_completion_without_losing_state
 
 @pytest.mark.asyncio
 async def test_each_session_keeps_its_own_plan_across_restarts(tmp_path):
-    from experimental.curator.raven_adapter.strategy import SESSION
+    from experimental.harness.raven_adapter.strategy import SESSION
     from raven.permissions.turn import start_permission_turn
 
     # Outside an explicit session the key falls back to the current turn's conversation, and a turn another test
@@ -215,7 +215,7 @@ async def test_each_session_keeps_its_own_plan_across_restarts(tmp_path):
 
 @pytest.mark.asyncio
 async def test_other_components_read_a_detached_copy_of_their_own_conversations_plan(tmp_path):
-    from experimental.curator.raven_adapter.strategy import SESSION
+    from experimental.harness.raven_adapter.strategy import SESSION
 
     planning = make(tmp_path)
     token = SESSION.set("traveller:a")
@@ -288,10 +288,10 @@ async def test_failed_checkpoint_does_not_publish_a_new_plan(tmp_path, monkeypat
     await planning.prepare()
     before = planning.path.read_bytes()
 
-    def fail():
+    def fail(records):
         raise OSError("checkpoint unavailable")
 
-    monkeypatch.setattr(planning.scopes, "save", fail)
+    monkeypatch.setattr(planning.scopes.checkpoints, "save", fail)
     with pytest.raises(OSError, match="checkpoint unavailable"):
         await planning.interact({"operation": "complete", "item": "Verify"})
     assert planning.path.read_bytes() == before
@@ -345,7 +345,7 @@ def test_projection_domain_extensions_belong_in_the_view(tmp_path):
 
 @pytest.mark.asyncio
 async def test_planning_factory_reader_is_session_scoped_and_only_reads_committed_state(tmp_path):
-    from experimental.curator.raven_adapter.strategy import SESSION
+    from experimental.harness.raven_adapter.strategy import SESSION
 
     contents = files()
     contents["task_planning.py"] = contents["task_planning.py"].replace(
@@ -378,8 +378,9 @@ async def test_planning_factory_reader_is_session_scoped_and_only_reads_committe
 @pytest.mark.asyncio
 async def test_the_validation_probe_refuses_an_observation_translation_that_keeps_state(tmp_path):
     from types import SimpleNamespace
+    from unittest.mock import AsyncMock
 
-    from experimental.curator.raven_adapter.probe import PROBE, exercise_translations
+    from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
 
     def bound_for(planning):
         return SimpleNamespace(
@@ -422,6 +423,7 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
     class Memory:
         observe = staticmethod(lambda observation: None)
         command_type = dict
+        initialize_context = AsyncMock()
 
         async def prepare(self):
             return None
@@ -434,9 +436,18 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
             return function(observation)
 
     with_memory = SimpleNamespace(
-        planning=None, strategies={"memory": Memory()}, recorder=clean.recorder, baseline=None
+        planning=None,
+        strategies={"memory": Memory()},
+        recorder=clean.recorder,
+        baseline=None,
+        context_sources=SimpleNamespace(assemble=AsyncMock(), frame=lambda session: SimpleNamespace(messages=[])),
+        runtime=SimpleNamespace(
+            loop=SimpleNamespace(harness=SimpleNamespace(memory=SimpleNamespace(token_budget=lambda: None)))
+        ),
     )
-    await exercise_translations(with_memory)
+    from experimental.harness.raven_adapter.probe import _memory
+
+    await _memory(with_memory, "probe")
     assert seen == [("observe", "validation-probe-after_iteration", 0)]
     memory_rows = [row for row in clean.recorder.rows if row.get("strategy") == "memory"]
     assert memory_rows[-1]["status"] == "passed"
@@ -451,6 +462,9 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
 
         def scope(self):
             return clean.scope()
+
+        def envelope(self, controls, *, can_guide=False):
+            return {"scope": self.scope(), "event_id": "", "allowed_controls": controls, "can_guide": can_guide}
 
         async def handle_event(self, event):
             handled.append((event.kind, event.allowed_controls, event.can_guide))

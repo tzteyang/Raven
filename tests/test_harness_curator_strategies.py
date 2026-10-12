@@ -1,5 +1,6 @@
 """Semantic strategy boundaries, checkpoint ownership and validated resource decisions."""
 
+import json
 from dataclasses import replace
 from pathlib import Path
 from types import SimpleNamespace
@@ -8,21 +9,21 @@ import pytest
 from pydantic import BaseModel
 from pydantic_core import PydanticSerializationError
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.harness.action import ActionDecision, FailureEvent, ProposalEvent
-from experimental.curator.harness.context import ContextRequest, ContextSource
-from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.resources import EffectiveCapabilities, SelectionRequest
-from experimental.curator.raven_adapter.action.contracts import ActionBinding
-from experimental.curator.raven_adapter.action.runtime import REFUSED, BoundAction
-from experimental.curator.raven_adapter.capability.catalog import CapabilityCatalog
-from experimental.curator.raven_adapter.capability.contracts import CapabilityBinding
-from experimental.curator.raven_adapter.capability.runtime import BoundCapability
-from experimental.curator.raven_adapter.context_sources import ContextFrame
-from experimental.curator.raven_adapter.materialize import write_package
-from experimental.curator.raven_adapter.memory.contracts import MemoryBinding
-from experimental.curator.raven_adapter.memory.runtime import BoundMemory
-from experimental.curator.raven_adapter.observe import Recorder
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.action import ActionDecision, FailureEvent, ProposalEvent
+from experimental.harness.contract.context import ContextRequest, ContextSource
+from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.resources import EffectiveCapabilities, SelectionRequest
+from experimental.harness.raven_adapter.action.contracts import ActionBinding
+from experimental.harness.raven_adapter.action.runtime import REFUSED, BoundAction
+from experimental.harness.raven_adapter.capability.catalog import CapabilityCatalog
+from experimental.harness.raven_adapter.capability.contracts import CapabilityBinding
+from experimental.harness.raven_adapter.capability.runtime import BoundCapability
+from experimental.harness.raven_adapter.context_sources import ContextFrame
+from experimental.harness.raven_adapter.materialize import write_package
+from experimental.harness.raven_adapter.memory.contracts import MemoryBinding
+from experimental.harness.raven_adapter.memory.runtime import BoundMemory
+from experimental.harness.raven_adapter.observe import Recorder
 from raven.agent.tools.registry import ToolRegistry
 from raven.config.raven import RavenConfig
 from raven.contracts.assembled import TokenBudget
@@ -57,14 +58,14 @@ def values():
     }
 
 
-def make(tmp_path, role, contents=None, task=None):
+def make(tmp_path, role, contents=None, task=None, plan=None):
     package = write_package(tmp_path / "package", Artifact(values={}, files=contents or files()))
     binding, implementation = ROLES[role]
     task = task or Task(id="task", text="Find evidence")
     recorder = Recorder(tmp_path / "records.jsonl")
     recorder.turn_id = "turn"
     config = binding.model_validate(values()[f"{role}.strategy"])
-    kwargs = {}
+    kwargs = {} if plan is None else {"plan": plan}
     if role == "capability":
         kwargs["catalog"] = CapabilityCatalog(
             "candidate", package, tmp_path / "assembly", material_base=tmp_path, recorder=recorder
@@ -233,7 +234,7 @@ async def test_capability_selection_uses_active_resources_and_invalid_names_pres
 
 @pytest.mark.asyncio
 async def test_the_validation_probe_runs_the_capability_selection_on_the_installed_catalogue(tmp_path):
-    from experimental.curator.raven_adapter.probe import PROBE, exercise_translations
+    from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
 
     def bound_for(owner):
         owner.runtime.loop.subagents = SimpleNamespace(list_agents=lambda: [])
@@ -251,6 +252,51 @@ async def test_the_validation_probe_runs_the_capability_selection_on_the_install
     mislabelled = make(tmp_path / "mislabelled", "capability", contents)
     with pytest.raises(ValueError, match="selected skill is unknown, ambiguous or unavailable: evidence"):
         await exercise_translations(bound_for(mislabelled))
+
+
+PLAN_BOUND_STRATEGY = '''
+"""Decide every event from the Planning view, which a bound Planning gives each Action event."""
+
+from experimental.harness.contract.action import ActionDecision, ActionEvent
+from experimental.harness.contract.strategies import ActionStrategy
+
+
+class Action(ActionStrategy[None, None]):
+    def __init__(self, state):
+        self.state = state
+
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.plan is None:
+            raise ValueError("the Planning view is missing")
+        return ActionDecision()
+
+
+def create(state, task):
+    return Action(state)
+'''
+
+
+@pytest.mark.asyncio
+async def test_the_validation_probe_gives_action_events_the_planning_view_a_real_turn_would(tmp_path):
+    from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
+
+    owner = make(
+        tmp_path, "action", contents={**files(), "task_action.py": PLAN_BOUND_STRATEGY}, plan=lambda: {"step": "read"}
+    )
+    bound = SimpleNamespace(planning=None, strategies={"action": owner}, recorder=owner.recorder, baseline=None)
+    await exercise_translations(bound)
+    rows = [row for row in owner.recorder.rows if row["kind"] == PROBE and row["strategy"] == "action"]
+    assert [(row["event"], row["status"]) for row in rows] == [
+        ("proposal", "passed"),
+        ("outcome", "passed"),
+        ("failure", "passed"),
+    ]
+    calls = [row for row in owner.recorder.rows if row["kind"] == "action.call"]
+    assert [(row["source"], row["arguments"][0]["plan"]) for row in calls] == [
+        ("proposal", {"step": "read"}),
+        ("outcome", {"step": "read"}),
+        ("failure", {"step": "read"}),
+    ]
 
 
 @pytest.mark.asyncio
@@ -286,9 +332,9 @@ async def test_action_reply_and_terminal_failure_have_distinct_control_allowance
 DISPATCH_STRATEGY = '''
 """Decide each dispatch the way its arguments say, standing in for a strategy whose judgment may be unavailable."""
 
-from experimental.curator.harness.action import ActionDecision, ActionEvent
-from experimental.curator.harness.inference import InferenceError
-from experimental.curator.harness.strategies import ActionStrategy
+from experimental.harness.contract.action import ActionDecision, ActionEvent
+from experimental.harness.contract.inference import InferenceError
+from experimental.harness.contract.strategies import ActionStrategy
 
 
 class Action(ActionStrategy[None, None]):
@@ -364,9 +410,9 @@ def test_removed_protocol_payloads_fail_explicitly():
 
 
 def test_session_working_state_and_explicit_shared_knowledge_survive_reconstruction(tmp_path):
-    from experimental.curator.raven_adapter.strategy import SESSION, Scopes
+    from experimental.harness.raven_adapter.strategy import SESSION, Scopes
 
-    task = Task(id="task", text="Serve travellers")
+    task = Task(id="task", text="Serve conversants")
     memory = Scopes("memory", task, tmp_path / "memory.json", lambda state: state, per_session=True)
     for key in ("traveller:a", "traveller:b"):
         token = SESSION.set(key)
@@ -383,6 +429,18 @@ def test_session_working_state_and_explicit_shared_knowledge_survive_reconstruct
         assert reopened.current().state == {"seen": "traveller:b"} and reopened.current().resuming
     finally:
         SESSION.reset(token)
+
+
+def test_legacy_owner_checkpoints_migrate_together_and_never_override_new_state(tmp_path):
+    from experimental.harness.raven_adapter.checkpoints import Checkpoints
+
+    for name in ("memory", "planning"):
+        (tmp_path / f"{name}.json").write_text(json.dumps({"task_id": "task", "data": {"value": name}}))
+    store = Checkpoints(tmp_path, "task")
+    store.save({"memory": {"data": {"value": "updated"}}})
+    restored = Checkpoints(tmp_path, "task")
+    assert restored.read("memory")["data"]["value"] == "updated"
+    assert restored.read("planning")["data"]["value"] == "planning"
 
 
 @pytest.mark.parametrize("inheritance", ["missing", "lookalike", "indirect"])

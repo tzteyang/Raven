@@ -4,11 +4,11 @@ from pathlib import Path
 
 import pytest
 
-from experimental.assessor.checks import Finding
-from experimental.assessor.guidance import GuidanceStore
-from experimental.assessor.reviewer import GuidanceProposal
-from experimental.assessor.validation import RepairSuite, ReplayCase, ReplayEvaluation, compare
-from experimental.iteration.protocols import Exchange
+from experimental.harness.assessor.checks import Finding
+from experimental.harness.assessor.guidance import GuidanceStore
+from experimental.harness.assessor.reviewer import GuidanceProposal
+from experimental.harness.assessor.validation import RepairSuite, ReplayCase, ReplayEvaluation, compare
+from experimental.harness.participation.protocols import Exchange
 from tests.test_assessor_builder import drafted
 from tests.test_assessor_standard import execution
 
@@ -50,7 +50,7 @@ async def score(instructions, case):
 
 @pytest.mark.asyncio
 async def test_persisted_diagnosis_bounds_the_replacement_and_requires_rollback_verification(tmp_path):
-    from experimental.experience.governance import Issue
+    from experimental.harness.experience.governance import Issue
 
     store = GuidanceStore(tmp_path / "guidance.json")
     original = store.propose(proposal(), episodes={"assessment-1"})
@@ -101,8 +101,8 @@ async def test_persisted_diagnosis_bounds_the_replacement_and_requires_rollback_
 
 @pytest.mark.asyncio
 async def test_loading_diagnosis_cannot_be_bypassed_by_an_inline_content_correction(tmp_path):
-    from experimental.assessor.reviewer import GuidanceCorrection
-    from experimental.experience.governance import Issue
+    from experimental.harness.assessor.reviewer import GuidanceCorrection
+    from experimental.harness.experience.governance import Issue
 
     store = GuidanceStore(tmp_path / "guidance.json")
     original = store.propose(proposal(), episodes={"assessment-1"})
@@ -169,7 +169,7 @@ async def test_guidance_is_adopted_only_after_improvement_and_survives_reopening
 
 @pytest.mark.asyncio
 async def test_independent_corpus_retries_pending_guidance_and_retains_its_source_episode(tmp_path):
-    from experimental.assessor.validation import ReplayCorpus, evidence_fingerprint
+    from experimental.harness.assessor.validation import ReplayCorpus, evidence_fingerprint
 
     corpus = ReplayCorpus(tmp_path / "replays.json")
     for case in cases():
@@ -200,7 +200,7 @@ async def test_independent_corpus_retries_pending_guidance_and_retains_its_sourc
 
 @pytest.mark.asyncio
 async def test_retained_labels_cannot_outlive_their_artifact_evidence(tmp_path):
-    from experimental.assessor.validation import ReplayCorpus, evidence_fingerprint
+    from experimental.harness.assessor.validation import ReplayCorpus, evidence_fingerprint
 
     path = tmp_path / "quote.txt"
     path.write_text("Tax included.")
@@ -320,7 +320,7 @@ def test_two_runs_cannot_overwrite_each_others_guidance(tmp_path):
 async def test_repeated_inputs_do_not_become_held_out_by_changing_execution_ids():
     from dataclasses import replace
 
-    from experimental.assessor.validation import input_identity
+    from experimental.harness.assessor.validation import input_identity
 
     used = {input_identity(case.evidence()) for case in cases()}
     repeated = tuple(
@@ -351,9 +351,9 @@ async def test_adopted_guidance_changes_the_next_real_builder_request(tmp_path):
     import json
     from dataclasses import replace
 
-    from experimental.assessor.builder import RubricBuilder
-    from experimental.assessor.reviewer import MetaReviewer
-    from experimental.assessor.standard import Assessor
+    from experimental.harness.assessor.builder import RubricBuilder
+    from experimental.harness.assessor.reviewer import MetaReviewer
+    from experimental.harness.assessor.standard import Assessor
     from tests.test_assessor_standard import Provider, response, verdict
 
     class LearningProvider(Provider):
@@ -462,7 +462,7 @@ async def test_adopted_guidance_changes_the_next_real_builder_request(tmp_path):
 
 @pytest.mark.asyncio
 async def test_a_failed_persistence_does_not_activate_guidance_in_memory(tmp_path, monkeypatch):
-    from experimental.assessor import guidance
+    from experimental.harness.assessor import guidance
 
     store = GuidanceStore(tmp_path / "guidance.json")
     id = store.propose(proposal(), episodes={"assessment-1"})

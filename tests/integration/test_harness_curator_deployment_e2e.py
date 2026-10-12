@@ -4,10 +4,10 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.deployment import Child
-from experimental.curator.raven_adapter.worker import Worker, WorkerError
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.deployment import Child
+from experimental.harness.raven_adapter.worker import Worker, WorkerError
 from raven.contracts.llm_provider import LLMResponse
 from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
 from tests.fixtures.harness_curator.authoring import capability
@@ -29,8 +29,8 @@ def authored(reply):
     return Artifact(
         values={"action.strategy": {"factory": "behavior:create", "events": ["input"]}},
         files={
-            "behavior.py": f"""from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import InputEvent, ActionDecision
+            "behavior.py": f"""from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import InputEvent, ActionDecision
 class Action(ActionStrategy[str, str]):
     async def _handle_input(self, event: InputEvent) -> ActionDecision:
         return ActionDecision(control="finish", reply={reply!r})

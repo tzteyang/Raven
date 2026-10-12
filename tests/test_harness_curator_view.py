@@ -4,12 +4,12 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Artifact, Declaration
-from experimental.curator.harness.view import project, validate
-from experimental.curator.raven_adapter.inspection import Inspection, file_source
-from experimental.curator.raven_adapter.inspection.mechanisms import describe
-from experimental.curator.raven_adapter.materialize import extend_artifact
-from experimental.curator.raven_adapter.targets import catalogue
+from experimental.harness.contract import Artifact, Declaration
+from experimental.harness.contract.view import project, validate
+from experimental.harness.raven_adapter.inspection import Inspection, file_source
+from experimental.harness.raven_adapter.inspection.mechanisms import describe
+from experimental.harness.raven_adapter.materialize import extend_artifact
+from experimental.harness.raven_adapter.targets import catalogue
 from tests.test_harness_curator_generation import plan
 
 
@@ -77,7 +77,7 @@ def test_component_and_source_references_are_validated():
 
 @pytest.mark.asyncio
 async def test_registered_and_searchable_materials_share_external_package_scope(tmp_path):
-    from experimental.curator.raven_adapter.exploration import Exploration
+    from experimental.harness.raven_adapter.exploration import Exploration
     from raven.config.schema import Config
 
     repo = tmp_path / "repo"
@@ -105,8 +105,8 @@ async def test_registered_and_searchable_materials_share_external_package_scope(
 
 
 def test_retirement_cannot_reset_fields_outside_the_current_grant(tmp_path):
-    from experimental.curator.raven_adapter.baselines import Baseline
-    from experimental.curator.raven_adapter.worker import Worker
+    from experimental.harness.raven_adapter.baselines import Baseline
+    from experimental.harness.raven_adapter.worker import Worker
     from raven.config.raven import RavenConfig
     from raven.config.schema import Config
 
@@ -124,8 +124,8 @@ def test_retirement_cannot_reset_fields_outside_the_current_grant(tmp_path):
 
 
 def test_existing_strategy_state_is_visible_even_when_its_modification_is_not_granted():
-    from experimental.curator.generation.context.collect import collect
-    from experimental.curator.generation.stages.shared import materials
+    from experimental.harness.curator.generation.context.collect import collect
+    from experimental.harness.curator.generation.stages.shared import materials
 
     context = collect(
         "Adjust behavior",
@@ -141,7 +141,7 @@ def test_existing_strategy_state_is_visible_even_when_its_modification_is_not_gr
 def test_prepared_config_uses_the_same_declared_mode_resolution_as_agent_preparation(tmp_path):
     import json
 
-    from experimental.curator.raven_adapter.baselines import prepare
+    from experimental.harness.raven_adapter.baselines import prepare
 
     path = tmp_path / "config.json"
     path.write_text(

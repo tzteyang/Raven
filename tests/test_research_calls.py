@@ -9,7 +9,7 @@ from types import SimpleNamespace
 import pytest
 from pydantic import BaseModel
 
-from experimental.research import calls, researchers, terminal
+from experimental.cultivation.collector import calls, researchers, terminal
 
 
 class Answer(BaseModel):

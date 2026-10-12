@@ -7,11 +7,11 @@ from uuid import uuid4
 
 import pytest
 
-from experimental.curator.generation.run import Limits
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.inspection import Baseline
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
+from experimental.harness.contract import Task
+from experimental.harness.curator.generation.run import Limits
+from experimental.harness.curator.workflow import improve
+from experimental.harness.raven_adapter.inspection import Baseline
+from experimental.harness.raven_adapter.worker import Worker
 from raven.config.raven import load_raven_config
 from raven.core.config_stack import load_runtime_config
 from raven.core.plugin_stack import discover_plugins

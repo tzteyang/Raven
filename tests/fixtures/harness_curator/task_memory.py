@@ -4,10 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict
 
-from experimental.curator.harness.context import ContextRequest, ContextView, InitialContext
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.raven_adapter.memory.contracts import MemoryObservation
+from experimental.harness.contract.context import ContextRequest, ContextView, InitialContext
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.strategies import MemoryStrategy
+from experimental.harness.raven_adapter.memory.contracts import MemoryObservation
 
 
 class Query(BaseModel):

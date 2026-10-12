@@ -1,0 +1,121 @@
+{
+  "initial": [
+    "copy-norms",
+    "copy-workflow",
+    "claim-evidence",
+    "consumer-research",
+    "launch-brief",
+    "competitor-matrix"
+  ],
+  "criteria": [
+    {
+      "id": "copy-shape",
+      "severity": "standard",
+      "check": "Judge the latest actually delivered first screen by copy norms sections 2, 3.1, 3.2, 4.6, 7 and 8, launch brief appendix one, and applicable legal feedback 3.3. Require a title of at most 16 visible non-space characters that only summarizes the proposition and has no data except the model; a single proposition of at most 30 characters that identifies the research-backed audience and problem, contains no data except the model, and promises only supported selected concerns; exactly three supported points of at most 12 characters; and the correct research name, time and verified sample count in the sorting basis. Verify request/model/date/number/version/replacement metadata against the source request and retained predecessor, not output assertions. Duplicate or missing required fields are defects. Computed first_screen and identity facts help locate defects but do not establish audience, meaning or research provenance. Missing retained content cannot prove compliance."
+    },
+    {
+      "id": "points-in-research-order",
+      "severity": "standard",
+      "check": "Judge the latest actually delivered version by copy norms 3.1, 3.5 and 4.7 and, for simulated fulfillment dates from 16 October 2026, legal feedback section 3. Each of exactly three points must actually express its corresponding research concern, in descending research order, with one eligible row from this product sheet. Under the later rule prefer qualified eligible third-party evidence, then the newest date within the same type, and skip concerns with no usable evidence in research order. Verify selection reasons in the evidence comparison and skipped reasons in the unused section and requester communication; before delivery tell the requester when a top concern cannot be supported. Expected row IDs are source-derived calibration, not a substitute for point meaning or reasons. Before the later rule, a different equally eligible choice with a valid source-supported reason is acceptable."
+    },
+    {
+      "id": "evidence-usable",
+      "severity": "red_line",
+      "check": "Judge every actual external claim in both delivered documents by copy norms 3.3, 3.4 and 4.1/4.5, legal feedback 3.2 and, from simulated fulfillment date 28 October 2026, citation notice section 3. Every point, sales explanation and note must stay within its own cited eligible product-sheet row and conditions. Reject expired, effective void, externally barred, future or comparative evidence; from the notice reject unqualified third-party evidence and false third-party descriptions of internal tests; internal citations in the customer-facing training card and displayed notes must use the enterprise-internal-test description required by notice 3.3. The off-page first-screen comparison keeps its existing format under notice 2.4. Verify value, unit, qualifiers, scope and test meaning against that row: the same digits elsewhere are not support, and 12 hours is not 12 minutes. evidence and training_evidence standing and scope/figure hits are partial aids; absence of a hit is not success and a scope token is not an automatic violation without an actual overclaim."
+    },
+    {
+      "id": "evidence-copied",
+      "severity": "standard",
+      "check": "Judge both delivered documents by copy norms 4.2-4.4, workflow 4.4-4.5 and launch brief appendices. The first-screen comparison must contain one correct row ID per point, type, third-party issuer name and report ID or internal-test label, exact usable wording, complete original conditions including all footnotes, source date and valid-until date. Training-card evidence uses the appendix two compact form: the same correct row ID, report ID or internal-test label, and complete accurate conditions/footnotes; its sales phrasing may summarize supported wording. The compact sample does not require repeating the issuer in that field. Reject absent, changed, conflicting or misassociated source information. Normalized substring booleans do not prove exact copying or absence of contradictions. Inspect source fields and actual raw delivered text independently."
+    },
+    {
+      "id": "no-comparison-or-absolute",
+      "severity": "red_line",
+      "check": "Judge all actual external content in both delivered files by copy norms sections 5 and 6.1-6.4 and the competitor matrix internal-use rule. Reject actual absolute claims, product comparisons including implied comparisons or own old/new models, forbidden efficacy or unsupported negative claims, and any competitor data/disclosure. Read additional paragraphs, duplicate labels and training sales explanations, not only recognized fields. Wording hits are candidates, not verdicts: an audience token does not establish a comparison, and permitted time-order wording such as first use is allowed. Quoted warnings under dont-say or unused sections and the assistant own explanatory remark are not affirmative customer claims. Missing lexical hits cannot establish compliance; compare the entire file meaning with the authoritative sources."
+    },
+    {
+      "id": "figures-traced",
+      "severity": "red_line",
+      "check": "Judge all customer-facing data in the first screen and training card, and the sorting basis, by copy norms 3.4 and 4.6 and applicable citation notice section 4. Bind each datum including written-out numbers, units, qualifiers and conditions to the correct product evidence row or relevant research source and a verified requester answer where the source lacks information. Research claims require the correct study name, time and sample count; never use a year, test quantity, competitor figure or another study sample as the sample. Scalar membership in handouts/materials/requester text is only a candidate provenance aid, not proof that a claim is sourced. Reject unsupported or misattributed figures even when untraced_figures is empty. Inspect the retained raw outputs and source meaning."
+    },
+    {
+      "id": "two-files-agree",
+      "severity": "standard",
+      "check": "Judge actual handover and the latest retained pair by workflow 4.5 and 5.1-5.4 and launch brief 3.1-3.2. Both prescribed Markdown files must reach the requester together with one request-bound valid final number; a draft write, assistant success statement, arbitrary file or filename alone is not delivery. Their proposition/introduction, exactly three point texts and order and complete evidence-ID choices must match literally after removal of markup labels, without silently folding internal whitespace or character width. Independently verify that the training card has supported sales explanations for all three points, accurate compact evidence citations and 2-4 product-specific dont-say examples. training_card facts compare only designated fields and do not prove full contents. Unavailable earlier snapshots cannot prove an earlier pair matched."
+    },
+    {
+      "id": "register-appended",
+      "severity": "standard",
+      "check": "Judge observed register state and actual retained delivered versions by workflow 3.2, 5.2 and section 6 including 6.5-6.6 and revision 7.5. Every delivered version needs exactly one correctly appended row, correct source request date/model/requester, valid request-date numbering and sequence, actual version count, exact replacement link, matching proposition/points/ordered evidence, references to both retained delivery files and appropriate revision remarks. Preserve all existing rows and their order, import missing rows from the newest supplied export verbatim, and append after those rows. Changed exported rows are defects when those rows were required to be imported; under 6.6 preserve an already existing live row even if the export disagrees. Reject duplicate numbers, missing delivered versions, altered/lost starting rows, missing imported rows and incorrect metadata/file links. Use actual live state or explicitly successful content-bearing operations; missing/null success and unobserved register state cannot prove success."
+    },
+    {
+      "id": "revision-scoped",
+      "severity": "standard",
+      "check": "Judge an actual requester/legal/evidence correction by workflow section 7, using the retained delivered or explicitly supplied accepted predecessor, actual request and applicable newer source rules. Change every affected point wording/evidence/condition, including evidence-priority changes not named in the request; preserve title, proposition and all unaffected point and training sales/evidence content literally. A wording-only legal correction may retain valid evidence; an evidence update must replace each affected citation and conditions. Both new files need a correct new request-bound number, version increment, matching replacement identity and appended register row with changed items and source in remarks; deliver together and tell the requester the actual changes and basis. Compare both documents, not just first-screen row IDs. Draft writes do not establish a delivered revision; missing predecessor snapshots leave preservation unknown. When no correction occurred this criterion is unexercised, not a guessed pass.",
+      "applies_when": "At least one actual legal, evidence, policy or requester correction requires a revision of an accepted or delivered version; a local draft write alone does not satisfy this condition."
+    },
+    {
+      "id": "citation-notes",
+      "severity": "standard",
+      "check": "Judge the latest actually delivered first screen by citation notice sections 2 and 3.3, for simulated fulfillment dates from 28 October 2026. The profile defines fulfillment on the attached export date, including revisions; repeated older-date drills keep that date. Immediately after the first-screen section add customer-visible first-screen notes, one per actual point with matching number, third-party issuer name plus detection-report wording and correct report ID or exactly the enterprise-internal-test description, complete source conditions including footnotes, and correct valid-until date. Off-page evidence comparisons do not substitute for displayed notes. Check placement, completeness, association and actual meaning, not merely source tokens. Missing, duplicate, misleading or conflicting notes fail; unreadable/unretained content remains unknown. Earlier already-delivered versions are preserved and changed only on requested re-review under notice section 5.",
+      "applies_when": "At least one played request has a simulated fulfillment date on or after 2026-10-28, determined by its attached evidence-sheet export date under the profile."
+    }
+  ],
+  "plans": {
+    "by-version": {
+      "steps": [
+        [
+          "copy-norms",
+          "copy-workflow",
+          "claim-evidence",
+          "consumer-research",
+          "launch-brief",
+          "competitor-matrix"
+        ],
+        [
+          "legal-feedback",
+          "evidence-update"
+        ],
+        [
+          "citation-notice"
+        ]
+      ],
+      "labels": [
+        "copy norms, workflow, evidence sheet, research, launch brief and competitor matrix",
+        "legal feedback with the evidence-choice rule, and the AF5 evidence update",
+        "citation guideline notice"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "shuanglan",
+        "fanbao",
+        "mianbao"
+      ],
+      [
+        "pobiji",
+        "yangshenghu",
+        "fuhe"
+      ],
+      [
+        "shuanglan",
+        "mianbao"
+      ]
+    ],
+    "holdout": [
+      "kaoxiang",
+      "doujiang",
+      "shuihu",
+      "dunguo",
+      "zaocanji",
+      "dunguoagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

@@ -8,7 +8,7 @@
 
 学习对象是 Curator 调查、归因、改造和验证 Harness 的方法。经验主要表达为带适用条件的机制级改造策略：保留条件、行动、验证和边界，移除来源案例的实体、路径、数值及操作叙事。
 
-交接资料为[Curator 经验机制开发交接](/root/.codex/worktrees/f5a8/Raven-SI/experimental/docs/curator-experience-handoff.md)及其关联设计。已有 experimental/experience/ 核心包含记录转换、Experience Builder、Experience Critic、有界修订、SQLite 存储、证据准入和只读检索。当前已通过 CuratorExperience 接入实际归因、生成、检查点和后续学习。
+交接资料为[Curator 经验机制开发交接](/root/.codex/worktrees/f5a8/Raven-SI/experimental/docs/curator-experience-handoff.md)及其关联设计。已有 experimental/harness/experience/ 核心包含记录转换、Experience Builder、Experience Critic、有界修订、SQLite 存储、证据准入和只读检索。当前已通过 CuratorExperience 接入实际归因、生成、检查点和后续学习。
 
 已接收完整经验核心及未提交的准入、检索和测试文件，并保留来源清单与内容摘要；当前生成、独立归因和历史接口采用适配方式接入。交接工作区未修改。
 

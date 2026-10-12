@@ -5,8 +5,8 @@ import threading
 
 import pytest
 
-from experimental.automation.files import page_images
-from experimental.automation.render import cached
+from experimental.harness.participation.files import page_images
+from experimental.harness.participation.render import cached
 
 
 def fake_render(calls, pages=2, pause=None):

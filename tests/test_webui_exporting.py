@@ -14,9 +14,9 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from experimental.curator.harness import Artifact, Task
-from experimental.curator.raven_adapter.deployment import _digest
-from experimental.curator.raven_adapter.inspection import fingerprint
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.deployment import _digest
+from experimental.harness.raven_adapter.inspection import fingerprint
 from experimental.webui import exporting
 from experimental.webui.employee_runtime import prepare_employee
 from experimental.webui.live import Live, LiveConfig

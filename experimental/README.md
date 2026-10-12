@@ -20,113 +20,50 @@
 ```text
 experimental/
 ├── README.md
-├── requirements.py              # 行为要求 Requirement：Analyst、模拟评审与 playbook 节点要求共用
-├── audience.py                  # 字段受众：每个字段哪些角色能读，project 按角色投影
-├── docs/
-│   ├── design.md                # Curator 怎样生成与管理 harness-of-harnesses
-│   ├── rsi-iteration.md         # Harness 怎样在多轮反馈中迭代改进
-│   ├── cultivation-loop-design.md  # 改进闭环的角色、边界、归因、台账与标准
-│   └── cultivation-loop-plan.md    # 闭环机制的实施规划与进度
+├── docs/                            设计文档（每个管线步骤一篇）
 │
-├── scenario/                    # 【通用】场景契约：闭集的输入类别与各角色的可见性
-│   ├── contract.py              #   类别、默认可见性、资料出处（provenance.json）、目录加载与完备性检查
-│   ├── disclosure.py            #   披露日程：开场与每次评审交出什么
-│   └── sealed.py                #   差分封印：从契约推出每个角色不能看到的内容
+├── harness/                     L1  一个 Harness 及改进它的通用机制：不认识员工、交互方和案例
+│   ├── contract/                    产物模型、Declaration、四个策略协议、commitments、inference 契约与参考页
+│   ├── raven_adapter/               绑到 Raven 运行时：targets、bind、worker、inference 额度、inspection、hosting、confinement
+│   ├── curator/                     生成者：workflow 入口、generation（select → design → implement → repair）、attribution、composition
+│   ├── assessor/                    持有标准、测量每一轮：rubric、builder、reviewer、validation、introspect、human、dataset
+│   ├── analyst/                     把 Assessor 的话整理成 Curator 的行为要求
+│   ├── experience/                  受治理的经验：admission、governance、verification、repair、retrieve、store
+│   ├── scenario/                    材料契约、披露日程、差分封印
+│   ├── participation/               每个参与方共同遵守的东西：protocols、exchange、compartment、hearing、audience、
+│   │                                requirements、allowance（token 区间）、model_calls、model_roles、channel、files、render、views
+│   └── loop/                        循环本体：run、session、history、ledger、records
 │
-├── research/                    # 【通用】Curator 前共享的信息收集、审核与版本化交付
-│   ├── information.py           #   八个专家维度、证据、资源、未决问题及内容版本
-│   ├── collection.py            #   agent 自主收集：原生工具、研究委派、询问用户；独立审核与有界修正
-│   ├── guidance.py              #   仅调研需要时，从可选产品案例提炼研究问题与分组线索
-│   ├── curator.py               #   Raven exploration 适配；审核通过后向 Curator 交付
-│   ├── scenario.py              #   已交付材料投影、首轮准备与离线结果复用
-│   ├── inquiry.py               #   研究结果与原文引用核验
-│   ├── researchers.py           #   研究 agent 或独立模型交换
-│   └── prompts/                 #   收集、引导、研究与审核提示词
+├── cultivation/                 L2  数字员工的培养：L1 的应用形态，定义反馈从交互中来
+│   ├── counterpart/                 交互方协议：Owner（评审骨架、交材料）、scenario（交互方眼中的场景）、case（交付谓词）
+│   ├── collector/                   专家信息收集：assess → ask → research → compose → review，专家口吻成文
+│   ├── conversation.py              员工与交互方的对话回合
+│   ├── employee.py                  把 worker 雇成数字员工：基线、副本、Curator 不能读的评测侧
+│   └── __main__.py                  真人入口：一个人既是交互方又是对话人
 │
-├── curator/                     # 【通用】读取、生成、校验、安装 Harness
-│   ├── workflow.py              #   入口 improve / propose / attribute
-│   ├── attribution/             #   机制归因：每条输入一条诊断，自己的对话、预算、检查点与记录
-│   ├── composition/             #   两层组合：根候选 → 各子候选 → 整体校验与一次生效
-│   ├── generation/              #   分阶段生成
-│   │   ├── stages/              #     select → design → implement → repair（从归因结果开始）
-│   │   ├── prompts/             #     各阶段提示词
-│   │   └── context/             #     生成材料的组装与只读查询
-│   ├── harness/                 #   产物模型、target 声明、四个公共策略协议与参考材料
-│   └── raven_adapter/           #   与 Raven 运行时的连接层
-│       ├── targets/             #     四个策略面在 Raven 上的扩展点声明
-│       ├── bind.py, strategy.py #     把生成的策略与组件绑定到原生扩展点
-│       ├── worker.py            #     被培养的 worker：装载、执行、安装
-│       ├── deployment.py, hosting/  # 子 Harness 的部署与 ACP 托管
-│       ├── inspection/          #     从实际运行时读出当前 Harness
-│       ├── observe.py           #     机制每次决定写成观测记录
-│       ├── exploration.py       #     生成期间 Curator 的只读探索空间
-│       ├── planning/, action/, capability/, memory/  # 各策略面的运行时绑定
-│       ├── baselines/           #     专家与朴素 Raven 基线的准备
-│       └── reference/           #     给 Curator 读的宿主参考材料
+├── simulation/                  L3  没有真人也把一次培养跑起来：测试台 + 任务包
+│   ├── __main__.py, suite.py        单次运行与批量挖掘入口
+│   ├── bench/                       测试台：conversant（按题卡扮演的对话人）、drills、cards、isolation、caching、
+│   │                                record、value、attribution、information（模拟交互方答问）、experts、collect
+│   ├── cases/                       任务包：materials、题卡、Owner 子类、参考事实
+│   │   ├── travel_agency/           旅行社：owner.py、reference.py（价目与方案 PPT 的尺子）
+│   │   └── brand_strategist/        品牌策略师：owner.py、experts、watch 源
+│   └── showcase/s0925c/             展示案例记录
 │
-├── assessor/                    # 【通用】持有标准、测量每一轮的角色
-│   ├── role.py                  #   Assessor 协议
-│   ├── human.py                 #   真人：既对话又评价
-│   ├── dataset.py               #   数据集：既供样例又打分
-│   ├── standard.py              #   评价侧 Standard（声明、派生、沉淀）与按它判定的自动 Assessor
-│   ├── introspect.py            #   自评：在雇员副本上让它自己复查每单，来源为 self 的信号
-│   └── prompts/                 #   自动 Assessor 的判定与派生提示词
-│
-├── analyst/                     # 【通用】把 Assessor 的话整理成 Curator 的行为要求
-│   ├── run.py                   #   一次有界的模型交换，产出 Feedback
-│   ├── feedback.py              #   Feedback：决定 + 行为要求
-│   ├── materials.py             #   材料组装与 read_records 查询
-│   ├── activity.py              #   机制活动：装上的机制本轮实际做了什么
-│   ├── role.py                  #   Analyst：读一轮的信号与记录，写出要求
-│   └── prompts/
-│
-├── iteration/                   # 【通用】多轮闭环
-│   ├── run.py                   #   入职 curation → 每轮：试炼 → 评价 → 分析 → 修订（Session 的自动编排）
-│   ├── session.py               #   可分步的 Session：每一步返回 Outcome，Studio 与 run() 共用
-│   ├── protocols.py             #   Trial 协议，Signal 与交接项 Handover
-│   ├── hearing.py               #   Curator 听到什么：按受众投影的信号、引用回合、历史与先验
-│   ├── compartment.py           #   隔间与守卫：模型角色的每次请求按封印扫描，记入 boundaries.jsonl
-│   ├── history.py, ledger.py    #   类型化历史（要求、诊断、改动、是否守住）与唯一的"守住"规则
-│   ├── conversation.py          #   对话型 Trial
-│   ├── exchange.py              #   各模型角色共用的有界结构化提交
-│   ├── __main__.py              #   真人 CLI
-│   └── records.py               #   按轮读取一次运行的记录
-│
-├── automation/                  # 【通用】自动培养的装配：不含任何场景的领域知识
-│   ├── employee.py              #   数字员工：雇佣、每张题卡一个隔离副本、并行演练、Curator 不能读的评测侧、起点指纹
-│   ├── traveller.py, prompts/   #   模拟客人：按题卡扮演，读到的只有渠道上发出的内容
-│   ├── channel.py, files.py, render.py  # 客人实际看到的内容、交付物读取与页图
-│   ├── isolation.py             #   越界检查：运行结束后扫描每次工具调用的路径
-│   └── caching.py               #   网关模型的提示词缓存断点
-│
-├── counterpart/                       # 【通用】交互方（老板）的通用实现：评审骨架、题卡装配、成案谓词
-│   ├── owner.py, prompts/       #   通用老板：按案例注入的事实与画面评审，按披露日程交材料
-│   ├── drills.py                #   enlist / grouped：题卡 → 模拟对话人 → 副本上的并行分组演练
-│   └── case.py                  #   成案判定里的交付谓词（按场景名选）
-│
-└── simulation/                  # 【实例】旅行社与品牌策略师场景（真实专家包也用这个入口）
-    ├── __main__.py, suite.py    #   单次运行与批量挖掘入口
-    ├── scenarios/travel_agency/ #   场景数据：岗位说明、资料、评审标准、客人画像
-    ├── scenario.py, cards.py    #   交互方视角的场景，题卡数值的抽取规则（含行程字段）
-    ├── agency.py                #   旅行社老板：`counterpart.Owner` 加价目计算器的事实与 PPT 页图
-    ├── brand.py                 #   品牌老板：极限词、口号一致、数字来源、守望证据的事实
-    ├── reference.py             #   价目计算器与方案 PPT 的结构事实（老板评审时的尺子）
-    ├── record.py                #   把一次运行导出成培养记录 transcript
-    ├── value.py, attribution.py #   价值判定、要求与干预对应的规则
-    └── cases/s0925c/            #   展示案例
+└── webui/                           本地网页界面：Studio 与 ribbon，读 cultivation 的记录
 ```
 
 ## 通用机制与场景的关系
 
-依赖方向固定：`simulation/` 引用通用层，通用层不引用 `simulation/`。`counterpart/` 属通用层：它不认识任何场景，只提供老板的评审骨架、题卡装配与钩子；每个案例在 `simulation/` 里注入自己的事实计算器。
+依赖方向固定：`simulation/ → cultivation/ → harness/`，只向下，`tests/test_experimental_layers.py` 强制。`harness/` 不认识员工、交互方和案例；`cultivation/` 只定义反馈怎样从交互中来；`simulation/bench/` 用模拟的人跑 `cases/` 里的任务包，案例不反向引用测试台。
 
 | 通用接口 | 旅行社场景的实现 |
 |---|---|
-| `iteration.run.run(worker, provider, trials, assessors, analyst=…, opening=…, boundaries=…, prior=…)` | `simulation/__main__.py` 从场景契约组装参数与隔间，默认最多 4 轮 |
-| `Trial.run(worker) -> Sessions` | `counterpart.drills.enlist` 把题卡装成模拟对话人 `Traveller`，`grouped` 配成 `Together`，让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
-| `assessor.role.AssessorProtocol.evaluate(sessions) -> Signal` | `counterpart.Owner` 的案例子类（旅行社 `agency.Agency`、品牌 `brand.BrandOwner`，按场景名从 `OWNERS` 选）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.Assessor`；通用 Analyst 把这些整理成要求 |
-| `curator.raven_adapter.worker.Worker` | `automation.employee.hire` 雇来的员工，带上 Curator 不能读的评测侧文件（`withheld`）；`automation.employee.Replica` 是每张题卡的隔离副本 |
-| `curator.workflow.improve(worker, provider, feedback=…)` | 不改，直接调用 |
+| `harness.loop.run.run(worker, provider, trials, assessors, analyst=…, opening=…, boundaries=…, prior=…)` | `simulation/__main__.py` 从场景契约组装参数与隔间，默认最多 4 轮 |
+| `Trial.run(worker) -> Sessions` | `simulation.bench.drills.enlist` 把题卡装成模拟对话人 `Conversant`，`grouped` 配成 `Together`，让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
+| `assessor.role.AssessorProtocol.evaluate(sessions) -> Signal` | `cultivation.counterpart.Owner` 的案例子类（旅行社 `cases.travel_agency.owner.Agency`、品牌 `cases.brand_strategist.owner.BrandOwner`，入口取案例目录下 `owner.py` 的 `OWNER`，没有时退回旅行社的 `Agency`，所以新案例要带自己的老板）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.Assessor`；通用 Analyst 把这些整理成要求 |
+| `harness.raven_adapter.worker.Worker` | `cultivation.employee.hire` 雇来的员工，带上 Curator 不能读的评测侧文件（`withheld`）；`cultivation.employee.Replica` 是每张题卡的隔离副本 |
+| `harness.curator.workflow.improve(worker, provider, feedback=…)` | 不改，直接调用 |
 | 入职资料 `opening` | 老板的入职对话与交出的资料 |
 
 ### Evaluation role names
@@ -172,7 +109,7 @@ name its encompassing criterion, or `None` for an explicitly verified whole-rubr
 accepted as substitutes for a checker-specific oracle. Missing verification leaves the repair a candidate. Exact
 duplicates can be removed with a host-checked equivalent condition retained; this proves preservation, not judging accuracy.
 
-Use `--owner-feedback silent --chain documents` for simulation comparisons where the owner's scores are measurements
+Use `--owner-feedback silent --disclose all` for simulation comparisons where the owner's scores are measurements
 only. All materials must be available at onboarding. Measurement signals remain in the record and are excluded from
 Analyst input, curation, historical requirements and stopping decisions. Actual external feedback still takes precedence.
 
@@ -214,14 +151,14 @@ See [design](docs/evaluation-system-design.md) and [implementation evidence](doc
 ```bash
 # 旅行社模拟：一次运行（需要自备带 key 的配置文件）
 uv run python -m experimental.simulation --config <config.json> --home <基线 home> \
-  --state-dir <新的空目录> --scenario travel_agency --chain documents --rounds 4
+  --state-dir <新的空目录> --scenario travel_agency --disclose all --rounds 4
 
 # 离线准备：只使用指定披露计划的首轮材料，输出审核结果与记录
-uv run python -m experimental.research --scenario <场景目录> --disclose staged \
+uv run python -m experimental.cultivation.collector --scenario <场景目录> --disclose staged \
   --output <新的准备目录> --config <config.json> --research exchange
 
 # 或明确指定此次已交付材料；允许询问真人
-uv run python -m experimental.research --scenario <场景目录> --release <材料名> \
+uv run python -m experimental.cultivation.collector --scenario <场景目录> --release <材料名> \
   --output <新的准备目录> --config <config.json> --interactive
 
 # Scenario 首轮可复用离线审核结果；任务、材料、环境不匹配时拒绝，需要重新评估
@@ -235,23 +172,23 @@ uv run python -m experimental.simulation --config <config.json> --state-dir <新
 # 老板只评不说：评审照常记进每轮记录作度量，但不进 Analyst、停止判断、历史和 Curator，
 # 改进只靠雇员自评与 --standard；材料须在入职时交齐
 uv run python -m experimental.simulation --config <config.json> --state-dir <新的空目录> \
-  --scenario brand_strategist --chain documents --owner-feedback silent --standard derived sedimented
+  --scenario brand_strategist --disclose all --owner-feedback silent --standard derived sedimented
 
 # 真人 CLI：真人既是对话方也是评价者
-uv run python -m experimental.iteration --help
+uv run python -m experimental.cultivation --help
 
 # 从业务任务和交互材料开始；没有产品案例也能进行信息收集
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --task-file <业务任务.md> --material <交互材料目录> --output <新的运行目录> \
   --research exchange --interactive
 
 # 可选：产品案例仅为调研提供引导，不作为本次交互输入
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --task-file <业务任务.md> --research-reference <产品案例目录> --output <新的运行目录> \
   --research exchange --research-tasks 3
 
 # 产品包也可以明确作为交互输入：先评估已有信息与缺口，不强制抽象或重新调研
-uv run python -m experimental.simulation.experts --config <config.json> \
+uv run python -m experimental.simulation.bench.experts --config <config.json> \
   --expert <专家包目录> --output <新的运行目录> \
   --research exchange --interactive --request-file <客户需求.md>
 
@@ -321,7 +258,7 @@ uv run pytest tests/integration/test_research_real_llm.py -k claude_collection_c
 测试脚本只提供环境、输入与证据回放，不另写规划器、审核循环或手动决定修订路径。
 结构化检查通过或按预算正确结束，不等于完整职业画像已经充分，更不等于专家工作能力得到证明。
 
-Scenario 默认在入职前准备信息；`--information-research none` 关闭外部研究渠道，不跳过信息评估。可选 `--information-answer-material <材料名>` 让模拟交互方回答必要问题，私有资料只在回答适配器内使用。离线入口的对应选项是 `--answer-material`。内容审核不代替交互方采纳，研究结果也不自动成为评价标准。
+Scenario 默认在入职前准备信息；`--information-research none` 关闭外部研究渠道，不跳过信息评估。可选 `--information-answer-material <材料名>` 让模拟交互方回答必要问题，私有资料只在回答适配器内使用。培养期间 Curator 报告的缺口由 `--gap-answers {counterpart,research,both,none}` 决定谁来答（默认 `both`，用已配置的渠道）：私有与不明的问题在下一轮评审时问模拟交互方（需 `--information-answer-material`），公开问题和交互方没答的不明问题走同一调研渠道；答复带出处进入下一次改造，`none` 保持只记录问题。离线入口的对应选项是 `--answer-material`。内容审核不代替交互方采纳，研究结果也不自动成为评价标准。
 
 后续信息补充可传 `--previous-information <snapshot.json>`、`--focus knowledge methods` 和
 `--answers-file <带版本的答复JSON>`；已生成的 `guidance/guidance.json` 可以用 `--research-guidance` 复用。答复文件格式为 `{"version": "sha256:上一快照摘要", "answers": {"问题ID": "答复"}}`，版本不匹配时拒绝使用。独立专家入口也可用 `--information <离线result.json>` 复用匹配的已审核结果。

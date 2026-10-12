@@ -1,0 +1,135 @@
+"""Read one worker root's iteration, analysis, attribution and curation records as a single joined run, with its
+ledger (`experimental.harness.loop.ledger`)."""
+
+import json
+from dataclasses import dataclass
+from pathlib import Path
+
+from experimental.harness.loop.history import Entry, read_history
+from experimental.harness.loop.ledger import held_out, rows, summary
+
+RETRYABLE = {"analyse": "analysis", "assess": "assessment"}
+
+
+def retryable_step(record: dict) -> str | None:
+    """The step a run that failed in it may explicitly retry, `analyse` or `assess` (`RETRYABLE`), while the failed
+    round is the last one and nothing came after it; None for every other ended run, which stays ended. A record
+    written before failures named their step counts as a failed analysis when its error says the Analyst's provider
+    failed."""
+    rounds = record.get("rounds") or []
+    if record.get("status") != "error" or not rounds:
+        return None
+    step = record.get("error_step")
+    if step is None and str(record.get("error", "")).startswith("analyst: provider error:"):
+        step = "analyse"
+    if step not in RETRYABLE:
+        return None
+    last = rounds[-1]
+    retryable = (
+        bool(last.get("sessions"))
+        and last.get("feedback") is None
+        and not any(last.get(key) for key in ("curated", "curation", "attribution"))
+        and all(item.get("feedback") is not None for item in rounds[:-1])
+        and not any((record.get("pending") or {}).get(key) for key in ("sessions", "signals", "holdout", "review"))
+        and all(item.get("round", -1) < len(rounds) for item in record.get("history", ()))
+    )
+    return step if retryable else None
+
+
+def runs(root: Path) -> list[Path]:
+    """Iteration record files under a worker root, oldest first."""
+    directory = Path(root) / "iteration"
+    if not directory.is_dir():
+        return []
+    return sorted(directory.glob("*.json"), key=lambda path: path.stat().st_mtime)
+
+
+@dataclass(frozen=True)
+class Cultivation:
+    """An earlier cultivation brought as a prior: its typed history, and what its conversants said, one stream per
+    session of each round, which is all its own Curator compartment spared."""
+
+    history: tuple[Entry, ...]
+    spoken: tuple[tuple[str, ...], ...] = ()
+
+    def record(self) -> dict:
+        return {"history": [entry.model_dump(mode="json") for entry in self.history], "spoken": self.spoken}
+
+    @classmethod
+    def of(cls, value: dict) -> "Cultivation":
+        return cls(
+            read_history(value),
+            tuple(tuple(stream) for stream in value.get("spoken", ())),
+        )
+
+
+def cultivation(path: Path) -> Cultivation:
+    """An earlier run as a prior: an iteration record file, or a worker root's latest one. A held-out session was
+    never heard by that run's Curator, so its words are not among those spared."""
+    path = Path(path)
+    if path.is_dir():
+        found = runs(path)
+        if not found:
+            raise ValueError(f"no iteration record under {path}")
+        path = found[-1]
+    record = json.loads(path.read_text())
+    if not isinstance(record, dict) or not isinstance(record.get("history"), list):
+        raise ValueError(f"not an iteration record, it keeps no history: {path}")
+    spoken = [
+        tuple(exchange["user"] for exchange in exchanges)
+        for item in record.get("rounds", ())
+        for exchanges in item.get("sessions", {}).values()
+    ]
+    return Cultivation(read_history(record), tuple(spoken))
+
+
+def load(path: Path) -> dict:
+    """The run record with each round's analysis, attribution and curation records read in beside it, and the
+    ledger joined from its history and held-out assessments (the baseline exam as round 0)."""
+    path = Path(path)
+    root = path.parents[1]
+    run = json.loads(path.read_text())
+    run["initial_curation"] = [_read(root / "curation" / name) for name in run.get("initial_curation", [])]
+    run["initial_attribution"] = [_read(root / "attribution" / name) for name in run.get("initial_attribution", [])]
+    for exchanges in run.get("baseline", {}).get("sessions", {}).values():
+        _place(exchanges, root)
+    for item in run["rounds"]:
+        for exchanges in (*item.get("sessions", {}).values(), *item.get("holdout", {}).values()):
+            _place(exchanges, root)
+        item["analysis"] = [_read(root / "analysis" / name) for name in item.get("analysis", [])]
+        item["curation"] = [_read(root / "curation" / name) for name in item.get("curation", [])]
+        item["attribution"] = [_read(root / "attribution" / name) for name in item.get("attribution", [])]
+    joined = rows(run.get("history", ()))
+    run["ledger"] = {
+        "rows": joined,
+        "summary": summary(joined),
+        "holdout": held_out(run["rounds"], run.get("baseline")),
+    }
+    return run
+
+
+def _place(exchanges, root: Path) -> None:
+    for exchange in exchanges:
+        execution = exchange["execution"]
+        execution["deliverables"] = [_here(path, root) for path in execution.get("deliverables", [])]
+
+
+def _here(path: str, root: Path) -> str:
+    """A kept deliverable's path under this worker root, so a moved or copied run still finds its files: the longest
+    tail of the recorded path, from a `deliverables` folder or above, that exists under the root, which keeps the
+    folder of a replica that kept it; a file found nowhere is placed where the root keeps its own."""
+    parts = Path(path).parts
+    if "deliverables" not in parts:
+        return path
+    last = len(parts) - 1 - parts[::-1].index("deliverables")
+    for start in range(1 if Path(path).is_absolute() else 0, last + 1):
+        candidate = root.joinpath(*parts[start:])
+        if candidate.exists():
+            return str(candidate)
+    return str(root.joinpath(*parts[parts.index("deliverables") :]))
+
+
+def _read(path: Path) -> dict:
+    if not path.is_file():
+        return {"missing": path.name}
+    return {"file": path.name, **json.loads(path.read_text())}

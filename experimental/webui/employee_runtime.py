@@ -7,15 +7,14 @@ import os
 import sys
 from pathlib import Path
 
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.raven_adapter.baselines import prepare
+from experimental.harness.raven_adapter.materialize import _write
+from experimental.webui.exporting import decoded, load_package, safe_file
 from raven.config import product_render
 from raven.config.schema import AgentDefaults
 from raven.contracts.path_policy import CONFIG_FILENAME
 from raven.home import raven_home
-
-from ..curator.harness import Artifact, Task
-from ..curator.raven_adapter.baselines import prepare
-from ..curator.raven_adapter.materialize import _write
-from .exporting import decoded, load_package, safe_file
 
 
 def prepare_employee(
@@ -72,11 +71,10 @@ def prepare_employee(
 
 
 async def serve(folder: Path):
+    from experimental.harness.raven_adapter.hosting.acp import serve_harness
     from raven.acp.server import install_crash_handlers
     from raven.acp.stdio import claim_stdout
     from raven.cli.acp_commands import _open_stdin
-
-    from ..curator.raven_adapter.hosting.acp import serve_harness
 
     package, _ = load_package(folder)
     product = f"{package['name']}-{package['sha256'][:12]}"

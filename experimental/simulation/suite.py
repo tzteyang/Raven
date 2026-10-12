@@ -1,9 +1,9 @@
 """Mine for the value case: run cultivation runs over disclosure plans within a budget, judge each, rank them.
 
-A candidate is one disclosure plan: a chain preset, a partition given as JSON, or a random partition of the scenario's
-materials (the owner still knows everything from the start and has handed everything over before the last round; only
-the partition differs, see `experimental.simulation.__main__`). Each finished run is judged by
-`experimental.simulation.value`; with `--stop-on-value` the first run that qualifies stops the others.
+A candidate is one disclosure plan: a schedule `--disclose` takes (`all`, `none`, `staged` or a scenario plan's name),
+a partition given as JSON, or a random partition of the scenario's materials (the owner still knows everything from
+the start; only when it hands things over differs, see `experimental.simulation.__main__`). Each finished run is judged by
+`experimental.simulation.bench.value`; with `--stop-on-value` the first run that qualifies stops the others.
 
 Each run gets its own Raven home under `--state-root` (the only place a configuration with credentials is written,
 readable by its owner only) and its own record directory under `--runs-dir`. While runs go, their spend is read from
@@ -15,6 +15,7 @@ whole process. Then the cultivation record is exported and judged, and a summary
 """
 
 import argparse
+import hashlib
 import json
 import os
 import random
@@ -26,10 +27,10 @@ import time
 from dataclasses import dataclass, field
 from pathlib import Path
 
-from ..automation.employee import AREA, FORWARDED
-from .__main__ import CHAINS
-from .record import REDACTED, SUMMARY, build_record, export_record, redact
-from .scenario import Scenario
+from experimental.cultivation.employee import AREA, FORWARDED
+from experimental.simulation.bench.record import REDACTED, SUMMARY, build_record, export_record, redact
+from experimental.simulation.bench.scenario import Scenario
+from raven.providers.usage import reported_cost
 
 KEPT_FILES = ("run.log", "command.json")
 VALUE = "value.json"
@@ -48,15 +49,67 @@ PRICES = {
 def call_cost(attributes: dict, prices=PRICES) -> float:
     """A model call's cost: what the provider reported, else its tokens at the model's price (0 when unpriced)."""
     try:
-        reported = float(attributes.get("llm.usage.cost_total") or 0)
+        value = attributes.get("llm.usage.cost_total")
+        reported = reported_cost(float(value)) if not isinstance(value, bool) else None
     except (TypeError, ValueError):
-        reported = 0.0
+        reported = None
     model = str(attributes.get("llm.model") or "")
     price = prices.get(model) or next((p for name, p in prices.items() if name.split("/")[-1] == model), None)
-    if reported or not price:
+    if reported is not None:
         return reported
+    if not price:
+        return 0.0
     tokens = [attributes.get(f"llm.usage.{key}") or 0 for key in ("input_tokens", "output_tokens", "cache_read_tokens")]
     return sum(float(count) * rate for count, rate in zip(tokens, price, strict=True)) / 1_000_000
+
+
+def execution_spend(accounting, prices):
+    """Keep the budget estimate distinct from reported spend, using the same unique records."""
+    from raven.observability.report import cost
+
+    amount = cost(accounting)
+    estimated, unpriced = 0.0, 0
+    for row in accounting["attempts"]:
+        usage = row.get("usage", {})
+        if usage.get("cost_usd") is not None or usage.get("quota_usd") is not None:
+            continue
+        model = str(row["attributes"].get("model") or "")
+        priced = model in prices or any(name.split("/")[-1] == model for name in prices)
+        if (
+            row["kind"] == "external"
+            or not priced
+            or usage.get("input_total_tokens") is None
+            or usage.get("inconsistent")
+        ):
+            unpriced += 1
+            continue
+        fresh = usage.get("input_tokens")
+        if fresh is None:
+            fresh = max(
+                0,
+                usage["input_total_tokens"]
+                - (usage.get("cache_read_tokens") or 0)
+                - (usage.get("cache_write_tokens") or 0),
+            )
+        attributes = {
+            "llm.model": model,
+            "llm.usage.input_tokens": fresh,
+            "llm.usage.output_tokens": usage.get("output_tokens"),
+            "llm.usage.cache_read_tokens": usage.get("cache_read_tokens"),
+        }
+        estimated += call_cost(attributes, prices)
+    return {
+        **amount["by_part"],
+        "total": amount["total"],
+        "accounting": amount,
+        "budget_total": (amount["total"] or 0) + estimated,
+        "budget_estimate_usd": estimated,
+        "budget_unpriced_calls": unpriced,
+        "budget_pricing": {
+            "rates": {name: list(rates) for name, rates in prices.items()},
+            "version": hashlib.sha256(json.dumps(prices, sort_keys=True).encode()).hexdigest()[:16],
+        },
+    }
 
 
 def span_logs(folder: Path) -> list[Path]:
@@ -66,8 +119,8 @@ def span_logs(folder: Path) -> list[Path]:
     return [*sorted(folder.glob("archive/*/audit-spans-*.log")), *sorted(folder.glob("audit-spans*.log*"))]
 
 
-def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, float]:
-    """Model spend of one run from the calls its Raven home recorded, split by who made them.
+def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict:
+    """Reported execution spend, with the audit-log estimate retained only for historical runs.
 
     A child harness hosted beside the employee or one of its replicas keeps its own log under the run's records
     (`employee/children/<id>/native/traces/logs`, or the same under `replicas/<label>/`); every call there counts as a
@@ -75,6 +128,11 @@ def spend(state: Path, records: Path | None = None, prices=PRICES) -> dict[str, 
     Replicas' own calls land in the run's Raven home with the employee's; once the home is gone, its logs are read
     from the copy the records keep under `traces/`.
     """
+    from raven.observability.report import read
+
+    accounting = read(records or state)
+    if accounting["available"]:
+        return execution_spend(accounting, prices)
     parts = {"simulation": 0.0, "employee": 0.0, "subagents": 0.0}
     logs = [(log, None) for log in span_logs(Path(state) / "traces" / "logs")]
     if not logs and records is not None:
@@ -187,7 +245,7 @@ def random_partition(materials: list[str], rounds: int, rng: random.Random, onbo
 
 def candidates(args) -> list[tuple[str, list[str]]]:
     """Each disclosure plan to try, as a label and the simulation arguments that select it."""
-    found = [(chain, ["--chain", chain]) for chain in args.chains or ()]
+    found = [(plan, ["--disclose", plan]) for plan in args.discloses or ()]
     given = json.loads(Path(args.partitions).read_text()) if args.partitions else []
     found += [
         (f"p{index}", ["--partition", json.dumps(steps, ensure_ascii=False)]) for index, steps in enumerate(given, 1)
@@ -211,7 +269,9 @@ def command(plan: list[str], args, *, config: Path, workdir: Path, records: Path
     argv = [sys.executable, "-m", "experimental.simulation", "--config", str(config), "--workdir", str(workdir)]
     argv += ["--home", str(args.home), "--state-dir", str(records), "--scenario", str(args.scenario), *plan]
     argv += ["--rounds", str(args.rounds), "--turns", str(args.turns), "--repeats", str(args.repeats)]
-    argv += ["--timeout", str(args.timeout)]
+    argv += ["--timeout", str(args.timeout), "--deliver", str(getattr(args, "deliver", "dialog"))]
+    if getattr(args, "no_completion", False):
+        argv.append("--no-completion")
     for flag, value in (
         ("--curator-calls", getattr(args, "curator_calls", None)),
         ("--curator-queries", getattr(args, "curator_queries", None)),
@@ -330,12 +390,12 @@ def finish(run: Run, args) -> dict:
     redacted = scrub(run.records) if run.records.is_dir() else 0
     isolation = None
     try:
-        from ..automation.isolation import write as check_isolation
+        from experimental.simulation.bench.isolation import write as check_isolation
 
         isolation = check_isolation(run.records, run.state, args.forbid) if run.records.is_dir() else None
     except Exception as exc:  # noqa: BLE001 -- an unscanned run is judged not isolated, never lost
         run.notes.append(f"isolation scan failed: {exc!r}")
-    from ..automation.files import page_images
+    from experimental.harness.participation.files import page_images
 
     decks = sorted(run.records.rglob("*.pptx")) if run.records.is_dir() else []
     for deck in (deck for deck in decks if "deliverables" in deck.relative_to(run.records).parts):
@@ -383,7 +443,10 @@ def finish(run: Run, args) -> dict:
 
 
 def over_budget(runs: list[Run], budget: float | None) -> bool:
-    return budget is not None and sum(spend(run.state, run.records)["total"] for run in runs if run.started) >= budget
+    if budget is None:
+        return False
+    amounts = [spend(run.state, run.records) for run in runs if run.started]
+    return sum((amount.get("budget_total", amount["total"]) or 0) for amount in amounts) >= budget
 
 
 def main(args) -> list[dict]:
@@ -399,7 +462,7 @@ def main(args) -> list[dict]:
         for label, plan in candidates(args)
     ]
     if not runs:
-        raise ValueError("name at least one chain, partition file or random partition")
+        raise ValueError("name at least one disclosure plan, partition file or random partition")
     for run in runs:
         if run.records.exists() or run.state.exists():
             raise ValueError(f"a run named {run.name} already exists")
@@ -426,11 +489,14 @@ def main(args) -> list[dict]:
                     pending.clear()
         time.sleep(args.poll)
     ranking = sorted(done, key=lambda summary: -((summary["value"] or {}).get("score") or 0))
-    total = sum(summary["spend"]["total"] for summary in done)
+    known = [summary["spend"]["total"] for summary in done if summary["spend"]["total"] is not None]
+    total = sum(known) if known else None
+    missing = sum(summary["spend"].get("accounting", {}).get("missing_calls", 0) for summary in done)
     (args.runs_dir / f"{args.prefix}mining-{stamp}.json").write_text(
-        json.dumps({"spend": total, "ranking": ranking}, ensure_ascii=False, indent=2)
+        json.dumps({"spend": total, "unpriced_calls": missing, "ranking": ranking}, ensure_ascii=False, indent=2)
     )
-    print(f"mining finished: {len(done)} runs, ${total:.2f}", flush=True)
+    amount = f"${total:.2f}" if total is not None else "unknown"
+    print(f"mining finished: {len(done)} runs, reported spend {amount}, {missing} unpriced calls", flush=True)
     return ranking
 
 
@@ -441,7 +507,19 @@ def cli():
     parser.add_argument("--runs-dir", type=Path, required=True, help="Where each run's record directory is created")
     parser.add_argument("--state-root", type=Path, required=True, help="Where each run's Raven home is created")
     parser.add_argument("--scenario", type=Path, default=Path("travel_agency"))
-    parser.add_argument("--chains", nargs="+", choices=sorted(CHAINS), default=[])
+    parser.add_argument(
+        "--discloses",
+        nargs="+",
+        default=[],
+        metavar="PLAN",
+        help="Disclosure plans to try, each as --disclose takes it: all, none, staged or a scenario plan's name",
+    )
+    parser.add_argument("--deliver", choices=("pool", "dialog"), default="dialog", help="Passed to every run")
+    parser.add_argument(
+        "--no-completion",
+        action="store_true",
+        help="Passed to every run: never hand the rest over before the last round",
+    )
     parser.add_argument("--partitions", type=Path, help="A JSON file holding a list of partitions to try")
     parser.add_argument("--random-partitions", type=int, default=0, help="How many random partitions to try")
     parser.add_argument(

@@ -1,0 +1,76 @@
+{
+  "materials": {
+    "icp-signals": {
+      "kind": "norm"
+    },
+    "outreach-norms": {
+      "kind": "norm"
+    },
+    "watch-brief": {
+      "kind": "norm"
+    },
+    "sequence-sop": {
+      "kind": "norm"
+    },
+    "case-library": {
+      "kind": "fact"
+    },
+    "case-library-update": {
+      "kind": "fact"
+    },
+    "crm-export": {
+      "kind": "fact"
+    },
+    "email-samples": {
+      "kind": "exemplar"
+    }
+  },
+  "checks": {
+    "letter-shape": {
+      "derived_from": [
+        "outreach-norms",
+        "sequence-sop"
+      ]
+    },
+    "case-figures-authorised": {
+      "derived_from": [
+        "outreach-norms"
+      ]
+    },
+    "barred-contacts": {
+      "derived_from": [
+        "outreach-norms",
+        "icp-signals"
+      ]
+    },
+    "outbox-after-confirmation": {
+      "derived_from": [
+        "outreach-norms"
+      ]
+    },
+    "crm-entries": {
+      "derived_from": [
+        "outreach-norms",
+        "sequence-sop"
+      ]
+    },
+    "reply-handling": {
+      "derived_from": [
+        "sequence-sop"
+      ]
+    },
+    "watch-run": {
+      "derived_from": [
+        "watch-brief",
+        "icp-signals",
+        "outreach-norms"
+      ]
+    },
+    "claims-match-records": {
+      "derived_from": [
+        "outreach-norms",
+        "watch-brief"
+      ]
+    }
+  }
+}

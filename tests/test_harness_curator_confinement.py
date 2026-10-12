@@ -12,11 +12,11 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.automation.employee import AREA, BOUNDARIES, REPLICAS, seal, unsealed
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.baselines import Baseline
-from experimental.curator.raven_adapter.confinement import Confinement, selected
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.cultivation.employee import AREA, BOUNDARIES, REPLICAS, seal, unsealed
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.baselines import Baseline
+from experimental.harness.raven_adapter.confinement import Confinement, selected
+from experimental.harness.raven_adapter.worker import Worker
 from raven.config.raven import RavenConfig
 from raven.config.schema import Config
 
@@ -30,17 +30,24 @@ WORKER_CODE = [
     "agents/raven-ppt/run.py",
     "plugins-dist/ppt-engine/pyproject.toml",
     "experimental/__init__.py",
-    "experimental/audience.py",
-    "experimental/requirements.py",
-    "experimental/curator/raven_adapter/worker.py",
-    "experimental/scenario/sealed.py",
-    "experimental/iteration/__init__.py",
-    "experimental/iteration/compartment.py",
+    "experimental/harness/__init__.py",
+    "experimental/harness/contract/declaration.py",
+    "experimental/harness/raven_adapter/worker.py",
+    "experimental/harness/curator/workflow.py",
+    "experimental/harness/scenario/sealed.py",
+    "experimental/harness/participation/__init__.py",
+    "experimental/harness/participation/audience.py",
+    "experimental/harness/participation/requirements.py",
+    "experimental/harness/participation/allowance.py",
+    "experimental/harness/participation/model_calls.py",
+    "experimental/harness/participation/compartment.py",
 ]
 EVALUATION = [
-    "experimental/iteration/session.py",
-    "experimental/analyst/run.py",
-    "experimental/simulation/scenarios/shop/checks.md",
+    "experimental/harness/loop/session.py",
+    "experimental/harness/analyst/run.py",
+    "experimental/harness/participation/protocols.py",
+    "experimental/cultivation/employee.py",
+    "experimental/simulation/cases/shop/checks.md",
     "experimental/simulation/cases/one.md",
     "experimental/notes/draft.md",
     "experimental/docs/design.md",
@@ -181,7 +188,7 @@ def test_the_probe_is_asked_to_close_the_records_the_runs_beside_and_what_the_ow
 
 
 def test_a_closed_path_the_user_cannot_even_look_up_counts_as_closed(tmp_path, monkeypatch):
-    from experimental.curator.raven_adapter import confinement as module
+    from experimental.harness.raven_adapter import confinement as module
 
     hidden, open_file = tmp_path / "closed" / "runs", tmp_path / "open.txt"
     open_file.write_text("")

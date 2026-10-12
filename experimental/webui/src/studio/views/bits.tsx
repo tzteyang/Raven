@@ -1,14 +1,14 @@
 /* Small pieces every Studio view uses: the stroke icons (drawn like ui-web's,
    16px on a 24 grid), Markdown in ui-web's prose style, a strategy target
-   tag, a diagnosis state chip, a handed-over material, a JSON block, and the
-   Raven mark. */
+   tag, a diagnosis state chip, a handed-over material and a JSON block; the
+   Raven mark is the run viewer's. */
 
-import { useId } from 'react'
 import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 
 import { T } from '../copy'
 import { LOOSE, surfaceOf } from '../harness'
+import { RavenMark } from '../../views/RavenMark'
 
 import type { JSX, ReactNode } from 'react'
 import type { Handover, MaterialOrigin } from '../../model'
@@ -46,34 +46,6 @@ export function Icon({ name, size = 16, className }: { name: keyof typeof PATHS 
   return (
     <svg className={className} width={size} height={size} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth={1.8} strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
       <path d={PATHS[name] ?? PATHS.spark} />
-    </svg>
-  )
-}
-
-/* ui-web/src/components/RavenMark.tsx, redrawn here so the island does not
-   import a second copy of React from ui-web's own node_modules. */
-export function RavenMark({ size = 22 }: { size?: number }): JSX.Element {
-  const id = 'st' + useId().replace(/[^\w-]/g, '')
-  return (
-    <svg width={size} height={size} viewBox="0 0 24 24" fill="none" aria-hidden="true">
-      <defs>
-        <linearGradient id={`${id}g`} x1="0" y1="0" x2="24" y2="24" gradientUnits="userSpaceOnUse">
-          <stop stopColor="#dfe7f5" />
-          <stop offset="1" stopColor="#f6ecd6" />
-        </linearGradient>
-        <clipPath id={`${id}c`}>
-          <rect width="24" height="24" rx="6.46" />
-        </clipPath>
-      </defs>
-      <g clipPath={`url(#${id}c)`}>
-        <rect width="24" height="24" rx="6.46" fill={`url(#${id}g)`} />
-        <rect x="3" y="8.42" width="18.34" height="16.93" rx="4.23" fill="black" />
-        <path d="M13.03 2.78c.92 1.02 1.5 2.48 1.52 4.1.53-.76.92-1.62 1.16-2.55.87.91 1.42 2.25 1.42 3.75l-.01.35H8.65c2.17-.82 3.85-2.97 4.38-5.65z" fill="black" />
-        <circle cx="9.26" cy="13.27" r="3.43" fill="white" />
-        <circle cx="8.95" cy="12.97" r="1.72" fill="black" />
-        <circle cx="17.72" cy="13.27" r="3.43" fill="white" />
-        <circle cx="17.42" cy="12.97" r="1.72" fill="black" />
-      </g>
     </svg>
   )
 }
@@ -151,3 +123,5 @@ export function Fold({ summary, children, open = false }: { summary: ReactNode; 
 }
 
 export const fileName = (path: string): string => path.split('/').pop() ?? path
+
+export { RavenMark }

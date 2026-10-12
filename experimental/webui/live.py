@@ -26,16 +26,16 @@ from dataclasses import dataclass, field, fields
 from functools import lru_cache
 from pathlib import Path
 
-from .. import model_roles
-from ..iteration.records import RETRYABLE, retryable_step, runs
-from ..scenario import load as load_contract
-from ..scenario.contract import SKILL_FILE as SKILL
-from . import exporting
-from .process import redact
-from .rundir import curator_progress, pending_stage
-from .studio import studio_run
+from experimental.harness.loop.records import RETRYABLE, retryable_step, runs
+from experimental.harness.participation import model_roles
+from experimental.harness.scenario import load as load_contract
+from experimental.harness.scenario.contract import SKILL_FILE as SKILL
+from experimental.webui import exporting
+from experimental.webui.process import redact
+from experimental.webui.rundir import curator_progress, pending_stage
+from experimental.webui.studio import studio_run
 
-BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "scenarios" / "travel_agency"
+BUNDLED = Path(__file__).resolve().parents[1] / "simulation" / "cases" / "travel_agency"
 # The model roles of a live session: a person on the page is the counterpart and every conversant, and nothing is
 # collected before onboarding.
 MODEL_ROLES = (
@@ -79,7 +79,7 @@ STOP_WAIT = 30
 TITLE_KEEP = 80
 ERROR_KEEP = 1_000
 # A scenario built on the page: its name, never a word the repository holds, since the Curator may not read a file that
-# names its scenario (`experimental.automation.employee.withheld`), and the limits of what it is built from.
+# names its scenario (`experimental.cultivation.employee.withheld`), and the limits of what it is built from.
 BUILT = re.compile(r"scn-[0-9a-f]{8}")
 BUILT_SCRIPTS, MATERIAL = "scripts.json", "materials"
 UPLOADED = frozenset({".md", ".txt", ".csv"})
@@ -163,7 +163,7 @@ class LiveConfig:
     the session's process only, never shown or recorded), the `root` the sessions are kept under, the `scenario`
     directory whose contract bounds them and whose materials a person may hand over, and the run's settings, named as
     the automated run's command line names them; `models` and `efforts` map a model role of `MODEL_ROLES` to its model and
-    effort (`experimental.model_roles`), a role not named running on the partner's. A relative path is read from the
+    effort (`experimental.harness.participation.model_roles`), a role not named running on the partner's. A relative path is read from the
     file's own directory."""
 
     config: Path
@@ -278,7 +278,7 @@ class LiveConfig:
 
 def _host(connection, spec: dict) -> None:
     # Imported here, in the session's process, so the server's own process never loads the loop.
-    from .session_host import main
+    from experimental.webui.session_host import main
 
     main(connection, spec)
 

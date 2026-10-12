@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.curator.harness.commitments import (
+from experimental.harness.contract.commitments import (
     Commitment,
     CommitmentChange,
     apply,

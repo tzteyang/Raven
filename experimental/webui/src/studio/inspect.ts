@@ -1,7 +1,7 @@
 /* The input inspector's reading of one process card: what the assessor kept
    for itself, what the Analyst was given, and what the Curator was handed --
    and whether any per-item verdict id the Analyst saw turns up in the
-   Curator's input, which experimental/iteration/hearing.py is meant to rule
+   Curator's input, which experimental/harness/participation/hearing.py is meant to rule
    out. */
 
 import type { Signal } from '../model'

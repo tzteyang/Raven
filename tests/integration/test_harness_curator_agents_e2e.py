@@ -2,9 +2,9 @@
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.inspection import Baseline
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.inspection import Baseline
+from experimental.harness.raven_adapter.worker import Worker
 from raven.config.loader import load_config
 from raven.config.raven import load_raven_config
 from raven.core.plugin_stack import discover_plugins
@@ -18,7 +18,7 @@ from tests.test_agents_code_launcher import launcher as launcher
 @pytest.mark.integration
 @pytest.mark.asyncio
 async def test_a_rendered_code_agent_keeps_its_plugins_mechanism_and_tools_through_curator_changes(grounded, tmp_path):
-    from experimental.curator.raven_adapter.exploration import Exploration
+    from experimental.harness.raven_adapter.exploration import Exploration
 
     rendered = grounded.render_acp_config(RUN_PY.parent / "config.json")
     config, extensions = load_config(rendered), load_raven_config(rendered)

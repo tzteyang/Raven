@@ -5,9 +5,9 @@ from copy import deepcopy
 
 import pytest
 
-from experimental.curator.raven_adapter.inspection import fingerprint
-from experimental.experience.contracts import OutcomeReceipt, RecordOrigin, digest, for_model
-from experimental.experience.records import RecordAccess, RecordRejectedError, normalize, read_record
+from experimental.harness.experience.contracts import OutcomeReceipt, RecordOrigin, digest, for_model
+from experimental.harness.experience.records import RecordAccess, RecordRejectedError, normalize, read_record
+from experimental.harness.raven_adapter.inspection import fingerprint
 
 FIELDS = frozenset({"plan.understanding", "change.target", "change.reason", "outcome.held", "outcome.observations"})
 ARTIFACT = {"values": {"action.config": {"temperature": 0.2}}, "files": {}}

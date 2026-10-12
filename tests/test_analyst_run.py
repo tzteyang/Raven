@@ -5,15 +5,15 @@ from types import SimpleNamespace
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.analyst.materials import RECORDS, read_records
-from experimental.analyst.run import NAME, Limits, analyse, triage, vet
-from experimental.curator.harness import Plan, Task
-from experimental.curator.raven_adapter.worker import Execution
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
-from experimental.iteration.protocols import Exchange, Item, Signal
-from experimental.scenario.sealed import Sealed
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.analyst.materials import RECORDS, read_records
+from experimental.harness.analyst.run import NAME, Limits, analyse, triage, vet
+from experimental.harness.contract import Plan, Task
+from experimental.harness.loop.history import Diagnosed, Entry, Raised, Revised
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.participation.protocols import Exchange, Item, Signal
+from experimental.harness.raven_adapter.worker import Execution
+from experimental.harness.scenario.sealed import Sealed
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 
 
@@ -29,7 +29,7 @@ class Provider:
 
 class FakeWorker:
     def __init__(self, root, plan=None):
-        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's travellers"))
+        self.baseline = SimpleNamespace(task=Task(text="Serve the agency's conversants"))
         self.root = root
         self.last_plan = plan
 
@@ -370,7 +370,7 @@ def test_what_the_curator_already_holds_or_hears_is_not_held_against_a_requireme
 
 
 def test_requirement_authority_comes_from_supplied_evidence_not_a_model_claim():
-    from experimental.analyst.run import sourced
+    from experimental.harness.analyst.run import sourced
 
     def feedback(*grounds, conditions=()):
         return Feedback.model_validate(
@@ -399,10 +399,10 @@ def test_requirement_authority_comes_from_supplied_evidence_not_a_model_claim():
 
 
 def test_original_external_authority_survives_history_and_model_restating():
-    from experimental.analyst.run import sourced
-    from experimental.assessor.standard import Standard
-    from experimental.audience import project
-    from experimental.iteration.history import entry
+    from experimental.harness.analyst.run import sourced
+    from experimental.harness.assessor.standard import Standard
+    from experimental.harness.loop.history import entry
+    from experimental.harness.participation.audience import project
 
     external = Signal("customer", "Include tax.", authority="external")
     request = Feedback.model_validate(
@@ -444,9 +444,9 @@ def test_original_external_authority_survives_history_and_model_restating():
 
 
 def test_an_already_satisfied_external_condition_is_retained_without_inventing_a_gap():
-    from experimental.analyst.run import sourced
-    from experimental.audience import project
-    from experimental.requirements import ExternalRequirement
+    from experimental.harness.analyst.run import sourced
+    from experimental.harness.participation.audience import project
+    from experimental.harness.participation.requirements import ExternalRequirement
 
     signal = Signal("customer", "Good. Future quotes must include tax.", authority="external")
     condition = ExternalRequirement(source="customer", quote="Future quotes must include tax.", kind="gate")

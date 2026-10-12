@@ -1,0 +1,25 @@
+{
+  "materials": {
+    "copy-norms": {"kind": "norm"},
+    "copy-workflow": {"kind": "norm"},
+    "launch-brief": {"kind": "norm"},
+    "legal-feedback": {"kind": "norm"},
+    "citation-notice": {"kind": "norm"},
+    "claim-evidence": {"kind": "fact"},
+    "consumer-research": {"kind": "fact"},
+    "competitor-matrix": {"kind": "fact"},
+    "evidence-update": {"kind": "fact"}
+  },
+  "checks": {
+    "copy-shape": {"derived_from": ["copy-norms", "launch-brief", "legal-feedback"]},
+    "points-in-research-order": {"derived_from": ["copy-norms", "legal-feedback"]},
+    "evidence-usable": {"derived_from": ["copy-norms", "legal-feedback", "citation-notice"]},
+    "evidence-copied": {"derived_from": ["copy-norms"]},
+    "no-comparison-or-absolute": {"derived_from": ["copy-norms"]},
+    "figures-traced": {"derived_from": ["copy-norms"]},
+    "two-files-agree": {"derived_from": ["copy-workflow", "launch-brief"]},
+    "register-appended": {"derived_from": ["copy-workflow"]},
+    "revision-scoped": {"derived_from": ["copy-workflow"]},
+    "citation-notes": {"derived_from": ["citation-notice"]}
+  }
+}

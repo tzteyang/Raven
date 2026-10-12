@@ -6,15 +6,13 @@ from copy import deepcopy
 
 import pytest
 
-from experimental.curator.attribution import AttributionLimits, ModelAttributor
-from experimental.curator.generation.run import Limits
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.inspection import Baseline
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.curator.workflow import improve
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.build import ExperiencePipeline
-from experimental.experience.contracts import (
+from experimental.harness.contract import Task
+from experimental.harness.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.harness.curator.generation.run import Limits
+from experimental.harness.curator.workflow import improve
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.build import ExperiencePipeline
+from experimental.harness.experience.contracts import (
     EvidenceLink,
     ExperienceCondition,
     ExperienceProposal,
@@ -22,10 +20,12 @@ from experimental.experience.contracts import (
     OutcomeReceipt,
     digest,
 )
-from experimental.experience.curator import CuratorExperience
-from experimental.experience.records import RecordAccess
-from experimental.experience.store import ExperienceStore
-from experimental.experience.verification import Case, Result, compare_methods
+from experimental.harness.experience.curator import CuratorExperience
+from experimental.harness.experience.records import RecordAccess
+from experimental.harness.experience.store import ExperienceStore
+from experimental.harness.experience.verification import Case, Result, compare_methods
+from experimental.harness.raven_adapter.inspection import Baseline
+from experimental.harness.raven_adapter.worker import Worker
 from tests.fixtures.harness_curator.authoring import action, profile
 from tests.integration.test_harness_curator_e2e import (  # noqa: F401 -- isolated baseline fixture
     baseline,

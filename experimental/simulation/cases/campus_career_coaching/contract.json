@@ -1,0 +1,24 @@
+{
+  "materials": {
+    "coaching-norms": {"kind": "norm"},
+    "resume-template": {"kind": "norm"},
+    "cpa-facts": {"kind": "fact"},
+    "audit-jd-pack": {"kind": "fact"},
+    "consult-records": {"kind": "fact"},
+    "interview-guide": {"kind": "norm"},
+    "interview-samples": {"kind": "exemplar"},
+    "signing-guide": {"kind": "norm"},
+    "recruiting-calendar": {"kind": "fact"}
+  },
+  "checks": {
+    "resume-facts-sourced": {"derived_from": ["coaching-norms"]},
+    "resume-role-wording": {"derived_from": ["coaching-norms"]},
+    "certificate-column": {"derived_from": ["coaching-norms"]},
+    "layout-one-page": {"derived_from": ["resume-template", "coaching-norms"]},
+    "fact-base-before-rewrite": {"derived_from": ["coaching-norms"]},
+    "consult-record-kept": {"derived_from": ["coaching-norms", "signing-guide"]},
+    "interview-practice-loop": {"derived_from": ["interview-guide"]},
+    "no-ready-answer": {"derived_from": ["interview-guide"]},
+    "signing-and-safety": {"derived_from": ["signing-guide"]}
+  }
+}

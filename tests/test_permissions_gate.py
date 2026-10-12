@@ -1645,7 +1645,7 @@ def _tool_from(module: str) -> object:
 @pytest.mark.asyncio
 async def test_trusted_harness_tools_run_unattended_while_builtins_still_ask():
     authored = _tool_from("_curator_0123abcd.day_tool")
-    interaction = _tool_from("experimental.curator.raven_adapter.interaction_tools")
+    interaction = _tool_from("experimental.harness.raven_adapter.interaction_tools")
     builtin = _tool_from("raven.agent.tools.filesystem")
     bind(None)
     trusting = gate_for(PermissionsConfig(trust_harness_tools=True))

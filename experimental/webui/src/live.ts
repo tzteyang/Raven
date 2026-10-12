@@ -45,7 +45,7 @@ export interface LiveReply {
   /** Copies the worker kept of delivered files, newest first; absent from an older server. */
   deliveries?: KeptFile[]
   /** Each session the record already holds, by name, with the opaque label its session key and replica folder
-      carry (experimental/iteration/hearing.py opaque). A drill of a round not yet recorded is known only by its label;
+      carry (experimental/harness/participation/hearing.py opaque). A drill of a round not yet recorded is known only by its label;
       absent from an older server. */
   labels?: Record<string, string>
   now: number

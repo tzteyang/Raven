@@ -17,10 +17,10 @@ from urllib.request import Request, urlopen
 
 import pytest
 
-from experimental.curator.generation.run import GenerationPausedError
-from experimental.curator.harness import Task
-from experimental.iteration import session as stepping
-from experimental.simulation.scenario import BUNDLED
+from experimental.harness.contract import Task
+from experimental.harness.curator.generation.run import GenerationPausedError
+from experimental.harness.loop import session as stepping
+from experimental.simulation.bench.scenario import BUNDLED
 from experimental.webui import employ, session_host
 from experimental.webui.live import Handle, Live, LiveConfig
 from experimental.webui.serve import Handler
@@ -171,7 +171,7 @@ def spec(tmp_path, **values):
     config = LiveConfig.load(write_config(tmp_path))
     run_dir = config.root / "runs" / SESSION
     run_dir.mkdir(parents=True, exist_ok=True)
-    return {**config.spec(run_dir, config.root / "workdirs" / SESSION, "Serve the agency's travellers"), **values}
+    return {**config.spec(run_dir, config.root / "workdirs" / SESSION, "Serve the agency's conversants"), **values}
 
 
 async def until(check, timeout=10.0):
@@ -251,8 +251,8 @@ def test_the_materials_offered_are_those_the_curator_may_receive_with_where_each
     spec = json.loads((scenario / "scenario.json").read_text())
     spec["initial"] = [name for name in spec["initial"] if name != "price-list"]
     spec["plans"] = {
-        plan: [[name for name in step if name != "price-list"] for step in steps]
-        for plan, steps in spec["plans"].items()
+        name: {**plan, "steps": [[item for item in step if item != "price-list"] for step in plan["steps"]]}
+        for name, plan in spec["plans"].items()
     }
     (scenario / "scenario.json").write_text(json.dumps(spec))
     origin = {"origin": "induced", "confirmed": False, "items": ["greet-by-name"]}
@@ -279,7 +279,7 @@ async def test_a_live_session_takes_the_loops_steps_as_the_page_asks_and_refuses
         assert state["failed"] is None and state["status"] == "running" and not state["onboarded"]
         assert host.session.boundaries.policy == "warn" and hired[0].guard is not None and hired[0].employee.started
         settings = json.loads((host.root / "settings.json").read_text())
-        assert settings["chain"] == "live" and settings["models"]["partner"] == "deepseek/deepseek-flash"
+        assert settings["disclose"] == "live" and settings["models"]["partner"] == "deepseek/deepseek-flash"
         assert settings["models"]["curator"] == "deepseek/deepseek-flash" and "counterpart" not in settings["models"]
         assert "raven.json" not in json.dumps(settings) and settings["efforts"]["curator"] == "low"
 
@@ -451,7 +451,7 @@ async def test_pending_inquiries_are_saved_and_cancellation_stays_visible_after_
 async def test_information_preparation_asks_the_person_on_the_page_who_answers_or_skips_before_the_onboarding(
     tmp_path, curations
 ):
-    from experimental.research.information import Question, Result, Review
+    from experimental.cultivation.collector.information import Question, Result, Review
     from tests.test_research_collection import accepted, snapshot
 
     seen = []
@@ -532,7 +532,7 @@ async def test_an_ai_question_drafts_the_next_message_of_a_held_trial_from_what_
         drafted = await until(lambda: (q := host.state()["question"]) and "message" in q and q)
         assert drafted["trial"] == "trial-1" and drafted["message"] == "Draft 1" and drafted["good"]
         [packet] = asked
-        assert packet["job"] == "Serve the agency's travellers" and packet["trial"] == [] and packet["earlier"] == []
+        assert packet["job"] == "Serve the agency's conversants" and packet["trial"] == [] and packet["earlier"] == []
         assert packet["materials"] and all(name.startswith("service-sop/") for name in packet["materials"])
         assert packet["checks"] and packet["counterpart"] and packet["requirements"] == []
 
@@ -583,7 +583,7 @@ async def test_proposed_checks_are_settled_by_the_person_and_join_what_every_ass
         proposals = await until(lambda: (p := host.state()["proposals"]) and "items" in p and p)
         [packet] = packets
         assert packet["trials"][0]["turns"][0]["said"] == "Plan a trip" and packet["chosen"] == []
-        assert packet["checks"] and packet["job"] == "Serve the agency's travellers"
+        assert packet["checks"] and packet["job"] == "Serve the agency's conversants"
         assert [item["chosen"] for item in proposals["items"]] == [None, None]
 
         assert (await host.handle({"op": "adopt", "index": 0, "option": 0}))["ok"]
@@ -684,7 +684,7 @@ async def test_resuming_rehires_the_employee_on_the_record_and_its_saved_deploym
 FLAKY = """
 from pathlib import Path
 
-from experimental.iteration.protocols import Item, Signal
+from experimental.harness.participation.protocols import Item, Signal
 
 
 class Flaky:
@@ -878,11 +878,11 @@ def test_the_server_relays_the_pages_steps_to_the_sessions_process_and_serves_it
     status, info = call(studio.base)
     assert status == 200 and info["enabled"] and info["sessions"] == [] and info["settings"]["rounds"] == 3
     assert info["task"].strip() and any(row["name"] == "service-sop" for row in info["materials"])
-    status, created = call(studio.base, {"title": "Agency", "task": "Serve the agency's travellers"})
+    status, created = call(studio.base, {"title": "Agency", "task": "Serve the agency's conversants"})
     assert status == 201 and created["title"] == "Agency" and created["attached"]
     session = f"{studio.base}/{created['id']}"
     body = poll(session, lambda body: body["state"] and body["state"]["step"] is None and "record" in body)
-    assert body["record"]["task"] == "Serve the agency's travellers" and body["run"].startswith(created["id"] + "/")
+    assert body["record"]["task"] == "Serve the agency's conversants" and body["run"].startswith(created["id"] + "/")
     assert body["progress"] == {"curation": None, "paused": None}
     status, again = call(f"{session}?stamp={body['stamp']}")
     assert status == 200 and "record" not in again and again["state"]["status"] == "running"
@@ -995,7 +995,7 @@ def test_without_a_live_configuration_the_server_only_replays(tmp_path):
 
 
 EXAMINER = """
-from experimental.iteration.protocols import Item, Signal
+from experimental.harness.participation.protocols import Item, Signal
 
 
 class Examiner:
@@ -1319,7 +1319,7 @@ def test_a_built_scenarios_checks_are_judged_against_the_handed_materials_and_th
 
 @pytest.mark.asyncio
 async def test_an_exam_judges_each_question_on_its_own_all_at_once():
-    from experimental.iteration.protocols import Item, Signal
+    from experimental.harness.participation.protocols import Item, Signal
     from experimental.webui.session_host import EachQuestion
 
     class Standard:
@@ -1375,7 +1375,7 @@ async def test_an_exam_judges_each_question_on_its_own_all_at_once():
         await EachQuestion(broken).evaluate({"e01": ["turn"], "e03": ["turn"]})
     assert broken.adopted == [[["e01"], ["e03"]]] and broken.running == 1
 
-    from experimental.assessor.standard import Assessor
+    from experimental.harness.assessor.standard import Assessor
 
     with pytest.raises(ValueError, match="no twins"):
         EachQuestion(Assessor(object(), sources=("derived",), builder=object()))

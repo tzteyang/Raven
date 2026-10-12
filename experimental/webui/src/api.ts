@@ -102,7 +102,7 @@ export async function loadNodeProcess(run: string, dag: string, node: string, qu
 export const loadSubharnesses = (run: string): Promise<HousedHome[]> =>
   read<{ homes?: HousedHome[] }>(`/api/subharnesses?run=${encodeURIComponent(run)}`).then((body) => (Array.isArray(body.homes) ? body.homes : []))
 
-/** The error /api/record gives while experimental/simulation/record.py cannot be imported. */
+/** The error /api/record gives while experimental/simulation/bench/record.py cannot be imported. */
 export const RECORD_UNAVAILABLE = 'record builder not available'
 
 export type RecordReply =

@@ -6,8 +6,8 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse
 from tests.fixtures.harness_curator.authoring import capability
 from tests.integration.test_harness_curator_e2e import baseline as baseline
@@ -17,11 +17,11 @@ from tests.integration.test_harness_curator_planning_e2e import response
 pytestmark = pytest.mark.integration
 
 MEMORY = """import json
-from experimental.curator.harness.preparation import PreparationRequest
+from experimental.harness.contract.preparation import PreparationRequest
 from pydantic import BaseModel
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.strategies import MemoryStrategy
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.strategies import MemoryStrategy
 
 class Layout(BaseModel):
     order: list[str]
@@ -61,8 +61,8 @@ def create(state, task, *, shared, host):
     return Memory(state, shared, host)
 """
 
-CAPABILITY = """from experimental.curator.harness.strategies import CapabilityStrategy
-from experimental.curator.harness.resources import (
+CAPABILITY = """from experimental.harness.contract.strategies import CapabilityStrategy
+from experimental.harness.contract.resources import (
     CapabilityContribution, RegistrationReceipt, SelectionRequest, CapabilitySelection, SkillSelection,
 )
 from raven.contracts.tool import Tool
@@ -92,12 +92,12 @@ def create(state, task, *, registrar):
     return Capability(state, registrar)
 """
 
-ACTION = """from experimental.curator.raven_adapter.preparation import ExecutionPolicy
+ACTION = """from experimental.harness.raven_adapter.preparation import ExecutionPolicy
 import json
-from experimental.curator.harness.preparation import PreparationRequest
+from experimental.harness.contract.preparation import PreparationRequest
 from pydantic import BaseModel
-from experimental.curator.harness.strategies import ActionStrategy
-from experimental.curator.harness.action import (
+from experimental.harness.contract.strategies import ActionStrategy
+from experimental.harness.contract.action import (
     ActionEvent, ActionDecision, ActionInteraction, ActionResponse,
 )
 from raven.contracts.tool import Tool
@@ -403,7 +403,7 @@ async def test_action_replaces_rejected_streamed_reply_before_it_becomes_visible
 
 @pytest.mark.asyncio
 async def test_uploaded_skill_is_inspectable_before_curator_adoption_and_assets_are_readable(baseline, tmp_path):
-    from experimental.curator.workflow import improve
+    from experimental.harness.curator.workflow import improve
     from tests.integration.test_harness_curator_planning_e2e import CuratorProvider
     from tests.test_harness_curator_generation import diagnosis, packet, selection
 

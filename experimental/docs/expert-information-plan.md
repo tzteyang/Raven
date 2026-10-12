@@ -22,12 +22,12 @@ Only initial construction is wired now. The collection API accepts an existing i
 
 ## Implementation boundaries
 
-- `experimental/research/`: expert information contracts, collection and review prompts, a bounded collection/review runner, and a Curator handoff adapter. The offline entry and Scenario onboarding now share collection; no material-presence gap classifier remains.
+- `experimental/cultivation/collector/`: expert information contracts, collection and review prompts, a bounded collection/review runner, and a Curator handoff adapter. The offline entry and Scenario onboarding now share collection; no material-presence gap classifier remains.
 - Existing Raven `Exploration`: owned source snapshots, native file tools and shell where the configured executor supports it. No new shell implementation or relaxation of its visibility rules.
 - Existing research delegation: explicit questions, source-backed findings and unresolved questions; its raw source checks are supplemented by semantic review of the complete expert description.
 - User interaction: an injected question callback; unavailable answers remain explicit unresolved questions instead of invented business content.
-- `experimental/research/guidance.py`: bounded abstraction of research-only references into questions linked to dimensions. It is invoked lazily and shared across research groups; it never supplies factual evidence to the expert description.
-- `experimental/simulation/experts.py`: accept the business task and optional interaction materials, plus separately declared research references or prepared guidance. Only the initial collection and review are connected to Curator.
+- `experimental/cultivation/collector/guidance.py`: bounded abstraction of research-only references into questions linked to dimensions. It is invoked lazily and shared across research groups; it never supplies factual evidence to the expert description.
+- `experimental/simulation/bench/experts.py`: accept the business task and optional interaction materials, plus separately declared research references or prepared guidance. Only the initial collection and review are connected to Curator.
 - `CONTEXT.md` and current design documentation: describe the distinction between information coverage and mechanism attribution, and the initial-only integration.
 
 ## Acceptance
@@ -116,7 +116,7 @@ Frozen experiments remain possible: record Scenario digest, released-material ma
 | Surface | Target behavior |
 |---|---|
 | `simulation.experts` | Retain task/package inputs and separate research references; shared preparation, curation, optional tasks. Fix task-only execution and retire unused staging duplication. |
-| `python -m experimental.research` | Offline entry to the same collector, using a task or Scenario-derived allowed input view. Output a versioned collection result and records, not a rewritten Scenario. Update help/callers together; do not silently retain former `--out` semantics. |
+| `python -m experimental.cultivation.collector` | Offline entry to the same collector, using a task or Scenario-derived allowed input view. Output a versioned collection result and records, not a rewritten Scenario. Update help/callers together; do not silently retain former `--out` semantics. |
 | Scenario first onboarding | Once opening handovers are determined and staged, prepare the actual released materials and Curator-visible task/context. Replay a reviewed offline result only when its task/source manifest matches; otherwise reassess. |
 | Later rounds | Keep current behavior. Preserve need origin and scope for a future request; no automatic supplement/clarification/gap dispatch. Missing authority or capability is not automatically a web-research question. |
 | User answers | Use the common answer channel. A simulation adapter may use counterpart-private knowledge internally, but must enforce outgoing release/sealing rules. No private source text or evaluation result becomes collector context. |

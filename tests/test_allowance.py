@@ -2,7 +2,7 @@
 
 import pytest
 
-from experimental.allowance import (
+from experimental.harness.participation.allowance import (
     Band,
     Calibration,
     context_window,

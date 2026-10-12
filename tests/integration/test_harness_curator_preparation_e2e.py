@@ -4,8 +4,8 @@ from functools import partial
 
 import pytest
 
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker
+from experimental.harness.contract import Task
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse
 from raven.session.manager import SessionManager
 from tests.integration.test_harness_curator_e2e import baseline as baseline
@@ -13,12 +13,12 @@ from tests.integration.test_harness_curator_e2e import plan_for, replay_provider
 
 pytestmark = pytest.mark.integration
 
-CODE = """from experimental.curator.harness.preparation import PreparationRequest
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView
-from experimental.curator.harness.resources import (
+CODE = """from experimental.harness.contract.preparation import PreparationRequest
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView
+from experimental.harness.contract.resources import (
     CapabilityContribution, CapabilitySelection, RegistrationReceipt, SelectionRequest, SkillContribution,
 )
-from experimental.curator.harness.strategies import CapabilityStrategy, MemoryStrategy
+from experimental.harness.contract.strategies import CapabilityStrategy, MemoryStrategy
 
 class Memory(MemoryStrategy[dict, str, str]):
     def __init__(self, host):
@@ -114,9 +114,9 @@ async def test_code_preparation_adopts_assets_and_changes_native_context_with_re
 async def test_memory_lifecycle_keeps_raw_input_and_stamps_the_native_turn_record(baseline, tmp_path):
     baseline.task = Task(text="Keep original information and actual completion records.")
     code = """from pydantic import JsonValue
-from experimental.curator.harness.context import InitialContext, ContextRequest, ContextView
-from experimental.curator.harness.strategies import MemoryStrategy
-from experimental.curator.raven_adapter.memory.contracts import MemoryInput, MemoryArchive
+from experimental.harness.contract.context import InitialContext, ContextRequest, ContextView
+from experimental.harness.contract.strategies import MemoryStrategy
+from experimental.harness.raven_adapter.memory.contracts import MemoryInput, MemoryArchive
 
 class Memory(MemoryStrategy[dict, str, str]):
     def __init__(self, state):
@@ -154,8 +154,8 @@ def create(state, task):
         )
 
 
-ACTION_CODE = """from experimental.curator.harness.action import ActionDecision, InputEvent, ProposalEvent, GenerationOverrides
-from experimental.curator.harness.strategies import ActionStrategy
+ACTION_CODE = """from experimental.harness.contract.action import ActionDecision, InputEvent, ProposalEvent, GenerationOverrides
+from experimental.harness.contract.strategies import ActionStrategy
 
 class Action(ActionStrategy[str, str]):
     async def _handle_input(self, event: InputEvent) -> ActionDecision:

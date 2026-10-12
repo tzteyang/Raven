@@ -1,0 +1,23 @@
+{
+  "materials": {
+    "talk-redlines": {"kind": "norm"},
+    "rhythm-guide": {"kind": "norm"},
+    "presale-aftersale": {"kind": "norm"},
+    "field-control": {"kind": "norm"},
+    "product-card-format": {"kind": "fact"},
+    "last-live-review": {"kind": "fact"},
+    "flagged-transcript": {"kind": "counterexample"},
+    "pitch-sample": {"kind": "exemplar"}
+  },
+  "checks": {
+    "no-ruled-out-wording": {"derived_from": ["talk-redlines"]},
+    "price-with-its-link": {"derived_from": ["talk-redlines"]},
+    "presale-shipping-said": {"derived_from": ["presale-aftersale"]},
+    "after-sales-as-written": {"derived_from": ["presale-aftersale", "talk-redlines"]},
+    "origin-name": {"derived_from": ["talk-redlines"]},
+    "minute-rhythm": {"derived_from": ["rhythm-guide"]},
+    "stock-from-latest-reading": {"derived_from": ["field-control", "talk-redlines"]},
+    "watch-handled-by-the-on-call-colleague": {"derived_from": ["field-control"]},
+    "files-in-their-places": {"derived_from": ["rhythm-guide", "field-control"]}
+  }
+}

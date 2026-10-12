@@ -1,0 +1,1 @@
+"""What every participant of a round shares: the signal and session protocols, structured model exchanges, sealed compartments, audiences, requirements, token allowances, model roles and the views that read a worker's exchanges and delivered files."""

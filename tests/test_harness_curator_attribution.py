@@ -7,8 +7,10 @@ from pathlib import Path
 
 import pytest
 
-from experimental.curator import workflow
-from experimental.curator.attribution import (
+from experimental.harness.contract import Attributed, Attribution, Validation
+from experimental.harness.contract.artifact import Selection
+from experimental.harness.curator import workflow
+from experimental.harness.curator.attribution import (
     NAME,
     PROMPT_FILES,
     PROMPTS,
@@ -19,10 +21,8 @@ from experimental.curator.attribution import (
     parse,
     subjects,
 )
-from experimental.curator.generation.run import GapReportedError, GenerationPausedError, Limits, generate
-from experimental.curator.generation.stages import design
-from experimental.curator.harness import Attributed, Attribution, Validation
-from experimental.curator.harness.artifact import Selection
+from experimental.harness.curator.generation.run import GapReportedError, GenerationPausedError, Limits, generate
+from experimental.harness.curator.generation.stages import design
 from tests.test_harness_curator_generation import (
     Provider,
     context,  # noqa: F401 -- the generation tests' curation context
@@ -38,6 +38,32 @@ from tests.test_harness_curator_workflow import worker  # noqa: F401 -- a worker
 
 def names(request) -> set[str]:
     return {entry["function"]["name"] for entry in request["tools"]}
+
+
+@pytest.mark.asyncio
+async def test_an_adequately_handled_input_can_be_diagnosed_without_inventing_a_change(context):
+    from experimental.harness.loop.history import entry
+
+    supplied = diagnosis()
+    supplied["diagnoses"][0].update(
+        state="adequate", mechanism="native task handling", evidence=["observed successful task completion"]
+    )
+    provider = Provider(response(NAME, supplied))
+    diagnosed = await ModelAttributor().attribute(context, provider)
+    assert diagnosed.attribution.diagnoses[0].state == "adequate"
+    assert "adequate" in json.dumps(provider.requests[0]["tools"])
+    assert "Choose adequate" in instructions(provider.requests[0])
+    attributed = Attributed(attribution=diagnosed.attribution, identity=diagnosed.identity)
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    generated = await generate(
+        context, Provider(response("submit_selection", selection())), attribution=attributed, validate=validate
+    )
+    assert not generated.candidate.plan.changes
+    history = entry(0, (), None, generated.candidate.plan, attribution=generated.candidate.attribution)
+    assert history.diagnoses[0].state == "adequate"
 
 
 def test_what_must_be_diagnosed_is_every_input_of_the_curation_or_the_task_alone():
@@ -133,7 +159,7 @@ async def test_an_attribution_pauses_on_its_own_budget_and_resumes_with_the_same
         await attributor.attribute(context, Provider(response("read_source", {"name": "loop"})), model="m")
     state = paused.value.state
     assert state.calls == 1 and state.queries == 1 and state.attribution is None
-    with pytest.raises(ValueError, match="attributor changed"):
+    with pytest.raises(ValueError, match="recorded failed provider call"):
         await ModelAttributor(model="other", limits=AttributionLimits(max_calls=2)).attribute(
             context, Provider(), model="m", resume=state
         )
@@ -190,10 +216,12 @@ async def test_a_revised_prompt_directory_is_another_attributor_version(context,
 
 @pytest.mark.asyncio
 async def test_a_reported_gap_ends_the_attribution_with_its_question(context):
-    provider = Provider(response("report_gap", {"reason": "The owner never said who approves refunds."}))
+    provider = Provider(
+        response("report_gap", {"reason": "The owner never said who approves refunds.", "kind": "private"})
+    )
     with pytest.raises(GapReportedError) as gap:
         await ModelAttributor().attribute(context, provider)
-    assert gap.value.stage == "diagnose" and "approves refunds" in gap.value.reason
+    assert gap.value.stage == "diagnose" and "approves refunds" in gap.value.reason and gap.value.kind == "private"
 
 
 @pytest.mark.asyncio
@@ -229,7 +257,7 @@ async def test_a_generation_starts_from_its_attribution_and_its_reads_and_keeps_
     }
     assert "Select the necessary" in instructions(provider.requests[0])
     paused = Provider(response("read_source", {"name": "loop"}))
-    from experimental.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
 
     with pytest.raises(GenerationPausedError) as stopped:
         await generate(context, paused, attribution=attributed, validate=validate, limits=Limits(max_calls=1))
@@ -266,7 +294,7 @@ async def test_a_curation_records_its_attribution_on_its_own_and_uses_a_supplied
     taken = await workflow.improve(worker, again, attribution=supplied)
     assert taken.candidate.attribution.attribution == supplied
     assert taken.candidate.attribution.identity["implementation"] == "supplied"
-    assert len(again.requests) == 3 and "submit_selection" in names(again.requests[0])
+    assert len(again.requests) == 4 and "submit_selection" in names(again.requests[0])
     assert all(NAME not in names(request) for request in again.requests)
 
 
@@ -316,7 +344,7 @@ async def test_a_refused_resume_keeps_the_paused_attribution_and_spends_nothing(
     pending = worker.root / "curation/pending.json"
     workspace = Path(json.loads(pending.read_text())["workspace"])
     untouched = Provider()
-    with pytest.raises(ValueError, match="attributor changed"):
+    with pytest.raises(ValueError, match="recorded failed provider call"):
         await workflow.improve(
             worker, untouched, attributor=ModelAttributor(model="other", limits=AttributionLimits(max_calls=2))
         )
@@ -346,7 +374,7 @@ async def test_a_paused_generation_resumes_only_on_the_attribution_it_started_fr
         await workflow.attribute(worker, untouched)
     assert pending.is_file() and not untouched.requests
     result = await workflow.improve(
-        worker, Provider(*SELECTED), attributor=ModelAttributor(), limits=Limits(max_calls=4)
+        worker, Provider(*SELECTED), attributor=ModelAttributor(), limits=Limits(max_calls=5)
     )
     assert result.candidate.attribution.identity["implementation"] == "model"
 
@@ -375,14 +403,16 @@ async def test_attributing_alone_continues_its_own_pause_and_hands_its_result_to
 @pytest.mark.asyncio
 async def test_an_attribution_that_reports_a_gap_is_recorded_with_what_it_attributed(worker):  # noqa: F811
     with pytest.raises(GapReportedError):
-        await workflow.improve(worker, Provider(response("report_gap", {"reason": "No refund policy was given."})))
+        await workflow.improve(
+            worker, Provider(response("report_gap", {"reason": "No refund policy was given.", "kind": "private"}))
+        )
     (body,) = [json.loads(path.read_text()) for path in (worker.root / "attribution").glob("*.json")]
     assert body["subjects"] == ["task"] and body["calls"] == 1 and len(body["request"]) == 4
     assert "No refund policy" in body["error"] and body["input_key"] and body["revision"]
 
 
 def test_an_attributor_version_is_everything_its_request_is_written_from(tmp_path, monkeypatch):
-    from experimental.curator.attribution import model
+    from experimental.harness.curator.attribution import model
 
     before = ModelAttributor().identity("m")
     shared = [tmp_path / path.name for path in model.prompt_files()]

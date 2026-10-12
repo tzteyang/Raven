@@ -4,13 +4,13 @@ outcome by id, grouped by the attributor that diagnosed them."""
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
-from experimental.iteration.ledger import held, mark, rows, summary
-from experimental.iteration.protocols import Item, Signal
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.loop.history import Diagnosed, Entry, Raised, Revised
+from experimental.harness.loop.ledger import held, mark, rows, summary
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits
+from experimental.harness.participation.protocols import Item, Signal
 from tests.test_iteration_run import (
     REQUIREMENT,
     FakeWorker,
@@ -101,10 +101,10 @@ async def test_the_next_rounds_analysis_decides_whether_the_last_rounds_requirem
 def test_a_composite_curations_child_changes_and_diagnoses_join_the_entry_under_their_scope():
     from types import SimpleNamespace
 
-    from experimental.curator.harness import Change, Plan
-    from experimental.curator.harness.artifact import Selection
-    from experimental.curator.harness.attribution import Attributed, Attribution, Diagnosis
-    from experimental.iteration.history import entry
+    from experimental.harness.contract import Change, Plan
+    from experimental.harness.contract.artifact import Selection
+    from experimental.harness.contract.attribution import Attributed, Attribution, Diagnosis
+    from experimental.harness.loop.history import entry
 
     def plan(target):
         change = Change(target=target, reason="r", expected="e", verification="v", treatment="add")

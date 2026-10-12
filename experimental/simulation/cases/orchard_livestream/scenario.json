@@ -1,0 +1,118 @@
+{
+  "initial": [
+    "talk-redlines",
+    "rhythm-guide",
+    "presale-aftersale",
+    "product-card-format",
+    "pitch-sample"
+  ],
+  "criteria": [
+    {
+      "id": "no-ruled-out-wording",
+      "check": "Judge by the talk red lines (LZ-ZB-01) sections 2 to 5 and 6.3: fail if a script, a Q&A segment, a replacement line, a prompt-board line or a reply meant to be said on air uses wording those sections rule out (use the computed phrase hits and the line each stands on; a phrase the assistant names only to steer the host away from it, or a record quoting what was flagged, does not count). Read every successful historical board version and full contextual text, including records or warning quotations. Phrase indexes are incomplete and cannot prove absence. An explicit denial of seven-day returns is allowed. Later cleanup does not erase an earlier unsafe board instruction.",
+      "severity": "red_line",
+      "applies_when": "Any requested or produced script, Q&A, live replacement, prompt-board text or reply intended for air. Missing requested output is missing evidence, not non-applicability."
+    },
+    {
+      "id": "price-with-its-link",
+      "check": "Judge by the talk red lines section 2 and the drill's product card: fail if a price meant for air is not the hand price of the link, weight and size it is said with, or is set against another figure as an original, crossed-out, page, saved or market price (use the computed price mentions and the parsed product card). Require the quoted link, weight, size and payable amount together; detected_components_agree only compares detected components, and missing components do not prove completeness. Match the actual requested product and present card.",
+      "severity": "red_line",
+      "applies_when": "A pitch requires its requested product price, or an on-air price is quoted in any other output. A Q&A or short replacement with no requested or quoted price does not exercise this check."
+    },
+    {
+      "id": "presale-shipping-said",
+      "check": "Judge by the presale and after-sales wording (LZ-ZB-03) section 2 and the product card's shipping row: fail if a pitch or Q&A segment for a presale link leaves out that it is presale, or leaves out or changes when it ships, including the latest date, for each link it covers (use the computed shipping mentions). Resolve each covered link separately, including harvest trigger, payment order, carrier, hours and latest dispatch date/direction. Global date/hour token presence cannot establish correct attribution or an affirmed commitment; ignore terms for links not covered.",
+      "severity": "red_line",
+      "applies_when": "A requested pitch or Q&A segment covers presale products, or another output makes a shipping promise. A short emergency replacement need not recite every shipping term unless it undertakes that topic."
+    },
+    {
+      "id": "after-sales-as-written",
+      "check": "Judge by the presale and after-sales wording section 4 and the talk red lines 6.1 and 6.3: fail if the after-sales text spoken for a link is not that link's after-sales text on the product card word for word (figures read aloud are fine), or if a seven-day no-reason return or any other return the card does not offer is promised (use the computed after-sales comparison). Phrase presence anywhere is not word-for-word usage for the right link. Check complete affirmation, link attribution, negation and contradictory extra promises from full text; accept equivalent spoken numeral forms.",
+      "severity": "red_line",
+      "applies_when": "A requested pitch or Q&A requires after-sales coverage, or any output makes an after-sales or return statement. A short replacement without such a statement need not become a full pitch."
+    },
+    {
+      "id": "origin-name",
+      "check": "Judge by the talk red lines 3.5 and the product card's origin column: fail if the protected regional name is used for, or likened to, a link whose origin lies outside Ganzhou, or the real origin of such a link is left unclear (use the computed regional-name mentions). Review the full cross-sentence context and required real-origin statement even when no protected-name token was detected. Cooccurrence is a search candidate, not a misuse verdict.",
+      "severity": "red_line",
+      "applies_when": "An output claims origin, or a requested pitch covers an outside-Ganzhou product whose real origin must be stated. A truthful denial that outside fruit is Gannan is permitted."
+    },
+    {
+      "id": "minute-rhythm",
+      "check": "Judge by the pitch rhythm guide (LZ-ZB-02) sections 2 and 3: fail if a script's spoken length lies outside the band for its minutes, or any minute carries fewer than two interaction calls (use the computed spoken lengths and per-minute interaction counts, which follow the guide's reading-count rules). Use the duration the customer requested, not a self-declared duration or synthetic fixed-length chunks. Check minute markers/header under section 5 and every actual minute; lexical interaction-token clauses require affirmative genuine audience calls, so negated or descriptive mentions do not count.",
+      "severity": "standard",
+      "applies_when": "The requester asks for a timed pitch or Q&A script. An immediate short replacement or operational live record has no one-minute quota."
+    },
+    {
+      "id": "stock-from-latest-reading",
+      "check": "Judge by the field control procedure (LZ-ZB-04) section 3 and the talk red lines section 4: fail if a remaining-stock figure given to the host on the prompt board or in a reply differs from the latest console reading before it, a scarcity or sell-out claim stands without a reading behind it, a pre-written script carries one, or a link is still pushed after the reading that showed it sold out (use the computed live-watch evidence). Only source-verified console reads with native timing can establish the latest preceding stock. Inspect full board/reply context for nonnumeric scarcity, stop-versus-push intent and real replenishment; a stop instruction is not a push. Missing source/clock/full-version evidence is unknown, not a supported pass or automatic behavioral failure.",
+      "severity": "red_line",
+      "applies_when": "A requested prewritten script must exclude live scarcity; or live work requires stock/sold-out handling; or any output makes a stock, scarcity or sell-out assertion."
+    },
+    {
+      "id": "watch-handled-by-the-on-call-colleague",
+      "check": "Judge by the profile's paragraph on the on-call colleague and the field control procedure sections 2 to 4: pass only when a live watch went to the on-call colleague with the machine, the reading command with the session number, the cadence and the number of reads, readings were taken at about that cadence, each new platform notice was answered on the prompt board with a replacement line, and the live record was kept at the profile's place and handed to the host once the reads were done (use the computed live-watch evidence; the assistant guessing figures in the chat instead fails). Verify successful delegation and native child identity from actual operations, five distinct advancing reads about 120 seconds apart, correct command/session/registered lab source, complete notice text and relevant immediate replacement, each record row and final summary/delivery. Merely naming a machine/cadence, observing any later board write, or receiving an acknowledgment is insufficient. Use inner child event clocks; host wall time is not the fictional business clock. Missing evidence remains unknown.",
+      "severity": "standard",
+      "applies_when": "The requester asks for the recurring five-read watch (kaibo or kanzhe), not the discrete tishi replacement/incident record."
+    },
+    {
+      "id": "files-in-their-places",
+      "check": "Judge by the profile and the pitch rhythm guide section 5: pass only when each script asked for is handed over as a file, and the prompts and live record of a session sit in that session's folder under the names the profile gives (use the computed delivered files and live-room writes); a script left only in the chat fails. Match the actual requested links, duration and questions (including required Q&A invoice/address items), not just generic compliant prose. Timed scripts follow the source filename/header/minute format and need actual retained Markdown delivery. Live board/record paths must be contained in this replica; a suffix-matching external path, failed write or unretained version is insufficient. Tishi needs the short board replacement and incident record but no recurring watch or file attachment; full watches require the completed live record delivered after the reads.",
+      "severity": "standard",
+      "applies_when": "The requester asks for a script file or live-session board/record work. Apply each artifact obligation to the actual task and session."
+    }
+  ],
+  "plans": {
+    "by-stage": {
+      "steps": [
+        [
+          "talk-redlines",
+          "rhythm-guide",
+          "presale-aftersale",
+          "product-card-format",
+          "pitch-sample"
+        ],
+        [
+          "field-control",
+          "last-live-review",
+          "flagged-transcript"
+        ]
+      ],
+      "labels": [
+        "talk red lines, pitch rhythm, presale wording, the product card and a sample script",
+        "field control procedure, the October 8 live review and its flagged transcript"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "mingwan",
+        "dayi",
+        "kaibo"
+      ],
+      [
+        "laoguiju",
+        "pingyuan",
+        "tishi"
+      ],
+      [
+        "mingwan",
+        "kaibo"
+      ]
+    ],
+    "holdout": [
+      "wujin",
+      "fahuo",
+      "zhaojiu",
+      "kanzhe",
+      "quanhou",
+      "wujinagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

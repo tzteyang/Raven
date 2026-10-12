@@ -1,7 +1,7 @@
-/* The shapes experimental/iteration/records.py joins: an iteration record with
+/* The shapes experimental/harness/loop/records.py joins: an iteration record with
    each round's analysis, attribution and curation records read in beside it,
-   its typed history (experimental/iteration/history.py) and the ledger joined
-   from it (experimental/iteration/ledger.py). serve.py adds the run directory's
+   its typed history (experimental/harness/loop/history.py) and the ledger joined
+   from it (experimental/harness/loop/ledger.py). serve.py adds the run directory's
    standard and compartment log (experimental/webui/rundir.py). Only the fields
    this page draws are typed; everything else stays open so a record growing a
    field is not a change here. */
@@ -22,8 +22,8 @@ export interface RunEntry {
   status: RunStatus
   error: string | null
   recorded: number
-  /** How the owner hands over the materials in this run (documents, staged, by-stage, examples or a partition), from settings.json. */
-  chain?: string | null
+  /** When the owner hands its materials over in this run (all, none, staged, a plan's name or partition), from settings.json. */
+  disclose?: string | null
   /** Each model role's model name, the partner first (an older run names employee, simulation and the like), from
       settings.json. */
   models?: Record<string, string>
@@ -51,7 +51,7 @@ export interface Execution {
   /** Kept copies of the files the turn handed over through deliver_files. */
   deliverables?: string[]
   /** How the turn ended; a turn that ran past the worker's timeout says `timed_out` with the `timeout` in seconds
-      (experimental/curator/raven_adapter/worker.py TurnTimeoutError). */
+      (experimental/harness/raven_adapter/worker.py TurnTimeoutError). */
   outcome?: Record<string, unknown>
   /** The run view's copy keeps only what the page reads of records it counts (webui/serve.py `slim`); the turn's
       whole records come from /api/turn. */
@@ -70,13 +70,13 @@ export interface Item {
   expected: string
   actual: string
   note: string
-  /** Where the criterion behind `expected` comes from (experimental/iteration/protocols.py Item): a counterpart's check, a
+  /** Where the criterion behind `expected` comes from (experimental/harness/participation/protocols.py Item): a counterpart's check, a
       dataset case, an earlier requirement held as a regression check, or a handed-over material it was drawn from. */
   basis?: '' | 'check' | 'case' | 'requirement' | 'material'
 }
 
 /** Where a material came from when the counterpart did not simply give it: induced or researched before the cultivation
-    (experimental/scenario/contract.py Origin), whether the counterpart confirmed it, and the ids of the rules or findings
+    (experimental/harness/scenario/contract.py Origin), whether the counterpart confirmed it, and the ids of the rules or findings
     it holds. */
 export interface MaterialOrigin {
   origin: string
@@ -84,7 +84,7 @@ export interface MaterialOrigin {
   items: string[]
 }
 
-/** One material handed over with a signal (experimental/iteration/protocols.py Handover): its kind in the
+/** One material handed over with a signal (experimental/harness/participation/protocols.py Handover): its kind in the
     scenario's terms and its files relative to the employee's agent home (uploads/<material>/...). */
 export interface Handover {
   name: string
@@ -166,7 +166,7 @@ export interface Artifact {
   remove_files?: string[]
 }
 
-/** The closed set of states an attribution puts an input in (experimental/curator/harness/attribution.py). */
+/** The closed set of states an attribution puts an input in (experimental/harness/contract/attribution.py). */
 export type DiagnosisState =
   | 'absent'
   | 'not_exposed'
@@ -324,7 +324,7 @@ export interface Revised {
   verification?: string
 }
 
-/** One round of the typed history (experimental/iteration/history.py); round 0 is onboarding. */
+/** One round of the typed history (experimental/harness/loop/history.py); round 0 is onboarding. */
 export interface HistoryEntry {
   round: number
   satisfied?: Record<string, boolean | null>
@@ -389,7 +389,7 @@ export interface Question {
   question: string
 }
 
-/** A criterion of the automatic standard assessor (experimental/assessor/standard.py). */
+/** A criterion of the automatic standard assessor (experimental/harness/assessor/standard.py). */
 export interface StandardCriterion {
   id: string
   parent_id?: string | null
@@ -409,7 +409,7 @@ export interface StandardCriterion {
   checks?: { method: string; spec: string; role?: 'decision' | 'required' }[]
 }
 
-/** One change of a rubric builder revision (experimental/assessor/builder.py), with its reason. */
+/** One change of a rubric builder revision (experimental/harness/assessor/builder.py), with its reason. */
 export interface StandardChange {
   id: string
   parent_id?: string | null
@@ -475,7 +475,7 @@ export interface Promotion {
   witnesses?: { satisfied: boolean | null; error?: string; policy: { kind: string } }[]
 }
 
-/** The research stage's records under information/ (experimental/research/, read by rundir.research): how the
+/** The research stage's records under information/ (experimental/cultivation/collector/, read by rundir.research): how the
     collection before onboarding ended, the review's verdict, each dimension's coverage, and the calls per stage with
     every reply that was missing, rejected or failed. */
 export interface ResearchRecord {
@@ -552,6 +552,9 @@ export interface Pending {
 export interface Run {
   task_id: string
   task: string
+  /** The held-out trials played once before onboarding, on the starting Harness with whatever it was handed, and
+      their assessment: what every curation is compared with; never read by the Analyst or cited to the Curator. */
+  baseline?: { sessions: Record<string, Exchange[]>; signals: Signal[] }
   status?: RunStatus
   stop?: string
   curator?: string
@@ -565,11 +568,11 @@ export interface Run {
   ledger?: Ledger
   questions?: Question[]
   /** Assessors whose signals only measure each round: recorded, kept from the Analyst and the Curator
-      (experimental/iteration/session.py `measuring`), such as an owner who watches without speaking. */
+      (experimental/harness/loop/session.py `measuring`), such as an owner who watches without speaking. */
   measuring?: string[]
   pending?: Pending
   /** Each session the record names, with the opaque label it goes by wherever the Curator sees it
-      (experimental/iteration/hearing.py opaque); the server adds it beside the record. */
+      (experimental/harness/participation/hearing.py opaque); the server adds it beside the record. */
   labels?: Record<string, string>
   /** Each material the counterpart did not simply give, by name, from the provenance the run's settings keep. */
   origins?: Record<string, MaterialOrigin>

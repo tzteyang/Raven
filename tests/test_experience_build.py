@@ -4,13 +4,13 @@ import asyncio
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy
-from experimental.experience.build import BuildLimits, ExperiencePipeline
-from experimental.experience.builder import ModelExperienceBuilder
-from experimental.experience.contracts import ExperienceReview, ReviewIssue, digest
-from experimental.experience.critic import ModelExperienceCritic
-from experimental.experience.retrieve import ExperienceRetriever, GuidanceQuery
-from experimental.experience.store import BindingMismatchError, ExperienceStore, StoreError
+from experimental.harness.experience.admission import AdmissionPolicy
+from experimental.harness.experience.build import BuildLimits, ExperiencePipeline
+from experimental.harness.experience.builder import ModelExperienceBuilder
+from experimental.harness.experience.contracts import ExperienceReview, ReviewIssue, digest
+from experimental.harness.experience.critic import ModelExperienceCritic
+from experimental.harness.experience.retrieve import ExperienceRetriever, GuidanceQuery
+from experimental.harness.experience.store import BindingMismatchError, ExperienceStore, StoreError
 from tests.experience_helpers import Provider, accept, event, proposal, response, reviewed
 
 

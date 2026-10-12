@@ -4,10 +4,10 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, JsonValue
 
-from experimental.curator.harness.interaction import InteractionRequest
-from experimental.curator.harness.planning import PlanningInitialization, PlanningProjection, PlanningResult
-from experimental.curator.harness.strategies import PlanningStrategy
-from experimental.curator.raven_adapter.planning.contracts import PlanningObservation
+from experimental.harness.contract.interaction import InteractionRequest
+from experimental.harness.contract.planning import PlanningInitialization, PlanningProjection, PlanningResult
+from experimental.harness.contract.strategies import PlanningStrategy
+from experimental.harness.raven_adapter.planning.contracts import PlanningObservation
 
 GUARD_COMPLETION = False
 

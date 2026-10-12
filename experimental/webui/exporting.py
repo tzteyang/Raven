@@ -10,12 +10,11 @@ import zipfile
 from dataclasses import dataclass
 from pathlib import Path
 
+from experimental.harness.contract import Artifact, Task
+from experimental.harness.contract.artifact import relative_path
+from experimental.harness.raven_adapter.deployment import _STATE_FILES, _digest
+from experimental.harness.raven_adapter.inspection import fingerprint
 from raven.config.schema import AgentDefaults
-
-from ..curator.harness import Artifact, Task
-from ..curator.harness.artifact import relative_path
-from ..curator.raven_adapter.deployment import _STATE_FILES, _digest
-from ..curator.raven_adapter.inspection import fingerprint
 
 FORMAT = 1
 NAME = re.compile(r"expert-live-[0-9]{14}-[0-9a-f]{6}")

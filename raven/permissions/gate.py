@@ -83,7 +83,7 @@ def _clamped(evidence: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
-_HARNESS_TOOL_MODULES = ("experimental.curator.raven_adapter.interaction_tools",)
+_HARNESS_TOOL_MODULES = ("experimental.harness.raven_adapter.interaction_tools",)
 
 
 def harness_supplied(tool: Tool | None) -> bool:

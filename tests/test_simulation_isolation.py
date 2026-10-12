@@ -2,7 +2,7 @@
 
 import json
 
-from experimental.automation.isolation import EXPERIMENTAL, scan
+from experimental.simulation.bench.isolation import EXPERIMENTAL, scan
 
 
 def tool_event(name, arguments, call_id):

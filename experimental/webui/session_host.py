@@ -8,7 +8,7 @@ Session documents. Two steps play the scenario's scripts (`experimental.webui.li
 of the employee: `script` as trials of the round and `exam` as the round's held-out trials, which the automatic
 assessors score apart from the Analyst; `revert` puts back the version installed before the last curation, so a
 curated version whose exam came out worse need not stay. The person on the page is the counterpart: what it writes,
-the materials it hands over and its marks on the turns of the round's trials become a `Signal` from `human`, and in a trial it is the conversant, the terminal's `experimental.assessor.human.Human` reading
+the materials it hands over and its marks on the turns of the round's trials become a `Signal` from `human`, and in a trial it is the conversant, the terminal's `experimental.harness.assessor.human.Human` reading
 the page's messages instead (`PagePerson`). The run is assembled as the automated one (`experimental.simulation`)
 assembles its own, from the scenario's contract, except that its boundaries warn instead of aborting: the person is
 the counterpart, so what it says is its own to say, and a crossing is logged rather than refused.
@@ -29,34 +29,33 @@ import time
 from dataclasses import asdict, replace
 from pathlib import Path
 
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.run import Limits as AnalystLimits
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.guidance import GuidanceStore
+from experimental.harness.assessor.human import Human
+from experimental.harness.assessor.reviewer import MetaReviewer
+from experimental.harness.assessor.standard import Assessor, Standard
+from experimental.harness.assessor.validation import ReplayCorpus, fingerprint
+from experimental.harness.contract import Task
+from experimental.harness.curator.attribution import AttributionLimits, ModelAttributor
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.experience.curator import CuratorExperience
+from experimental.harness.loop.records import cultivation
+from experimental.harness.loop.session import Limits, Session, StepError
+from experimental.harness.participation import model_roles
+from experimental.harness.participation.compartment import Boundaries
+from experimental.harness.participation.protocols import Item, Signal
+from experimental.harness.participation.requirements import ExternalRequirement
+from experimental.harness.raven_adapter.observe import plain
+from experimental.harness.scenario import ROLES, load
+from experimental.harness.scenario.sealed import sealed_for
+from experimental.webui import employ
+from experimental.webui.live import MODEL_ROLES, scripts
+from experimental.webui.process import redact
+from experimental.webui.studio import slim_exchange
 from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
-
-from .. import model_roles
-from ..analyst.run import Limits as AnalystLimits
-from ..assessor.builder import RubricBuilder
-from ..assessor.guidance import GuidanceStore
-from ..assessor.human import Human
-from ..assessor.reviewer import MetaReviewer
-from ..assessor.standard import Assessor, Standard
-from ..assessor.validation import ReplayCorpus, fingerprint
-from ..curator.attribution import AttributionLimits, ModelAttributor
-from ..curator.generation.run import Limits as CuratorLimits
-from ..curator.harness import Task
-from ..curator.raven_adapter.observe import plain
-from ..experience.curator import CuratorExperience
-from ..iteration.compartment import Boundaries
-from ..iteration.conversation import Conversation
-from ..iteration.protocols import Item, Signal
-from ..iteration.records import cultivation
-from ..iteration.session import Limits, Session, StepError
-from ..requirements import ExternalRequirement
-from ..scenario import ROLES, load
-from ..scenario.sealed import sealed_for
-from . import employ
-from .live import MODEL_ROLES, scripts
-from .process import redact
-from .studio import slim_exchange
 
 SOURCE = "human"
 BACKGROUND = ("onboard", "trial", "script", "exam", "assess", "analyse", "curate", "revert")
@@ -203,6 +202,13 @@ class Host:
             self.step = None
 
     async def _boot(self) -> None:
+        from raven.observability import execution
+
+        saved = json.loads(Path(self.spec["record"]).read_text()) if self.spec.get("record") else {}
+        with execution.run(self.root, run_id=saved.get("execution_run_id"), name="setup"):
+            await self._boot_run()
+
+    async def _boot_run(self) -> None:
         spec = self.spec
         self.employ.prepare()
         self.contract = contract = load(Path(spec["scenario"]))
@@ -361,7 +367,7 @@ class Host:
         path."""
         spec = self.spec
         settings = {
-            "chain": "live",
+            "disclose": "live",
             "scenario": self.contract.root.name,
             "rounds": spec["rounds"],
             "turns": spec["turns"],
@@ -1047,7 +1053,7 @@ class PageAsker:
 
 def _plugin(named: str):
     """The factory `path/to/file.py:name` names: called with the session's spec and its employee, it makes an
-    automatic assessor (`experimental.assessor.role.AssessorProtocol`) whose `name` is its signals' source."""
+    automatic assessor (`experimental.harness.assessor.role.AssessorProtocol`) whose `name` is its signals' source."""
     file, _, factory = named.rpartition(":")
     found = importlib.util.spec_from_file_location(f"studio_assessor_{Path(file).stem}", file)
     if found is None or found.loader is None:

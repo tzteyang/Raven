@@ -111,17 +111,48 @@ Frozen per Generation: the tool array is the prompt-cache prefix, so the set a t
 does not move between two of its model calls -- except for tools the turn's own `plugin` call
 connected, which join it on purpose (`ToolRegistry.admit_to_this_turn`).
 
-**Harness Curator** (`experimental/curator/`):
+**Experimental layers** (`experimental/`):
+Three layers that depend downward only. `harness/` is a Harness and the generic machinery that
+improves it round by round: its contract (`contract/`), the Raven binding (`raven_adapter/`), the
+Curator, the assessors and analyst, the governed experience, the scenario contract, the loop and
+`participation/`, what every participant shares; it knows no employee, counterpart or case.
+`cultivation/` is the application form in which a Harness is improved through interaction: the
+counterpart protocol, the collector of expert information, the conversation and the employee
+wrapper. `simulation/` runs a cultivation without people: `bench/` (the conversant played from
+cards, drills, records, the value judge) plays `cases/`, task packages each holding materials,
+cards and an owner. `tests/test_experimental_layers.py` enforces the direction.
+_Avoid_: calling the bench a case, or a case a scenario: a scenario is the contract a case's
+materials satisfy, and a case is what the bench plays.
+
+**Execution accounting** (`raven/observability/execution.py`):
+The experimental run's durable operation and provider request records. A scope records
+one operation's lifetime and carries its run, round, revision and parent identity into
+async tasks. Worker commands and ACP prompts transmit that identity to receiver-owned
+SQLite shards. A **request attempt** is one call at the concrete provider's transport
+boundary; retries have separate identities, and streaming usage updates one cumulative
+snapshot. Stage totals are derived from unique attempts, never from sums of parent totals.
+Missing usage remains unknown, including attempts interrupted before the final report.
+An **external invocation** records one collector-owned Claude or Codex process's
+reported aggregate usage; its internal request count is unknown. Subscription
+quota equivalents are separate from metered USD, and corrections are separate invocations.
+_Avoid_: equating a logical model call (which may retry), or an external invocation,
+with a request attempt.
+
+**Harness Curator** (`experimental/harness/curator/`):
 Experimental generation of a worker's Harness from its task, the materials handed to it and
-feedback. The `harness/` contracts supply one host-owned `Declaration` for model schemas, grants
+feedback. The `contract/` package supplies one host-owned `Declaration` for model schemas, grants
 and artifact checks; a `Candidate` carries both baseline and contract identity. `generation/`
-runs bounded understand, select, design, implement and repair stages with read-only source
+runs bounded select, design, implement, consistency_review and repair stages with read-only source
 queries; `Limits.stage_queries`, when set, caps what one stage may spend of the query pool, and the
 budget note, kept in the conversation so each request begins with the previous one, asks for a
-submission once half of it is spent. Validation of a candidate runs `raven_adapter/probe.py`'s
+submission once half of it is spent. Every host-validated candidate receives a version-bound
+Harness consistency review. Blocking findings re-enter the same bounded repair loop;
+repaired candidates require fresh validation and consistency review.
+Validation of a candidate runs `raven_adapter/probe.py`'s
 `exercise_translations` inside the validation copy: every declared planning observation phase is driven
-once with a synthetic observation, so a translation that keeps state fails validation and reaches repair
-instead of the worker. `raven_adapter/` inspects actual
+once with a synthetic observation. It also assembles native context, initializes Memory
+and runs the same `ModelInput.prepare` projection path used before provider calls,
+so lost protected input fails validation before installation. `raven_adapter/` inspects actual
 assembly, binds generated code through native sockets and records execution in a persistent
 worker process; its `targets/` owns native authoring entries. A `Target` carries `knowledge`
 (protocol, binding, host class, its reference pages and known pitfalls, sent in full with the
@@ -138,23 +169,46 @@ root's node requirements, checked and activated together. Children run through
 `raven_adapter/hosting/acp.py` on the native ACP/RPC turn pipeline; a `Child` in
 `raven_adapter/deployment.py` holds a host-provided baseline, its active artifact, authoring
 grants and prior plan.
+After a recorded provider failure, explicit model replacement can resume attribution,
+generation or composition at a fresh request boundary without replaying accepted work.
+Input, source and contract identities and consumed budgets still apply. The trace records
+each actual model and the reason for a replacement; accepted attribution keeps its original
+identity. Budget pauses alone do not authorize reusing progress with another model.
 
-**Strategy interaction** (`experimental/curator/harness/interaction.py`):
+**Harness consistency review** (`experimental/harness/curator/generation/stages/consistency_review.py`):
+The `consistency_review` stage examines one scope's complete effective Harness for conflicts
+across strategies and shared dependencies, incompatibilities between new and retained behavior,
+and contradictions between executable paths and the current plan or Harness commitments.
+`ConsistencyReview` binds its report to the current candidate and covers every listed surface,
+including unchanged strategies and native behavior. `submit_consistency_review` records evidence,
+corrections and blocking decisions; implementation changes remain the repair stage's responsibility.
+Limitations are separate from blockers, and incomplete business improvement alone does not block
+delivery. This review does not establish consistency of the final root-and-children composition.
+_Avoid_: generic code-quality review, or a global review of all Harness scopes.
+
+**Strategy interaction** (`experimental/harness/contract/interaction.py`):
 A concrete domain command inside an `InteractionRequest`, whose `InteractionScope`
 identifies the host Harness, task, revision, session and turn. Model tools expose only
 the command schema and query/command mode; the adapter supplies identity and provenance. `StrategyPeers`
 provides named cross-owner operations and detached views. Read-only operations cannot
 request peer writes, and awaited owner cycles are rejected before acquiring a lock.
+One top-level operation and its sequential peers commit their managed JSON state together
+to `strategies.json`; exceptions, cancellation, invalid results and failed persistence
+restore the chain's state, initialization and pending projections or controls. Existing
+per-owner checkpoints are imported when the aggregate checkpoint is first created.
+The chain can read its provisional projections; other callers see the prior committed
+view. Private owner attributes, external effects, audit records and inference usage
+are outside this rollback boundary.
 
-**Planning projection** (`experimental/curator/harness/planning.py`):
+**Planning projection** (`experimental/harness/contract/planning.py`):
 The concrete plan view and optional model guidance returned by Planning initialization
-and interactions. A command publishes it only after its checkpoint succeeds; a query
+and interactions. A command publishes it outside its peer chain only after the shared checkpoint succeeds; a query
 cannot change it. Consumers read a detached committed view, and restored session owners
 reconstruct the projection through initialization. Business replies are separate from
 the projection; rejecting a proposal can legitimately record a blocker. A partial plan
 is valid, and replanning does not undo external execution facts.
 
-**Capability contribution** (`experimental/curator/harness/resources.py`):
+**Capability contribution** (`experimental/harness/contract/resources.py`):
 A serializable tool implementation/interaction reference or a complete Skill package
 declaration submitted to `CapabilityStrategy.register`. A `RegistrationReceipt`
 reports candidate staging, idempotent repetition or rejection. The adapter installs
@@ -162,7 +216,7 @@ the complete closed catalogue into a new native runtime; staging does not grant 
 visibility or execution permission. `EffectiveCapabilities` records the actual tool
 definitions and skill delivery selected for a model call.
 
-**Strategy preparation** (`experimental/curator/harness/preparation.py`):
+**Strategy preparation** (`experimental/harness/contract/preparation.py`):
 The synchronous candidate lifecycle before native construction. The same generated
 strategy class implements `prepare`, optionally through protected resource helpers.
 Role-scoped Raven host services collect typed policies, owned content and native
@@ -172,7 +226,7 @@ close before session execution. Supporting assets do not activate independently.
 field. Native content ownership is persisted separately for withdrawal, outside-edit
 preservation and failed-activation recovery.
 
-**Strategy inference** (`experimental/curator/harness/inference.py`):
+**Strategy inference** (`experimental/harness/contract/inference.py`):
 An optional typed, single-step worker-model judgment inside an active strategy operation;
 `each` makes several judgments of one operation at once, on host-owned tasks. Curator
 authors the instruction, input selection, result model and consumer. The host owns
@@ -183,7 +237,7 @@ returns validated domain data without tools or a model repair loop; Action maps 
 permitted controls whose application is recorded separately. It is not Curator execution
 or a delegated Agent workflow.
 
-**Context source** (`experimental/curator/harness/context.py`):
+**Context source** (`experimental/harness/contract/context.py`):
 A host-supplied context contribution with identity, owner, role, text and protection.
 Memory initializes its organization from actual sources and composes a detached
 projection for each model call. Protected source text and current user messages survive
@@ -195,26 +249,26 @@ the native Loop can use its existing window-shrink budget before retrying. It
 records local pressure without claiming a provider call; invalid message or
 source projections remain contract errors.
 
-**Action control receipt** (`experimental/curator/harness/action.py`):
+**Action control receipt** (`experimental/harness/contract/action.py`):
 The host's requested, applied, rejected or unsupported result for an Action control.
 Typed events distinguish proposals, actual outcomes, progress, failure and application
 feedback. A decision to revise or finish is separate from evidence that the native loop
 applied it; per-call refusal uses the native ToolGate consumer.
-`experimental/analyst/` turns a round's `Signal`s and execution records into `Feedback`: a
-decision plus behavior requirements stated in observable terms, never a mechanism. `experimental/iteration/`
+`experimental/harness/analyst/` turns a round's `Signal`s and execution records into `Feedback`: a
+decision plus behavior requirements stated in observable terms, never a mechanism. `experimental/harness/loop/`
 is the generic loop: `Trial`s run the worker (a conversation, a dataset, a simulation), `Assessor`s
 measure the sessions into `Signal`s (text, per-item results, metrics, their own satisfied verdict,
 attachments for material handed over), the analyst decides, and only a `curate` decision or a handover
 reaches `workflow.improve`. An **Assessor** holds a standard the worker never sees (criteria, materials,
 references, held-out cases) as its own state; the loop sees only its `Signal`; `AssessorProtocol` and the generic
-human and dataset assessors live in `experimental/assessor/`. `iteration/hearing.py`
+human and dataset assessors live in `experimental/harness/assessor/`. `harness/participation/hearing.py`
 decides what the Curator hears of the signals and the history: a `Remark` (source, text, satisfied,
 attachments), never per-item results, metrics or references.
 _Avoid_: conflating this experiment with the Context Engine's Curator; calling the analyst an
 assessor, which names the source of a `Signal`; the earlier name "evaluator" for that role; writing an
 assessor's standard into a `Signal`.
 
-**Measuring source** (`Session.measuring`, `experimental/iteration/session.py`):
+**Measuring source** (`Session.measuring`, `experimental/harness/loop/session.py`):
 An assessor whose signals measure each round in its record and reach neither the Analyst, the decision to stop, the
 history, the curation nor `previous_signals` (`Session._acted`). The simulation's `--owner-feedback silent` makes the
 owner one, so a run improves from its other assessors alone while the owner still scores every round.
@@ -236,26 +290,32 @@ handed materials. Raven discovers its `subagent.json` and serves it over ACP usi
 installed source checkout. The package keeps the employee's model settings; provider selection, credentials and
 tool configuration come from the host. The first launch restores the saved state; later launches preserve progress.
 
-**Cultivation scenario** (`experimental/scenario/`):
+**Cultivation scenario** (`experimental/harness/scenario/`):
 The closed set of inputs one cultivation may consist of: the profile, cases, norms, facts,
 exemplars, counterexamples, checks, the exchange's schedule and wording, the prior and the
 evaluation aids, each item with the roles that may receive it (partner, conversant, counterpart,
 analyst, curator). `load` reads a scenario directory and refuses a file outside every category;
 `sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the counterpart's
-schedule of handing materials over, which the loop never reads. `provenance.json` says where each
+schedule of handing materials over (`all`, `none`, `staged`, or a named `Plan` whose labelled steps say what
+each step is meant to give), which the loop never reads. A case may hand files over as its conversation opens
+(`Case.files`, placed in the replica's `uploads/`) and may carry its `expected` answer, which only the evaluation
+side receives; `Schedule` says which cases each round plays, which are held out and in which rounds they are
+played (round 0 is a baseline before onboarding). `provenance.json` says where each
 material came from and whether the counterpart stands behind it (`Scenario.confirmed`).
 _Avoid_: calling a check a norm: a norm is handed over, a check is the counterpart's own standard and stays
 on the evaluation side; writing a check as a translation of a norm sentence: the sealing is differential only
 against verbatim text, so the Curator's own English rendering of a Chinese norm can coincide with a sealed
-window of such a check (seen 2026-10-07) -- a check is the evaluator's instruction in its own words.
+window of such a check (seen 2026-10-07) -- a check is the evaluator's instruction in its own words. A check is
+sealed in windows of ten content words (`check_windows`): function words, numerals and single letters weigh nothing,
+so citing its sections ("By contract-routing 4.3 to 4.5 and 5.3") is no leak, while a copied run of its judgement is.
 
-**Compartment** (`experimental/iteration/compartment.py`):
+**Compartment** (`experimental/harness/participation/compartment.py`):
 One model role's context: every value admitted into it and every provider request made inside it
 is scanned for that role's sealed fingerprints, and each admission and violation is appended to the
 run's `boundaries.jsonl`. Words a speaker is entitled to say, such as each conversant's messages, are
 spared per speaker; identifiers stay sealed.
 
-**Model role** (`experimental/model_roles.py`):
+**Model role** (`experimental/harness/participation/model_roles.py`):
 A role of a cultivation that calls a model, beside the partner: `curator`, `attribution`, `analyst`, `collector` (the
 research stage's own calls), `counterpart` (the owner's review and its answers to the collector), `conversant`,
 `assessor` (the `Assessor`, the holdout assessor and the post-run reading of interventions against the owner's
@@ -265,7 +325,7 @@ partner's, never on another role's. The resolved map is the `models` and `effort
 sub-harness runs in the partner's processes and takes only a model; its effort stays its own configuration's.
 _Avoid_: simulation model or traveller model, the former per-role flags that fell back along a chain of roles.
 
-**Confinement** (`experimental/curator/raven_adapter/confinement.py`):
+**Confinement** (`experimental/harness/raven_adapter/confinement.py`):
 The partner's process tree (the employee, its shell, its child harnesses and the strategy code the Curator installs)
 running as a dedicated user from a code image, able to reach only its area. The *area* (`Worker.area`; `employee/`
 of a run, `employee/` of each replica) is where the process runs and writes; the worker's root beside it keeps the
@@ -274,7 +334,7 @@ whitelist, with its own environment and interpreter, built once per content. Bef
 run as that user must find the records, the runs beside, the repository and the scenario out of its reach.
 _Avoid_: sandbox, which in Raven (`tools.sandbox`) confines one tool command, not the process.
 
-**Harness commitment** (`experimental/curator/harness/commitments.py`):
+**Harness commitment** (`experimental/harness/contract/commitments.py`):
 One entry of the Curator's standing statement of what a Harness does: what one strategy
 surface (or `native` host behavior) does, in which situation, from what input and with
 what effect, and the curation inputs it serves (requirement ids, materials, the reviewed
@@ -287,27 +347,28 @@ _Avoid_: requirement, which names an Analyst behavior requirement or a routed no
 requirement; commitment alone, which in a scenario's conversations can mean a promise
 to a customer.
 
-**Mechanism attribution** (`experimental/curator/attribution/`):
+**Mechanism attribution** (`experimental/harness/curator/attribution/`):
 The Curator's diagnosis, before it changes anything, of where each input stands in the current
-Harness: the responsible mechanism and its state from a closed set (`absent`, `not_exposed`,
+Harness: the responsible mechanism and its state from a closed set (`adequate`, `absent`, `not_exposed`,
 `not_triggered`, `not_consumed`, `wrong_logic`, `blocked`, `model_ignored`, `uncovered`), with the
 evidence. It is its own step with its own budget, resumable state and record; `ModelAttributor`, the
-default, runs on the Curator's model, and any `Attributor` may replace it.
+default, runs on the Curator's model, and any `Attributor` may replace it. `adequate` records evidence that
+the current mechanism already handles the input adequately; it does not require a code change.
 
-**Typed history** (`experimental/iteration/history.py`, `ledger.py`):
+**Typed history** (`experimental/harness/loop/history.py`, `ledger.py`):
 Per round, the behavior requirements raised, the Curator's diagnoses and changes with the scope they
 belong to (`root` or `child/<name>`), and whether each requirement held in the round after its
 revision. `ledger.held` is the one rule for holding; the ledger joins the entries into rows and
 groups them by attributor identity, so versions of attribution can be compared.
 
-**Standard** (`experimental/assessor/standard.py`):
+**Standard** (`experimental/harness/assessor/standard.py`):
 The criteria a round is held to on the evaluation side: declared (the counterpart's checks), derived (constructed
 from the task and materials), and sedimented (historical requirements retained as regression checks). `Criterion.origin`
 records this entry path independently of `authority`. Confirmation makes a derived criterion external;
 model revisions and sedimentation cannot weaken it. The `Assessor`
 returns a `Signal`; unknown applicable hard criteria cannot produce a satisfied verdict.
 
-**Criterion** (`experimental/assessor/rubric.py`):
+**Criterion** (`experimental/harness/assessor/rubric.py`):
 One rubric condition with an identity, origin, authority, kind, definition, basis, assessment plan and optional
 `parent_id`. The parent identifies a necessary semantic refinement within a forest; every level remains a complete
 condition. Depth does not confer authority or inherit a verdict. `Definition`
@@ -316,7 +377,7 @@ names the subject, applicability and sole acceptance statement. `kind` distingui
 an inference explanation. The host binds each reference to its source content version; a grounded quote alone does
 not prove that the criterion follows from it. Builder and Meta Reviewer inspect the same definition.
 
-**Assessment plan** (`experimental/assessor/rubric.py`, `AssessmentPlan`):
+**Assessment plan** (`experimental/harness/assessor/rubric.py`, `AssessmentPlan`):
 How to measure a criterion: required evidence channels, one whole-criterion decision and necessary local checks.
 `EvidenceRequirement` names conversation, execution, delivered text or a supplied material; unavailable required
 evidence blocks a pass. `LLMCheck` carries judgment instructions. `ProgramCheck` names either a host verifier or a
@@ -324,7 +385,7 @@ restricted expression. Local passes alone cannot establish the criterion. Every 
 expression needs independent positive/negative calibration bound to the exact definition, basis and assessment plan.
 Auxiliary observations remain evidence; they are not extra voting checks. This is distinct from Runtime stint `Check`.
 
-**Rubric Builder** (`experimental/assessor/builder.py`, `RubricBuilder`):
+**Rubric Builder** (`experimental/harness/assessor/builder.py`, `RubricBuilder`):
 The role that constructs a forest of derived criteria from the task and materials. Fresh source inputs, new measurement
 undecidability or explicit review corrections create scoped construction work; otherwise the rubric is reused. Each
 change may request a reasoned `refine` follow-up for its resulting node, bounded by the host's call and addition budgets.
@@ -335,18 +396,18 @@ out of the current rubric while keeping its previous definition in revision hist
 checked against their source; an inferred condition records its reasoning in `basis.derivation`, separately from why
 the revision was requested. Changed source contents under the same name count as new input.
 External criteria cannot be rewritten or removed by this role. Its numbered revisions are kept in the run's
-`standard.json` under `rubric_builder`. `Assessor` (`experimental/assessor/standard.py`) judges the criteria;
-`AssessorProtocol` (`experimental/assessor/role.py`) is the shared interface for evaluation sources.
-_Avoid_: Standard critic or Critic for this role; calling it the experience critic (`experimental/experience/`, another branch), which reviews experience
+`standard.json` under `rubric_builder`. `Assessor` (`experimental/harness/assessor/standard.py`) judges the criteria;
+`AssessorProtocol` (`experimental/harness/assessor/role.py`) is the shared interface for evaluation sources.
+_Avoid_: Standard critic or Critic for this role; calling it the experience critic (`experimental/harness/experience/`, another branch), which reviews experience
 candidates across curations; optimizing the rubric to make the current answer pass.
 
-**Rubric revision scope** (`experimental/assessor/revision.py`, `RevisionScope`):
+**Rubric revision scope** (`experimental/harness/assessor/revision.py`, `RevisionScope`):
 A host-owned patch capability bound to the rubric version and source inputs. `Permission` specifies an addition's
 parent, a rewrite's exact id and fields, or a removal's id. Claimed reasons cannot expand this capability. Whole patches
 are checked before application; removal never implicitly cascades or reparents. Pending work is invalidated when its
 rubric, inputs or construction guidance changes. Records preserve the permission, actual diff and stopping reason.
 
-**Repair suite** (`experimental/assessor/validation.py`, `RepairSuite`):
+**Repair suite** (`experimental/harness/assessor/validation.py`, `RepairSuite`):
 Host-owned independent cases for a specific criterion subtree, or the whole rubric with `criterion=None`. The issue
 being repaired and the property being verified are explicit; checker defects require that check's criterion scope.
 Positive and negative cases must show improvement without regression and all proposed property judgments must match
@@ -354,7 +415,7 @@ their independent outcomes. Receipts bind the exact baseline, candidate and froz
 an earlier candidate without requiring another edit. Exact duplicate removal can instead use host-checked structural
 equivalence; evidence gaps can close when the recorded missing channel becomes available for an unchanged condition.
 
-**Meta Reviewer** (`experimental/assessor/reviewer.py`, `MetaReviewer`):
+**Meta Reviewer** (`experimental/harness/assessor/reviewer.py`, `MetaReviewer`):
 Audits evaluation episodes against the task and materials. It returns evidenced rubric, check or evidence issues,
 plus candidate construction guidance. An Assessor configured with this role allows one audit and one corrective
 reassessment per evaluation cycle. Review agreement cannot authorize adoption, and independently observed program
@@ -362,7 +423,7 @@ failures cannot be voted away. Unresolved diagnoses survive restart and an empty
 does not erase their original mandatory strength. Simulation and live-session hosts enable this role with the derived
 rubric source.
 
-**Construction guidance** (`experimental/assessor/guidance.py`, `GuidanceStore`):
+**Construction guidance** (`experimental/harness/assessor/guidance.py`, `GuidanceStore`):
 Scoped principles and procedures proposed from named evaluation episodes. Episodes remain in assessment records;
 guidance retains cited snapshots for cross-run attribution, instruction text and shared candidate/active/inactive
 state. Legacy retired values remain compatibility history. The host compares the exact old and proposed instructions
@@ -370,7 +431,7 @@ against independently verified replay cases before adoption. Only applicable act
 requests, with a bounded selection. Restoring a replaced version requires fresh verification of its current context.
 _Avoid_: treating experience type, repetition or model agreement as authority; conflating this store with the worker's memory.
 
-**Experience governance** (`experimental/experience/governance.py`, `Governance`):
+**Experience governance** (`experimental/harness/experience/governance.py`, `Governance`):
 A storage-independent host protocol for candidate, active and inactive role-owned experience. Admission records
 bind a candidate, its active baseline, policy and witnessed grounding, applicability and effect checks. Domains
 supply the meaning and evidence of those checks. Diagnoses bind local revision fields; usage snapshots retain the
@@ -378,36 +439,36 @@ actual selected content and reject changed or withdrawn dependencies. `Governanc
 under a file lock; the rubric store embeds the same protocol in its existing versioned JSON record.
 _Avoid_: equating a model's review approval with admission, or sharing a domain's score rule with every role.
 
-**Curator experience** (`experimental/experience/curator.py`, `CuratorExperience`):
+**Curator experience** (`experimental/harness/experience/curator.py`, `CuratorExperience`):
 The Curator-specific adapter from reviewed conditional methods and independent source support to shared governance.
 It freezes a bounded package for diagnosis and generation stages, renders applicable guidance into the actual
 requests, and binds the package to local checkpoints. Source withdrawals invalidate recovery before another model
 call or installation. Domain `supported` evidence does not by itself authorize the shared active state.
 
-**Experience Builder and Experience Critic** (`experimental/experience/builder.py`, `critic.py`):
+**Experience Builder and Experience Critic** (`experimental/harness/experience/builder.py`, `critic.py`):
 The roles that extract conditional Curator methods from approved evidence and review their scope, expression and
 claims. `ExperiencePipeline` retains their bounded, resumable work. The Critic can accept a candidate's content;
 independent source evidence and host admission still decide whether it can guide another task.
 _Avoid_: conflating the Experience Builder with the Rubric Builder, or the Experience Critic with the Meta Reviewer.
 
-**Experience usage** (`experimental/experience/governance.py`, `Governance.capture`):
+**Experience usage** (`experimental/harness/experience/governance.py`, `Governance.capture`):
 A version-bound selection of experience for a consumer, stage, task, inputs, policy and renderer. Curator records
 which usage texts actually entered its model requests. Loading is distinct from observed application; only actual
 execution evidence can establish whether the method was followed or improved the result.
 
-**Replay corpus** (`experimental/assessor/validation.py`, `ReplayCorpus`):
+**Replay corpus** (`experimental/harness/assessor/validation.py`, `ReplayCorpus`):
 A bounded host-owned set of independently verified task executions, recorded by `Session.holdout` with their fixed
 policies and source records. It retains up to three positive and three negative outcomes for construction comparisons;
 changed or missing artifacts invalidate their labels. Repeated inputs cannot become unused held-out evidence merely
 by changing session or execution identifiers. Adaptive self-assessment never supplies the corpus labels.
 
-**External requirement** (`experimental/requirements.py`, `ExternalRequirement`):
+**External requirement** (`experimental/harness/participation/requirements.py`, `ExternalRequirement`):
 A reusable condition quoted from an actual external signal, with its criterion kind and situation. Analyst can retain
 it without reporting a worker defect. Session preserves it across restart and has configured assessors recheck newly
 supplied conditions on the current output; hard failures or unknowns can trigger one additional analysis. It remains
 separate from behavior gaps that need Curator attribution and repair.
 
-**Requirement example** (`experimental/requirements.py`, `Example`):
+**Requirement example** (`experimental/harness/participation/requirements.py`, `Example`):
 A concrete instance the Analyst attaches to a requirement. A `wrong` example quotes the input and what the worker
 produced there, with the handling that follows from the input, the handed-over materials and the requirement's
 behavior alone; a `right` example is a turn of the same kind the worker handled correctly. Examples show the behavior
@@ -415,14 +476,14 @@ on seen inputs; they never carry an assessor's reference, notes or values, and t
 the Curator has not seen.
 _Avoid_: calling them cases; a case is a dataset input with its own id (`case:<id>`).
 
-**Harness promotion** (`experimental/assessor/validation.py`, `experimental/iteration/session.py`):
+**Harness promotion** (`experimental/harness/assessor/validation.py`, `experimental/harness/loop/session.py`):
 The host's adoption judgment about an installed experimental revision. A held-out assessment qualifies only with a
 fixed external rubric or dataset policy; revision identity, requirement context and retained execution evidence must
 remain unchanged. Independent failure rejects adoption; unavailable evidence or unresolved required conditions keep
 the revision a candidate. The record identifies the accepted revision separately from later experimental installations.
 _Avoid_: equating a completed run or a self-generated pass with promotion.
 
-**Counterpart layer** (`experimental/counterpart/`):
+**Counterpart layer** (`experimental/cultivation/counterpart/`):
 The counterpart is the role on the other side of the partner's work: it holds the materials and the standard,
 judges each round by the partner's deliverables and final replies, hands materials over on its schedule and speaks
 to the Curator (the travel agency's owner, the brand case's marketing lead). This layer is its generic side in
@@ -430,19 +491,23 @@ automated cultivation: `Owner`, the simulated owner that reviews a round's
 sessions against the facts and pictures a case injects (`facts(name, exchanges, card)`, `pictures(sessions)`)
 and hands materials over on its disclosure schedule; `drills.enlist` / `grouped`, which turn a scenario's cards
 into conversants and group them into trials played on replicas; and `case.delivered_for`, the delivery predicate
-the value judge uses for a scenario. A case (`simulation/agency.py`, `simulation/brand.py`) subclasses `Owner`
-with its own facts and nothing else.
+the value judge uses for a scenario. A case's `owner.py` (`simulation/cases/<name>/owner.py`) subclasses `Owner`
+with its own facts and nothing else and names it `OWNER`; a case without one falls back to the travel agency's
+owner (`Agency`), so a new case brings its own.
 _Avoid_: party, the role's former name, which reads as a gathering out of a contract's context; putting a scenario's rule into `counterpart/`; calling the owner an agency outside the travel case.
 
-**Self signal** (`experimental/assessor/introspect.py`):
+**Self signal** (`experimental/harness/assessor/introspect.py`):
 The worker's own review of each session of a round, taken on a replica after the trials, as a `Signal` whose
 `source` is `self`: a verdict, the defects it sees and a note per session, with no standard, check or counterpart
-remark shown to it. Its items reach the Analyst only, its text reaches the Curator through hearing, and
+remark shown to it. Its packet is the session's conversation and delivered files and, when the session's replica is
+known (`placed`), what that replica held beyond the worker's baseline: `attachments`, the files the requester handed
+into its `uploads` during the session, and `filed`, what the worker wrote in its workdir and home (the owner's
+`written` view, `experimental/harness/participation/views.py`). Its items reach the Analyst only, its text reaches the Curator through hearing, and
 `satisfied` is always None, so it never ends a run. The Analyst reads it against the external verdicts for
 blind spots.
 _Avoid_: treating a self verdict as a pass or fail of a criterion; feeding the standard into the self review.
 
-**Research stage** (`experimental/research/`):
+**Research stage** (`experimental/cultivation/collector/`):
 Information collection before a Curator invocation, run as fixed stages the host sequences: read the listed
 material, assess it (one bounded exchange, with native inspection offered as capped queries), ask the user once when
 a user channel is configured, plan research groups when a research channel is configured, run the groups
@@ -468,7 +533,7 @@ Scenario package writer have been removed. Web acquisition and quote verificatio
 `simulation.information.PartyAnswers` is an optional simulated user-answer adapter: its private inputs
 stay with the counterpart, outgoing answers are checked against the release, and review never implies adoption.
 
-**Information snapshot** (`experimental/research/information.py`):
+**Information snapshot** (`experimental/cultivation/collector/information.py`):
 An expert description covering role, tasks, knowledge, abilities, methods, judgement, cases, and
 performance/learning, plus operating resources, unresolved questions and the retained evidence it
 cites. Each section reports coverage and its reason. The content-derived identity pins what a
@@ -493,13 +558,25 @@ assumption the description applies meanwhile. Only a user question can block, an
 under `wait_for_input`; every other open point carries an assumption and never holds the result.
 _Avoid_: "blocking research question".
 
+**Curation question** (`Session.record["questions"]`, routed by `experimental/harness/loop/gaps.py`):
+A gap a curation reported (`report_gap`) and could not close, kept with the `kind` of source the Curator says can
+settle it: `private` (only the business can state, decide or grant it), `public` (published sources can) or
+`unclear`. With `Gaps` supplied, a private or unclear one is asked of the counterpart at its next review
+(`Session.assess`), a public one is researched right away on the collector's channel (`collector/gaps.py`), an
+unclear one the counterpart leaves open (or any it refers to public sources) is researched then, and the rest stays
+`unanswered`; research runs in the Curator's compartment, at most `research_tasks` between two analyses. Settled
+questions reach the next curation as `feedback.information.answers`, each with its provenance, `counterpart` or
+`research`; a researched practice is the field's, not the business's rule, until the counterpart confirms it.
+Unlike an `Open point`, it belongs to the loop, not to an information snapshot, and no snapshot is recomposed.
+_Avoid_: "gap answer" for the question itself; "clarification", which in the Analyst's vocabulary is a decision.
+
 **Information input manifest** (`research.information.Manifest`):
 The task, objective, invocation scope, released source digests, context digest and observed environment
 bound to a Snapshot, including version-bound answers and source-exclusion policy. Offline replay requires a ready Result whose reviewed version matches its snapshot
 and whose manifest matches the current invocation. A bare Snapshot is evidence for reassessment, not
 an accepted replay. A mismatched result is refused before model calls.
 
-**Research group** (`research.information.ResearchGroup`, run by `experimental/research/waves.py`):
+**Research group** (`collector.information.ResearchGroup`, run by `experimental/cultivation/collector/waves.py`):
 A coherent work problem associated with one or more information dimensions, known evidence ids and a semantic
 ResearchBrief. The planning stage returns a `ResearchPlan` of at most `research_tasks` groups with at most
 `research_questions` questions each, in priority order; optional guidance is derived once before planning. The host
@@ -515,7 +592,7 @@ The researcher's self-contained handoff: background, known information, question
 acceptance criteria. The collector expresses relevant evidence and optional guidance in words, with their authority
 and limitations. Dimension associations and collection identifiers remain outside this handoff.
 
-**Reviewed research** (`experimental/research/review.py`):
+**Reviewed research** (`experimental/cultivation/collector/review.py`):
 One bounded acquisition, source check and tool-free semantic review per delegation. The delivery includes findings, synthesis,
 source disagreements and unresolved needs with their next acquisition channel. Review sees independently retrieved
 source views with their sizes and truncation. Admission is per finding (`ResearchReview`): the review returns one
@@ -533,7 +610,7 @@ A finding refused only because the host could not read a cited page. It is retur
 the attempt as an address and passage a person can check by hand; it is a research-channel question, not evidence.
 _Avoid_: calling it a weak or unverified finding.
 
-**Research guidance** (`experimental/research/information.py`, `ResearchGuide`):
+**Research guidance** (`experimental/cultivation/collector/information.py`, `ResearchGuide`):
 Optional questions, relationships and grouping hints for the research step, linked to dimensions.
 It may be supplied directly or derived lazily from product-case references by `research/guidance.py`.
 Derived guidance is shared within a collection invocation and can be reused by later Requests.
@@ -542,7 +619,7 @@ guidance workspace reads research-only cases; the collector reads interaction in
 Extraction is a bounded source-reading exchange, without a separate review-and-rewrite loop. Source references
 are structurally validated; the collector treats directions as hypotheses, never as established professional knowledge.
 
-**Finding** (`experimental/research/inquiry.py`):
+**Finding** (`experimental/cultivation/collector/inquiry.py`):
 One sourced fact or source-recommended practice returned by research: its wording, the cited pages that hold
 its supporting passage, the passage, and narrative tensions with known inputs. Cited addresses where the host did not
 find the passage are pruned from the admitted finding and reported as unmatched sources. Conflicts are not material identifiers.

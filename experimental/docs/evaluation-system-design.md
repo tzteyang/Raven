@@ -18,7 +18,7 @@ local records; and a separate evaluation platform with services, a verifier regi
 Choose the second. A single prompt cannot enforce source authority, unknown handling or independent adoption.
 A separate platform adds deployment and consistency costs without helping the current cultivation loop.
 
-Retain `experimental/assessor/` and the existing `Signal -> Analyst -> Feedback -> Curator` interface. The roles are
+Retain `experimental/harness/assessor/` and the existing `Signal -> Analyst -> Feedback -> Curator` interface. The roles are
 Rubric Builder (construct/revise), Assessor (measure) and Meta Reviewer (audit and propose corrections/principles).
 They are responsibilities, not three new services. Session owns execution budgets, records and adoption decisions.
 `Standard` remains the rubric data type; `Criterion` is one requirement. Verifier and Promotion Gate describe
@@ -47,7 +47,7 @@ outside the criterion definition. Each field has a concrete consumer:
 | `definition.acceptance` | The sole normative statement; replaces overlapping text and acceptance fields |
 | `basis.references` | Source names and supporting quotes, bound by the host to content versions; supports grounding and stale-source detection |
 | `basis.derivation` | Why an inferred condition follows from its inputs, distinct from the explanation for a revision |
-| `assessment.evidence_requirements` | Observation channels the host must supply; missing required evidence prevents a pass |
+| `assessment.evidence_requirements` | Observation channels the host must supply; missing required evidence prevents a pass, and a delivered-text reference that locates no file falls back to all delivered text with a note |
 | `assessment.decision` | One judgment of the complete criterion, defaulting to an LLM reading its definition |
 | `assessment.required_checks` | Necessary local checks that can refute a criterion; passing them alone cannot establish it |
 
@@ -102,10 +102,19 @@ Neither determinism nor model agreement makes a newly generated checker an indep
 
 Evidence requirements name conversation, execution, delivered text or a supplied material. The host records gaps and
 blocks a pass when required observations are missing or truncated. Applicability is a separate semantic decision;
-failure to produce required output is not proof that the criterion does not apply.
+failure to produce required output is not proof that the criterion does not apply. A delivered-text reference locates
+a file by its delivered name, or by the path of a file the session left behind when the case supplies those
+(`references[session]["filed"]`). A reference that locates neither, such as a description of the files or a name the
+worker never used, is judged against all delivered text and filed files and recorded as an evidence note on the
+criterion (`evidence_notes` in the assessment record, the judge's packet and the item note the Analyst reads); whether
+the needed file exists is then part of the judgment. Only the absence of any delivered or filed text, or a located
+file that cannot be read, is a gap. The Builder is told to name a file exactly or leave the reference empty, since
+file names are not known when the rubric is built.
 
-Any necessary failure fails the criterion. A missing result, missing evidence, an execution error or an unresolved
-disagreement is unknown, never a pass. Explicitly inapplicable criteria do not count as successful checks. At least
+Any necessary failure fails the criterion. A violation observed in the available evidence stays a failure when another
+necessary condition is unknown or the host recorded an evidence gap; the gap joins the note. Only a stale source, whose
+interpretation must be rebuilt, turns an observed failure into unknown. A missing result, missing evidence, an
+execution error or an unresolved disagreement is unknown, never a pass. Explicitly inapplicable criteria do not count as successful checks. At least
 one applicable hard criterion must be exercised to conclude that the gates pass. An unknown applicable hard criterion
 blocks that conclusion. Quality scores never offset a gate or guardrail failure.
 

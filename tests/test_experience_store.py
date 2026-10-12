@@ -7,10 +7,10 @@ from threading import Barrier
 
 import pytest
 
-from experimental.experience.admission import AdmissionPolicy, ProcessCheckReceipt
-from experimental.experience.contracts import EvidenceLink, digest, for_model
-from experimental.experience.state import BuildState
-from experimental.experience.store import ExperienceStore, StoreConflictError, StoreError
+from experimental.harness.experience.admission import AdmissionPolicy, ProcessCheckReceipt
+from experimental.harness.experience.contracts import EvidenceLink, digest, for_model
+from experimental.harness.experience.state import BuildState
+from experimental.harness.experience.store import ExperienceStore, StoreConflictError, StoreError
 from tests.experience_helpers import accept, event, proposal, reviewed
 
 _LEGACY_SCHEMA = (

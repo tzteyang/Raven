@@ -3,7 +3,7 @@
    binding names and the supporting files those modules name), how a target
    changed between two versions, and the playbooks a candidate's planning
    strategy prepared, as the host check recorded them. Targets follow
-   experimental/curator/raven_adapter/targets/. */
+   experimental/harness/raven_adapter/targets/. */
 
 import { STRATEGIES, looseFiles, strategyOf, targetFiles } from '../mechanism'
 

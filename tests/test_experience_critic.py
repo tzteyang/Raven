@@ -2,9 +2,9 @@
 
 import pytest
 
-from experimental.experience.contracts import BuildRequest, ExperienceReview, ReviewIssue
-from experimental.experience.critic import ModelExperienceCritic
-from experimental.experience.model import ModelCallError
+from experimental.harness.experience.contracts import BuildRequest, ExperienceReview, ReviewIssue
+from experimental.harness.experience.critic import ModelExperienceCritic
+from experimental.harness.experience.model import ModelCallError
 from tests.experience_helpers import Provider, event, proposal, response
 
 

@@ -8,18 +8,26 @@ from unittest.mock import AsyncMock
 
 import pytest
 
-from experimental.analyst.feedback import Feedback
-from experimental.curator.generation.run import GapReportedError, GenerationPausedError
-from experimental.curator.generation.run import Limits as CuratorLimits
-from experimental.iteration import session as stepping
-from experimental.iteration.conversation import Conversation
-from experimental.iteration.exchange import ExchangeError
-from experimental.iteration.protocols import Handover, Signal
-from experimental.iteration.records import load, runs
-from experimental.iteration.run import run
-from experimental.iteration.session import Limits, Outcome, Session, StepError
-from tests.test_iteration_run import CONTINUE, CURATE, FakeWorker, Scripted, Verifier, failing, passing
-from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
+from experimental.cultivation.conversation import Conversation
+from experimental.harness.analyst.feedback import Feedback
+from experimental.harness.curator.generation.run import GapReportedError, GenerationPausedError
+from experimental.harness.curator.generation.run import Limits as CuratorLimits
+from experimental.harness.loop import session as stepping
+from experimental.harness.loop.records import load, runs
+from experimental.harness.loop.run import run
+from experimental.harness.loop.session import Limits, Outcome, Session, StepError
+from experimental.harness.participation.exchange import ExchangeError
+from experimental.harness.participation.protocols import Handover, Signal
+from tests.test_iteration_run import (  # noqa: F401 -- the loop test's Analyst stand-in
+    CONTINUE,
+    CURATE,
+    FakeWorker,
+    Scripted,
+    Verifier,
+    failing,
+    passing,
+)
+from tests.test_iteration_run import analyses as analyses
 
 
 @pytest.fixture
@@ -124,12 +132,23 @@ def shape(record):
 
 @pytest.mark.asyncio
 async def test_measurement_only_signals_stay_out_of_analysis_curation_history_and_stop(tmp_path, curations, analyses):
-    analyses.scripted.extend([CURATE, CONTINUE])
+    from experimental.harness.loop.records import cultivation
+    from experimental.harness.participation.protocols import Item
+
+    analyses.scripted.extend([CURATE, CURATE, CONTINUE])
     worker = FakeWorker(tmp_path)
     session = Session.open(worker, object(), measuring={"agency"})
     assert await session.onboard()
     await session.trial(student("Plan a trip", "Cheap please"))
-    session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    session.signal(
+        Signal(
+            "agency",
+            "PRIVATE_MEASUREMENT_ONLY",
+            satisfied=False,
+            authority="external",
+            items=(Item("private-check", "fail", "private-session"),),
+        )
+    )
     await session.assess(Verifier(failing("Ask the budget.")))
     assert (await session.analyse()).next == "curate"
     assert all(signal.source != "agency" for signal in analyses.calls[-1]["signals"])
@@ -137,14 +156,31 @@ async def test_measurement_only_signals_stay_out_of_analysis_curation_history_an
     assert any(signal.source == "agency" for signal in session.rounds[-1].signals)
     assert await session.curate()
     assert "PRIVATE_MEASUREMENT_ONLY" not in json.dumps(curations[-1]["feedback"])
+    assert all("agency" not in item.satisfied for item in session.history)
+    assert all("agency" not in item.results and "agency" not in item.failed_in for item in session.history)
     await session.trial(student("Plan again", "Cheap please"))
     session.signal(Signal("agency", "PRIVATE_MEASUREMENT_ONLY", satisfied=False, authority="external"))
+    await session.assess(Verifier(failing("Ask again.")))
+    assert await session.analyse() == Outcome("curate")
+    assert all("agency" not in item.satisfied for item in analyses.calls[-1]["history"])
+    assert await session.curate()
+    assert all("agency" not in item["satisfied"] for item in curations[-1]["feedback"]["history"])
+    await session.trial(student("Final plan"))
     await session.assess(Verifier(passing()))
     assert await session.analyse() == Outcome("stop", "every assessor is satisfied")
+    record = json.loads(session.path.read_text())
+    record["history"][0]["satisfied"]["agency"] = False
+    record["history"][0]["results"]["agency"] = {"private-check": "fail"}
+    record["history"][0]["failed_in"]["agency"] = {"private-check": "private-session"}
+    session.path.write_text(json.dumps(record))
     restored = Session.resume(worker, object(), session.path)
     assert restored.measuring == frozenset({"agency"})
     assert all(signal.source != "agency" for signal in restored.previous_signals)
     assert not restored.external_requirements
+    prior = cultivation(session.path)
+    for item in (*restored.history, *prior.history):
+        assert "agency" not in item.satisfied and "agency" not in item.results and "agency" not in item.failed_in
+    assert json.loads(session.path.read_text())["rounds"][0]["signals"][0]["source"] == "agency"
 
 
 @pytest.mark.asyncio
@@ -447,7 +483,7 @@ async def test_retry_analysis_preserves_failed_attempt_and_reuses_only_training_
 async def test_a_failed_assessment_is_retried_on_its_trials_and_the_persons_signals_and_judged_whole_again(
     tmp_path, curations, analyses
 ):
-    from experimental.iteration.records import retryable_step
+    from experimental.harness.loop.records import retryable_step
 
     analyses.scripted.append(CURATE)
 
@@ -716,7 +752,16 @@ async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_a
     resumed = Session.resume(worker, object(), session.path)
     assert set(resumed.rounds[0].holdout) == {"unseen"} and resumed.rounds[0].holdout_signals == (passing(),)
     (measured,) = load(session.path)["ledger"]["holdout"]
-    assert measured == {"round": 1, "source": "verifier", "satisfied": True, "items": 1, "passed": 1, "failed": 0}
+    assert measured == {
+        "round": 1,
+        "source": "verifier",
+        "satisfied": True,
+        "items": 1,
+        "passed": 1,
+        "failed": 0,
+        "unknown": 0,
+        "not_applicable": 0,
+    }
 
 
 @pytest.mark.asyncio
@@ -737,7 +782,7 @@ async def test_a_reported_gap_keeps_the_question_and_the_run_goes_on_unrevised(t
     assert await session.curate() and session.status == "running"
     assert asked and not session.rounds[-1].curated and session.history[-1].revision is None
     assert session.record["questions"] == [
-        {"round": 1, "stage": "select", "question": "Who approves a refund above the listed amount?"}
+        {"round": 1, "stage": "select", "question": "Who approves a refund above the listed amount?", "kind": "unclear"}
     ]
     await session.trial(student("Hi again"))
     session.signal(Signal("human", "Fine."))
@@ -766,10 +811,10 @@ async def test_a_resumed_session_keeps_the_names_of_its_onboarding_attributions(
 async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resume_keeps_it(
     tmp_path, curations, analyses
 ):
-    from experimental.iteration.compartment import Boundaries, BoundaryError
-    from experimental.iteration.history import Entry, Raised
-    from experimental.iteration.records import Cultivation, cultivation
-    from experimental.scenario.sealed import Sealed
+    from experimental.harness.loop.history import Entry, Raised
+    from experimental.harness.loop.records import Cultivation, cultivation
+    from experimental.harness.participation.compartment import Boundaries, BoundaryError
+    from experimental.harness.scenario.sealed import Sealed
 
     card = "The customer asks for a refund above the listed amount and wants a manager to approve it today."
     check = "A refund above the listed amount is refused unless a named manager approves it in writing first."
@@ -825,7 +870,7 @@ async def test_every_curation_hears_the_prior_the_counterpart_brings_and_a_resum
 @pytest.mark.asyncio
 @pytest.mark.parametrize("blocked", [False, True])
 async def test_unready_information_prevents_curation_and_trials(tmp_path, curations, analyses, blocked):
-    from experimental.research.information import Question, Result, Review, Snapshot
+    from experimental.cultivation.collector.information import Question, Result, Review, Snapshot
     from tests.test_research_collection import accepted, snapshot
 
     original = snapshot()
@@ -867,7 +912,7 @@ async def test_unready_information_prevents_curation_and_trials(tmp_path, curati
 
 @pytest.mark.asyncio
 async def test_information_is_prepared_once_and_its_version_reaches_later_curation(tmp_path, curations, analyses):
-    from experimental.research.information import Result, Review
+    from experimental.cultivation.collector.information import Result, Review
     from tests.test_research_collection import accepted, snapshot
 
     preparations = []
@@ -919,8 +964,8 @@ async def test_a_conversant_who_comes_back_later_lets_the_worker_run_meanwhile()
 
 @pytest.mark.asyncio
 async def test_a_met_external_condition_survives_resume_and_guards_the_next_round(tmp_path, curations, analyses):
-    from experimental.assessor.standard import Assessor
-    from experimental.requirements import ExternalRequirement
+    from experimental.harness.assessor.standard import Assessor
+    from experimental.harness.participation.requirements import ExternalRequirement
     from tests.test_assessor_standard import Provider, response, verdict
 
     condition = ExternalRequirement(source="human", quote="Future quotes must include tax.", kind="gate")

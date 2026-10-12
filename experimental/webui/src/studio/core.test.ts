@@ -242,6 +242,16 @@ describe('replay', () => {
     expect(heldOut.trials.map((trial) => [trial.id, trial.holdout])).toEqual([['1:holdout:quiet', true]])
   })
 
+  it('plays the baseline exam on the starting Harness before the onboarding', () => {
+    const recorded = run()
+    recorded.baseline = { sessions: { quiet: [{ user: 'hello', execution: { turn_id: 'b', artifact_id: '', records: [] } }] }, signals: [signal('baseline remark', [{ id: 'C1', result: 'fail' }])] }
+    const entries = replayThread('w/x', recorded).entries
+    const first = entries.findIndex((entry) => entry.kind === 'process')
+    const before = entries.slice(0, first).filter((entry) => entry.kind === 'trials' || entry.kind === 'score')
+    expect(before.map((entry) => [entry.kind, entry.round])).toEqual([['trials', 0], ['score', 0]])
+    expect((before[0] as TrialsEntry).trials.map((trial) => [trial.id, trial.version, trial.holdout])).toEqual([['0:holdout:quiet', 'v0', true]])
+  })
+
   it('shows the trials of the round still in progress', () => {
     const recorded = run()
     recorded.status = 'running'

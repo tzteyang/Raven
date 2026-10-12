@@ -1,7 +1,7 @@
 /* What one turn's records say the four strategies did. An Action decision is
    a request and the host's receipt says whether it was applied (trial.ts
    reads both); only an applied receipt is an intervention, as
-   experimental/analyst/activity.py counts it, and a tool refusal naming that
+   experimental/harness/analyst/activity.py counts it, and a tool refusal naming that
    control is the same intervention seen again. Raven's own refusals, the
    guidance Action and Planning put before the model, the strategies asking
    one another, capability selection and registration, Memory's organisation

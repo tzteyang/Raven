@@ -182,7 +182,7 @@ def cjk_runs(lines) -> set[str]:
 
 def diff_lines(revision_range: str) -> tuple[list[AddedLine], list[AddedLine]]:
     output = subprocess.check_output(
-        ["git", "diff", "--unified=0", "--no-color", revision_range],
+        ["git", "-c", "core.quotepath=false", "diff", "--unified=0", "--no-color", revision_range],
         text=True,
         errors="replace",
     )

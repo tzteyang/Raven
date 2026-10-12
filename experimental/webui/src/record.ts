@@ -1,4 +1,4 @@
-/* The cultivation record experimental/simulation/record.py builds for a run:
+/* The cultivation record experimental/simulation/bench/record.py builds for a run:
    its inputs, every curation with the harness scope it changed, each round's
    trial, evaluation, analysis and mechanism evidence, and the ledger that
    follows each of the owner's rules across rounds. This module reads that
@@ -22,8 +22,8 @@ export interface RecordRun {
   stop?: string | null
   started?: string | number | null
   updated?: string | number | null
-  chain?: unknown
-  /** How the run was set up (settings.json): chain, teaching, models, rounds, cards; never a credential. */
+  disclose?: unknown
+  /** How the run was set up (settings.json): disclosure plan, models, rounds, cards; never a credential. */
   settings: Record<string, unknown>
   revisions: unknown[]
   /** Why the suite stopped the run early, for example its spending budget. */
@@ -226,9 +226,9 @@ export interface CultivationRecord {
   rounds: RecordRound[]
   ledger: LedgerRow[]
   /** What the run spent, by part; `quota` is what ran under a subscription login, priced at its API equivalent and
-      not in the total (experimental/simulation/record.py _research_spend). */
-  cost: { total: number; by_part: Record<string, number>; quota?: Record<string, number> } | null
-  /** The value judge's reading of this run (experimental/simulation/value.py), when the record carries one. */
+      not in the total (experimental/simulation/bench/record.py _research_spend). */
+  cost: { total: number | null; by_part: Record<string, number>; quota?: Record<string, number>; missing_calls?: number } | null
+  /** The value judge's reading of this run (experimental/simulation/bench/value.py), when the record carries one. */
   value: ValueVerdict | null
 }
 
@@ -398,7 +398,7 @@ export function normalizeRecord(raw: unknown): CultivationRecord {
         }),
       }
     }),
-    cost: typeof cost.total === 'number' ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number>, quota: obj(cost.quota) as Record<string, number> } : null,
+    cost: typeof cost.total === 'number' || cost.total === null ? { total: cost.total, by_part: obj(cost.by_part) as Record<string, number>, quota: obj(cost.quota) as Record<string, number>, missing_calls: typeof cost.missing_calls === 'number' ? cost.missing_calls : undefined } : null,
     value: verdictOf(value.value),
   }
 }
@@ -456,11 +456,11 @@ function requirement(value: unknown): RecordRequirement {
   }
 }
 
-/** A chain label from whatever shape the record gives it: a word, a list of steps or an object naming it. */
-export function chainLabel(chain: unknown): string {
-  if (typeof chain === 'string') return chain
-  if (Array.isArray(chain)) return chain.map(chainLabel).filter(Boolean).join(' / ')
-  const row = obj(chain)
+/** A disclosure plan's label from whatever shape the record gives it: a word, a list of steps or an object naming it. */
+export function disclosureLabel(plan: unknown): string {
+  if (typeof plan === 'string') return plan
+  if (Array.isArray(plan)) return plan.map(disclosureLabel).filter(Boolean).join(' / ')
+  const row = obj(plan)
   for (const key of ['label', 'name', 'kind']) if (typeof row[key] === 'string') return row[key] as string
   return Object.values(row).filter((item) => typeof item === 'string').join(' / ')
 }
@@ -473,7 +473,7 @@ export const handedAfter = (record: CultivationRecord, round: number): string[] 
 
 const shortModel = (name: string): string => name.split('/').pop() ?? name
 
-/** One model role's model and effort as a run's settings keep them (experimental/model_roles.py). */
+/** One model role's model and effort as a run's settings keep them (experimental/harness/participation/model_roles.py). */
 export interface RoleChoice {
   role: string
   model: string

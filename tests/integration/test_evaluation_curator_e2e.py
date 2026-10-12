@@ -6,16 +6,16 @@ from copy import deepcopy
 
 import pytest
 
-from experimental.assessor.builder import RubricBuilder
-from experimental.assessor.dataset import Case, Dataset
-from experimental.assessor.guidance import GuidanceStore
-from experimental.assessor.reviewer import MetaReviewer
-from experimental.assessor.standard import Assessor
-from experimental.assessor.validation import ReplayCorpus
-from experimental.curator.harness import Task
-from experimental.curator.raven_adapter.worker import Worker
-from experimental.iteration.protocols import Exchange, Signal
-from experimental.iteration.session import Session
+from experimental.harness.assessor.builder import RubricBuilder
+from experimental.harness.assessor.dataset import Case, Dataset
+from experimental.harness.assessor.guidance import GuidanceStore
+from experimental.harness.assessor.reviewer import MetaReviewer
+from experimental.harness.assessor.standard import Assessor
+from experimental.harness.assessor.validation import ReplayCorpus
+from experimental.harness.contract import Task
+from experimental.harness.loop.session import Session
+from experimental.harness.participation.protocols import Exchange, Signal
+from experimental.harness.raven_adapter.worker import Worker
 from raven.contracts.llm_provider import LLMResponse
 from tests.fixtures.harness_curator.authoring import profile
 from tests.integration.test_harness_curator_e2e import ReplayProvider, plan_for
@@ -155,7 +155,7 @@ class IsolatedDataset:
         self.dataset, self.root = dataset, root
 
     async def run(self, worker):
-        from experimental.automation.employee import Replica, same_revision
+        from experimental.cultivation.employee import Replica, same_revision
 
         baseline = deepcopy(worker.baseline)
         home, work = self.root / "home", self.root / "work"

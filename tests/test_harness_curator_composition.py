@@ -4,8 +4,8 @@ import json
 
 import pytest
 
-from experimental.curator.composition.context import execution_turns, merge_sources
-from experimental.curator.composition.run import _groups
+from experimental.harness.curator.composition.context import execution_turns, merge_sources
+from experimental.harness.curator.composition.run import _groups
 
 
 def test_execution_identity_survives_restart_but_changes_for_new_or_revised_turns():
@@ -70,7 +70,7 @@ def test_shared_protocols_reuse_sources_but_child_implementations_keep_their_own
 def test_only_dag_playbooks_contribute_nodes_that_can_hold_requirements(tmp_path):
     from types import SimpleNamespace
 
-    from experimental.curator.raven_adapter.inspection.runtime import playbook_nodes
+    from experimental.harness.raven_adapter.inspection.runtime import playbook_nodes
     from raven.playbook import NodeSpec, PlaybookSpec, PlaybookStore
     from raven.playbook.executor import PlaybookExecutor
     from raven.playbook.runtime import PlaybookRuntime
@@ -121,7 +121,7 @@ def test_only_dag_playbooks_contribute_nodes_that_can_hold_requirements(tmp_path
 
 
 def test_requirement_files_are_read_only_beside_a_playbook_node():
-    from experimental.curator.composition.requirements import requirement_node
+    from experimental.harness.curator.composition.requirements import requirement_node
 
     assert requirement_node("work/nodes/step/requirements.json") == "work/step"
     assert requirement_node("work/step/requirements.json") is None
@@ -130,12 +130,13 @@ def test_requirement_files_are_read_only_beside_a_playbook_node():
 
 
 def test_the_shared_budget_is_what_the_scopes_consumed_plus_what_a_scope_may_still_spend(tmp_path):
-    """Each scope's generation keeps its own counters; the composite budget is their sum. A scope resumes with its
-    own count plus what the whole composition has left, so the total exceeds the limits by no more than a
-    correction call; with nothing left, lowered limits or such a call included, a scope pauses."""
-    from experimental.curator.composition.state import Progress
-    from experimental.curator.generation.run import GenerationPausedError, Limits
-    from experimental.curator.generation.state import GenerationState
+    """Each scope's generation keeps its own counters; calls, queries and checks are shared, their budget the sum.
+    A scope resumes with its own count plus what the whole composition has left, so the total exceeds the limits by
+    no more than a correction call; with nothing left, lowered limits or such a call included, a scope pauses.
+    Repairs are each scope's own, so a root that spent them all still leaves a child its full allowance."""
+    from experimental.harness.curator.composition.state import Progress
+    from experimental.harness.curator.generation.run import GenerationPausedError, Limits
+    from experimental.harness.curator.generation.state import GenerationState
 
     def spent(scope, **counters):
         path = tmp_path / scope / "progress" / "generation.json"
@@ -151,13 +152,15 @@ def test_the_shared_budget_is_what_the_scopes_consumed_plus_what_a_scope_may_sti
     root = progress.limits_for("root", limits)
     assert (root.max_calls, root.max_queries, root.max_checks, root.max_repairs) == (8, 6, 3, 3)
     fresh = progress.limits_for("child-b", limits)
-    assert (fresh.max_calls, fresh.max_queries, fresh.max_checks, fresh.max_repairs) == (5, 5, 2, 2)
+    assert (fresh.max_calls, fresh.max_queries, fresh.max_checks, fresh.max_repairs) == (5, 5, 2, 3)
     assert fresh.call_timeout == 9
     with pytest.raises(GenerationPausedError, match="budget exhausted"):
         progress.limits_for("root", Limits(max_calls=4))
     with pytest.raises(GenerationPausedError) as paused:
         progress.limits_for("root", Limits(max_calls=5, max_queries=8))
     assert paused.value.state.stage == "implement" and paused.value.state.calls == 5
+    spent("child-e", repairs=3)
+    assert progress.root_repairs() == 1 and progress.limits_for("child-d", limits).max_repairs == 3
     with pytest.raises(GenerationPausedError) as paused:
         progress.limits_for("child-b", Limits(max_calls=5, max_queries=8))
     assert paused.value.state.stage == "select"
@@ -174,11 +177,11 @@ class Composite:
     """
 
     def __init__(self, tmp_path, *, nodes_now=None):
-        from experimental.curator.harness import Artifact, Task
-        from experimental.curator.raven_adapter.baselines import Baseline
-        from experimental.curator.raven_adapter.deployment import Child
-        from experimental.curator.raven_adapter.exploration import Withheld
-        from experimental.curator.raven_adapter.inspection.runtime import declaration_for
+        from experimental.harness.contract import Artifact, Task
+        from experimental.harness.raven_adapter.baselines import Baseline
+        from experimental.harness.raven_adapter.deployment import Child
+        from experimental.harness.raven_adapter.exploration import Withheld
+        from experimental.harness.raven_adapter.inspection.runtime import declaration_for
         from raven.config.raven import RavenConfig
         from raven.config.schema import Config
 
@@ -205,7 +208,7 @@ class Composite:
 
     @property
     def revision_id(self):
-        from experimental.curator.raven_adapter.inspection import fingerprint
+        from experimental.harness.raven_adapter.inspection import fingerprint
 
         return fingerprint(
             {
@@ -223,7 +226,7 @@ class Composite:
         }
 
     async def agent_state(self, name):
-        from experimental.curator.raven_adapter.inspection import fingerprint
+        from experimental.harness.raven_adapter.inspection import fingerprint
 
         return {
             "inspection": self.child_payload(),
@@ -232,9 +235,9 @@ class Composite:
         }
 
     async def inspect(self):
-        from experimental.curator.harness import Declaration
-        from experimental.curator.raven_adapter.inspection import Inspection
-        from experimental.curator.raven_adapter.targets import catalogue
+        from experimental.harness.contract import Declaration
+        from experimental.harness.raven_adapter.inspection import Inspection
+        from experimental.harness.raven_adapter.targets import catalogue
 
         return Inspection(
             Declaration("root@1", catalogue()),
@@ -243,7 +246,7 @@ class Composite:
         )
 
     async def check(self, candidate, *, probe=None):
-        from experimental.curator.harness import Validation
+        from experimental.harness.contract import Validation
 
         return Validation([], [{"kind": "root.checked"}])
 
@@ -263,7 +266,7 @@ class Composite:
         return {"content": {"memory": json.loads(candidate.artifact.files["memory_profile.json"])}, "skills": {}}
 
     async def check_composition(self, candidate, children, *, probe=None):
-        from experimental.curator.harness import Validation
+        from experimental.harness.contract import Validation
 
         self.composition_checks.append(dict(children))
         if self.composition_errors:
@@ -271,7 +274,7 @@ class Composite:
         return Validation([], [{"kind": "composition.child_ready", "harness": "Hosted"}])
 
     async def install(self, candidate, *, children=None):
-        from experimental.curator.raven_adapter.materialize import extend_artifact
+        from experimental.harness.raven_adapter.materialize import extend_artifact
 
         self.installed.append((candidate, dict(children or {})))
         self.artifact = extend_artifact(self.artifact, candidate.artifact)
@@ -286,7 +289,7 @@ class Proposals:
     candidate through the subject as the real proposal would, and leaves the generation checkpoint a real one leaves."""
 
     def __init__(self, monkeypatch, root_candidate, child_candidate):
-        from experimental.curator.composition import run as composition
+        from experimental.harness.curator.composition import run as composition
 
         self.root_candidate, self.child_candidate = root_candidate, child_candidate
         self.calls, self.failures, self.attributed = [], [], False
@@ -308,16 +311,18 @@ class Proposals:
     ):
         from dataclasses import replace
 
-        from experimental.curator.attribution import AttributionState
-        from experimental.curator.generation.run import Generated, GenerationError
-        from experimental.curator.generation.state import GenerationState
-        from experimental.curator.harness import Attributed, Attribution, Validation
+        from experimental.harness.contract import Attributed, Attribution, Validation
+        from experimental.harness.curator.attribution import AttributionState
+        from experimental.harness.curator.generation.run import Generated, GenerationError
+        from experimental.harness.curator.generation.state import GenerationState
         from tests.test_harness_curator_generation import diagnosis
 
         scope = "root" if subject.root.name == "root" else "child"
         self.calls.append(
             {
                 "scope": scope,
+                "model": model,
+                "probe": probe,
                 "feedback": feedback,
                 "limits": limits,
                 "repair": repair,
@@ -402,8 +407,8 @@ async def candidates(worker, *, node_reasons=None, withdraw=False):
 
 
 async def curated(worker, provider=None, **arguments):
-    from experimental.curator.composition.run import improve
-    from experimental.curator.generation.run import Limits
+    from experimental.harness.curator.composition.run import improve
+    from experimental.harness.curator.generation.run import Limits
 
     arguments = {
         "feedback": {"text": "Train the child"},
@@ -416,13 +421,85 @@ async def curated(worker, provider=None, **arguments):
     return await improve(worker, provider, **arguments)
 
 
+@pytest.mark.asyncio
+async def test_children_always_receive_general_checks_while_custom_probes_stay_at_root(tmp_path, monkeypatch):
+    from experimental.harness.raven_adapter.probe import exercise_translations
+
+    worker = Composite(tmp_path)
+    root, child = await candidates(worker)
+    proposals = Proposals(monkeypatch, root, child)
+
+    async def deployment_probe(bound):
+        raise AssertionError("This probe is specific to the root deployment")
+
+    await curated(worker, probe=deployment_probe)
+    assert [(row["scope"], row["probe"]) for row in proposals.calls] == [
+        ("root", deployment_probe),
+        ("child", exercise_translations),
+    ]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("invalid", [None, "root", "child"])
+async def test_final_experience_validation_covers_only_the_adopted_root_and_child(tmp_path, monkeypatch, invalid):
+    from types import SimpleNamespace
+
+    from experimental.harness.curator.composition import run as composition
+    from experimental.harness.curator.generation.run import GenerationError, Limits
+
+    worker = Composite(tmp_path)
+    root, child = await candidates(worker)
+    proposals = Proposals(monkeypatch, root, child)
+
+    async def propose(subject, provider, **kwargs):
+        kwargs.pop("experience", None)
+        result = await proposals(subject, provider, **kwargs)
+        scope = "root" if subject.root.name == "root" else "child"
+        checkpoint = subject.root / "curation/candidate.json"
+        checkpoint.parent.mkdir(parents=True, exist_ok=True)
+        checkpoint.write_text(json.dumps({"experience": {"scope": scope, "inputs": scope}}))
+        abandoned = subject.root.parent / "abandoned/curation/candidate.json"
+        abandoned.parent.mkdir(parents=True, exist_ok=True)
+        abandoned.write_text(json.dumps({"experience": {"scope": "abandoned", "inputs": "old"}}))
+        return result
+
+    class Experience:
+        identity = {"implementation": "test"}
+        access = SimpleNamespace(access_scope="test")
+
+        def __init__(self):
+            self.checked = []
+
+        def validate(self, snapshot, *, inputs):
+            assert snapshot["scope"] != "abandoned"
+            assert inputs == snapshot["inputs"]
+            self.checked.append(snapshot["scope"])
+            if snapshot["scope"] == invalid:
+                raise ValueError(f"invalid {invalid} experience")
+
+        async def learn(self, *args, **kwargs):
+            return {"status": "recorded"}
+
+    monkeypatch.setattr(composition, "propose", propose)
+    experience = Experience()
+    if invalid is None:
+        await curated(worker, experience=experience)
+        assert experience.checked == ["root", "child"]
+        assert len(worker.installed) == 1
+    else:
+        with pytest.raises(GenerationError, match=f"invalid {invalid} experience"):
+            await curated(worker, experience=experience, limits=Limits(max_repairs=0))
+        assert not worker.installed
+        assert experience.checked == (["root"] if invalid == "root" else ["root", "child"])
+
+
 def records_of(worker):
     paths = sorted((worker.root / "curation").glob("*.json"))
     return [json.loads(path.read_text()) for path in paths if path.name != "composition.json"]
 
 
 def test_child_trial_evidence_keeps_scope_and_excludes_other_children():
-    from experimental.curator.composition.context import child_observations
+    from experimental.harness.curator.composition.context import child_observations
 
     rows = [
         {
@@ -494,7 +571,7 @@ async def test_a_composition_proposes_the_root_then_each_assigned_child_and_acti
 
 @pytest.mark.asyncio
 async def test_a_root_whose_node_reasons_miss_a_node_or_name_an_unprepared_child_is_sent_back(tmp_path, monkeypatch):
-    from experimental.curator.generation.run import GenerationError, Limits
+    from experimental.harness.curator.generation.run import GenerationError, Limits
 
     worker = Composite(tmp_path)
     root, child = await candidates(worker, node_reasons={})
@@ -529,7 +606,7 @@ async def test_a_failed_composite_check_repairs_the_root_and_reuses_the_child_wh
 
 @pytest.mark.asyncio
 async def test_a_child_that_fails_to_generate_sends_the_root_back_with_its_scope_and_nodes(tmp_path, monkeypatch):
-    from experimental.curator.generation.run import GenerationError
+    from experimental.harness.curator.generation.run import GenerationError
 
     worker = Composite(tmp_path)
     root, child = await candidates(worker)
@@ -547,7 +624,7 @@ async def test_a_child_that_fails_to_generate_sends_the_root_back_with_its_scope
 
 @pytest.mark.asyncio
 async def test_an_exhausted_repair_budget_keeps_the_failure_until_an_explicit_restart(tmp_path, monkeypatch):
-    from experimental.curator.generation.run import GenerationError, Limits
+    from experimental.harness.curator.generation.run import GenerationError, Limits
 
     worker = Composite(tmp_path)
     root, child = await candidates(worker)
@@ -571,7 +648,7 @@ async def test_an_exhausted_repair_budget_keeps_the_failure_until_an_explicit_re
 
 @pytest.mark.asyncio
 async def test_a_gap_the_root_reports_leaves_no_composite_progress_behind(tmp_path, monkeypatch):
-    from experimental.curator.generation.run import GapReportedError
+    from experimental.harness.curator.generation.run import GapReportedError
 
     worker = Composite(tmp_path)
     root, child = await candidates(worker)
@@ -582,7 +659,8 @@ async def test_a_gap_the_root_reports_leaves_no_composite_progress_behind(tmp_pa
     checkpoint = worker.root / "curation/composition.json"
     assert not checkpoint.exists() and worker.installed == []
     (record,) = records_of(worker)
-    assert record["gap"] == {"stage": "design", "reason": "the brand guide is missing"} and "error" not in record
+    assert record["gap"] == {"stage": "design", "reason": "the brand guide is missing", "kind": "unclear"}
+    assert "error" not in record
     await curated(Composite(tmp_path), feedback={"text": "Here is the brand guide"})
     assert [call["scope"] for call in proposals.calls] == ["root", "root", "child"]
     assert proposals.calls[1]["feedback"] == {"text": "Here is the brand guide"} and not checkpoint.exists()
@@ -592,8 +670,8 @@ async def test_a_gap_the_root_reports_leaves_no_composite_progress_behind(tmp_pa
 async def test_a_paused_composition_resumes_in_a_new_worker_object_without_proposing_the_root_again(
     tmp_path, monkeypatch
 ):
-    from experimental.curator.generation.run import GenerationPausedError
-    from experimental.curator.generation.state import GenerationState
+    from experimental.harness.curator.generation.run import GenerationPausedError
+    from experimental.harness.curator.generation.state import GenerationState
 
     worker = Composite(tmp_path)
     root, child = await candidates(worker)
@@ -625,8 +703,76 @@ async def test_a_paused_composition_resumes_in_a_new_worker_object_without_propo
 
 
 @pytest.mark.asyncio
+async def test_composite_model_recovery_keeps_the_accepted_root_and_records_the_change(tmp_path, monkeypatch):
+    from experimental.harness.curator.generation.run import GenerationInterruptedError, GenerationPausedError
+    from experimental.harness.curator.generation.state import GenerationState
+
+    worker = Composite(tmp_path)
+    root, child = await candidates(worker)
+    proposals = Proposals(monkeypatch, root, child)
+    interrupted = GenerationState(
+        input_id="x",
+        stage="design",
+        calls=2,
+        trace=[
+            {"event": "model.call", "stage": "design", "call": 2, "model": "m"},
+            {"event": "model.error", "stage": "design", "call": 2, "error": "temporarily unavailable"},
+        ],
+    )
+    proposals.failures.append(("child", GenerationInterruptedError("Unavailable", interrupted)))
+    with pytest.raises(GenerationInterruptedError):
+        await curated(worker)
+    checkpoint = worker.root / "curation/composition.json"
+    before = checkpoint.read_bytes()
+    with pytest.raises(ValueError, match="composite inputs changed"):
+        await curated(Composite(tmp_path), model="replacement", feedback="Another task")
+    assert checkpoint.read_bytes() == before
+    again = Composite(tmp_path)
+    await curated(again, model="replacement")
+    assert [call["scope"] for call in proposals.calls] == ["root", "child", "child"]
+    assert proposals.calls[-1]["model"] == "replacement"
+    completed = next(row for row in records_of(again) if row.get("changed") is not None)
+    events = completed["composition"]["model_events"]
+    assert events[-1]["event"] == "model.changed" and events[-1]["previous_model"] == "m"
+    proposals.failures.append(("child", GenerationPausedError(GenerationState(input_id="x", calls=2))))
+    with pytest.raises(GenerationPausedError):
+        await curated(Composite(tmp_path))
+    before = checkpoint.read_bytes()
+    with pytest.raises(ValueError, match="recorded failed provider call"):
+        await curated(Composite(tmp_path), model="replacement")
+    assert checkpoint.read_bytes() == before
+
+
+@pytest.mark.asyncio
+async def test_replacing_curator_model_cannot_claim_recovery_of_a_separate_failed_attributor(tmp_path, monkeypatch):
+    from experimental.harness.curator.attribution import AttributionInterruptedError, AttributionState
+
+    worker = Composite(tmp_path)
+    root, child = await candidates(worker)
+    proposals = Proposals(monkeypatch, root, child)
+    state = AttributionState(
+        input_id="x",
+        identity={"model": "diagnoser"},
+        subjects=("task",),
+        calls=1,
+        trace=[
+            {"event": "model.call", "stage": "diagnose", "call": 1, "model": "diagnoser"},
+            {"event": "model.error", "stage": "diagnose", "call": 1, "error": "temporarily unavailable"},
+        ],
+    )
+    proposals.failures.append(("child", AttributionInterruptedError("Unavailable", state)))
+    with pytest.raises(AttributionInterruptedError):
+        await curated(worker)
+    checkpoint = worker.root / "curation/composition.json"
+    before = checkpoint.read_bytes()
+    with pytest.raises(ValueError, match="separate attributor"):
+        await curated(Composite(tmp_path), model="another-curator")
+    assert checkpoint.read_bytes() == before
+
+
+@pytest.mark.asyncio
 async def test_a_child_no_node_needs_any_more_is_withdrawn_to_its_original_artifact(tmp_path, monkeypatch):
-    from experimental.curator.harness import Artifact
+    from experimental.harness.contract import Artifact
 
     served = {"work/step": {"playbook": "work", "node": {"subagent": "Hosted"}, "requirements": [REQUIREMENT]}}
     worker = Composite(tmp_path, nodes_now=served)
@@ -649,9 +795,9 @@ async def test_a_child_no_node_needs_any_more_is_withdrawn_to_its_original_artif
 
 @pytest.mark.asyncio
 async def test_every_scope_attributes_on_its_own_and_every_record_reaches_the_worker(tmp_path, monkeypatch):
-    from experimental.curator.attribution import ModelAttributor
-    from experimental.curator.generation.run import GenerationError
-    from experimental.curator.harness import Attribution
+    from experimental.harness.contract import Attribution
+    from experimental.harness.curator.attribution import ModelAttributor
+    from experimental.harness.curator.generation.run import GenerationError
     from tests.test_harness_curator_generation import diagnosis
 
     worker = Composite(tmp_path)
@@ -673,8 +819,8 @@ async def test_every_scope_attributes_on_its_own_and_every_record_reaches_the_wo
 
 @pytest.mark.asyncio
 async def test_attributing_a_composite_alone_sees_the_root_scope_and_records_beside_the_worker(tmp_path, monkeypatch):
-    from experimental.curator import workflow
-    from experimental.curator.composition import run as composition
+    from experimental.harness.curator import workflow
+    from experimental.harness.curator.composition import run as composition
 
     worker = Composite(tmp_path)
     seen = {}

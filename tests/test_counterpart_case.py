@@ -1,6 +1,7 @@
 """The counterpart layer's delivery predicates: what a run's last round must have handed over, by scenario."""
 
-from experimental.counterpart.case import deck_delivered, delivered_for, files_delivered
+from experimental.cultivation.counterpart.case import deck_delivered, files_delivered
+from experimental.simulation.bench.value import delivered_for
 
 
 def round_with(*drills):

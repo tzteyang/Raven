@@ -2,11 +2,11 @@
 
 import pytest
 
-from experimental.experience.build import ExperiencePipeline
-from experimental.experience.contracts import EvidenceLink, ExperienceReview
-from experimental.experience.governance import Issue
-from experimental.experience.repair import verification_context
-from experimental.experience.verification import Case, Result, compare_methods
+from experimental.harness.experience.build import ExperiencePipeline
+from experimental.harness.experience.contracts import EvidenceLink, ExperienceReview
+from experimental.harness.experience.governance import Issue
+from experimental.harness.experience.repair import verification_context
+from experimental.harness.experience.verification import Case, Result, compare_methods
 from tests.experience_helpers import event, proposal, reviewed
 from tests.test_experience_curator import consumer, prepare
 
