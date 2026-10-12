@@ -95,3 +95,106 @@ async def test_an_empty_round_has_no_self_signal():
 def test_reviews_run_at_least_one_at_a_time():
     with pytest.raises(ValueError):
         Introspection(object(), lambda worker, label: None, concurrency=0)
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("entrypoint", ["batch", "session"])
+@pytest.mark.parametrize("owner_fails", [False, True])
+async def test_self_review_precedes_next_round_handover_even_when_the_owner_is_listed_first(
+    tmp_path, entrypoint, owner_fails
+):
+    from experimental.iteration.protocols import Signal
+    from experimental.iteration.session import Session, assess
+    from tests.test_iteration_run import FakeWorker
+
+    material = tmp_path / "next-round-norm.md"
+    worker = FakeWorker(tmp_path)
+    sessions = {"case": [exchange("Create the three-file package.", "The files are ready.")]}
+    order, log = [], []
+
+    class Owner:
+        async def evaluate(self, sessions):
+            order.append("owner")
+            material.write_text("The next round requires five files.")
+            if owner_fails:
+                raise ValueError("owner unavailable")
+            return Signal("owner", "Here is the next-round norm.")
+
+    class Independent:
+        async def evaluate(self, sessions):
+            order.append("independent")
+            assert material.exists()
+            return Signal("independent")
+
+    def spawn(employee, label):
+        order.append("self")
+        assert employee is worker and not material.exists()
+        return _Replica(label, {label: "VERDICT: pass\nDEFECTS: none\nNOTE: old norm only"}, log)
+
+    self_review = Introspection(worker, spawn, records=tmp_path)
+    assessors = (Owner(), self_review, Independent())
+    session = Session.open(worker, object()) if entrypoint == "session" else None
+    if session is not None:
+        session.sessions = sessions
+
+    async def evaluate():
+        return await session.assess(*assessors) if session is not None else await assess(assessors, sessions)
+
+    if owner_fails:
+        with pytest.raises(ValueError, match="owner unavailable"):
+            await evaluate()
+        assert order[:2] == ["self", "owner"]
+        assert order[2:] in ([], ["independent"])
+        if session is not None:
+            assert session.rounds[-1].signals[0].source == SOURCE
+    else:
+        assert [signal.source for signal in await evaluate()] == [SOURCE, "owner", "independent"]
+        assert order == ["self", "owner", "independent"]
+    assert [entry[0] for entry in log] == ["start", "run", "close"]
+    reviews = [json.loads(path.read_text()) for path in (tmp_path / "analysis").glob("*.json")]
+    assert any(review.get("source") == SOURCE and review["reviews"][0]["result"] == "pass" for review in reviews)
+
+
+@pytest.mark.asyncio
+async def test_each_rounds_self_replica_keeps_prior_materials_but_excludes_its_new_handover(tmp_path):
+    from experimental.iteration.protocols import Signal
+    from experimental.iteration.session import assess
+    from tests.test_iteration_run import FakeWorker
+
+    worker, log, observed = FakeWorker(tmp_path), [], []
+    materials = [tmp_path / "cost-update.md", tmp_path / "five-file-update.md"]
+
+    class Owner:
+        rounds = 0
+
+        async def evaluate(self, sessions):
+            materials[self.rounds].write_text("Next-round requirements.")
+            self.rounds += 1
+            return Signal("owner")
+
+    def spawn(employee, label):
+        assert employee is worker
+        observed.append([path.name for path in materials if path.exists()])
+        return _Replica(label, {label: "VERDICT: pass\nDEFECTS: none\nNOTE: reviewed"}, log)
+
+    owner, self_review = Owner(), Introspection(worker, spawn)
+    sessions = {"case": [exchange("Maintain the package.", "Here is the current package.")]}
+    await assess((owner, self_review), sessions)
+    await assess((owner, self_review), sessions)
+    assert observed == [[], ["cost-update.md"]]
+    assert self_review.rounds == owner.rounds == 2 and all(path.exists() for path in materials)
+
+
+@pytest.mark.asyncio
+async def test_self_replica_is_closed_when_startup_fails():
+    log = []
+
+    class FailedReplica(_Replica):
+        async def start(self):
+            await super().start()
+            raise ValueError("startup failed")
+
+    self_review = Introspection(object(), lambda worker, label: FailedReplica(label, {}, log))
+    with pytest.raises(ValueError, match="startup failed"):
+        await self_review.evaluate({"case": [exchange("Review it.", "Done.")]})
+    assert [entry[0] for entry in log] == ["start", "close"]

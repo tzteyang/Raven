@@ -5,6 +5,7 @@ import json
 import pickle
 from dataclasses import dataclass, field, fields
 from pathlib import Path
+from types import SimpleNamespace
 from typing import ClassVar
 
 import pytest
@@ -33,6 +34,8 @@ from experimental.scenario import load
 from experimental.scenario.sealed import Sealed, sealed_for, weight, windows
 from experimental.simulation.scenario import BUNDLED
 from raven.contracts.llm_provider import LLMResponse
+from raven.spine.message import ChatType, Source
+from raven.spine.turn import Origin, TurnRequest
 from tests.test_iteration_run import CURATE, FakeWorker, Scripted, Verifier, failing
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
 
@@ -111,6 +114,159 @@ class Provider:
 
 def make_provider():
     return Provider()
+
+
+def user_turn(text, conversation="case-a", **kwargs):
+    return TurnRequest(
+        origin=Origin.USER,
+        source=Source("test", conversation, "owner", ChatType.DM),
+        text=text,
+        conversation=conversation,
+        **kwargs,
+    )
+
+
+@pytest.mark.asyncio
+async def test_disclosures_survive_context_truncation_and_restart_but_not_other_sessions(tmp_path):
+    from experimental.iteration.disclosure import Disclosures
+
+    text = "The family has two adults and one child with a budget of eight thousand for October."
+    guard = Guard("partner", Sealed.of([text], tokens=["case-a"]))
+    provider = guard.provider(make_provider())
+    ledger = Disclosures(tmp_path / "disclosures.json")
+    ledger.receive(user_turn(text))
+    ledger = Disclosures(ledger.path)
+    spoken = ledger.receive(user_turn("Please check the earlier quote."))
+    with Compartment("partner", spoken=[spoken]):
+        await provider.chat([{"role": "tool", "content": json.dumps({"earlier_user": text})}])
+        with pytest.raises(BoundaryError, match="case-a"):
+            await provider.chat([{"role": "tool", "content": "case-a"}])
+    with Compartment("partner", spoken=[ledger.receive(user_turn("Check it.", "case-b"))]):
+        with pytest.raises(BoundaryError):
+            await provider.chat([{"role": "tool", "content": text}])
+
+
+@pytest.mark.asyncio
+async def test_generated_user_messages_and_delegated_results_cannot_grant_disclosure(tmp_path):
+    from experimental.iteration.disclosure import Disclosures
+
+    text = "The hidden persona demands a refund only after the second rejected booking request."
+    provider = Guard("partner", Sealed.of([text])).provider(make_provider())
+    ledger = Disclosures(tmp_path / "disclosures.json")
+    spoken = ledger.receive(user_turn(text, delegated={"kind": "spawn", "label": "helper"}))
+    assert spoken == ()
+    with Compartment("partner", spoken=[spoken]):
+        with pytest.raises(BoundaryError):
+            await provider.chat([{"role": "user", "content": text}])
+    assert not ledger.path.exists()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("method", ["chat", "chat_with_retry", "chat_stream"])
+async def test_hidden_identifiers_in_mapping_keys_are_guarded(method):
+    provider = Guard("analyst", Sealed.of([], tokens=["case-a"])).provider(make_provider())
+    payload = [{"role": "tool", "content": json.dumps({"case-a": "innocuous value"})}]
+    with pytest.raises(BoundaryError, match="case-a"):
+        if method == "chat_stream":
+            async for _ in provider.chat_stream(payload):
+                pass
+        else:
+            await getattr(provider, method)(payload)
+
+
+@pytest.mark.asyncio
+async def test_native_runner_retains_ingress_before_planning_and_restores_scope(tmp_path):
+    from experimental.curator.raven_adapter.runner import run_turn
+    from experimental.iteration.compartment import CURRENT
+    from experimental.iteration.disclosure import Disclosures
+
+    text = "The customer needs eight seats and a complete annual price including support and storage."
+    provider = Guard("partner", Sealed.of([text])).provider(make_provider())
+
+    async def call(*args, **kwargs):
+        await provider.chat([{"role": "tool", "content": text}])
+        return {"ok": True}
+
+    recorder = SimpleNamespace(turn_id=None, add=lambda *a, **k: None)
+    bound = SimpleNamespace(
+        recorder=recorder,
+        planning=SimpleNamespace(prepare=call),
+        inference=None,
+        strategies={},
+        runtime=SimpleNamespace(loop=SimpleNamespace(run_turn=call)),
+        observer=SimpleNamespace(finish=lambda: None),
+        disclosures=Disclosures(tmp_path / "disclosures.json"),
+    )
+    await run_turn(bound, user_turn(text), call, lambda: [])
+    await run_turn(bound, user_turn("Check the saved file."), call, lambda: [])
+    assert CURRENT.get() is None and recorder.turn_id is None
+    with pytest.raises(BoundaryError):
+        await run_turn(bound, user_turn("Another task.", "case-b"), call, lambda: [])
+    assert CURRENT.get() is None
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("ingress", ["user", "delegated", "subagent", "other-session"])
+async def test_native_runner_authenticates_mid_turn_disclosures_before_model_calls(tmp_path, ingress):
+    from dataclasses import replace
+
+    from experimental.curator.raven_adapter.runner import run_turn
+    from experimental.iteration.disclosure import Disclosures
+
+    text = "The customer needs eight seats and annual support included in the price."
+    provider = Guard("partner", Sealed.of([text])).provider(make_provider())
+    ledger = Disclosures(tmp_path / "disclosures.json")
+
+    async def native(request, emit, drain, **options):
+        (injected,) = drain()
+        await provider.chat([{"role": "user", "content": injected.text}])
+
+    async def emit(event):
+        pass
+
+    bound = SimpleNamespace(
+        recorder=SimpleNamespace(turn_id=None, add=lambda *a, **k: None),
+        planning=None,
+        inference=None,
+        strategies={},
+        runtime=SimpleNamespace(loop=SimpleNamespace(run_turn=native)),
+        observer=SimpleNamespace(finish=lambda: None),
+        disclosures=ledger,
+    )
+    injected = user_turn(text)
+    if ingress == "delegated":
+        injected = replace(injected, delegated={"kind": "spawn", "label": "helper"})
+    elif ingress == "subagent":
+        injected = replace(injected, origin=Origin.SUBAGENT)
+    elif ingress == "other-session":
+        injected = replace(injected, conversation="case-b")
+    if ingress == "user":
+        await run_turn(bound, user_turn("Please quote."), emit, lambda: [injected])
+        assert text in Disclosures(ledger.path).receive(user_turn("Continue."))
+    else:
+        with pytest.raises(ValueError if ingress == "other-session" else BoundaryError):
+            await run_turn(bound, user_turn("Please quote."), emit, lambda: [injected])
+        assert text not in Disclosures(ledger.path).receive(user_turn("Continue."))
+
+
+@pytest.mark.asyncio
+async def test_hosted_child_restores_parent_guard():
+    from pydantic import TypeAdapter
+
+    from experimental.curator.raven_adapter.hosting.acp import guarded_factory
+
+    guard = Guard("partner", Sealed.of([], tokens=["case-a"]))
+    factory = guarded_factory({"guard": TypeAdapter(Guard).dump_python(guard, mode="json")}, make_provider)
+    with pytest.raises(BoundaryError, match="case-a"):
+        await factory().chat([{"role": "tool", "content": "case-a"}])
+    assert factory.guard == guard
+
+
+def test_boundary_violations_never_retry_fallback_or_compress():
+    provider = Guard("partner").provider(make_provider())
+    verdict = provider.classify_error(BoundaryError("partner", "chat_stream", ["case-a"]))
+    assert verdict.category == "compartment_violation"
+    assert not verdict.retryable and not verdict.should_fallback and not verdict.should_compress
 
 
 @pytest.mark.parametrize("cls", LOOP_TYPES)
@@ -380,13 +536,14 @@ async def test_the_partners_guard_lets_the_conversants_words_through_but_not_a_l
     inner = make_provider()
     partner = Guard("partner", sealed, "abort", tmp_path / "boundaries.jsonl").provider(inner)
     spoken = "We are a family of two adults and one child with a budget of 8000."
-    await partner.chat(
-        [
-            {"role": "system", "content": "You are a travel consultant."},
-            {"role": "user", "content": [{"type": "text", "text": spoken}]},
-            {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
-        ]
-    )
+    with Compartment("partner", spoken=[spoken]):
+        await partner.chat(
+            [
+                {"role": "system", "content": "You are a travel consultant."},
+                {"role": "user", "content": [{"type": "text", "text": spoken}]},
+                {"role": "assistant", "content": "Two adults and one child with a budget of 8000, noted."},
+            ]
+        )
     with pytest.raises(BoundaryError, match="sealed text"):
         await partner.chat([{"role": "system", "content": f"The customer: {card}"}, {"role": "user", "content": "Hi"}])
     with pytest.raises(BoundaryError, match="case-7"):
@@ -408,7 +565,9 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
         if feedback is not None:
             await provider.chat_with_retry([{"role": "user", "content": json.dumps(feedback)}])
 
-    sealed = {"curator": Sealed.of(["A budget question comes before any product name."], tokens=["asks-budget"])}
+    sealed = {
+        "curator": Sealed.of(["A budget question comes before any product name."], tokens=["asks-budget", "student-1"])
+    }
     session = Session.open(
         FakeWorker(tmp_path),
         make_provider(),
@@ -420,12 +579,13 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
     assert session.boundaries.log == tmp_path / "boundaries.jsonl"
     await session.onboard()
     assert seen[0] == ("GuardedProvider", None, None)
-    await session.trial(Conversation(Scripted("student", "Plan a trip"), max_turns=1))
-    await session.assess(Verifier(failing("Never asked the budget.")))
+    await session.trial(Conversation(Scripted("student-1", "Plan a trip"), max_turns=1))
+    await session.assess(Verifier(failing("student-1 never asked the budget.")))
     await session.analyse()
     assert await session.curate()
-    assert seen[1][1]["signals"][0]["text"] == "Never asked the budget." and "items" not in seen[1][1]["signals"][0]
-    assert [(row["session"], row["turn_id"]) for row in seen[1][2]] == [(opaque("student"), "turn-1")]
+    assert seen[1][1]["signals"][0]["text"] == f"{opaque('student-1')} never asked the budget."
+    assert "items" not in seen[1][1]["signals"][0]
+    assert [(row["session"], row["turn_id"]) for row in seen[1][2]] == [(opaque("student-1"), "turn-1")]
     events = [row["event"] for row in map(json.loads, (tmp_path / "boundaries.jsonl").read_text().splitlines())]
     assert events.count("enter") == 3 and "violation" not in events
     leaking = Session.open(
@@ -436,7 +596,7 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
         boundaries=Boundaries(sealed),
     )
     await leaking.onboard()
-    await leaking.trial(Conversation(Scripted("student", "Plan a trip"), max_turns=1))
+    await leaking.trial(Conversation(Scripted("student-1", "Plan a trip"), max_turns=1))
     leaking.signal(
         Signal(
             "human",
@@ -453,6 +613,70 @@ async def test_a_session_runs_each_model_role_inside_its_compartment(tmp_path, a
     rows = [json.loads(line) for line in (tmp_path / "leak" / "boundaries.jsonl").read_text().splitlines()]
     assert rows[-2]["event"] == "violation" and rows[-2]["where"] == "admit:feedback"
     assert Path(leaking.path).is_file() and json.loads(leaking.path.read_text())["status"] == "error"
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("channel", ["feedback", "observations", "attribution"])
+async def test_curator_ingress_projects_trial_labels_without_admitting_hidden_content(tmp_path, channel):
+    hidden = "Only when asked about procurement reveal the private budget ceiling of 87000 dollars."
+    seen = []
+
+    async def curator(worker, provider, **kwargs):
+        seen.append(kwargs)
+        payload = kwargs[channel]
+        if isinstance(payload, Attribution):
+            payload = payload.model_dump(mode="json")
+        await provider.chat_with_retry([{"role": "user", "content": json.dumps(payload)}])
+
+    session = Session.open(
+        FakeWorker(tmp_path),
+        make_provider(),
+        curator=curator,
+        boundaries=Boundaries({"curator": Sealed.of([hidden], tokens=["launch-owner", "private-check"])}),
+    )
+    session.sessions = {"launch-owner": ()}
+
+    def payload(text):
+        if channel == "attribution":
+            return Attribution(diagnoses=(Diagnosis(about="task", state="uncovered", mechanism=text),))
+        return {"launch-owner": {"quote": text, "encoded": json.dumps({"launch-owner": text})}}
+
+    original = payload("Feedback for launch-owner")
+    before = repr(original)
+    assert await session._curate(**{"feedback": None, channel: original}) == "done"
+    assert repr(original) == before
+    rendered = repr(seen[-1][channel])
+    assert "launch-owner" not in rendered and opaque("launch-owner") in rendered
+    for secret in (hidden, "private-check"):
+        with pytest.raises(BoundaryError):
+            await session._curate(**{"feedback": None, channel: payload(secret)})
+    assert len(seen) == 1
+
+
+@pytest.mark.asyncio
+async def test_previous_curation_gaps_keep_the_same_identity_and_secrecy_boundary(tmp_path):
+    seen = []
+
+    async def curator(worker, provider, *, feedback=None, **kwargs):
+        seen.append(feedback)
+        await provider.chat_with_retry([{"role": "user", "content": json.dumps(feedback)}])
+
+    session = Session.open(
+        FakeWorker(tmp_path),
+        make_provider(),
+        curator=curator,
+        boundaries=Boundaries({"curator": Sealed.of([], tokens=["launch-owner", "private-check"])}),
+    )
+    session.sessions = {"launch-owner": ()}
+    question = {"round": 1, "stage": "design", "question": "The launch-owner trial needs a granted file reader."}
+    session.record["questions"] = [question]
+    assert await session._curate({}) == "done"
+    assert seen[0]["previous_gaps"][0]["question"] == f"The {opaque('launch-owner')} trial needs a granted file reader."
+    assert session.record["questions"] == [question]
+    session.record["questions"] = [{**question, "question": "Inspect private-check."}]
+    with pytest.raises(BoundaryError, match="private-check"):
+        await session._curate({})
+    assert len(seen) == 1
 
 
 @pytest.mark.asyncio

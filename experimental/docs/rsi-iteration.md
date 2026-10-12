@@ -22,6 +22,10 @@ flowchart TD
 - 之后每轮先执行、再评价、再修订。最后一轮只评价、不修订，因为没有下一轮能检验那次修订。
 - 停止条件：Analyst 决定 stop；本轮没有任何 Signal；所有 Assessor 都满意且不需要修订；或轮次用完。
 
+Design, implementation and repair share one gap-driven replan within the original budget. A second unresolved gap blocks the session before another trial; `Session.resolve_gap(answer)` records new information before retrying the same round.
+
+Self review runs before an assessor can hand over next-round materials in the same assessment batch. Separate assessment calls retain caller order. Historical diagnoses retain their evidence, placement and uncertainty for the Curator only.
+
 ## 2. 角色与信息边界
 
 | 角色 | 看得到 | 看不到 | 产出 |

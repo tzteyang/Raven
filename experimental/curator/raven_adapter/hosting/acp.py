@@ -142,10 +142,27 @@ async def serve_harness(reader, out, baseline, artifact, root, *, grants=None, p
         await close()
 
 
+def guarded_factory(deployment, provider_factory=None):
+    """Restore the parent's guard before constructing any provider in the hosted child."""
+    if deployment.get("guard") is None:
+        return provider_factory
+    from pydantic import TypeAdapter
+
+    from raven.providers.factory import make_lazy_provider
+
+    from ....iteration.compartment import Guard, GuardedFactory
+
+    guard = TypeAdapter(Guard).validate_python(deployment["guard"])
+    if guard.role != "partner":
+        raise ValueError("a hosted child needs its partner compartment")
+    return GuardedFactory(provider_factory or make_lazy_provider, guard)
+
+
 async def main(path: Path, *, provider_factory=None):
     deployment = json.loads(path.read_text())
-    if set(deployment) - {"baseline", "artifact", "state_dir", "grants"}:
+    if set(deployment) - {"baseline", "artifact", "state_dir", "grants", "guard"}:
         raise ValueError("unknown Harness deployment fields")
+    provider_factory = guarded_factory(deployment, provider_factory)
     baseline = Baseline.restore(deployment["baseline"])
     if baseline.inherit_model:
         from copy import deepcopy

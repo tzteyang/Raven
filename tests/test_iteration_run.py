@@ -10,7 +10,7 @@ from experimental.analyst import role
 from experimental.analyst.feedback import Feedback
 from experimental.assessor.dataset import Case, Dataset, contains
 from experimental.assessor.human import Human
-from experimental.curator.generation.run import GenerationPausedError
+from experimental.curator.generation.run import GapReportedError, GenerationPausedError
 from experimental.curator.generation.run import Limits as CuratorLimits
 from experimental.curator.harness import Attributed, Attribution, Diagnosis, Task
 from experimental.curator.raven_adapter.worker import Execution, TurnTimeoutError
@@ -176,7 +176,7 @@ async def test_curate_reaches_improve_with_the_signals_and_the_next_round_runs_o
     assert earlier.requirements == (
         Raised(id="", behavior=REQUIREMENT["behavior"], strength="must_hold", acceptance=REQUIREMENT["acceptance"]),
     )
-    assert earlier.diagnoses == (Diagnosed(about="task", state="absent"),)
+    assert earlier.diagnoses == (Diagnosed(about="task", state="absent", evidence=("task",)),)
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
     assert record["task"] == "Serve the agency's travellers" and len(record["rounds"]) == 2
     assert record["status"] == "finished"
@@ -412,6 +412,30 @@ async def test_a_supplied_curator_replaces_improve(tmp_path, curations, analyses
     assert worker.artifact_id == "artifact-0" and not (tmp_path / "curation").exists()
     record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
     assert record["curator"] == "keep" and record["initial_curation"] == []
+
+
+@pytest.mark.asyncio
+async def test_a_terminal_gap_stops_the_loop_before_running_another_business_round(tmp_path, analyses):
+    worker = FakeWorker(tmp_path)
+    analyses.scripted.extend([CURATE])
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        if feedback is not None:
+            raise GapReportedError("design", "The required audit cannot be implemented with current grants.")
+
+    rounds = await run(
+        worker,
+        object(),
+        [Conversation(Scripted("student", "First delivery", "Second delivery"), max_turns=1)],
+        [Verifier(failing())],
+        curator=curator,
+        limits=Limits(max_rounds=3),
+    )
+    record = json.loads(next((tmp_path / "iteration").glob("*.json")).read_text())
+    assert len(rounds) == len(worker.runs) == 1
+    assert record["status"] == "blocked" and not rounds[0].curated
+    assert record["history"] == [] and "review" in record["pending"]
+    assert record["questions"][0]["round"] == 1
 
 
 @pytest.mark.asyncio

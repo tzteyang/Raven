@@ -37,6 +37,12 @@ Resource formats, factory parameters and result types come from selected_contrac
 
 Submit the artifact through the provided artifact action. If the mechanism needs revision, request plan revision with a concrete reason; the host returns to design. If the required entries change, revise selection; that also requires a new design. Do not implement against a superseded plan. If required support or information cannot be obtained, report the concrete gap.
 
+Unfinished code or behavioral checks are not themselves missing support or information. Use the remaining budget to
+stage the implementation and exercise its consumers. If the plan cannot be completed with the available contracts or
+budget, request a concrete plan revision that preserves the required behavior. A gap report must identify the missing
+capability, authority or fact and why no supported approach meets the requirement; do not report only that you have
+not finished the work.
+
 ## Completion check
 
 Every selected value has its required implementation or resource; references resolve; concrete types match callers and results; shared state and retained consumers remain coherent; meaningful failures stay observable. Describe only a proposal, without claiming installation or task improvement before host evidence arrives.

@@ -47,7 +47,8 @@ async def run(
     earlier cultivations the counterpart brings, heard by every curation (`hearing.heard_prior`). The signals of a
     `measuring` source (an assessor's name) measure each round in its record and are kept from the Analyst, the decision
     to stop and the Curator (`Session._acted`), such as an owner who watches without speaking. The rounds are returned; the
-    record says how the run ended: finished, paused (a curation was interrupted and can be resumed), stopped (the run
+    record says how the run ended: finished, blocked (a reported gap needs new information), paused (a curation was
+    interrupted and can be resumed), stopped (the run
     was interrupted from outside, such as by a spend cap) or error.
     """
     assessors = tuple(assessors)

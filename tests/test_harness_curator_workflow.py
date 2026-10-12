@@ -10,7 +10,7 @@ from unittest.mock import AsyncMock
 import pytest
 
 from experimental.curator import workflow
-from experimental.curator.generation.run import GenerationPausedError, Limits
+from experimental.curator.generation.run import GapReportedError, GenerationPausedError, Limits
 from experimental.curator.harness import Artifact, Declaration, Validation
 from experimental.curator.raven_adapter.exploration import Exploration, Withheld
 from experimental.curator.raven_adapter.inspection import Inspection
@@ -46,6 +46,46 @@ def worker(tmp_path, monkeypatch):
     pending = worker.root / "curation/pending.json"
     if pending.exists():
         shutil.rmtree(json.loads(pending.read_text())["workspace"], ignore_errors=True)
+
+
+@pytest.mark.asyncio
+async def test_design_gap_replanning_reaches_the_native_validator_and_installs_only_the_revised_candidate(worker):
+    provider = Provider(
+        response("submit_diagnosis", diagnosis()),
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "No authorized Action file reader."}),
+        response("revise_selection", selection("capability.strategy")),
+        response("submit_plan", plan("capability.strategy")),
+        response("submit_artifact", {"values": {"capability.strategy": {"factory": "rules:create"}}}),
+    )
+    result = await workflow.improve(worker, provider)
+    worker.check.assert_awaited_once()
+    worker.install.assert_awaited_once_with(result.candidate)
+    assert result.candidate.selection.targets == ("capability.strategy",)
+    assert any(event["event"] == "report_gap" for event in result.trace)
+    record = json.loads(next((worker.root / "curation").glob("*.json")).read_text())
+    assert record["generated"]["candidate"]["selection"]["targets"] == ["capability.strategy"]
+
+
+@pytest.mark.asyncio
+async def test_unresolved_design_gap_never_installs_and_keeps_both_gap_reports(worker):
+    provider = Provider(
+        response("submit_diagnosis", diagnosis()),
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "No authorized Action file reader."}),
+        response("report_gap", {"reason": "The guaranteed audit requires a missing host binding."}),
+    )
+    with pytest.raises(GapReportedError):
+        await workflow.improve(worker, provider)
+    worker.check.assert_not_awaited()
+    worker.install.assert_not_awaited()
+    record = json.loads(next((worker.root / "curation").glob("*.json")).read_text())
+    assert "missing host binding" in record["error"]
+    assert [event["output"] for event in record["trace"] if event["event"] == "report_gap"] == [
+        "No authorized Action file reader.",
+        "The guaranteed audit requires a missing host binding.",
+    ]
+    assert not (worker.root / "curation/pending.json").exists()
 
 
 @pytest.mark.asyncio

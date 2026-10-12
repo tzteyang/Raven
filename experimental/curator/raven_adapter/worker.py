@@ -127,7 +127,9 @@ def _serve(
             for name, content in restored_children.items():
                 home = children[name].baseline.config.workspace_path
                 restore_content(home, {home / path: value for path, value in content.items()})
-            baseline = bind_children(baseline, children, Path(planning_state).parent)
+            baseline = bind_children(
+                baseline, children, Path(planning_state).parent, guard=getattr(provider_factory, "guard", None)
+            )
             from .hosting.lifecycle import configure_role
 
             configure_role(baseline)

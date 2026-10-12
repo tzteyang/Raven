@@ -10,6 +10,15 @@ Use selection, the current code and bindings, selected_contracts with the shared
 
 ## Work
 
+If `reported_design_gap` is supplied, the previous approach reported a gap during design, implementation or repair.
+Reconsider it once within the remaining budget: distinguish the diagnosed requirement from guarantees your proposed
+mechanism added, and unfinished work from unavailable support. Check whether another supported selection or a
+different design meets the requirement using the actual grants. Revise selection when needed. Preserve required
+semantics and authority; do not invent a binding or weaken a requirement to produce a candidate. A model-guided
+capability may be appropriate when the requirement does not demand a guaranteed gate. Treat unavailable verification
+separately from an observed violation according to the host contract. Report the remaining concrete gap if no
+supported approach meets the requirement; that stops cultivation before another trial.
+
 For each proposed change, connect the caller or trigger to the semantic operation, available input, state access, result and actual consumer. State the expected difference from the current behavior and what must remain intact.
 
 Specify the cooperation that matters for implementation: representation and concrete types, construction dependencies, one owner of shared rules/state, initialization, subsequent updates and state handoff when replacing code. Keep task state distinct from a turn-scoped wrapper. Private implementation details need not become new public methods or output fields.

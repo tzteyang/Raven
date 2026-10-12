@@ -141,3 +141,39 @@ def test_a_composite_curations_child_changes_and_diagnoses_join_the_entry_under_
         "root",
         "child/Raven-PPT",
     ]
+
+
+def test_diagnosis_caveats_survive_record_roundtrip_and_only_reach_the_curator():
+    from experimental.audience import project
+    from experimental.curator.harness import Attributed, Attribution, Diagnosis, Plan
+    from experimental.iteration.hearing import heard_history
+    from experimental.iteration.history import entry
+
+    diagnosis = Diagnosis(
+        about="R1",
+        state="model_ignored",
+        mechanism="delivery instruction",
+        evidence=("turn-1 contains no completed delivery",),
+        placement="The instruction is supplied in the task Skill.",
+        uncertain="The available summary cannot distinguish omission from a tool refusal.",
+    )
+    attributed = Attributed(attribution=Attribution(diagnoses=(diagnosis,)))
+    made = entry(
+        1,
+        (Signal("owner", items=(Item("private-check", "fail", expected="PRIVATE_REFERENCE"),)),),
+        feedback("R1"),
+        Plan(understanding="u", design="d", changes=()),
+        attribution=attributed,
+    )
+    restored = Entry.model_validate_json(made.model_dump_json())
+    (seen,) = heard_history([restored])
+    saved = seen["diagnoses"][0]
+    assert saved["evidence"] == list(diagnosis.evidence)
+    assert saved["placement"] == diagnosis.placement and saved["uncertain"] == diagnosis.uncertain
+    assert "PRIVATE_REFERENCE" not in str(seen)
+    assert "diagnoses" not in project(restored, "analyst")
+    legacy = restored.model_dump(mode="json")
+    for saved in legacy["diagnoses"]:
+        for name in ("evidence", "placement", "uncertain"):
+            saved.pop(name)
+    assert Entry.model_validate(legacy).diagnoses[0].uncertain == ""

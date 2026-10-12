@@ -20,7 +20,7 @@ from dataclasses import dataclass
 from pathlib import Path
 from typing import Any, Literal
 
-from raven.contracts.llm_provider import LLMProvider
+from raven.contracts.llm_provider import ErrorClassification, LLMProvider
 
 from ..audience import ROLES, Role, project
 from ..curator.raven_adapter.observe import plain
@@ -56,7 +56,7 @@ def texts_of(value) -> list[str]:
                 return texts_of(decoded)
         return [value]
     if isinstance(value, dict):
-        return [text for item in value.values() for text in texts_of(item)]
+        return [text for pair in value.items() for item in pair for text in texts_of(item)]
     if isinstance(value, (list, tuple)):
         return [text for item in value for text in texts_of(item)]
     return []
@@ -87,14 +87,9 @@ class Guard:
         return found
 
     def check_request(self, messages, tools, kwargs, where: str, *, spared=()) -> list[str]:
-        """A provider request. `spared` are streams of words said by someone entitled to say them (see
-        `Sealed.without`). For the partner, the user messages are the conversant's own words: what it says of its
-        situation is not sealed against the partner, so those texts are subtracted before the scan (the identifiers
-        stay). A leak in the system prompt, a tool result or the partner's own words is still caught."""
+        """Only authenticated disclosure streams spare text. A generated user-role message or tool transcript
+        cannot grant access, and an omitted old message does not revoke what its conversation already heard."""
         sealed = self.sealed.without(spared) if spared else self.sealed
-        if self.role == "partner":
-            spoken = texts_of([row for row in messages if isinstance(row, dict) and row.get("role") == "user"])
-            sealed = sealed.without([spoken])
         return self.check({"messages": messages, "tools": tools, **kwargs}, where, sealed=sealed)
 
     def record(self, event: str, where: str, hits: list[str] = ()) -> None:
@@ -149,8 +144,10 @@ class GuardedProvider(LLMProvider):
         async for delta in self.provider.chat_stream(messages, tools, model, *args, **kwargs):
             yield delta
 
-    def classify_error(self, *args, **kwargs):
-        return self.provider.classify_error(*args, **kwargs)
+    def classify_error(self, exc=None, *args, **kwargs):
+        if isinstance(exc, BoundaryError):
+            return ErrorClassification("compartment_violation")
+        return self.provider.classify_error(exc, *args, **kwargs)
 
     def get_default_model(self) -> str:
         return self.provider.get_default_model()

@@ -31,6 +31,7 @@ from ..requirements import ExternalRequirement
 from .compartment import Boundaries, Compartment
 from .hearing import heard, heard_activity, heard_history, heard_observations, heard_prior
 from .history import Entry, entry
+from .labels import SessionLabels
 from .ledger import mark
 from .protocols import Exchange, Handover, Item, Sessions, Signal
 from .records import RETRYABLE, Cultivation, retryable_step
@@ -97,17 +98,27 @@ async def trial_sessions(worker, trials) -> Sessions:
     return sessions
 
 
+def _assessment_batches(assessors):
+    """Finish unchanged-worker reviews before other assessors may release next-round materials."""
+    assessors = tuple(assessors)
+    before = tuple(assessor for assessor in assessors if getattr(assessor, "before_handover", False) is True)
+    after = tuple(assessor for assessor in assessors if getattr(assessor, "before_handover", False) is not True)
+    return tuple(batch for batch in (before, after) if batch)
+
+
 async def assess(assessors, sessions, history=(), external_requirements=(), verifications=None) -> tuple[Signal, ...]:
-    """Every assessor's signal on the sessions, in the assessors' order; they judge at once, and the first to fail
-    stops the others and is raised. An assessor that keeps a standard of its own is first handed the history as the
-    Analyst reads it (`sediment`, see `experimental.assessor.standard`), so the requirements raised so far become its
-    regression checks."""
+    """Assessors judge concurrently within each handover phase; unchanged-worker reviews finish first. The first
+    to fail stops its phase and is raised. An assessor that keeps a standard of its own first receives the history
+    as the Analyst reads it (`sediment`, see `experimental.assessor.standard`), so requirements raised so far become
+    its regression checks."""
+    tasks = []
     try:
-        async with asyncio.TaskGroup() as group:
-            tasks = [
-                group.create_task(_assessed(assessor, sessions, history, external_requirements, verifications))
-                for assessor in assessors
-            ]
+        for batch in _assessment_batches(assessors):
+            async with asyncio.TaskGroup() as group:
+                tasks.extend(
+                    group.create_task(_assessed(assessor, sessions, history, external_requirements, verifications))
+                    for assessor in batch
+                )
     except ExceptionGroup as failed:
         raise failed.exceptions[0] from failed
     return tuple(signal for task in tasks if (signal := task.result()) is not None)
@@ -293,6 +304,8 @@ class Session:
                     "initial_curation",
                     "initial_attribution",
                     "questions",
+                    "gap_resolutions",
+                    "gap_retry",
                     "error",
                     "error_step",
                     "error_revision",
@@ -375,6 +388,10 @@ class Session:
     def _require(self, condition: bool, message: str, *, resuming: bool = False) -> None:
         if self.record["status"] in ("finished", "error"):
             raise StepError(f"the session is {self.record['status']}")
+        if self.record["status"] == "blocked":
+            raise StepError("the curation is blocked; resolve its reported gap before continuing")
+        if "gap_retry" in self.record and not resuming:
+            raise StepError("retry the resolved curation gap before continuing")
         if self.record["status"] == "paused" and not resuming:
             raise StepError("the paused curation resumes first: call the step that paused again")
         if not condition:
@@ -403,10 +420,15 @@ class Session:
         return [stream for cultivation in self.prior for stream in cultivation.spoken]
 
     def _heard(self, feedback: dict | None) -> dict | None:
-        """The feedback of a curation with the prior the counterpart brought, when it brought one."""
-        if not self.prior:
-            return feedback
-        return {**(feedback or {}), "prior": heard_prior(self.prior)}
+        """The curation's feedback, prior cultivations and gaps reported by earlier curations."""
+        additions = {}
+        if self.prior:
+            additions["prior"] = heard_prior(self.prior)
+        if self.record.get("questions"):
+            additions["previous_gaps"] = deepcopy(self.record["questions"])
+        if self.record.get("gap_resolutions"):
+            additions["gap_resolutions"] = deepcopy(self.record["gap_resolutions"])
+        return {**(feedback or {}), **additions} if additions else feedback
 
     async def _curate(self, feedback, observations=None, spoken=(), attribution=None) -> str:
         """One call of the curator inside its compartment; the feedback, the observations and every request it
@@ -414,11 +436,11 @@ class Session:
         not seal, and neither does it seal what the prior's conversants said; `attribution` is one made elsewhere
         that the curator takes instead of attributing itself.
 
-        Returns `done`, `paused` (the call may be repeated to resume) or `asked`: the Curator reported a gap it
-        cannot close with what it was given, nothing was revised, and its question waits in the record's
-        `questions` for whoever can answer it, a person on the page or the counterpart's next handover."""
+        Returns `done`, `paused` (the call may be repeated to resume) or `blocked`: the Curator reported a gap it
+        cannot close with what it was given. Nothing was revised; resolve the recorded question before retrying."""
         self.record["status"] = "running"
         self.record.pop("stop", None)
+        self.record.pop("gap_retry", None)
         feedback = self._heard(feedback)
         if self.record.get("information", {}).get("status") == "ready":
             feedback = {**(feedback or {}), "information": self.record["information"]["handoff"]}
@@ -433,9 +455,21 @@ class Session:
         ]
         try:
             async with self._compartment("curator", spoken=spoken) as scope:
+                provider = scope.provider(self.provider)
+                names = set(self.sessions)
+                for round in self.rounds:
+                    names.update(round.sessions)
+                for item in (*self.history, *(entry for prior in self.prior for entry in prior.history)):
+                    names.update(row["session"] for row in item.mechanisms_acted if row.get("session"))
+                labels = SessionLabels.protected(provider, names)
+                feedback = labels.encode(plain(feedback))
+                observations = labels.encode(plain(observations))
+                if attribution is not None:
+                    projected = scope.admit(labels.encode(plain(attribution)), "attribution")
+                    attribution = type(attribution).model_validate(projected)
                 await self.curator(
                     self.worker,
-                    scope.provider(self.provider),
+                    provider,
                     feedback=None if feedback is None else scope.admit(feedback, "feedback"),
                     model=self.curator_model,
                     limits=self.limits.curator,
@@ -452,7 +486,8 @@ class Session:
             self.record.setdefault("questions", []).append(
                 {"round": len(self.rounds), "stage": exc.stage, "question": exc.reason}
             )
-            return "asked"
+            self.record["status"], self.record["stop"] = "blocked", str(exc)
+            return "blocked"
         except Exception as exc:
             self.record["status"], self.record["error"] = "error", str(exc)
             raise
@@ -473,13 +508,17 @@ class Session:
         return "done"
 
     async def onboard(self, opening=()) -> bool:
-        """Prepare inputs when configured, then curate once; False when preparation is unready or curation pauses."""
+        """Prepare inputs, then curate once; False when preparation is unready or curation pauses or is blocked."""
         self._require(
-            not self.rounds and (not self.onboarded or self.status == "paused"), "onboarding comes first", resuming=True
+            not self.rounds and (not self.onboarded or self.status == "paused" or self.record.get("gap_retry") == 0),
+            "onboarding comes first",
+            resuming=True,
         )
         if not self.onboarded:
             self.record["opening"] = plain(tuple(opening))
             self.save()
+        else:
+            opening = tuple(_signal(signal) for signal in self.record.get("opening", ()))
         if self.prepare is not None and self.record.get("information", {}).get("status") != "ready":
             async with self._compartment("curator", spoken=self._prior_spoken()) as scope:
                 result = await self.prepare(
@@ -523,7 +562,7 @@ class Session:
                 )
             )
             self.save()
-        return status != "paused"
+        return status == "done"
 
     async def trial(self, *trials) -> Sessions:
         """Play trials on the worker as it stands; their sessions join the round in progress."""
@@ -653,9 +692,9 @@ class Session:
         self.save()
 
     async def assess(self, *assessors) -> tuple[Signal, ...]:
-        """The assessors judge at once, and each one's signal joins the round and the record as soon as it is given,
-        so one that fails ends the run with the words given by then kept in the round; those still judging stop. Once
-        all have spoken, the round holds their signals in the assessors' order."""
+        """Each assessor's signal joins the round and the record as soon as it is given, so one that fails after
+        others have spoken ends the run with their words kept in the round. Reviews requiring the unchanged
+        worker run before an assessor can hand over next-round materials."""
         self._require(self.review is None, "assessment comes before the analysis")
         witnesses = [] if self.experience is not None else None
         for assessor in assessors:
@@ -670,9 +709,11 @@ class Session:
             self.save()
             return signals
 
+        tasks = []
         try:
-            async with asyncio.TaskGroup() as group:
-                tasks = [group.create_task(judged(assessor)) for assessor in assessors]
+            for batch in _assessment_batches(assessors):
+                async with asyncio.TaskGroup() as group:
+                    tasks.extend(group.create_task(judged(assessor)) for assessor in batch)
         except ExceptionGroup as failed:
             self._abort(failed.exceptions[0], self.signals, step="assess")
             raise failed.exceptions[0] from failed
@@ -825,13 +866,13 @@ class Session:
         return self.outcome
 
     async def curate(self, attribution=None) -> bool:
-        """Revise the Harness from the analysed round; False when the Curator paused and may be called again. A
-        reported gap ends the round unrevised with its question kept (see `_curate`).
+        """Revise the Harness from the analysed round; False when the Curator pauses or reports a gap. A
+        reported gap blocks the round unrevised with its question kept (see `_curate`).
 
         The Curator attributes the round's requirements before it changes anything; `attribution` supplies an
         attribution made elsewhere instead, such as diagnoses a person reviewed."""
         self._require(
-            self.review is not None and self.rounds[-1].curated,
+            self.review is not None and self.outcome is not None and self.outcome.next == "curate",
             "curation follows an analysis that asked for it",
             resuming=True,
         )
@@ -861,8 +902,11 @@ class Session:
             self.save()
         if status == "paused":
             return False
-        if status == "asked":
+        if status == "blocked":
             self.rounds[-1] = replace(self.rounds[-1], curated=False)
+            self.save()
+            return False
+        self.rounds[-1] = replace(self.rounds[-1], curated=True)
         curated = status == "done" and bool(self.rounds[-1].curation)
         if curated:
             self.record["promotion"] = {
@@ -878,6 +922,20 @@ class Session:
         )
         self.save()
         return True
+
+    def resolve_gap(self, answer: str) -> None:
+        """Supply new information for a blocked curation; the same round is retried with this answer on record."""
+        if self.status != "blocked":
+            raise StepError("there is no blocked curation to resolve")
+        if not answer.strip():
+            raise ValueError("a gap resolution must supply new information")
+        self.record.setdefault("gap_resolutions", []).append(
+            {"question": deepcopy(self.record["questions"][-1]), "answer": answer}
+        )
+        self.record["status"] = "running"
+        self.record["gap_retry"] = self.record["questions"][-1]["round"]
+        self.record.pop("stop", None)
+        self.save()
 
     def extend(self, curator: CuratorLimits) -> None:
         """Give the Curator a larger budget from here on, such as to resume a curation that paused on its budget.
