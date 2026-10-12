@@ -24,6 +24,11 @@ class Conversation:
             raise ValueError("a conversation needs a positive turn budget")
         self.conversant, self.max_turns = conversant, max_turns
 
+    @property
+    def handed(self) -> tuple:
+        """The files the conversant hands over as the conversation opens; the one playing it puts them in place."""
+        return tuple(getattr(self.conversant, "handed", ()) or ())
+
     async def run(self, worker) -> Sessions:
         """Each run is a fresh worker session, so rounds do not continue one another's history; its key carries the
         conversant's opaque label, not its name, since the worker's records reach the Curator. A turn that ran

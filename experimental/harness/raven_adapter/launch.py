@@ -6,6 +6,7 @@ confinement's user, in the confinement's environment, and keeps its own module p
 """
 
 import multiprocessing
+import os
 import subprocess
 import sys
 from multiprocessing.connection import Connection
@@ -17,9 +18,12 @@ ENTRY = "experimental.harness.raven_adapter.launch"
 class Process:
     """The part of `multiprocessing.Process` a worker uses, over a subprocess that reads its arguments from a pipe."""
 
-    def __init__(self, arguments: tuple, *, confinement=None, area: Path | None = None):
+    def __init__(
+        self, arguments: tuple, *, confinement=None, area: Path | None = None, stderr_path: Path | None = None
+    ):
         self.arguments, self.confinement, self.area = arguments, confinement, area
         self._popen = None
+        self.stderr_path = stderr_path
 
     def start(self) -> Connection:
         parent, child = multiprocessing.Pipe()
@@ -29,6 +33,11 @@ class Process:
         else:
             command = [str(self.confinement.python), "-m", ENTRY, str(descriptor)]
             options, path = self.confinement.options(self.area), None
+        stderr = None
+        if self.stderr_path is not None:
+            self.stderr_path.parent.mkdir(parents=True, exist_ok=True)
+            stderr = os.fdopen(os.open(self.stderr_path, os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "wb")
+            options["stderr"] = stderr
         try:
             self._popen = subprocess.Popen(command, pass_fds=[descriptor], stdin=subprocess.DEVNULL, **options)
         except BaseException:
@@ -36,6 +45,8 @@ class Process:
             raise
         finally:
             child.close()
+            if stderr is not None:
+                stderr.close()
         try:
             parent.send(path)
             parent.send(self.arguments)

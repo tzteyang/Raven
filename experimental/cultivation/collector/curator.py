@@ -134,6 +134,106 @@ def _environment(worker, inspection, home):
     return hashlib.sha256(text.encode()).hexdigest()
 
 
+def research_channel(
+    worker,
+    provider,
+    *,
+    records: Path,
+    researcher="exchange",
+    model=None,
+    review_model=None,
+    research_model=None,
+    research_effort=None,
+    research_budget=None,
+    limits=CollectionLimits(),
+    admit=None,
+):
+    """The research callable of one collection: it takes a `ResearchAssignment` and returns its reviewed attempt,
+    researched by `researcher` (`exchange`, `claude` or `codex`) on the web the worker's configuration names, with each
+    attempt recorded under `records`. A collection and a round's public questions both research through it."""
+    web = None
+
+    async def review_packet(packet, destination, prompt, name, agent=None, output=Review):
+        def complete(review):
+            delivered = {finding["id"] for finding in packet.get("delivery", {}).get("findings", [])}
+            if isinstance(review, ResearchReview) and {verdict.id for verdict in review.findings} != delivered:
+                raise ValueError(f"give one verdict for each delivered finding, by id: {sorted(delivered)}")
+            return review
+
+        if researcher == "claude":
+            actor = agent or Agent(
+                "claude", model=research_model, effort=research_effort, budget=research_budget, timeout=limits.timeout
+            )
+            review, _ = await actor.stage(
+                prompt + "\n\n" + json.dumps(packet, ensure_ascii=False), output, records=destination
+            )
+            try:
+                return complete(review)
+            except ValueError as exc:
+                raise ResearchError(str(exc)) from exc
+        destination.mkdir(parents=True, exist_ok=False)
+        calls, trace = _Calls(provider), []
+
+        def accept(arguments):
+            calls.check(arguments)
+            return complete(output.model_validate(arguments))
+
+        try:
+            _, review = await exchange(
+                calls,
+                messages(prompt, packet),
+                [tool(name, "Review the supplied content and its actual inputs.", schema_for(output))],
+                submit={name: accept},
+                model=review_model or model,
+                effort="high",
+                max_calls=limits.review_calls,
+                timeout=limits.timeout,
+                trace=trace,
+                label=name,
+            )
+            return review
+        finally:
+            (destination / "trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=2))
+
+    async def research(task):
+        nonlocal web
+        timeout = min(limits.research_window, task.remaining_seconds)
+        acquisition = limits.acquisition_window(timeout)
+        if web is None:
+            web = Web.of(
+                worker.baseline.config, searching=researcher == "exchange", page_chars=60_000, log=records / "web.jsonl"
+            )
+        agent = (
+            Exchange(provider, model=research_model or model, effort=research_effort or "high", timeout=limits.timeout)
+            if researcher == "exchange"
+            else Agent(
+                researcher,
+                model=research_model,
+                effort=research_effort,
+                budget=research_budget,
+                timeout=acquisition,
+            )
+        )
+
+        async def review_delivery(packet, destination):
+            return await review_packet(
+                packet, destination, prompt("review_research.md"), "review_research", agent, ResearchReview
+            )
+
+        return await review_research(
+            agent,
+            task.brief,
+            web,
+            review_delivery,
+            records=records / task.attempt,
+            previous=records / task.previous_attempt if task.previous_attempt else None,
+            timeout=timeout,
+            admit=admit,
+        )
+
+    return research
+
+
 async def collect_for_curator(
     worker,
     provider,
@@ -246,7 +346,6 @@ async def collect_for_curator(
         return replay
     collected_inspection = replace(inspection, sources=sources, facts=facts)
     records.parent.mkdir(parents=True, exist_ok=True)
-    web = None
 
     async def guidance():
         guide_inspection = Inspection(
@@ -267,84 +366,6 @@ async def collect_for_curator(
                 effort=effort,
             )
             return result
-
-    async def review_packet(packet, destination, prompt, name, agent=None, output=Review):
-        def complete(review):
-            delivered = {finding["id"] for finding in packet.get("delivery", {}).get("findings", [])}
-            if isinstance(review, ResearchReview) and {verdict.id for verdict in review.findings} != delivered:
-                raise ValueError(f"give one verdict for each delivered finding, by id: {sorted(delivered)}")
-            return review
-
-        if researcher == "claude":
-            actor = agent or Agent(
-                "claude", model=research_model, effort=research_effort, budget=research_budget, timeout=limits.timeout
-            )
-            review, _ = await actor.stage(
-                prompt + "\n\n" + json.dumps(packet, ensure_ascii=False), output, records=destination
-            )
-            try:
-                return complete(review)
-            except ValueError as exc:
-                raise ResearchError(str(exc)) from exc
-        destination.mkdir(parents=True, exist_ok=False)
-        calls, trace = _Calls(provider), []
-
-        def accept(arguments):
-            calls.check(arguments)
-            return complete(output.model_validate(arguments))
-
-        try:
-            _, review = await exchange(
-                calls,
-                messages(prompt, packet),
-                [tool(name, "Review the supplied content and its actual inputs.", schema_for(output))],
-                submit={name: accept},
-                model=review_model or model,
-                effort="high",
-                max_calls=limits.review_calls,
-                timeout=limits.timeout,
-                trace=trace,
-                label=name,
-            )
-            return review
-        finally:
-            (destination / "trace.json").write_text(json.dumps(trace, ensure_ascii=False, indent=2))
-
-    async def research(task):
-        nonlocal web
-        timeout = min(limits.research_window, task.remaining_seconds)
-        acquisition = limits.acquisition_window(timeout)
-        if web is None:
-            web = Web.of(
-                worker.baseline.config, searching=researcher == "exchange", page_chars=60_000, log=records / "web.jsonl"
-            )
-        agent = (
-            Exchange(provider, model=research_model or model, effort=research_effort or "high", timeout=limits.timeout)
-            if researcher == "exchange"
-            else Agent(
-                researcher,
-                model=research_model,
-                effort=research_effort,
-                budget=research_budget,
-                timeout=acquisition,
-            )
-        )
-
-        async def review_delivery(packet, destination):
-            return await review_packet(
-                packet, destination, prompt("review_research.md"), "review_research", agent, ResearchReview
-            )
-
-        return await review_research(
-            agent,
-            task.brief,
-            web,
-            review_delivery,
-            records=records / task.attempt,
-            previous=records / task.previous_attempt if task.previous_attempt else None,
-            timeout=timeout,
-            admit=admit,
-        )
 
     async with Exploration(
         worker.baseline.config, collected_inspection, repository=SOURCE_ROOT, withheld=withheld
@@ -378,7 +399,21 @@ async def collect_for_curator(
                 provider,
                 effective,
                 registry=exploration.registry,
-                research=research if researcher is not None else None,
+                research=research_channel(
+                    worker,
+                    provider,
+                    records=records,
+                    researcher=researcher,
+                    model=model,
+                    review_model=review_model,
+                    research_model=research_model,
+                    research_effort=research_effort,
+                    research_budget=research_budget,
+                    limits=limits,
+                    admit=admit,
+                )
+                if researcher is not None
+                else None,
                 guidance=guidance if research_references else None,
                 ask=ask,
                 wait_for_input=wait_for_input,

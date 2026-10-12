@@ -12,6 +12,13 @@ words of English. Counting characters alike for both scripts would make an Engli
 any phrase a role says in its own words, such as "the pricing template", would read as a leak. Scripts written
 without spaces other than CJK (Thai) read as long words, and combining marks split words of scripts such as
 Devanagari; no scenario uses them yet, and their windows would be coarser.
+
+A check's text is windowed by its content (`check_windows`): function words, numerals and single letters weigh
+nothing, so a window of a check holds ten content words of English however many such words lie between them, and
+starts on one. A check cites the materials it judges by, as in "By contract-routing 4.3 to 4.5 and 5.3", and anyone
+who writes in English cites the same sections in the same words; such a run carries no judgement, and a run of plain
+words would read it as ten words of the check and stop the role that wrote it. What a check judges is said in content
+words, so a copied run of the check's own judgement still holds a window.
 """
 
 import hashlib
@@ -19,8 +26,9 @@ import re
 import unicodedata
 from collections.abc import Iterable
 from dataclasses import dataclass, replace
+from pathlib import Path
 
-from experimental.harness.scenario.contract import ROLES, Role, Scenario, contents
+from experimental.harness.scenario.contract import ROLES, TEXT_SUFFIXES, Role, Scenario, contents
 
 WINDOW = 20
 # A copied passage: this many consecutive sealed windows, about thirty characters of Chinese or twenty words of
@@ -33,6 +41,19 @@ _CJK = "\u3040-\u30ff\u3400-\u4dbf\u4e00-\u9fff\uf900-\ufaff\uac00-\ud7af\U00020
 _UNITS = re.compile(rf"[{_CJK}]|[^\W_{_CJK}]+")
 _CHARACTER = re.compile(rf"[{_CJK}]")
 _SEPARATOR = "\x1f"
+# The words a citation and the grammar around a judgement are made of; with numerals and single letters they weigh
+# nothing in a check's window (see `check_windows`). Negations, modals of obligation and the words that order or
+# condition a rule (not, must, should, only, before, unless, without) are content.
+_FUNCTION = frozenset(
+    """
+    a an the and or but if so as than then yet also at by for from in into of off on onto out over per to under up
+    upon via with within about against along among around behind below beside between beyond during inside like near
+    outside past since through throughout toward towards it its this that these those which who whom whose what where
+    there here their theirs they them he she his her him we our us you your me my is are was were be been being am
+    has have had do does did will would can could each every any all some such both either see section sections
+    clause clauses article articles paragraph paragraphs chapter chapters appendix
+    """.split()
+)
 # A token is sealable only when it reads as an identifier rather than a word: a plain word such as a case named
 # "family" would match ordinary speech, and the opaque session keys handle those names instead.
 _IDENTIFIER = re.compile(r"^[\w-]*[-_:.\d][\w-]*$")
@@ -60,6 +81,17 @@ def weight(text: str) -> int:
     return sum(_weight(unit) for unit in units(text))
 
 
+def _content(unit: str) -> int:
+    if _CHARACTER.fullmatch(unit):
+        return 1
+    return 0 if len(unit) < 2 or unit in _FUNCTION or any(char.isdigit() for char in unit) else 2
+
+
+def content(text: str) -> int:
+    """The text's weight in a check's window: what its CJK characters and content words weigh (see `check_windows`)."""
+    return sum(_content(unit) for unit in units(text))
+
+
 def normalize(text: str) -> str:
     """The units joined by a separator that also closes both ends, so a phrase matches whole units only."""
     found = units(text)
@@ -70,9 +102,10 @@ def _digest(piece: str) -> int:
     return int.from_bytes(hashlib.blake2b(piece.encode(), digest_size=8).digest(), "big")
 
 
-def _spans(found: list[str], size: int) -> list[tuple[int, int, int]]:
-    """(start, end, hash) of every shortest run of `found` weighing at least `size`, in order."""
-    weights = [_weight(unit) for unit in found]
+def _spans(found: list[str], size: int, weigh=_weight) -> list[tuple[int, int, int]]:
+    """(start, end, hash) of every shortest run of `found` that starts on a unit of some weight and weighs at least
+    `size`, in order."""
+    weights = [weigh(unit) for unit in found]
     spans: list[tuple[int, int, int]] = []
     end = total = 0
     for start in range(len(found)):
@@ -81,7 +114,8 @@ def _spans(found: list[str], size: int) -> list[tuple[int, int, int]]:
             end += 1
         if total < size:
             break
-        spans.append((start, end, _digest(_SEPARATOR.join(found[start:end]))))
+        if weights[start]:
+            spans.append((start, end, _digest(_SEPARATOR.join(found[start:end]))))
         total -= weights[start]
     return spans
 
@@ -96,6 +130,12 @@ def windows(text: str, size: int = WINDOW) -> frozenset[int]:
     return frozenset(window_sequence(text, size))
 
 
+def check_windows(text: str, size: int = WINDOW) -> frozenset[int]:
+    """Hashes of every shortest run of units that starts on a content unit and whose content weighs at least `size`
+    (`content`): the windows a check's text is sealed in, and those a text is scanned in for a check."""
+    return frozenset(digest for _, _, digest in _spans(units(text), size, _content))
+
+
 def sealable(token: str) -> bool:
     return bool(_IDENTIFIER.match(token)) and len(token) >= 4
 
@@ -105,7 +145,9 @@ class Sealed:
     """`tokens` are identifiers matched whole; `windows` are hashed windows of long texts; `phrases` are texts
     lighter than a window, normalised, matched as whole runs of units; `passages` are windows of texts sealed only
     against copying (`copying`): a text holds one when it shares `span` of them in a row, so a clause it restates in
-    the same order from something the role holds is not taken for the long text it happens to match."""
+    the same order from something the role holds is not taken for the long text it happens to match; `checks` are the
+    windows of check texts, weighed by their content (`check_windows`). `sources` and `check_sources` are the units
+    of the texts sealed in `windows` and in `checks` (see `without`)."""
 
     tokens: frozenset[str] = frozenset()
     windows: frozenset[int] = frozenset()
@@ -114,35 +156,55 @@ class Sealed:
     passages: frozenset[int] = frozenset()
     span: int = PASSAGE_SPAN
     sources: tuple[tuple[str, ...], ...] = ()
+    checks: frozenset[int] = frozenset()
+    check_sources: tuple[tuple[str, ...], ...] = ()
 
     @classmethod
     def of(
-        cls, hidden: Iterable[str], *, visible: Iterable[str] = (), tokens: Iterable[str] = (), size: int = WINDOW
+        cls,
+        hidden: Iterable[str],
+        *,
+        visible: Iterable[str] = (),
+        tokens: Iterable[str] = (),
+        size: int = WINDOW,
+        checks: Iterable[str] = (),
     ) -> "Sealed":
+        """`hidden` texts are sealed in windows of plain units, `checks` in windows of content (`check_windows`); a
+        text lighter than its window is sealed whole as a phrase, a check only when it has some content."""
+        checks = tuple(checks)
         shown_windows: set[int] = set()
         shown_texts: list[str] = []
         for text in visible:
-            shown_windows |= windows(text, size)
+            shown_windows |= windows(text, size) | (check_windows(text, size) if checks else frozenset())
             shown_texts.append(normalize(text))
         sealed: set[int] = set()
+        judged: set[int] = set()
         phrases: set[str] = set()
         sources: list[tuple[str, ...]] = []
-        for text in hidden:
+        check_sources: list[tuple[str, ...]] = []
+
+        def seal(text: str, measure, window, into: set[int], kept: list[tuple[str, ...]]) -> None:
             normal = normalize(text)
             if not normal:
-                continue
-            if weight(text) < size:
-                if not any(normal in seen for seen in shown_texts):
-                    phrases.add(normal)
-            else:
-                sealed |= windows(text, size)
-                sources.append(tuple(units(text)))
+                return
+            if measure(text) >= size:
+                into.update(window(text, size))
+                kept.append(tuple(units(text)))
+            elif measure(text) and not any(normal in seen for seen in shown_texts):
+                phrases.add(normal)
+
+        for text in hidden:
+            seal(text, weight, windows, sealed, sources)
+        for text in checks:
+            seal(text, content, check_windows, judged, check_sources)
         return cls(
             frozenset(fold(token) for token in tokens if sealable(token)),
             frozenset(sealed - shown_windows),
             frozenset(phrases),
             size,
             sources=tuple(sources),
+            checks=frozenset(judged - shown_windows),
+            check_sources=tuple(check_sources),
         )
 
     def copying(self, texts: Iterable[str], *, visible: Iterable[str] = ()) -> "Sealed":
@@ -180,6 +242,7 @@ class Sealed:
         normal = normalize(text)
         if (
             (self.windows and self.windows & windows(text, self.size))
+            or (self.checks and self.checks & check_windows(text, self.size))
             or any(phrase in normal for phrase in self.phrases)
             or self._copies(text)
         ):
@@ -201,6 +264,7 @@ class Sealed:
             said = [stream] if isinstance(stream, str) else list(stream)
             for text in (*said, "\n".join(said)):
                 shown |= windows(text, self.size)
+                shown |= check_windows(text, self.size) if self.checks else frozenset()
                 shown |= self._beside(units(text))
                 normals.append(normalize(text))
         return replace(
@@ -208,65 +272,95 @@ class Sealed:
             windows=frozenset(self.windows - shown),
             phrases=frozenset(phrase for phrase in self.phrases if not any(phrase in normal for normal in normals)),
             passages=frozenset(self.passages - shown),
+            checks=frozenset(self.checks - shown),
         )
 
     def _beside(self, said: list[str]) -> set[int]:
         """The hidden windows that overlap an occurrence of `said` in a hidden text with at most `BESIDE` of their
-        weight outside it."""
+        weight outside it, a check's weighed by its content."""
         found: set[int] = set()
         if not said:
             return found
         length, said, first = len(said), tuple(said), said[0]
-        for source in self.sources:
-            spans = None
-            for at in range(len(source) - length + 1):
-                if source[at] != first or source[at : at + length] != said:
-                    continue
-                spans = spans if spans is not None else _spans(list(source), self.size)
-                for start, end, digest in spans:
-                    if end <= at or start >= at + length:
+        for sources, weigh in ((self.sources, _weight), (self.check_sources, _content)):
+            for source in sources:
+                spans = None
+                for at in range(len(source) - length + 1):
+                    if source[at] != first or source[at : at + length] != said:
                         continue
-                    outside = sum(_weight(unit) for unit in source[start:at]) + sum(
-                        _weight(unit) for unit in source[at + length : end]
-                    )
-                    if outside <= BESIDE:
-                        found.add(digest)
+                    spans = spans if spans is not None else _spans(list(source), self.size, weigh)
+                    for start, end, digest in spans:
+                        if end <= at or start >= at + length:
+                            continue
+                        outside = sum(weigh(unit) for unit in source[start:at]) + sum(
+                            weigh(unit) for unit in source[at + length : end]
+                        )
+                        if outside <= BESIDE:
+                            found.add(digest)
         return found
 
     def __bool__(self) -> bool:
-        return bool(self.tokens or self.windows or self.phrases or self.passages)
+        return bool(self.tokens or self.windows or self.phrases or self.passages or self.checks)
+
+
+# Who receives the files a held-out case hands over: the partner sitting the exam, the person handing them over, and
+# the counterpart who holds the case.
+_HANDED_TO = frozenset({"partner", "conversant", "counterpart"})
+_RESTATING = frozenset({"partner", "conversant"})
 
 
 def sealed_for(scenario: Scenario, role: Role) -> Sealed:
-    """What `role` must not receive of this scenario, minus what it may: checks, hidden cases and their expected
-    answers, the evaluation aids and the scenario's own name. The onboarding and handover wording is never sealed:
+    """What `role` must not receive of this scenario, minus what it may: checks, hidden cases and the files of
+    held-out ones, the evaluation aids and the scenario's own name (a check's id is a word the role may well coin
+    itself, so only its text is sealed, in windows of its content: `check_windows`). The onboarding and handover wording is never sealed:
     it is what the counterpart says, heard by whoever it is said to and free to be relayed; the schedule it belongs to has
-    no text of its own. A prior record is not fingerprinted here: what of it a role receives is scanned with these
-    fingerprints when a session opens with it (`experimental.harness.loop.session`)."""
+    no text of its own. Hidden cards and the aids are sealed against copying only (`Sealed.copying`): the cards of one
+    scenario open on the same sentences, which whoever plays them says in slight variants, so a partner restating what
+    it was told, or the aids' word lists restating the handed-over norms in an order of their own, is no leak, while a
+    copied run of a card or an aid still is (a card lighter than a passage is sealed whole). A prior record is not fingerprinted here: what of it a role receives is scanned
+    with these fingerprints when a session opens with it (`experimental.harness.loop.session`)."""
     if role not in ROLES:
         raise ValueError(f"unknown role: {role}")
     hidden: list[str] = []
     visible: list[str] = []
     tokens: list[str] = [scenario.root.name]
+    checks: list[str] = []
     for check in scenario.statements.checks:
-        (visible if role in check.visibility else hidden).append(check.check)
-        if role not in check.visibility:
-            tokens.append(check.id)
+        (visible if role in check.visibility else checks).append(check.check)
+    held = set(scenario.situation.schedule.holdout)
+    copied: list[str] = []
     for case in scenario.situation.cases:
-        (visible if role in case.visibility else hidden).append(case.text)
+        (visible if role in case.visibility else copied).append(case.text)
+        # A file the person hands over reaches the partner and, through the trajectories of a case played for
+        # feedback, everyone who reads them; a held-out case's trajectories stay on the evaluation side, so its files
+        # are sealed from the others, against copying: their boilerplate (table heads, clause wording, stylesheet
+        # lines) recurs in what the partner is handed and writes, a copied run of a file does not.
+        handed = [
+            (scenario.root / item).read_text(errors="replace")
+            for item in case.files
+            if Path(item).suffix.lower() in TEXT_SUFFIXES
+        ]
+        (visible if case.id not in held or role in _HANDED_TO else copied).extend(handed)
         if role not in case.visibility:
             tokens.append(case.id)
-        if case.expected:
-            (visible if scenario.visible(f"case.expected:{case.id}", role) else hidden).append(case.expected)
+        # An expected answer is never sealed: work that gets the case right writes the answer itself, so its text
+        # marks no leak. Whoever may receive it (`case.expected` visibility) also holds its words as visible.
+        if case.expected and scenario.visible(f"case.expected:{case.id}", role):
+            visible.append(case.expected)
     for material in scenario.materials.values():
         (visible if role in material.visibility else hidden).extend(contents(material.path)[0].values())
     if scenario.visible("profile", role):
         visible.append(scenario.situation.profile)
-    (visible if scenario.visible("aids", role) else hidden).extend(
-        text for text in (scenario.aids.rulers, scenario.aids.labels) if text
-    )
+    # The aids restate the facts of the handed-over files in a table of their own; the partner and the conversant,
+    # who never receive the aids, write those same facts up from the files they were handed, so a run of an aid in
+    # their words marks no leak and is not sealed from them.
+    aids = [text for text in (scenario.aids.rulers, scenario.aids.labels) if text]
+    if scenario.visible("aids", role):
+        visible.extend(aids)
+    elif role not in _RESTATING:
+        copied.extend(aids)
     visible.extend(text for text in (scenario.exchange.onboarding, scenario.exchange.handover) if text)
-    return Sealed.of(hidden, visible=visible, tokens=tokens)
+    return Sealed.of(hidden, visible=visible, tokens=tokens, checks=checks).copying(copied, visible=visible)
 
 
 def carried(texts, sealed):

@@ -211,6 +211,20 @@ def test_a_document_handed_over_as_written_is_a_material_and_a_folder_without_on
         load(root)
 
 
+def test_a_lab_folder_belongs_to_the_machine_it_is_placed_on_and_is_never_a_material(tmp_path):
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    (root / "lab").mkdir()
+    (root / "lab" / "console.py").write_text("print('reading')\n")
+    (root / "lab" / "readings.md").write_text("| at | value |\n|---|---|\n| 0 | 12 |\n")
+    read = load(root)
+    assert not any(material.path.is_relative_to(root / "lab") for material in read.materials.values())
+    (root / "labs").mkdir()
+    (root / "labs" / "stray.md").write_text("stray")
+    with pytest.raises(ValueError, match="files outside every category"):
+        load(root)
+
+
 def test_a_relative_prior_is_read_from_the_scenario_directory_and_its_files_belong_to_it(tmp_path):
     root = copy(tmp_path)
     kept = root / "records" / "earlier" / "iteration" / "run.json"
@@ -272,3 +286,117 @@ def test_what_the_partner_may_not_receive_is_never_scheduled_to_be_handed_over(t
         load(root)
     held_back(root, "price-list")
     assert "price-list" not in load(root).handed
+
+
+def _with_card_file(tmp_path):
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    (root / "handouts").mkdir()
+    (root / "handouts" / "itinerary.md").write_text("Saturday: lake walk, Sunday: tea farm.\n")
+    card = root / "personas" / "family.md"
+    head, body = frontmatter(card.read_text())
+    card.write_text("---\n" + json.dumps({**head, "files": ["handouts/itinerary.md"]}) + "\n---\n" + body)
+    return root
+
+
+def test_a_card_hands_over_files_of_the_scenario_which_are_claimed_and_visible_to_everyone(tmp_path):
+    root = _with_card_file(tmp_path)
+    read = load(root)
+    (family,) = [case for case in read.situation.cases if case.id == "family"]
+    assert family.files == ("handouts/itinerary.md",)
+    assert not sealed_for(read, "partner").hits("Saturday: lake walk, Sunday: tea farm.")
+    card = root / "personas" / "family.md"
+    head, body = frontmatter(card.read_text())
+    card.write_text("---\n" + json.dumps({**head, "files": ["handouts/missing.md"]}) + "\n---\n" + body)
+    with pytest.raises(ValueError, match="hands over a file the scenario does not have"):
+        load(root)
+    card.write_text("---\n" + json.dumps({**head, "files": ["../outside.md"]}) + "\n---\n" + body)
+    with pytest.raises(ValueError, match="hands over a file the scenario does not have"):
+        load(root)
+    card.write_text("---\n" + json.dumps({k: v for k, v in head.items() if k != "files"}) + "\n---\n" + body)
+    with pytest.raises(ValueError, match="files outside every category"):
+        load(root)
+
+
+@pytest.mark.parametrize(
+    ("schedule", "message"),
+    [
+        ({"rounds": [["family"], ["nobody"]]}, "does not have"),
+        ({"rounds": [["family"], []]}, "at least one case"),
+        ({"rounds": [["family"]], "holdout": ["family"]}, "not also played"),
+        ({"rounds": [["family"]], "holdout_rounds": [1]}, "holds cases out"),
+        ({"rounds": [["family"]], "holdout": ["returning"], "holdout_rounds": [-1]}, "0 before onboarding"),
+    ],
+)
+def test_a_schedule_names_known_cases_plays_something_each_round_and_keeps_the_exam_apart(tmp_path, schedule, message):
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    spec = json.loads((root / "scenario.json").read_text())
+    (root / "scenario.json").write_text(json.dumps({**spec, "schedule": schedule}))
+    with pytest.raises(ValueError, match=message):
+        load(root)
+    (root / "scenario.json").write_text(
+        json.dumps(
+            {
+                **spec,
+                "schedule": {
+                    "rounds": [["family"], ["student", "premium"]],
+                    "holdout": ["returning"],
+                    "holdout_rounds": [0, 2],
+                },
+            }
+        )
+    )
+    read = load(root).situation.schedule
+    assert (read.round(1), read.round(2), read.round(5), read.holdout, read.holdout_rounds) == (
+        ("family",),
+        ("student", "premium"),
+        ("student", "premium"),
+        ("returning",),
+        (0, 2),
+    )
+
+
+def test_a_card_may_carry_its_expected_answer_which_only_the_evaluation_side_may_receive(tmp_path):
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    card = root / "personas" / "family.md"
+    head, body = frontmatter(card.read_text())
+    answer = "The quote totals 18,420 yuan for the party, insurance excluded, valid for 48 hours from the quote time."
+    card.write_text("---\n" + json.dumps({**head, "expected": answer}) + "\n---\n" + body)
+    read = load(root)
+    (family,) = [case for case in read.situation.cases if case.id == "family"]
+    assert family.expected == answer
+    assert read.visible("case.expected:family", "counterpart") and read.visible("case.expected:family", "analyst")
+    assert not read.visible("case.expected:family", "curator") and not read.visible("case.expected:family", "partner")
+    assert not any(sealed_for(read, role).hits(f"Done: {answer}") for role in ("partner", "curator", "analyst"))
+    (root / "contract.json").write_text(
+        json.dumps({**json.loads((root / "contract.json").read_text()), "cases": {"family": {"expected": answer}}})
+    )
+    with pytest.raises(ValueError, match="expected answer twice"):
+        load(root)
+
+
+def test_a_held_out_case_keeps_its_handed_over_files_from_whoever_improves_the_partner(tmp_path):
+    root = _with_card_file(tmp_path)
+    scenario = json.loads((root / "scenario.json").read_text())
+    played = [path.stem for path in (root / "personas").glob("*.md") if path.stem != "family"]
+    scenario["schedule"] = {"rounds": [played], "holdout": ["family"]}
+    (root / "scenario.json").write_text(json.dumps(scenario))
+    read = load(root)
+    text = "Saturday: lake walk, Sunday: tea farm."
+    assert not sealed_for(read, "partner").hits(text) and not sealed_for(read, "counterpart").hits(text)
+    assert sealed_for(read, "curator").hits(text) and sealed_for(read, "analyst").hits(text)
+
+
+def test_explicit_check_applicability_reaches_the_counterpart_view(tmp_path):
+    from experimental.cultivation.counterpart.scenario import Scenario as CounterpartScenario
+
+    root = copy(tmp_path)
+    path = root / "scenario.json"
+    spec = json.loads(path.read_text())
+    condition = "Only when a customer asks for a group booking."
+    spec["criteria"][0]["applies_when"] = condition
+    path.write_text(json.dumps(spec))
+    assert load(root).statements.checks[0].applies_when == condition
+    assert CounterpartScenario.of(load(root)).criteria[0].applies_when == condition

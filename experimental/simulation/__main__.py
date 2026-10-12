@@ -31,7 +31,9 @@ directories there with a scenario material's name are owned by the scenario and 
 
 import argparse
 import asyncio
+import importlib
 import json
+import os
 import random
 import sys
 import tempfile
@@ -40,7 +42,7 @@ from pathlib import Path
 
 from experimental.cultivation.collector.collection import CollectionLimits
 from experimental.cultivation.collector.information import Result as InformationResult
-from experimental.cultivation.collector.scenario import scenario_preparer
+from experimental.cultivation.collector.scenario import scenario_preparer, scenario_researcher
 from experimental.cultivation.counterpart.owner import SOURCE as OWNER
 from experimental.cultivation.employee import (
     REPLICAS,
@@ -80,17 +82,32 @@ from experimental.harness.scenario.sealed import sealed_for
 from experimental.simulation.bench import caching
 from experimental.simulation.bench.attribution import write as attribute_run
 from experimental.simulation.bench.drills import enlist, grouped
-from experimental.simulation.bench.information import CounterpartAnswers
+from experimental.simulation.bench.information import CounterpartAnswers, gap_answerers
+from experimental.simulation.bench.lab import lab_placement, replica_lab
 from experimental.simulation.bench.record import PLACEHOLDERS, keep_scenario, placed
-from experimental.simulation.bench.scenario import Scenario
-from experimental.simulation.cases.brand_strategist.owner import BrandOwner
+from experimental.simulation.bench.scenario import Scenario, handed_evidence
 from experimental.simulation.cases.travel_agency.owner import Agency
 from raven.config.loader import load_config
 from raven.config.mode_catalogue import build_mode_catalogue
 from raven.observability import execution
 
-# The owner each bundled scenario is judged by; the travel agency's is the default for a scenario directory given by path.
-OWNERS = {"brand_strategist": BrandOwner}
+
+def owner_of(scenario) -> type:
+    """The owner a case is judged by: `OWNER` in the bundled case of the scenario directory's name, so a copy of a case
+    (a frozen run's, a test's) keeps its owner; the travel agency's for a scenario no bundled case is named after. A
+    directory carrying an `owner.py` the bundled cases do not have is refused rather than judged by another owner."""
+    module = f"experimental.simulation.cases.{scenario.root.name}.owner"
+    try:
+        found = importlib.import_module(module)
+    except ModuleNotFoundError as exc:
+        if exc.name not in (module, module.rpartition(".")[0]):
+            raise
+        if (scenario.root / "owner.py").is_file():
+            raise ValueError(f"the owner of {scenario.root} is not a bundled case's ({module})") from exc
+        return Agency
+    if not hasattr(found, "OWNER"):
+        raise ValueError(f"{module} names no OWNER")
+    return found.OWNER
 
 
 def settings(args, roles: dict, partner_tier=None) -> dict:
@@ -111,6 +128,7 @@ def settings(args, roles: dict, partner_tier=None) -> dict:
         "turns": args.turns,
         "repeats": args.repeats,
         "cards": args.cards,
+        "holdout_rounds": sorted(args.holdout_rounds) if getattr(args, "holdout_rounds", None) else None,
         "concurrent_drills": args.concurrent_drills,
         "introspection": getattr(args, "introspection", True),
         "curator_budget": {
@@ -137,6 +155,7 @@ def settings(args, roles: dict, partner_tier=None) -> dict:
             "reviews": getattr(args, "information_reviews", None),
             "answers_from": getattr(args, "information_answer_material", None),
             "replayed": bool(getattr(args, "information", None)),
+            "gap_answers": getattr(args, "gap_answers", "both"),
         },
         "baseline": baseline(args.home),
         "starting_harness": starting_harness(Path(__file__).resolve().parents[2]),
@@ -169,6 +188,8 @@ async def _run(args, scenario, root, confinement):
         args.partition or args.disclose, rounds=args.rounds, completes=not getattr(args, "no_completion", False)
     )
     contract = scenario.contract
+    judge = owner_of(scenario)
+    exams = exam_rounds(contract.situation.schedule, args.holdout_rounds, args.rounds)
     # The contract's prior and the command line's, read before anything is hired so a bad record fails fast.
     args.prior_records = [*contract.prior.records, *(args.prior or ())]
     prior = [cultivation(path) for path in args.prior_records]
@@ -179,6 +200,15 @@ async def _run(args, scenario, root, confinement):
         model_roles.partner_of(load_config(args.config)),
     )
     counterpart, conversant, assessor_role = roles["counterpart"], roles["conversant"], roles["assessor"]
+    lab_root = None
+    lab_registry = None
+    if (scenario.root / "lab").is_dir():
+        if not os.environ.get("RAVEN_CONNECTIONS"):
+            raise ValueError("a scenario lab needs RAVEN_CONNECTIONS with a local-lab machine")
+        lab_registry = Path(os.environ["RAVEN_CONNECTIONS"])
+        lab_root = Path(tempfile.mkdtemp(prefix="raven-simulation-labs-"))
+        if confinement is not None:
+            confinement.hand_over(lab_root)
     employee = hire(
         contract,
         args.config,
@@ -195,10 +225,14 @@ async def _run(args, scenario, root, confinement):
         json.dumps(
             {
                 **settings(args, roles, tier),
+                "owner": f"{judge.__module__}.{judge.__qualname__}",
+                "exam_rounds": sorted(exams) if exams else None,
                 "disclosure": disclosure.record(),
                 "provenance": contract.provenance.record or None,
                 "scenario_dir": str(scenario.root),
                 "scenario_digest": digest(scenario.root),
+                "scenario_digest_format": "source-v2",
+                "lab_root": str(lab_root) if lab_root is not None else None,
                 "isolation": None
                 if confinement is None
                 else {"user": confinement.user, "image": str(confinement.image)},
@@ -210,7 +244,7 @@ async def _run(args, scenario, root, confinement):
     provider = model_roles.provider(employee.baseline.config, roles)
     conversants, placed = {}, {}
     analyst_limits = AnalystLimits(call_timeout=args.timeout, max_calls=8)
-    agency = OWNERS.get(scenario.root.name, Agency)(
+    agency = judge(
         scenario,
         provider,
         skills(employee),
@@ -220,6 +254,9 @@ async def _run(args, scenario, root, confinement):
         uploads=employee.baseline.config.workspace_path / "uploads",
         shared=employee.baseline.workdir / "uploads",
         cards=lambda: {name: conversant.card for name, conversant in conversants.items() if conversant.card},
+        handouts=lambda sessions: {
+            name: evidence["handouts"] for name, evidence in handed_evidence(sessions, conversants).items()
+        },
         records=root,
         workdirs=placed,
         model=counterpart.model,
@@ -228,33 +265,55 @@ async def _run(args, scenario, root, confinement):
         boundaries=boundaries,
     )
     agency.prepare()
-    cards, held = drills(scenario.personas, args.cards, args.holdout)
-
-    conversants.update(
-        enlist(
-            cards,
-            provider,
-            repeats=args.repeats,
-            model=conversant.model,
-            effort=conversant.effort,
-            timeout=args.timeout,
-            seed=args.seed,
-            boundaries=boundaries,
+    rounds, held = scheduled(scenario.personas, contract.situation.schedule, args.cards, args.holdout)
+    sets = list(dict.fromkeys(tuple(card.name for card in cards) for cards in rounds))
+    for index, names in enumerate(sets, 1):
+        conversants.update(
+            enlist(
+                [card for card in scenario.personas if card.name in names],
+                provider,
+                repeats=args.repeats,
+                prefix=f"s{index}-" if len(sets) > 1 else "",
+                model=conversant.model,
+                effort=conversant.effort,
+                timeout=args.timeout,
+                seed=args.seed,
+                boundaries=boundaries,
+            )
         )
-    )
 
     def spawn(worker, label):
-        return replicate(
+        connections = (
+            replica_lab(scenario.root / "lab", lab_root / label, lab_registry) if lab_root is not None else None
+        )
+        if connections is not None and confinement is not None:
+            confinement.hand_over(connections.parent)
+        replica = replicate(
             worker,
             args.config,
             root / REPLICAS / label,
             subagent_model=roles["sub-harness"].model,
             timeout=args.timeout,
+            connections=connections,
         )
+        if connections is not None:
+            replica.lab = lab_placement(connections)
+        return replica
 
     assessors = [agency]
+
+    def supplied_evidence(sessions, speakers):
+        found = handed_evidence(sessions, speakers)
+        for name in sessions:
+            found.setdefault(name, {})["scenario_digest"] = digest(scenario.root)
+            if filed := agency._filed(name):
+                found.setdefault(name, {})["filed"] = filed
+        return found
+
     if args.introspection:
-        assessors.append(Introspection(employee, spawn, records=root, concurrency=args.concurrent_drills))
+        assessors.append(
+            Introspection(employee, spawn, records=root, concurrency=args.concurrent_drills, placed=placed)
+        )
     standard = None
     if args.standard:
         memory = getattr(args, "evaluation_memory", None) or root / "evaluation-memory"
@@ -262,10 +321,13 @@ async def _run(args, scenario, root, confinement):
         standard = Assessor(
             provider,
             Standard.declared(
-                (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
+                ((check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility),
+                applies_when={check.id: check.applies_when for check in contract.statements.checks},
             ),
             sources=args.standard,
             norms=lambda: scenario.standing_norms(agency.released),
+            materials=lambda: scenario.evidence_materials(agency.released),
+            references=lambda sessions: supplied_evidence(sessions, conversants),
             task=employee.baseline.task.text,
             model=assessor_role.model,
             effort=assessor_role.effort,
@@ -289,22 +351,38 @@ async def _run(args, scenario, root, confinement):
             scope=fingerprint({"task": employee.baseline.task.text}),
         )
         assessors.append(standard)
-    trials = grouped(conversants, spawn, size=args.concurrent_drills, turns=args.turns, placed=placed)
+    played = [
+        grouped(
+            {name: one for name, one in conversants.items() if name.startswith(f"s{index}-") or len(sets) == 1},
+            spawn,
+            size=args.concurrent_drills,
+            turns=args.turns,
+            placed=placed,
+        )
+        for index in range(1, len(sets) + 1)
+    ]
+    by_round = [played[sets.index(tuple(card.name for card in cards))] for cards in rounds]
+    trials = by_round[0] if len(by_round) == 1 else (lambda index: by_round[min(index, len(by_round)) - 1])
     holdout = None
     if held:
         holdout_assessor = Assessor(
             provider,
             Standard.declared(
-                (check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility
+                ((check.id, check.check) for check in contract.statements.checks if "analyst" in check.visibility),
+                applies_when={check.id: check.applies_when for check in contract.statements.checks},
             ),
             sources=("declared",),
             task=employee.baseline.task.text,
-            norms=lambda: scenario.standing_norms(agency.released),
+            norms=lambda: scenario.standing_norms(scenario.kinds),
+            materials=lambda: scenario.evidence_materials(scenario.kinds, role="counterpart"),
             model=assessor_role.model,
             effort=assessor_role.effort,
             timeout=args.timeout,
             boundaries=boundaries,
+            compartment="counterpart",
             name="holdout",
+            keep=root / "holdout-standard.json",
+            references=lambda sessions: {name: examined(name, exchanges) for name, exchanges in sessions.items()},
         )
         held_out = enlist(
             held,
@@ -317,7 +395,20 @@ async def _run(args, scenario, root, confinement):
             seed=args.seed,
             boundaries=boundaries,
         )
-        holdout = (grouped(held_out, spawn, size=args.concurrent_drills, turns=args.turns), [holdout_assessor])
+
+        def examined(name, exchanges) -> dict:
+            """What the exam judge holds a held-out drill to beside the checks: the case's facts and its answer."""
+            card = held_out[name].card if name in held_out else None
+            found = dict(agency.facts(name, exchanges, card) or {})
+            found.update(supplied_evidence({name: exchanges}, held_out).get(name, {}))
+            if getattr(card, "expected", None):
+                found["expected"] = card.expected
+            return found
+
+        holdout = (
+            grouped(held_out, spawn, size=args.concurrent_drills, turns=args.turns, placed=placed),
+            [holdout_assessor],
+        )
     if confinement is not None:
         problems = unsealed(employee, closed=[scenario.root, *args.closed])
         if problems:
@@ -338,7 +429,43 @@ async def _run(args, scenario, root, confinement):
             print(f"Task records: {root}")
             print(
                 f"Scenario: {scenario.root.name}; disclosure: {disclosure.plan}; delivery: {args.deliver}; "
-                f"cards: {', '.join(card.name for card in cards)}; skills: {skills(employee)}"
+                f"cards: {' | '.join(', '.join(card.name for card in cards) for cards in rounds)}"
+                f"{'; held out: ' + ', '.join(card.name for card in held) if held else ''}; skills: {skills(employee)}"
+            )
+            answers = (
+                CounterpartAnswers(
+                    provider,
+                    contract,
+                    args.information_answer_material,
+                    lambda: agency.released,
+                    records=root / "counterpart-answers",
+                    model=counterpart.model,
+                    effort=counterpart.effort,
+                    timeout=args.timeout,
+                )
+                if getattr(args, "information_answer_material", None)
+                else None
+            )
+            researcher = getattr(args, "information_research", "exchange")
+            researcher = researcher if researcher != "none" else None
+            research_limits = CollectionLimits(timeout=args.timeout, reviews=getattr(args, "information_reviews", 2))
+            gaps = gap_answerers(
+                getattr(args, "gap_answers", "both"),
+                answers,
+                scenario_researcher(
+                    contract,
+                    lambda: agency.released,
+                    records=root / "gap-research",
+                    researcher=researcher,
+                    model=roles["collector"].model,
+                    research_model=getattr(args, "information_research_model", None),
+                    research_effort=getattr(args, "information_research_effort", None),
+                    research_budget=getattr(args, "information_research_budget", None),
+                    limits=research_limits,
+                )
+                if researcher is not None
+                else None,
+                research_tasks=research_limits.research_tasks,
             )
             try:
                 await run(
@@ -361,33 +488,22 @@ async def _run(args, scenario, root, confinement):
                         records=root / "information",
                         model=roles["collector"].model,
                         effort=roles["collector"].effort,
-                        ask=CounterpartAnswers(
-                            provider,
-                            contract,
-                            args.information_answer_material,
-                            lambda: agency.released,
-                            records=root / "counterpart-answers",
-                            model=counterpart.model,
-                            effort=counterpart.effort,
-                            timeout=args.timeout,
-                        )
-                        if getattr(args, "information_answer_material", None)
-                        else None,
-                        researcher=getattr(args, "information_research", "exchange")
-                        if getattr(args, "information_research", "exchange") != "none"
-                        else None,
+                        ask=answers,
+                        researcher=researcher,
                         research_model=getattr(args, "information_research_model", None),
                         research_effort=getattr(args, "information_research_effort", None),
                         research_budget=getattr(args, "information_research_budget", None),
-                        limits=CollectionLimits(timeout=args.timeout, reviews=getattr(args, "information_reviews", 2)),
+                        limits=research_limits,
                         replay=InformationResult.model_validate_json(args.information.read_text())
                         if getattr(args, "information", None)
                         else None,
                     ),
                     curator_model=roles["curator"].model,
                     boundaries=boundaries,
+                    gaps=gaps,
                     prior=prior,
                     holdout=holdout,
+                    holdout_rounds=exams,
                     attributor=ModelAttributor(
                         model=roles["attribution"].model,
                         effort=roles["attribution"].effort,
@@ -438,6 +554,35 @@ async def _run(args, scenario, root, confinement):
             unseal(root)
 
 
+def scheduled(personas, schedule, cards=None, holdout=None) -> tuple[list[list], list]:
+    """The cards of each round and the held-out ones. Cards named on the command line are played every round in place
+    of the schedule's rounds, and cards held out on the command line replace its held-out ones, each independently;
+    without rounds every card not held out is played every round (see `drills`)."""
+    held = list(holdout) if holdout else list(schedule.holdout)
+    if cards or not schedule.rounds:
+        played, kept = drills(personas, cards, held)
+        return [played], kept
+    named = {persona.name: persona for persona in personas}
+    missing = set(held) - set(named)
+    if missing:
+        raise ValueError(f"the scenario has no drill cards named {sorted(missing)}")
+    both = {name for step in schedule.rounds for name in step} & set(held)
+    if both:
+        raise ValueError(f"a held-out card is not also played for feedback: {sorted(both)}")
+    return [[named[name] for name in step] for step in schedule.rounds], [named[name] for name in held]
+
+
+def exam_rounds(schedule, given, rounds: int) -> frozenset[int] | None:
+    """The rounds the held-out cards are played in: those named on the command line, else the schedule's, else every
+    round (None); 0 is before onboarding, and a round past the last one is refused rather than silently never
+    played."""
+    chosen = frozenset(given or schedule.holdout_rounds)
+    outside = sorted(number for number in chosen if not 0 <= number <= rounds)
+    if outside:
+        raise ValueError(f"held-out cards scheduled for rounds {outside} of a run of {rounds}")
+    return chosen or None
+
+
 def drills(personas, cards=None, holdout=None) -> tuple[list, list]:
     """The drill cards played for feedback each round and the ones held out: the cards named (every card when none
     is), less the held-out ones, which are played and judged against the scenario's declared checks but kept from the
@@ -468,7 +613,7 @@ def cli():
         "--information-research",
         choices=("exchange", "claude", "codex", "none"),
         default="exchange",
-        help="Research channel for initial information preparation only",
+        help="Research channel of initial information preparation and of the public questions a curation leaves open",
     )
     parser.add_argument(
         "--information-research-model",
@@ -489,7 +634,15 @@ def cli():
     parser.add_argument(
         "--information-answer-material",
         nargs="+",
-        help="Materials the simulated counterpart may use for initial preparation questions",
+        help="Materials the simulated counterpart may use to answer questions, of initial preparation and of curations",
+    )
+    parser.add_argument(
+        "--gap-answers",
+        choices=("counterpart", "research", "both", "none"),
+        default="both",
+        help="Who answers the questions a curation leaves open: the counterpart (with --information-answer-material) "
+        "for private and unclear ones at its next review, research (on --information-research) for public ones and "
+        "those the counterpart leaves open; both uses whichever is configured; none leaves them unanswered",
     )
     parser.add_argument(
         "--scenario", type=Path, default=Path("travel_agency"), help="Scenario directory or bundled name"
@@ -611,6 +764,13 @@ def cli():
         nargs="+",
         help="Drill cards held out: played each round and judged against the declared checks, never reviewed by the "
         "owner nor seen by the Analyst or the Curator",
+    )
+    parser.add_argument(
+        "--holdout-rounds",
+        type=int,
+        nargs="+",
+        help="Rounds (1-based; 0 is once before onboarding) in which the held-out cards are played; every round "
+        "when not given",
     )
     parser.add_argument(
         "--concurrent-drills",

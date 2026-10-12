@@ -18,12 +18,12 @@ from pathlib import Path
 
 from pptx import Presentation
 
+from experimental.cultivation.counterpart.rulers import CONFIG, tables, words
 from experimental.harness.participation.channel import said
 from experimental.harness.participation.files import _MOTION, deck_slides
 from experimental.harness.scenario.contract import frontmatter
 from experimental.simulation.bench.cards import Trip
 
-CONFIG = "reference.md"
 NUMBER = r"(?:\d{1,3}(?:,\d{3})+|\d+)(?:\.\d+)?"
 _FACE = re.compile(r'typeface="([^"]*)"')
 _SLIDE = re.compile(r"ppt/slides/slide\d+\.xml$")
@@ -60,32 +60,8 @@ def _ints(text: str) -> list[int]:
     return [int(_number(found)) for found in re.findall(NUMBER, text)]
 
 
-def _tables(text: str) -> list[list[list[str]]]:
-    tables, rows = [], []
-    for line in [*text.splitlines(), ""]:
-        if line.strip().startswith("|"):
-            cells = [cell.strip() for cell in line.strip().strip("|").split("|")]
-            if not all(re.fullmatch(r":?-{3,}:?", cell) for cell in cells):
-                rows.append(cells)
-        elif rows:
-            tables.append(rows)
-            rows = []
-    return tables
-
-
 def _sections(text: str) -> list[tuple[str, str]]:
     return [(part.partition("\n")[0], part.partition("\n")[2]) for part in re.split(r"^## ", text, flags=re.M)[1:]]
-
-
-def words(path: Path) -> dict[str, tuple[str, ...]]:
-    """The scenario's reference words: each table row's key and the backticked values in its second cell."""
-    found = {}
-    for table in _tables(Path(path).read_text()):
-        for row in table:
-            values = re.findall(r"`([^`]+)`", row[1]) if len(row) > 1 else []
-            if values and re.fullmatch(r"[a-z_]+", row[0]):
-                found[row[0]] = tuple(values)
-    return found
 
 
 def _pattern(template: str) -> re.Pattern:
@@ -123,10 +99,10 @@ class Rules:
         prices = frontmatter(scenario.text(found["price_list"][0]))[1]
         products, seasons, insurance = {}, {}, None
         for heading, body in _sections(prices):
-            tables = _tables(body)
-            if not tables:
+            listed = tables(body)
+            if not listed:
                 continue
-            header, *rows = tables[0]
+            header, *rows = listed[0]
             if len(header) >= 3 and rows and all(_ints(row[0]) for row in rows):
                 if not all(re.fullmatch(NUMBER, cell) for row in rows for cell in row[1:]):
                     continue
@@ -143,7 +119,7 @@ class Rules:
                     child=name in found["child_products"],
                 )
         names = {season for product in products.values() for season in product.prices}
-        for table in _tables(prices):
+        for table in tables(prices):
             for row in table:
                 if row[0] in names and len(row) == 2:
                     spans = []

@@ -151,7 +151,11 @@ async def test_root_and_child_generate_with_shared_contracts_and_resume_without_
             clarified[0]["acceptance"] += "; report missing input instead of inventing it"
             remaining = [
                 response(
-                    "report_gap", {"reason": "The assigned requirement needs a missing-input decision from the root"}
+                    "report_gap",
+                    {
+                        "reason": "The assigned requirement needs a missing-input decision from the root",
+                        "kind": "unclear",
+                    },
                 ),
                 response(
                     "submit_artifact",

@@ -247,6 +247,7 @@ async def test_agency_judges_every_criterion_and_hands_over_the_material_of_a_fa
     assert not any(criterion.id in json.dumps(packet) for criterion in scenario.criteria)
     assert set(packet["materials"]) == set(scenario.materials) and packet["deliverables"] == {}
     assert packet["given_to_the_assistant"] == list(scenario.initial) and packet["withheld"] == ["brand-design-guide"]
+    assert packet["expected"] == {}
 
     signal = await agency.evaluate(sessions)
     assert signal.satisfied is True and signal.text == "All good today."
@@ -373,8 +374,10 @@ async def test_under_none_the_owner_hands_nothing_over_and_still_judges_by_every
     everything = list(scenario.materials)
     skills, uploads = tmp_path / "home" / "skills", tmp_path / "home" / "uploads"
     waiting = verdicts(scenario, **{scenario.criteria[0].id: {"result": "fail", "waits_on": everything[-1]}})
+    failing = verdicts(scenario, **{scenario.criteria[0].id: {"result": "fail"}})
     provider = Provider(
-        response(REVIEW, {"verdicts": waiting, "remark": "Not yet.", "handover": [everything[0]]}),
+        response(REVIEW, {"verdicts": waiting, "remark": "Not yet.", "handover": []}),
+        response(REVIEW, {"verdicts": failing, "remark": "Quote from the list, never by feel."}),
         response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Still nothing to give."}),
     )
     agency = Agency(
@@ -388,15 +391,16 @@ async def test_under_none_the_owner_hands_nothing_over_and_still_judges_by_every
     )
     agency.prepare()
     assert agency.released == [] and agency.withheld == everything and not agency.chooses
-    (opening,) = agency.opening()
-    assert opening.attachments == () and "{files}" not in opening.text and not uploads.exists()
+    assert agency.opening() == () and not uploads.exists()
     sessions = {"student": [exchange("Cheap trip?", "Here.")]}
     first = await agency.evaluate(sessions)
     packet = json.loads(provider.requests[0]["messages"][1]["content"])
     assert packet["given_to_the_assistant"] == [] and packet["withheld"] == everything
+    assert packet["never_handed"] == everything
     assert packet["handing_over_now"] == [] and packet["you_choose_handover"] is False
     assert set(packet["materials"]) == set(everything)
-    assert first.attachments == () and agency.released == [] and first.satisfied is False
+    assert first.text == "Quote from the list, never by feel." and first.satisfied is False
+    assert first.attachments == () and agency.released == []
     last = await agency.evaluate(sessions)
     assert last.attachments == () and agency.withheld == everything and not uploads.exists()
 
@@ -495,6 +499,78 @@ def test_simulation_timeout_reaches_the_information_preparer(tmp_path, monkeypat
     assert limits.total_timeout == 3600 and limits.compose_timeout == 600
 
 
+@pytest.mark.parametrize(
+    ("given", "expected"),
+    [
+        ([], ("research", 3)),
+        (["--information-research", "none"], None),
+        (["--gap-answers", "none"], None),
+        (["--gap-answers", "research", "--information-research", "none"], "needs a research channel"),
+        (["--gap-answers", "counterpart"], "needs --information-answer-material"),
+    ],
+)
+def test_the_gap_answerers_follow_the_configured_channels(tmp_path, monkeypatch, capsys, given, expected):
+    from experimental.cultivation.counterpart import owner
+    from experimental.harness.contract import Task
+    from experimental.simulation import __main__ as simulation
+    from raven.config.loader import load_config
+
+    class Started(Exception):
+        pass
+
+    class Employee:
+        def __init__(self, contract, config, *, workdir, root, **options):
+            self.root = root
+            home = root / "home"
+            home.mkdir(parents=True)
+            configured = load_config(config)
+            configured.agents.defaults.workspace = str(home)
+            self.baseline = SimpleNamespace(
+                config=configured, workdir=workdir, task=Task(text=contract.situation.profile)
+            )
+
+        async def __aenter__(self):
+            return self
+
+        async def __aexit__(self, *_):
+            pass
+
+    started = {}
+
+    async def run(*args, **options):
+        started.update(options)
+        raise Started
+
+    config = tmp_path / "config.json"
+    config.write_text(
+        json.dumps(
+            {
+                "agents": {"defaults": {"model": "deepseek/x", "provider": "deepseek", "reasoningEffort": "low"}},
+                "providers": {"deepseek": {"apiKey": "test-key"}},
+            }
+        )
+    )
+    monkeypatch.setattr(simulation, "hire", Employee)
+    monkeypatch.setattr(simulation.model_roles, "provider", lambda *_: Provider())
+    monkeypatch.setattr(simulation.caching, "install", lambda: None)
+    monkeypatch.setattr(owner, "warm_catalog_in_background", lambda: None)
+    monkeypatch.setattr(simulation, "scenario_preparer", lambda *args, **options: None)
+    monkeypatch.setattr(simulation, "run", run)
+    argv = ["simulation", "--config", str(config), "--state-dir", str(tmp_path / "run"), "--no-introspection"]
+    monkeypatch.setattr(sys, "argv", [*argv, "--workdir", str(tmp_path / "work"), *given])
+    if isinstance(expected, str):
+        with pytest.raises(ValueError, match=expected):
+            cli()
+        return
+    with pytest.raises(Started):
+        cli()
+    gaps = started["gaps"]
+    if expected is None:
+        assert gaps is None
+    else:
+        assert gaps.answer is None and gaps.research is not None and gaps.research_tasks == expected[1]
+
+
 def test_settings_name_the_disclosure_and_carry_no_credential(tmp_path):
     config = tmp_path / "config.json"
     args = SimpleNamespace(
@@ -553,6 +629,7 @@ def test_settings_name_the_disclosure_and_carry_no_credential(tmp_path):
         "reviews": None,
         "answers_from": None,
         "replayed": False,
+        "gap_answers": "both",
     }
     assert written["baseline"] == {"playbooks/plan/playbook.md": hashlib.sha256(b"spec").hexdigest()}
     start = written["starting_harness"]
@@ -1246,3 +1323,202 @@ def test_held_out_cards_are_played_apart_from_the_cards_played_for_feedback():
         drills(personas, None, ["nobody"])
     with pytest.raises(ValueError, match="leaves nothing to play"):
         drills(personas, None, names)
+
+
+def test_cards_and_exam_named_on_the_command_line_each_replace_their_part_of_the_schedule():
+    from experimental.harness.scenario.contract import Schedule
+    from experimental.simulation.__main__ import exam_rounds, scheduled
+
+    personas = Scenario.load(TRAVEL).personas
+    names = lambda cards: [card.name for card in cards]  # noqa: E731
+    schedule = Schedule(rounds=(("family",), ("student",)), holdout=("returning",), holdout_rounds=(1, 2))
+    rounds, held = scheduled(personas, schedule)
+    assert [names(step) for step in rounds] == [["family"], ["student"]] and names(held) == ["returning"]
+    rounds, held = scheduled(personas, schedule, cards=["premium"])
+    assert [names(step) for step in rounds] == [["premium"]] and names(held) == ["returning"]
+    rounds, held = scheduled(personas, schedule, holdout=["professional"])
+    assert [names(step) for step in rounds] == [["family"], ["student"]] and names(held) == ["professional"]
+    with pytest.raises(ValueError, match="not also played"):
+        scheduled(personas, schedule, holdout=["family"])
+    rounds, held = scheduled(personas, Schedule(holdout=("returning",)))
+    assert "returning" not in names(rounds[0]) and names(held) == ["returning"]
+    assert exam_rounds(schedule, None, 3) == frozenset({1, 2}) and exam_rounds(schedule, [3], 3) == frozenset({3})
+    assert exam_rounds(Schedule(), None, 3) is None
+    with pytest.raises(ValueError, match="rounds \\[4\\]"):
+        exam_rounds(schedule, [1, 4], 3)
+    assert exam_rounds(schedule, [0, 3], 3) == frozenset({0, 3})
+    with pytest.raises(ValueError, match="rounds \\[-1\\]"):
+        exam_rounds(schedule, [-1], 3)
+
+
+def test_a_case_is_judged_by_the_owner_of_the_bundled_case_it_is_named_after(tmp_path):
+    from experimental.simulation.__main__ import owner_of
+    from experimental.simulation.cases.brand_strategist.owner import BrandOwner
+
+    assert owner_of(Scenario.load(BUNDLED / "brand_strategist")) is BrandOwner
+    assert owner_of(Scenario.load(TRAVEL)) is Agency
+    shutil.copytree(BUNDLED / "brand_strategist", tmp_path / "brand_strategist")
+    assert owner_of(Scenario.load(tmp_path / "brand_strategist")) is BrandOwner
+    shutil.copytree(BUNDLED / "travel_agency", tmp_path / "elsewhere")
+    with pytest.raises(ValueError, match="not a bundled case"):
+        owner_of(Scenario.load(tmp_path / "elsewhere"))
+    (tmp_path / "elsewhere" / "owner.py").unlink()
+    assert owner_of(Scenario.load(tmp_path / "elsewhere")) is Agency
+
+
+def test_a_played_card_carries_the_expected_answer_its_case_labels(tmp_path):
+    import json
+    import random
+
+    from experimental.harness.scenario.contract import frontmatter
+
+    root = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, root)
+    card = root / "personas" / "student.md"
+    head, body = frontmatter(card.read_text())
+    card.write_text("---\n" + json.dumps({**head, "expected": "Quote the value package only."}) + "\n---\n" + body)
+    (student,) = [persona for persona in Scenario.load(root).personas if persona.name == "student"]
+    assert student.play(random.Random(1)).expected == "Quote the value package only."
+
+
+async def test_the_owner_judges_a_labelled_card_with_its_expected_answer(tmp_path):
+    from experimental.simulation.bench.cards import Drawn
+
+    scenario = Scenario.load(TRAVEL)
+    provider = Provider(response(REVIEW, {"verdicts": verdicts(scenario), "remark": "Fine."}))
+    played = {"student": Drawn("student", "You want a cheap trip.", None, "Only the value package fits the budget.")}
+    agency = Agency(
+        scenario,
+        provider,
+        tmp_path / "skills",
+        workdir=tmp_path,
+        deliver="pool",
+        cards=lambda: played,
+        handouts=lambda sessions: {"student": {"proof.md": "The purchased voucher lasts 90 days."}},
+        records=tmp_path / "run",
+        model="sim",
+    )
+    agency.prepare()
+    await agency.evaluate({"student": [exchange("Cheap trip?", "The value package fits.")]})
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["expected"] == {"student": "Only the value package fits the budget."}
+    assert packet["handouts"]["student"]["proof.md"] == "The purchased voucher lasts 90 days."
+    assert "price-list" in packet["material_files"]
+    (row,) = [json.loads(line) for line in (tmp_path / "run" / "references.jsonl").read_text().splitlines()]
+    assert row["expected"] == "Only the value package fits the budget."
+
+
+def test_evaluator_sources_include_visible_facts_and_nested_files_without_releasing_hidden_materials(tmp_path):
+    from dataclasses import replace
+
+    folder = tmp_path / "travel_agency"
+    shutil.copytree(TRAVEL, folder)
+    nested = folder / "materials/price-list/details.md"
+    nested.write_text("Adopted factual detail.")
+    scenario = Scenario.load(folder)
+    material = scenario.contract.materials["price-list"].model_copy(update={"visibility": frozenset({"counterpart"})})
+    scenario = replace(
+        scenario,
+        contract=scenario.contract.model_copy(
+            update={
+                "materials": {**scenario.contract.materials, "price-list": material},
+            }
+        ),
+    )
+    assert scenario.evidence_materials(["price-list"], role="analyst") == {}
+    evidence = scenario.evidence_materials(["price-list"], role="counterpart")
+    assert "price-list" in evidence
+    assert evidence["price-list/details.md"] == "Adopted factual detail."
+    assert "price-list" not in scenario.standing_norms(["price-list"])
+    assert scenario.evidence_materials(["service-sop"], role="counterpart").keys() == {"service-sop"}
+
+
+def test_judge_receives_each_cards_handouts_without_private_role_or_answer(tmp_path):
+    from experimental.simulation.bench.scenario import handed_evidence
+
+    one, other = tmp_path / "one.md", tmp_path / "other.md"
+    one.write_text("The voucher is valid for 90 days.")
+    other.write_text("An unrelated customer's file.")
+    conversants = {
+        "played": SimpleNamespace(handed=(one,), card=SimpleNamespace(text="Private role", expected="Private answer")),
+        "unplayed": SimpleNamespace(handed=(other,)),
+    }
+    evidence = handed_evidence({"played": []}, conversants)
+    assert evidence == {"played": {"handouts": {"one.md": "The voucher is valid for 90 days."}}}
+
+
+async def test_owner_requires_a_declared_condition_and_evidence_for_not_applicable(tmp_path):
+    from dataclasses import replace
+
+    scenario, agency = owner(tmp_path, Provider())
+    review = scorecard(scenario)
+    review["verdicts"][0].update(result="not_applicable", note="All requested dates precede the effective date.")
+    names = list(handles(scenario.criteria).values())
+    sessions = {"student": [exchange("Use the earlier date.", "Understood.")]}
+    with pytest.raises(ValueError, match="unconditional"):
+        agency._parse(sessions, review, names)
+    first = scenario.criteria[0].model_copy(
+        update={"applies_when": "The requested date is after the policy takes effect."}
+    )
+    agency.scenario = replace(scenario, criteria=(first, *scenario.criteria[1:]))
+    review["verdicts"][0]["note"] = " "
+    with pytest.raises(ValueError, match="evidenced explanation"):
+        agency._parse(sessions, review, names)
+    review["verdicts"][0]["note"] = "All requested dates precede the effective date."
+    agency.provider = Provider(response(REVIEW, review))
+    signal = await agency.evaluate(sessions)
+    assert signal.satisfied is True
+    kept = next((tmp_path / "run" / "analysis").glob("*.json"))
+    measured = json.loads(kept.read_text())["scorecard"]["items"][0]
+    assert measured["result"] == "not_applicable" and measured["note"] == review["verdicts"][0]["note"]
+    agency.scenario = replace(scenario, criteria=(first,))
+    agency.provider = Provider(response(REVIEW, {**review, "verdicts": review["verdicts"][:1]}))
+    assert (await agency.evaluate(sessions)).satisfied is None
+
+
+async def test_private_owner_evidence_is_retained_exactly_without_entering_feedback(tmp_path):
+    scenario = Scenario.load(TRAVEL)
+    provider = Provider(response(REVIEW, scorecard(scenario, remark="Please improve the process.")))
+    scenario, agency = owner(tmp_path, provider)
+    body = "Internal filed note. " + "Detail retained beyond two hundred characters. " * 20
+    agency._filed = lambda name: {"workdir/department/review.md": body}
+    agency._provided_handouts = lambda sessions: {"student": {"customer.md": "Supplied customer source."}}
+    sessions = {"student": [exchange("Please check the request.", "I filed it.")]}
+    spoken = await agency.evaluate(sessions)
+    kept = json.loads(next((tmp_path / "run/analysis").glob("*.json")).read_text())
+    submitted = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert kept["evidence"] == submitted
+    assert kept["evidence"]["filed"]["student"]["workdir/department/review.md"] == body
+    assert kept["execution_ids"] == {"student": [sessions["student"][0].execution.turn_id]}
+    assert kept["rubric_version"] and kept["assessment_id"]
+    assert kept["criterion_handles"] == handles(scenario.criteria)
+    assert {row["id"] for row in kept["criteria"]} == {criterion.id for criterion in scenario.criteria}
+    assert "Internal filed note" not in spoken.text and "Supplied customer source" not in spoken.text
+    assert spoken.items == () and spoken.metrics == {}
+
+
+def test_filed_evidence_never_reads_escaped_current_or_baseline_links(tmp_path, monkeypatch):
+    from experimental.cultivation.counterpart.owner import written
+
+    current, before = tmp_path / "current", tmp_path / "before"
+    current.mkdir()
+    before.mkdir()
+    outside = tmp_path / "outside.md"
+    outside.write_text("Outside content must not enter the grader packet.")
+    (current / "escape.md").symlink_to(outside)
+    (current / "comparison.md").write_text("A current file with an unverifiable baseline.")
+    (before / "comparison.md").symlink_to(outside)
+    (current / "valid.md").write_text("A valid in-scope record.")
+    (current / "alias.md").symlink_to(current / "valid.md")
+    original = Path.read_bytes
+
+    def checked(path):
+        assert path.resolve() != outside.resolve()
+        return original(path)
+
+    monkeypatch.setattr(Path, "read_bytes", checked)
+    files = written(current, before, label="workdir")
+    assert files == {"workdir/alias.md": "A valid in-scope record.", "workdir/valid.md": "A valid in-scope record."}
+    aliased_root = tmp_path / "root-link"
+    aliased_root.symlink_to(current, target_is_directory=True)
+    assert written(aliased_root, before, label="workdir") == {}

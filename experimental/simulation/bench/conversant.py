@@ -12,9 +12,10 @@ from contextlib import nullcontext
 from pathlib import Path
 from typing import Protocol
 
-from experimental.harness.participation.allowance import reading_budget
+from experimental.harness.participation.allowance import excerpt, reading_budget
 from experimental.harness.participation.channel import said
 from experimental.harness.participation.exchange import ExchangeError, messages
+from experimental.harness.participation.files import read_delivered
 from experimental.harness.participation.views import opened, transcript
 
 LEAVE = "LEAVE"
@@ -103,6 +104,11 @@ class Conversant:
         return float(value) if isinstance(value, (int, float)) else 0.0
 
     @property
+    def handed(self) -> tuple[Path, ...]:
+        """The files this person hands over as the conversation opens (the card's `files`); the person knows them."""
+        return tuple(getattr(self.persona, "files", ()) or ())
+
+    @property
     def reading(self) -> int:
         """Tokens one opened file may take in what the person reads: a share of the model's window."""
         default = getattr(self.provider, "get_default_model", None)
@@ -117,6 +123,11 @@ class Conversant:
             return None
         packet = {
             "persona": self.card.text,
+            **(
+                {"handed": {path.name: excerpt(read_delivered(path), self.reading) for path in self.handed}}
+                if self.handed
+                else {}
+            ),
             "conversation": transcript(exchanges),
             "opened": opened(exchanges, tokens=self.reading),
         }

@@ -472,7 +472,7 @@ async def improve(
             except GenerationInterruptedError:
                 raise
             except (ValueError, GenerationError, WorkerError) as exc:
-                if state.totals()["repairs"] >= limits.max_repairs:
+                if state.root_repairs() >= limits.max_repairs:
                     raise GenerationError(f"composite repair budget exhausted: {exc}") from exc
                 state.repair = Validation(
                     [str(exc)],
@@ -513,7 +513,7 @@ async def improve(
     except GapReportedError as exc:
         # The root reported a gap it cannot close with what it was given: nothing was generated, the
         # question waits for whoever can answer it, and the next curation starts from new inputs.
-        record["gap"] = {"stage": exc.stage, "reason": exc.reason}
+        record["gap"] = {"stage": exc.stage, "reason": exc.reason, "kind": exc.kind}
         _cleanup(state.directory)
         path.unlink(missing_ok=True)
         raise

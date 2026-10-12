@@ -1,14 +1,16 @@
-"""Answer preparation questions as the simulated counterpart without exposing its private sources."""
+"""Answer questions as the simulated counterpart without exposing its private sources: those of initial preparation
+and those a curation leaves open (`experimental.harness.loop.gaps`), which `gap_answerers` routes."""
 
 import hashlib
 import json
 from pathlib import Path
 
-from pydantic import BaseModel, ConfigDict, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator
 
 from experimental.cultivation.collector.scenario import release_guard
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
+from experimental.harness.loop.gaps import Gaps, Reply
 from experimental.harness.participation.compartment import BoundaryError, Guard
 from experimental.harness.participation.exchange import exchange, messages
 from experimental.harness.scenario import contents
@@ -20,6 +22,11 @@ class Answer(BaseModel):
 
     text: str | None = None
     reason: str
+    public: bool = Field(
+        default=False,
+        description="True when the question is about public knowledge, such as regulation, platform rules or common "
+        "practice of the field, rather than your own business, so public sources should settle it.",
+    )
 
     @field_validator("text")
     @classmethod
@@ -40,8 +47,13 @@ class CounterpartAnswers:
         self.records, self.model, self.effort, self.timeout = Path(records), model, effort, timeout
 
     async def __call__(self, question):
+        return (await self.reply(question)).text
+
+    async def reply(self, question) -> Reply:
+        """The answer to a preparation `Question` or to a curation's question, given as a mapping."""
+        asked = question.model_dump(mode="json") if isinstance(question, BaseModel) else dict(question)
         packet = {
-            "question": question.model_dump(mode="json"),
+            "question": asked,
             "materials": {name: contents(self.scenario.materials[name].path)[0] for name in self.knows},
         }
         _, answer = await exchange(
@@ -53,8 +65,9 @@ class CounterpartAnswers:
                 "supplied material. For adoption, address the exact proposal, with limits if needed. Do not invent an "
                 "organisational choice or confirm a public claim merely because it sounds plausible. When your "
                 "material does not answer the question, return null text and say why in the reason; text that only "
-                "says you cannot answer is not an answer. Give only the answer, not private documents, tests or their "
-                "identifiers.",
+                "says you cannot answer is not an answer. When the question is about public knowledge rather than "
+                "your own business, you may say so with `public` instead of answering. Give only the answer, not "
+                "private documents, tests or their identifiers.",
                 packet,
             ),
             [tool("answer_question", "Answer or leave the question unresolved.", schema_for(Answer))],
@@ -76,8 +89,25 @@ class CounterpartAnswers:
         except BoundaryError:
             answer = Answer(text=None, reason="The proposed answer contains information outside the release scope.")
         self.records.mkdir(parents=True, exist_ok=True)
-        identity = hashlib.sha256(question.model_dump_json().encode()).hexdigest()
+        identity = hashlib.sha256(json.dumps(asked, sort_keys=True).encode()).hexdigest()
         (self.records / f"{identity}.json").write_text(
-            json.dumps({"question": question.model_dump(mode="json"), "answer": answer.model_dump(mode="json")})
+            json.dumps({"question": asked, "answer": answer.model_dump(mode="json")})
         )
-        return answer.text
+        return Reply(answer.text, answer.public)
+
+
+def gap_answerers(mode, counterpart=None, research=None, *, research_tasks=3) -> Gaps | None:
+    """The answerers of a run's open questions for `--gap-answers`: `both` uses whichever of the counterpart and
+    research is configured, `counterpart` or `research` requires that one, and `none` (or nothing configured) leaves
+    the questions in the record unanswered."""
+    if mode == "none":
+        return None
+    if mode == "counterpart" and counterpart is None:
+        raise ValueError("--gap-answers counterpart needs --information-answer-material")
+    if mode == "research" and research is None:
+        raise ValueError("--gap-answers research needs a research channel other than none")
+    answer = counterpart.reply if counterpart is not None and mode in ("counterpart", "both") else None
+    research = research if mode in ("research", "both") else None
+    if answer is None and research is None:
+        return None
+    return Gaps(answer=answer, research=research, research_tasks=research_tasks)

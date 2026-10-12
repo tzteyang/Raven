@@ -965,6 +965,52 @@ def test_an_unfinished_trial_becomes_a_partial_round_from_the_observations(tmp_p
     assert [(s["step"], s["state"]) for s in data["run"]["steps"]][-2:] == [("trial", "unfinished"), ("end", "error")]
 
 
+def test_recorded_baseline_stays_round_zero_with_its_case_and_copied_deliverable(tmp_path):
+    run, scenario = make_run(tmp_path, rounds=[], status="running")
+    turn = "d7" * 16
+    context = "[Runtime Context - metadata only]\nChat ID: session-opaque:0123456789abcdef\n\n"
+    rows = [
+        {
+            "kind": "provider.request",
+            "turn_id": turn,
+            "parameters": {"messages": [{"role": "user", "content": context + "Quote a short trip."}]},
+        },
+        text_row(turn, "Here is the quote."),
+    ]
+    path = write(run / "deliverables" / turn / "quote.md", "A supplied quote.")
+    write(run / "employee/gen-baseline/observations.jsonl", "\n".join(json.dumps(row) for row in rows) + "\n")
+    file = run / "iteration/r1.json"
+    saved = json.loads(file.read_text())
+    saved["baseline"] = {
+        "sessions": {
+            "holdout-student": [
+                {
+                    "user": "Quote a short trip.",
+                    "execution": {
+                        "turn_id": turn,
+                        "records": rows,
+                        "deliverables": [str(path)],
+                        "artifact_id": "baseline",
+                    },
+                }
+            ]
+        },
+        "signals": [{"source": "holdout", "satisfied": None, "items": [{"id": "quote-correct", "result": "unknown"}]}],
+    }
+    write(file, saved)
+    exported = build_record(run, scenario)
+    assert exported["rounds"] == []
+    baseline = exported["baseline"]
+    assert baseline["number"] == 0
+    assert baseline["drills"][0]["session"] == "holdout-student"
+    assert baseline["drills"][0]["card"] == "student"
+    assert baseline["evaluation"]["items"][0]["result"] == "unknown"
+    assert exported["requirements_ledger"]["holdout"][0]["unknown"] == 1
+    out = export_record(run, tmp_path / "exported", scenario)
+    copied = json.loads((out / "record.json").read_text())["baseline"]["drills"][0]["exchanges"][0]["delivered"][0]
+    assert (out / copied["path"]).read_text() == "A supplied quote."
+
+
 def test_a_drill_played_on_a_replica_is_read_from_the_replicas_folder(tmp_path):
     run, scenario = make_run(tmp_path, rounds=[], status="error", error="stopped")
     turn = "f6" * 16
@@ -1114,6 +1160,60 @@ def test_the_owners_scorecard_is_read_from_the_analysis_record_when_its_signal_c
     assert _analysis(item, None)["waiting_on_material"] == ["deck-aesthetics"]
 
 
+def test_auxiliary_scores_preserve_private_owner_failures_and_the_declared_catalog():
+    item = {
+        "signals": [
+            {"source": "agency", "text": "The required artifact is missing."},
+            {"source": "assessor", "items": [{"id": "derived-style", "result": "pass", "expected": "Be concise."}]},
+            {"source": "self", "items": [{"id": "self-review:one", "result": "unknown"}]},
+        ],
+        "analysis": [
+            {
+                "source": "agency",
+                "scorecard": {
+                    "items": [{"id": "artifact", "result": "fail", "expected": "Deliver the required artifact."}],
+                    "satisfied": False,
+                },
+            }
+        ],
+    }
+    scenario = {
+        "criteria": [
+            {"id": "artifact", "check": "Deliver the required artifact.", "severity": "red_line"},
+            {"id": "accuracy", "check": "Use the supplied facts.", "severity": "standard"},
+        ]
+    }
+    criteria = record._criteria(scenario, {"rounds": [item]})
+    assert [row["id"] for row in criteria] == ["artifact", "accuracy", "derived-style", "self-review:one"]
+    measured = record._evaluation(item, {row["id"]: row["severity"] for row in criteria})
+    assert {tuple(row[key] for key in ("criterion", "source", "result")) for row in measured["items"]} == {
+        ("artifact", "agency", "fail"),
+        ("derived-style", "assessor", "pass"),
+        ("self-review:one", "self", "unknown"),
+    }
+    assert next(row for row in measured["items"] if row["criterion"] == "artifact")["severity"] == "red_line"
+    item["signals"].append({"source": "agency", **item["analysis"][0]["scorecard"]})
+    repeated = record._evaluation(item, {})
+    assert len([row for row in repeated["items"] if row["source"] == "agency"]) == 1
+
+
+def test_a_passing_auxiliary_judge_cannot_hide_an_unknown_verdict_for_the_same_rule():
+    item = {
+        "number": 1,
+        "evaluation": {
+            "items": [
+                {"criterion": "claim", "source": "agency", "result": "unknown"},
+                {"criterion": "claim", "source": "assessor", "result": "pass"},
+            ]
+        },
+        "analysis": {"requirements": []},
+        "mechanism_evidence": [],
+    }
+    moment = record._moment("claim", 1, item, [])
+    assert moment["result"] == "unknown"
+    assert (moment["passes"], moment["fails"], moment["unknown"]) == (1, 0, 1)
+
+
 def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_place(tmp_path):
     from experimental.harness.scenario.digest import digest
     from experimental.simulation.bench.scenario import BUNDLED
@@ -1138,3 +1238,496 @@ def test_the_record_reads_the_scenario_the_run_used_and_never_another_in_its_pla
     later.mkdir()
     (later / "settings.json").write_text(json.dumps(settings))
     assert not record.keep_scenario(later, shop) and not (later / "scenario").exists()
+
+
+def test_a_drill_is_matched_to_its_card_through_the_set_and_exam_prefixes_and_repeats():
+    from experimental.simulation.bench.record import _card
+
+    cards = {"family", "student"}
+    assert _card("family", cards) == "family" and _card("s2-family", cards) == "family"
+    assert _card("holdout-student-2", cards) == "student" and _card("s1-family-3", cards) == "family"
+    assert _card("stranger", cards) == "stranger"
+
+
+def test_scenario_identity_ignores_runtime_cache_but_checks_legacy_hashes(tmp_path):
+    from experimental.harness.scenario.digest import digest
+
+    source = tmp_path / "case"
+    write(source / "scenario.json", {"name": "source"})
+    original = digest(source)
+    write(source / "__pycache__" / "owner.pyc", b"cache-one")
+    write(source / ".local" / "state", "local")
+    assert digest(source) == original
+    legacy = digest(source, include_generated=True)
+    assert legacy != original
+    assert record._scenario_matches(source, {"scenario_digest": legacy})
+    assert not record._scenario_matches(source, {"scenario_digest": legacy, "scenario_digest_format": "source-v2"})
+    assert record._scenario_matches(source, {"scenario_digest": original, "scenario_digest_format": "source-v2"})
+    write(source / "scenario.json", {"name": "changed"})
+    assert not record._scenario_matches(source, {"scenario_digest": original})
+
+
+def test_scenario_export_keeps_contract_handouts_and_helpers_without_local_state(tmp_path):
+    source, out = tmp_path / "case", tmp_path / "export"
+    retained = ["contract.json", "handouts/customer.md", "lab/tool.py", "owner_helpers.py", "materials/policy/SKILL.md"]
+    for relative in retained:
+        write(source / relative, "retained")
+    for relative in [".local/state", "__pycache__/owner.pyc", "config.json", "credentials/token"]:
+        write(source / relative, "private")
+    exported = {"inputs": {"materials": [{"name": "policy"}]}}
+    record._scenario_assets(exported, {"root": source}, out)
+    files = sorted(
+        p.relative_to(out / "assets/scenario").as_posix() for p in (out / "assets/scenario").rglob("*") if p.is_file()
+    )
+    assert files == sorted(retained)
+    assert exported["inputs"]["materials"][0]["copy"] == "assets/scenario/materials/policy/SKILL.md"
+
+
+def test_exam_evidence_is_bound_to_its_own_turns_and_exported_apart_from_training(tmp_path):
+    from dataclasses import asdict
+
+    from experimental.harness.assessor.standard import Standard
+    from experimental.harness.scenario.digest import digest
+
+    run, scenario = make_run(tmp_path)
+    declared = json.loads((scenario / "scenario.json").read_text())["criteria"]
+    standard = Standard.declared((row["id"], row["check"]) for row in declared)
+    frozen_criteria = json.loads(json.dumps([asdict(row) for row in standard.criteria]))
+    iteration = run / "iteration/r1.json"
+    saved = json.loads(iteration.read_text())
+    assessments = []
+    for number, turn in [(0, "a9" * 16), (1, "b9" * 16), (2, "c9" * 16)]:
+        path = write(run / "deliverables" / turn / "answer.md", f"Exam answer {number}.")
+        sessions = {
+            "holdout-student": [
+                {
+                    "user": f"Exam request {number}.",
+                    "execution": {
+                        "turn_id": turn,
+                        "records": [text_row(turn, f"Exam reply {number}.")],
+                        "deliverables": [str(path)],
+                        "artifact_id": f"exam-version-{number}",
+                    },
+                }
+            ]
+        }
+        signal = {
+            "source": "holdout",
+            "satisfied": number > 0,
+            "items": [
+                {"id": row["id"], "result": "pass" if number else "fail", "session": "holdout-student"}
+                for row in declared
+            ],
+        }
+        if number == 0:
+            saved["baseline"] = {"sessions": sessions, "signals": [signal]}
+        else:
+            saved["rounds"][number - 1].update(holdout=sessions, holdout_signals=[signal])
+        assessments.append(
+            {
+                "id": f"exam-{number}",
+                "rubric_version": standard.version,
+                "criteria": frozen_criteria,
+                "items": signal["items"],
+                "checks": [],
+                "evidence": {
+                    "conversations": {
+                        "holdout-student": [
+                            {
+                                "user": f"Exam request {number}.",
+                                "assistant": f"Exam reply {number}.",
+                                "delivered": {"answer.md": f"Exam answer {number}."},
+                            }
+                        ]
+                    },
+                    "executions": {
+                        "holdout-student": [{"turn_id": turn, "actions": [], "reports": [], "delivered": ["answer.md"]}]
+                    },
+                    "references": {
+                        "holdout-student": {
+                            "expected": f"answer-{number}",
+                            "source": f"version-{number}",
+                            "scenario_digest": digest(scenario),
+                        }
+                    },
+                    "materials": {"policy": f"Frozen policy {number}."},
+                },
+            }
+        )
+        assessments[-1]["evidence_digest"] = record.rubric_digest(assessments[-1]["evidence"])
+        assessments[-1]["execution_digest"] = record.execution_digest(
+            record._recorded_sessions({"sessions": sessions}, run)
+        )
+    write(iteration, saved)
+    unrelated = {
+        **assessments[0],
+        "id": "unrelated",
+        "evidence": {"executions": {"holdout-student": [{"turn_id": "other"}]}},
+    }
+    write(run / "holdout-standard.json", {"assessments": [assessments[2], unrelated, assessments[0], assessments[1]]})
+    data = build_record(run, scenario)
+    assert len(data["rounds"]) == 2 and len(data["exams"]) == 2
+    assert data["run"]["delivery_root"] == str(run.resolve())
+    for number, exam in enumerate([data["baseline"], *data["exams"]]):
+        assert exam["number"] == number and exam["assessment_binding"] == "session_and_turn_ids"
+        assert [row["id"] for row in exam["assessments"]] == [f"exam-{number}"]
+        assert exam["assessments"][0]["rubric_version"] == standard.version
+        assert exam["drills"][0]["references"]["expected"] == f"answer-{number}"
+        assert exam["drills"][0]["exchanges"][0]["assistant"] == f"Exam reply {number}."
+    out = export_record(run, tmp_path / "export", scenario)
+    exported = json.loads((out / "record.json").read_text())
+    assert exported["run"]["delivery_root"] == str(out.resolve())
+    for number, exam in enumerate([exported["baseline"], *exported["exams"]]):
+        file = exam["drills"][0]["exchanges"][0]["delivered"][0]
+        assert (out / file["path"]).read_text() == f"Exam answer {number}."
+    transcript = (out / "transcript.md").read_text()
+    assert "Baseline examination (round 0)" in transcript and "Held-out examination after round 2" in transcript
+    write(run / "deliverables" / ("a9" * 16) / "answer.md", "A replacement that the examiner never saw.")
+    changed = build_record(run, scenario)
+    assert changed["baseline"]["assessment_binding"] == "unavailable"
+    assert all(exam["assessment_binding"] == "session_and_turn_ids" for exam in changed["exams"])
+    write(run / "holdout-standard.json", {"assessments": [unrelated]})
+    data = build_record(run, scenario)
+    assert all(exam["assessment_binding"] == "unavailable" for exam in [data["baseline"], *data["exams"]])
+    assert all(exam["drills"][0]["references"] == {} for exam in data["exams"])
+
+
+@pytest.mark.parametrize(
+    "results,expected",
+    [
+        (["not_applicable"], "not_exercised"),
+        (["pass", "not_applicable"], "never_failed"),
+        (["fail", "not_applicable", "pass"], "held_since_round_3"),
+    ],
+)
+def test_inapplicable_rounds_do_not_become_failures_in_the_criterion_status(results, expected):
+    timeline = [{"round": number, "result": result} for number, result in enumerate(results, 1)]
+    assert record._status(timeline) == expected
+
+
+def test_owner_packets_and_full_filed_bodies_keep_their_round_and_turn_binding(tmp_path):
+    from experimental.harness.assessor.rubric import digest as rubric_digest
+    from experimental.harness.scenario.digest import digest
+
+    run, scenario = make_run(tmp_path)
+    criteria = [
+        {"id": row["id"], "check": row["check"], "severity": row.get("severity", "standard"), "applies_when": ""}
+        for row in json.loads((scenario / "scenario.json").read_text())["criteria"]
+    ]
+    body = "Internal note details. " * 30
+    named = {row["id"]: f"check-{number}" for number, row in enumerate(criteria, 1)}
+    conversations = [
+        {
+            "customer": f"How much for two? my key is {KEY}",
+            "assistant": f"Hello, I am the AI consultant. So {QUOTE}. Bearer abc.def.ghi",
+            "delivered": ["deck.pptx"],
+        },
+        {"customer": "How much for two?", "assistant": "It is 4100 per person."},
+    ]
+    rounds = json.loads((run / "iteration/r1.json").read_text())["rounds"]
+    for number, file, turn in [(1, "a1.json", T1), (2, "a3.json", T2)]:
+        p = run / "analysis" / file
+        owner = json.loads(p.read_text())
+        owner.update(
+            assessment_id=f"owner-{number}",
+            rubric_version=rubric_digest(criteria),
+            scenario_digest=digest(scenario),
+            evaluation=number,
+            execution_ids={"family": [turn]},
+            criteria=criteria,
+            criterion_handles=named,
+            evidence={
+                "criteria": [{**row, "id": named[row["id"]]} for row in criteria],
+                "conversations": {"family": [conversations[number - 1]]},
+                "filed": {"family": {"workdir/department/note.md": body + str(number)}},
+                "references": {"family": {"current": number}},
+            },
+        )
+        owner["evidence_digest"] = rubric_digest(owner["evidence"])
+        owner["execution_digest"] = record.execution_digest(record._recorded_sessions(rounds[number - 1], run))
+        owner["scorecard"]["items"].append({"id": "deck-structure", "result": "unknown"})
+        write(p, owner)
+    wrong = run / "analysis/a2.json"
+    write(
+        wrong,
+        {
+            "source": "agency",
+            "assessment_id": "wrong-turn",
+            "execution_ids": {"family": [T2]},
+            "evidence": {"filed": {"family": {"workdir/department/note.md": "Wrong packet."}}},
+        },
+    )
+    write(
+        run / "references.jsonl", json.dumps({"evaluation": 1, "drill": "family", "references": {"stale": True}}) + "\n"
+    )
+    data = build_record(run, scenario)
+    for number, item in enumerate(data["rounds"], 1):
+        assert item["owner_assessment_binding"] == "session_and_turn_ids"
+        assert item["drills"][0]["references"] == {"current": number}
+        assert item["drills"][0]["references_binding"] == "owner_assessment_turn_ids"
+        assert [a["assessment_id"] for a in item["owner_assessments"]] == [f"owner-{number}"]
+        assert item["drills"][0]["filed"]["workdir/department/note.md"] == body + str(number)
+    out = export_record(run, tmp_path / "export", scenario)
+    exported = json.loads((out / "record.json").read_text())
+    assert exported["run"]["scenario_source"] == str((out / "assets/scenario").resolve())
+    assert (Path(exported["run"]["scenario_source"]) / "scenario.json").is_file()
+    assert body in (out / "transcript.md").read_text()
+    for file in ("a1.json", "a3.json"):
+        path = run / "analysis" / file
+        d = json.loads(path.read_text())
+        d["execution_ids"] = {"family": ["unrelated"]}
+        write(path, d)
+    missing = build_record(run, scenario)
+    assert all(item["owner_assessment_binding"] == "unavailable" for item in missing["rounds"])
+
+
+def test_exported_source_binding_survives_removal_of_the_original_scenario(tmp_path):
+    import shutil
+
+    from experimental.harness.scenario.digest import digest
+    from experimental.simulation.bench.value import _delivery_check
+
+    run, scenario = make_run(tmp_path)
+    settings_path = run / "settings.json"
+    settings = json.loads(settings_path.read_text())
+    settings.update(scenario_digest=digest(scenario), scenario_digest_format="source-v2")
+    write(settings_path, settings)
+    out = export_record(run, tmp_path / "export", scenario)
+    exported = json.loads((out / "record.json").read_text())
+    shutil.rmtree(scenario)
+    assert exported["run"]["settings"]["scenario_digest"] == settings["scenario_digest"]
+    assert _delivery_check(exported, exported["rounds"][-1])["verified"] is True
+
+
+@pytest.mark.parametrize(
+    "changed",
+    [
+        "execution_ids",
+        "scenario_digest",
+        "rubric_version",
+        "criteria",
+        "assessment_id",
+        "evidence",
+        "packet_conversation",
+        "packet_criteria",
+        "criterion_handles",
+        "packet_references",
+        "packet_cards",
+        "packet_files",
+        "operation",
+        "artifact_id",
+        "delivered_bytes",
+        "evidence_digest",
+        "execution_digest",
+    ],
+)
+def test_foreign_private_scorecards_are_retained_as_rejected_unknowns_not_passes(tmp_path, changed):
+    from copy import deepcopy
+
+    from experimental.harness.assessor.rubric import digest as rubric_digest
+    from experimental.harness.scenario.digest import digest
+
+    scenario = scenario_dir(tmp_path)
+    context = record._scenario(scenario, {})
+    criteria = [
+        {"id": row["id"], "check": row["check"], "severity": row.get("severity", "standard"), "applies_when": ""}
+        for row in context["criteria"]
+    ]
+    scorecard = {
+        "source": "agency",
+        "satisfied": True,
+        "metrics": {"score": 1},
+        "items": [{"id": row["id"], "result": "pass"} for row in criteria],
+    }
+    data = {
+        "source": "agency",
+        "scorecard": scorecard,
+        "execution_ids": {"family": [T1]},
+        "scenario_digest": digest(scenario),
+        "rubric_version": rubric_digest(criteria),
+        "criteria": criteria,
+        "assessment_id": "owner-assessment",
+        "criterion_handles": {row["id"]: f"check-{number}" for number, row in enumerate(criteria, 1)},
+        "evidence": {
+            "conversations": {"family": [{"customer": "", "assistant": "", "delivered": ["quote.md"]}]},
+            "criteria": [{**row, "id": f"check-{number}"} for number, row in enumerate(criteria, 1)],
+        },
+    }
+    delivered = write(tmp_path / "deliverables" / T1 / "quote.md", "The actual delivered quote.")
+    item = {
+        "sessions": {
+            "family": [
+                {"execution": {"turn_id": T1, "artifact_id": "original-harness", "deliverables": [str(delivered)]}}
+            ]
+        },
+        "analysis": [data],
+    }
+    data["evidence_digest"] = rubric_digest(data["evidence"])
+    data["execution_digest"] = record.execution_digest(record._recorded_sessions(item, tmp_path))
+    assert all(row["result"] == "pass" for row in record._evaluation(item, {}, context, root=tmp_path)["items"])
+    conflicting = deepcopy(data)
+    conflicting["scorecard"].update(
+        items=[{**row, "result": "unknown"} for row in scorecard["items"]], satisfied=None, metrics={}
+    )
+    authoritative = record._evaluation(
+        {**item, "analysis": [conflicting], "signals": [scorecard]}, {}, context, root=tmp_path
+    )
+    assert all(row["result"] == "unknown" for row in authoritative["items"])
+    assert authoritative["satisfied"] == [None] and authoritative["metrics"] == {}
+    broken = deepcopy(data)
+    if changed in ("assessment_id", "evidence"):
+        broken.pop(changed)
+    elif changed == "packet_conversation":
+        broken["evidence"]["conversations"]["family"][0]["customer"] = "Another request."
+    elif changed == "packet_criteria":
+        broken["evidence"]["criteria"][0]["check"] = "A foreign rule."
+    elif changed.startswith("packet_"):
+        field = {"packet_references": "references", "packet_cards": "cards", "packet_files": "deliverables"}[changed]
+        broken["evidence"][field] = {"family": "Foreign evidence."}
+    elif changed == "delivered_bytes":
+        delivered.write_text("Changed after assessment.")
+    elif changed == "artifact_id":
+        item["sessions"]["family"][0]["execution"]["artifact_id"] = "another-harness"
+    elif changed == "operation":
+        item["sessions"]["family"][0]["execution"]["records"] = [{"kind": "runtime.error", "error": "Write failed."}]
+    else:
+        broken[changed] = {"family": [T2]} if changed == "execution_ids" else [] if changed == "criteria" else "foreign"
+    item["analysis"] = [broken]
+    item["signals"] = [scorecard, {"source": "assessor", "items": scorecard["items"]}]
+    judged = record._evaluation(item, {}, context, root=tmp_path)
+    assert len(judged["rejected_scorecards"]) == 1
+    assert judged["satisfied"][0] is None and judged["metrics"] == {}
+    rejected = judged["rejected_scorecards"][0]
+    assert rejected["rejected_scorecard"]["items"] == scorecard["items"]
+    assert all(row["result"] == "unknown" for row in judged["items"] if row["source"] == "agency")
+    for criterion in criteria:
+        moment = record._moment(
+            criterion["id"], 1, {"evaluation": judged, "analysis": {"requirements": []}, "mechanism_evidence": []}, []
+        )
+        assert moment["result"] == "unknown"
+
+
+@pytest.mark.parametrize(
+    "mismatch",
+    [
+        "rubric_version",
+        "criteria",
+        "scenario_digest",
+        "missing_digest",
+        "missing_session",
+        "missing_items",
+        "partial_items",
+        "items_conflict",
+        "final_items_conflict",
+        "conversation",
+        "operations",
+        "delivery_text",
+        "artifact_id",
+        "missing_execution_digest",
+        "missing_evidence_digest",
+    ],
+)
+def test_unverified_or_conflicting_exam_packets_do_not_certify_signal_passes(tmp_path, mismatch):
+    from dataclasses import asdict
+
+    from experimental.harness.assessor.standard import Standard
+    from experimental.harness.scenario.digest import digest
+
+    scenario_path = scenario_dir(tmp_path)
+    scenario = record._scenario(scenario_path, {})
+    standard = Standard.declared((row["id"], row["check"]) for row in scenario["exam_criteria"])
+    items = [{"id": row["id"], "result": "pass"} for row in scenario["exam_criteria"]]
+    trial = {
+        "sessions": {"holdout-family": [{"execution": {"turn_id": T1}}]},
+        "signals": [{"source": "holdout", "items": items, "satisfied": True}],
+    }
+    packet = {
+        "id": "original",
+        "rubric_version": standard.version,
+        "criteria": json.loads(json.dumps([asdict(row) for row in standard.criteria])),
+        "items": items,
+        "evidence": {
+            "conversations": {"holdout-family": [{"user": "", "assistant": ""}]},
+            "executions": {"holdout-family": [{"turn_id": T1, "actions": [], "reports": [], "delivered": []}]},
+            "references": {"holdout-family": {"scenario_digest": digest(scenario_path)}},
+        },
+    }
+    packet["evidence_digest"] = record.rubric_digest(packet["evidence"])
+    packet["execution_digest"] = record.execution_digest(record._recorded_sessions(trial, tmp_path))
+    correct = record._exam(trial, 0, tmp_path, {"family"}, {}, [packet], scenario)
+    assert correct["assessment_binding"] == "session_and_turn_ids"
+    if mismatch == "scenario_digest":
+        packet["evidence"]["references"]["holdout-family"]["scenario_digest"] = "foreign"
+    elif mismatch == "missing_digest":
+        packet["evidence"]["references"]["holdout-family"].pop("scenario_digest")
+    elif mismatch == "missing_session":
+        packet["evidence"]["references"].clear()
+    elif mismatch == "missing_items":
+        packet.pop("items")
+    elif mismatch == "partial_items":
+        packet["items"] = items[:1]
+    elif mismatch == "items_conflict":
+        packet["items"] = [{**row, "result": "unknown"} for row in items]
+    elif mismatch == "final_items_conflict":
+        packet["final_items"] = [{**row, "result": "fail"} for row in items]
+    elif mismatch == "conversation":
+        packet["evidence"]["conversations"]["holdout-family"][0]["user"] = "Another request."
+    elif mismatch == "operations":
+        packet["evidence"]["executions"]["holdout-family"][0]["actions"] = [{"name": "invented", "ok": True}]
+    elif mismatch == "delivery_text":
+        packet["evidence"]["conversations"]["holdout-family"][0]["delivered"] = {"unobserved.md": "Foreign work."}
+    elif mismatch == "artifact_id":
+        trial["sessions"]["holdout-family"][0]["execution"]["artifact_id"] = "another-harness"
+    elif mismatch in ("missing_execution_digest", "missing_evidence_digest"):
+        packet.pop(mismatch.removeprefix("missing_"))
+    else:
+        packet[mismatch] = [] if mismatch == "criteria" else "foreign"
+    rejected = record._exam(trial, 0, tmp_path, {"family"}, {}, [packet], scenario)
+    if mismatch.endswith("_conflict"):
+        assert rejected["assessment_binding"] == "session_and_turn_ids" and not rejected["rejected_assessments"]
+    else:
+        assert rejected["assessment_binding"] == "unavailable" and len(rejected["rejected_assessments"]) == 1
+    expected = "fail" if mismatch == "final_items_conflict" else "unknown"
+    assert all(row["result"] == expected for row in rejected["evaluation"]["items"])
+    assert rejected["evaluation"]["satisfied"] == [False if expected == "fail" else None]
+    assert all(row["result"] == "pass" for row in rejected["reported_evaluation"]["items"])
+
+
+@pytest.mark.parametrize("packet", [None, {"evidence": {"executions": {"holdout-family": [{"turn_id": "other"}]}}}])
+def test_missing_or_wrong_turn_exam_packets_keep_reported_passes_unverified(tmp_path, packet):
+    path = scenario_dir(tmp_path)
+    scenario = record._scenario(path, {})
+    trial = {
+        "sessions": {"holdout-family": [{"execution": {"turn_id": T1}}]},
+        "signals": [
+            {"source": "holdout", "items": [{"id": row["id"], "result": "pass"} for row in scenario["exam_criteria"]]}
+        ],
+    }
+    exam = record._exam(trial, 0, tmp_path, {"family"}, {}, [] if packet is None else [packet], scenario)
+    assert exam["assessment_binding"] == "unavailable"
+    assert all(row["result"] == "unknown" for row in exam["evaluation"]["items"])
+    assert all(row["result"] == "pass" for row in exam["reported_evaluation"]["items"])
+
+
+def test_legacy_private_scores_remain_reported_but_cannot_prove_verified_core_or_learning():
+    from experimental.simulation.bench.value import core, cultivated
+
+    criteria = [{"id": "claim", "check": "Use the source.", "severity": "red_line"}]
+    rounds = []
+    for number, result in [(1, "fail"), (2, "pass")]:
+        score = {"source": "agency", "scorecard": {"items": [{"id": "claim", "result": result}]}}
+        rounds.append(
+            {
+                "number": number,
+                "evaluation": record._evaluation({"analysis": [score]}, {"claim": "red_line"}),
+                "analysis": {"requirements": []},
+                "mechanism_evidence": [],
+            }
+        )
+    ledger = record.ledger(criteria, rounds, [])
+    assert [row["result"] for row in ledger[0]["timeline"]] == ["fail", "pass"]
+    assert all(row["binding_verified"] is False for row in ledger[0]["timeline"])
+    value = {"rounds": rounds, "ledger": ledger}
+    assert core(value)["ok"] is False
+    ledger[0]["sedimented_in"] = [{"round": 1, "scope": "root", "target": "memory.prompt"}]
+    assert cultivated(value) == []

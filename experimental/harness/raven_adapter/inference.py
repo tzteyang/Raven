@@ -22,6 +22,7 @@ from experimental.harness.raven_adapter.calls import current_operation
 from experimental.harness.raven_adapter.inspection import fingerprint
 from experimental.harness.raven_adapter.materialize import load_factory
 from raven.contracts.llm_provider import REASONING_EFFORT_LADDER, GenerationSettings
+from raven.providers.base import send_max_tokens
 from raven.providers.usage import token_count
 
 
@@ -125,8 +126,8 @@ class Inference(StrategyInference):
             "batch": "each(requests, output_type=...) makes several judgments of one operation at once",
             "max_output_tokens": {
                 "chosen_by": "strategy",
-                "default": generation.max_tokens or "the worker model's own ceiling",
-                "ceiling": generation.max_tokens or "the worker model's own ceiling",
+                "default": self._ceiling(),
+                "ceiling": self._ceiling(),
                 "includes_reasoning": True,
             },
             "reasoning_effort": {
@@ -145,6 +146,14 @@ class Inference(StrategyInference):
 
     def _generation(self) -> GenerationSettings:
         return getattr(self.provider, "generation", None) or GenerationSettings()
+
+    def _ceiling(self) -> int:
+        """The output allowance the worker's own requests carry: its pinned setting bounded by what the model
+        declares. Named on every judgment, since a plain `chat` call volunteers none and the far side's default
+        (8192 on some endpoints, reasoning included) cuts a judgment off before its answer."""
+        model = self._model()
+        wire = getattr(self.provider, "wire_model_id", None)
+        return send_max_tokens(self._generation(), wire(model) if callable(wire) else model)
 
     def _operation(self):
         """The current operation and the identity every record of its judgments carries."""
@@ -167,8 +176,8 @@ class Inference(StrategyInference):
         than the worker's own settings."""
         if max_output_tokens is not None and (type(max_output_tokens) is not int or max_output_tokens < 1):
             raise ValueError("max_output_tokens must be a positive integer or omitted")
-        ceiling = self._generation().max_tokens
-        if max_output_tokens is not None and ceiling is not None and max_output_tokens > ceiling:
+        ceiling = self._ceiling()
+        if max_output_tokens is not None and max_output_tokens > ceiling:
             raise ValueError(f"max_output_tokens may not exceed the worker's own output allowance of {ceiling}")
         if reasoning_effort is not None and reasoning_effort not in REASONING_EFFORT_LADDER:
             raise ValueError(f"reasoning_effort must be one of {list(REASONING_EFFORT_LADDER)} or omitted")
@@ -274,11 +283,17 @@ class Inference(StrategyInference):
 
     async def _judge(self, messages, schema, output_type, chosen, context, timeout, number, measure, key):
         generation = self._generation()
-        # Only what the strategy chose is sent; the provider applies the worker's own settings to the rest.
-        call = {"model": self.provider.get_default_model(), "tools": None, "tool_choice": None, **chosen}
+        # Beyond the output ceiling, only what the strategy chose is sent; the provider applies the worker's own
+        # settings to the rest.
+        call = {
+            "model": self.provider.get_default_model(),
+            "tools": None,
+            "tool_choice": None,
+            "max_tokens": self._ceiling(),
+            **chosen,
+        }
         parameters = {
             **call,
-            "max_tokens": chosen.get("max_tokens", generation.max_tokens),
             "reasoning_effort": chosen.get("reasoning_effort", generation.reasoning_effort),
             "temperature": generation.temperature,
             "chosen": sorted(chosen),

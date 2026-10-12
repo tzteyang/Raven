@@ -591,3 +591,55 @@ async def test_the_curator_never_receives_the_reference_answers_it_could_copy_in
     assert observed[0]["turn_id"] == "turn-1" and observed[0]["artifact_id"] == "artifact-1"
     assert observed[0]["records"][0]["kind"] == "runner.event"
     assert {row["session"] for row in observed} == {opaque("case:capital")}
+
+
+class Once:
+    """Asks one thing per conversation, so the same conversant can be played in several rounds."""
+
+    def __init__(self, name):
+        self.name = name
+
+    async def speak(self, exchanges):
+        return None if exchanges else f"ask {self.name}"
+
+
+@pytest.mark.asyncio
+async def test_each_round_plays_its_own_trials_and_the_exam_only_in_the_rounds_named(tmp_path, curations, analyses):
+    worker = FakeWorker(tmp_path)
+    analyses.scripted.extend([CURATE, CURATE, CURATE])
+    by_round = {1: [Conversation(Once("first"))], 2: [Conversation(Once("second"))]}
+    exam = ([Conversation(Once("exam"))], [Verifier(passing(), passing())])
+    rounds = await run(
+        worker,
+        object(),
+        lambda index: by_round[min(index, 2)],
+        [Verifier(failing(), failing(), failing())],
+        holdout=exam,
+        holdout_rounds=frozenset({1, 3}),
+        limits=Limits(max_rounds=3),
+    )
+    assert len(rounds) == 3
+    assert [text for _, text in worker.runs] == ["ask first", "ask exam", "ask second", "ask second", "ask exam"]
+
+
+@pytest.mark.asyncio
+async def test_round_zero_plays_the_exam_once_before_onboarding_and_keeps_it_apart(tmp_path, curations, analyses):
+    worker = FakeWorker(tmp_path)
+    analyses.scripted.extend([CURATE, CURATE])
+    exam = ([Conversation(Once("exam"))], [Verifier(passing(), passing())])
+    rounds = await run(
+        worker,
+        object(),
+        [Conversation(Once("drill"))],
+        [Verifier(failing(), failing())],
+        holdout=exam,
+        holdout_rounds=frozenset({0, 2}),
+        limits=Limits(max_rounds=2),
+    )
+    assert len(rounds) == 2
+    assert [text for _, text in worker.runs] == ["ask exam", "ask drill", "ask drill", "ask exam"]
+    path = next((tmp_path / "iteration").glob("*.json"))
+    record = json.loads(path.read_text())
+    assert list(record["baseline"]["sessions"]) and record["baseline"]["signals"][0]["satisfied"] is True
+    assert "exam" not in json.dumps(record["rounds"][0]["sessions"])
+    assert [row["round"] for row in load(path)["ledger"]["holdout"]] == [0, 2]

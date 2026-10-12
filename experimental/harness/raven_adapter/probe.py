@@ -55,13 +55,8 @@ async def exercise_translations(bound) -> None:
         SESSION.reset(token)
 
 
-def _event(kind, scope, text):
-    common = {
-        "scope": scope,
-        "event_id": f"validation-probe-{kind}",
-        "allowed_controls": ALL_CONTROLS,
-        "can_guide": True,
-    }
+def _event(kind, action, text):
+    common = {**action.envelope(ALL_CONTROLS, can_guide=True), "event_id": f"validation-probe-{kind}"}
     messages = [{"role": "user", "content": text}]
     if kind == "input":
         return InputEvent(**common, text=text)
@@ -85,7 +80,7 @@ async def _action(bound, text) -> None:
         return
     await action.prepare()
     for kind in action.config.events:
-        event = _event(kind, action.scope(), text)
+        event = _event(kind, action, text)
         if event is None:
             bound.recorder.add(PROBE, strategy="action", event=kind, status="not_synthesised")
             continue

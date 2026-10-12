@@ -121,6 +121,32 @@ def test_a_run_that_left_its_bounds_is_invalid_and_an_unscanned_one_cannot_quali
     assert unscanned["verdict"] == "partial" and not unscanned["checks"]["isolated"]["ok"]
 
 
+def test_unknown_or_missing_core_coverage_cannot_qualify_as_a_pass():
+    from experimental.simulation.bench.value import core
+
+    rounds = [round_(1)]
+    for timeline in ([moment(1, "unknown")], [], [moment(1, "not_exercised")]):
+        result = core(record(rounds, [entry(timeline, [], "red_line")]))
+        assert result["ok"] is False and "unresolved coverage" in result["detail"]
+    assert core(record(rounds, []))["ok"] is False
+    assert core(record(rounds, [entry([moment(1, "pass")], [], "red_line")]))["ok"] is True
+
+
+def test_exported_laundry_settings_select_file_delivery_without_requiring_a_deck():
+    from experimental.simulation.bench.value import _delivered
+
+    exported = {"run": {"settings": {"scenario": "laundry_short_video"}}}
+    item = {"drills": [drill("one", deck=False)]}
+    item["drills"][0]["exchanges"][0]["delivered"][0]["name"] = "script.md"
+    item["drills"][0]["references"] = {
+        "versions": [{"source": "script.md", "lines": [{"read_as": "Spoken line."} for _ in range(8)]}],
+    }
+    assert _delivered(exported, item)
+    item["drills"][0]["exchanges"][0]["delivered"] = []
+    assert not _delivered(exported, item)
+    assert not _delivered({"run": {}}, {"drills": [drill("one", deck=False)]})
+
+
 def test_only_rows_of_the_sedimented_target_in_the_rules_drills_count():
     elsewhere = [
         round_(1),
@@ -241,3 +267,61 @@ async def test_a_model_names_the_rules_each_intervention_reason_enforces_within_
     errors = [message["content"] for message in provider.requests[1]["messages"] if message["role"] == "tool"]
     assert "may name only" in errors[0]
     assert await attribute(record([round_(1)], []), provider) == {"links": {}, "interventions": 0}
+
+
+def test_delivery_verification_uses_frozen_case_root_and_rejects_changed_source(tmp_path, monkeypatch):
+    from pathlib import Path
+
+    from experimental.harness.scenario.digest import digest
+    from experimental.simulation.bench.value import _delivery_check
+    from experimental.simulation.cases.laundry_short_video import owner
+
+    frozen = tmp_path / "case"
+    frozen.mkdir()
+    source = Path(owner.__file__).parent
+    for path in source.rglob("*.py"):
+        target = frozen / path.relative_to(source)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        target.write_bytes(path.read_bytes())
+    (frozen / "request.md").write_text("The frozen request requires a script.")
+    captured = []
+
+    def predicate(item):
+        captured.append((item["scenario_root"], item["delivery_root"]))
+        return False
+
+    monkeypatch.setattr(owner, "DELIVERED", predicate)
+    settings = {"scenario": "laundry_short_video", "scenario_dir": str(frozen), "scenario_digest": digest(frozen)}
+    exported = {"run": {"settings": settings, "delivery_root": str(tmp_path / "state")}}
+    result = _delivery_check(exported, {"drills": []})
+    assert result["verified"] is True and result["ok"] is False
+    assert captured == [(str(frozen), str(tmp_path / "state"))]
+    (frozen / "request.md").write_text("Changed request.")
+    result = _delivery_check(exported, {"drills": []})
+    assert result["verified"] is False and "unavailable or changed" in result["detail"]
+    assert len(captured) == 1
+    (frozen / "helper.py").write_text('"""An unavailable evaluator helper."""\n')
+    settings["scenario_digest"] = digest(frozen)
+    result = _delivery_check(exported, {"drills": []})
+    assert result["verified"] is False and "evaluator modules differ" in result["detail"]
+    assert len(captured) == 1
+    (frozen / "owner.py").write_text("old evaluator version")
+    settings["scenario_digest"] = digest(frozen)
+    result = _delivery_check(exported, {"drills": []})
+    assert result["verified"] is False and "owner source differs" in result["detail"]
+    assert "handed nothing" not in result["detail"]
+    assert len(captured) == 1
+
+
+def test_inapplicable_checks_neither_prove_performance_nor_break_other_applicable_checks():
+    from experimental.simulation.bench.value import core
+
+    rounds = [round_(1), round_(2), round_(3)]
+    inactive = entry([moment(3, "not_applicable")], [], criterion="seasonal-rule")
+    assert core(record(rounds, [inactive]))["ok"] is False
+    assert core(record(rounds, [inactive, entry([moment(3, "pass")], [])]))["ok"] is True
+    timeline = [moment(1, "fail"), moment(2, "not_applicable"), moment(3, "pass")]
+    grown = cultivated(record(rounds, [entry(timeline, [landing(1)])]))
+    assert len(grown) == 1 and grown[0]["held_in"] == [3]
+    timeline[-1] = moment(3, "not_applicable")
+    assert cultivated(record(rounds, [entry(timeline, [landing(1)])])) == []

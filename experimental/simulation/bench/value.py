@@ -34,6 +34,8 @@ A hard case is read the same deterministic way:
 """
 
 import argparse
+import hashlib
+import importlib
 import json
 from pathlib import Path
 
@@ -53,16 +55,75 @@ def _completed(record: dict) -> list[dict]:
 
 
 def _delivered(record: dict, item: dict) -> bool:
-    return delivered_for(record.get("run", {}).get("scenario"))(item)
+    return _delivery_check(record, item)["ok"]
+
+
+def _delivery_check(record: dict, item: dict) -> dict:
+    """Bind delivery verification to the run's scenario, keeping unavailable evidence distinct from a missed task."""
+    run = record.get("run", {})
+    settings = run.get("settings", {})
+    scenario = run.get("scenario") or settings.get("scenario")
+    source = run.get("scenario_source") or settings.get("scenario_dir")
+    root = Path(source) if source else None
+    try:
+        if root is not None:
+            from experimental.simulation.bench.record import _scenario_matches
+
+            if not root.is_dir() or not _scenario_matches(root, settings):
+                raise ValueError("the run's scenario source is unavailable or changed")
+        predicate = delivered_for(scenario, scenario_root=root)
+        ok = predicate({**item, "delivery_root": run.get("delivery_root")})
+    except ValueError as exc:
+        return {"ok": False, "verified": False, "detail": f"delivery verification unavailable: {exc}"}
+    return {
+        "ok": ok,
+        "verified": True,
+        "detail": "every drill of the last round handed over what the case delivers"
+        if ok
+        else "some drill of the last round lacks the case's required delivery evidence",
+    }
 
 
 # Cases whose deliverables are documents rather than decks; the deck is the judge's historical default, so a record
 # without a case name (an older record, a synthetic one) is still judged as a deck case.
-DELIVERED = {"brand_strategist": files_delivered}
+DELIVERED = {"brand_strategist": files_delivered, "laundry_short_video": files_delivered}
 
 
-def delivered_for(scenario: str | None):
+def _case_code(root: Path) -> dict[str, str]:
+    """The case's evaluator modules, including helpers imported by its owner."""
+    return {
+        path.relative_to(root).as_posix(): hashlib.sha256(path.read_bytes()).hexdigest()
+        for path in root.rglob("*.py")
+        if path.is_file()
+        and not any(part.startswith(".") or part == "__pycache__" for part in path.relative_to(root).parts)
+    }
+
+
+def delivered_for(scenario: str | None, *, scenario_root: Path | None = None):
     """The delivery predicate a case is judged by: a file in every drill for a document case, else a deck."""
+    if scenario:
+        module = f"experimental.simulation.cases.{scenario}.owner"
+        try:
+            owner = importlib.import_module(module)
+        except ModuleNotFoundError as exc:
+            if exc.name not in (module, module.rpartition(".")[0]):
+                raise
+            if scenario_root is not None and (scenario_root / "owner.py").is_file():
+                raise ValueError("the run's delivery evaluator is not available") from exc
+        else:
+            if scenario_root is not None:
+                recorded_owner = scenario_root / "owner.py"
+                if recorded_owner.is_file() and recorded_owner.read_bytes() != Path(owner.__file__).read_bytes():
+                    raise ValueError("the run's owner source differs from the available delivery evaluator")
+                if recorded_owner.is_file() and _case_code(scenario_root) != _case_code(Path(owner.__file__).parent):
+                    raise ValueError("the run's case evaluator modules differ from the available delivery evaluator")
+            predicate = getattr(owner, "DELIVERED", None)
+            if callable(predicate):
+                return (
+                    (lambda item: predicate({**item, "scenario_root": str(scenario_root)}))
+                    if scenario_root is not None
+                    else predicate
+                )
     return DELIVERED.get(scenario or "", deck_delivered)
 
 
@@ -151,7 +212,11 @@ def _case(entry: dict, landings: list[dict]) -> dict:
 def _judged(record: dict, entry: dict) -> list[dict]:
     completed = {item["number"] for item in _completed(record)}
     return [
-        moment for moment in entry.get("timeline", []) if moment["round"] in completed and moment["result"] != "unknown"
+        moment
+        for moment in entry.get("timeline", [])
+        if moment["round"] in completed
+        and moment["result"] in ("pass", "fail", "mixed")
+        and moment.get("binding_verified") is not False
     ]
 
 
@@ -208,12 +273,24 @@ def core(record: dict) -> dict:
         return {"ok": False, "detail": "no completed round"}
     last = completed[-1]["number"]
     missed = {"red_line": [], "standard": []}
+    unresolved = []
+    checked = 0
     for entry in record.get("ledger", []):
+        if entry.get("severity") not in missed:
+            continue
         moment = next((m for m in entry.get("timeline", []) if m["round"] == last), None)
-        if moment and moment["result"] in ("fail", "mixed"):
+        verified = moment is not None and moment.get("binding_verified") is not False
+        checked += bool(verified and moment["result"] in ("pass", "fail", "mixed"))
+        if not verified or moment["result"] not in ("pass", "fail", "mixed", "not_applicable"):
+            unresolved.append(entry["criterion"])
+        if verified and moment["result"] in ("fail", "mixed"):
             missed["red_line" if entry.get("severity") == "red_line" else "standard"].append(entry["criterion"])
-    ok = not missed["red_line"] and len(missed["standard"]) <= TOLERATED
+    ok = checked > 0 and not unresolved and not missed["red_line"] and len(missed["standard"]) <= TOLERATED
     detail = f"round {last} missed {len(missed['red_line'])} red-line and {len(missed['standard'])} standard rules"
+    if not checked:
+        detail += "; no applicable owner criteria were verified"
+    if unresolved:
+        detail += f"; unresolved coverage: {', '.join(unresolved)}"
     return {"ok": ok, "detail": detail + (f": {', '.join(missed['red_line'] + missed['standard'])}" if not ok else "")}
 
 
@@ -264,7 +341,12 @@ def judge(record: dict) -> dict:
     completed = _completed(record)
     grown = cultivated(record)
     found, held = cases(record)
-    delivered = bool(completed) and _delivered(record, completed[-1])
+    delivery = (
+        _delivery_check(record, completed[-1])
+        if completed
+        else {"ok": False, "verified": False, "detail": "no completed round to check for delivery"}
+    )
+    delivered = delivery["ok"]
     met = core(record)
     checks = {
         "rounds": {"ok": len(completed) >= MIN_ROUNDS, "detail": f"{len(completed)} completed rounds after onboarding"},
@@ -278,12 +360,7 @@ def judge(record: dict) -> dict:
             f"{len(held)} rules held from onboarding under planning or action that intervened",
         },
         "core": met,
-        "delivered": {
-            "ok": delivered,
-            "detail": "every drill of the last round handed over what the case delivers"
-            if delivered
-            else "some drill of the last round handed nothing over",
-        },
+        "delivered": delivery,
         "isolated": _isolated(record.get("isolation")),
     }
     breached = isinstance(record.get("isolation"), dict) and record["isolation"].get("valid") is False

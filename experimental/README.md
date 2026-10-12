@@ -61,7 +61,7 @@ experimental/
 |---|---|
 | `harness.loop.run.run(worker, provider, trials, assessors, analyst=…, opening=…, boundaries=…, prior=…)` | `simulation/__main__.py` 从场景契约组装参数与隔间，默认最多 4 轮 |
 | `Trial.run(worker) -> Sessions` | `simulation.bench.drills.enlist` 把题卡装成模拟对话人 `Conversant`，`grouped` 配成 `Together`，让每张题卡在员工的隔离副本上并行演练，副本每轮从本体复制，所以每次演练的子代理 home 都是干净的 |
-| `assessor.role.AssessorProtocol.evaluate(sessions) -> Signal` | `cultivation.counterpart.Owner` 的案例子类（旅行社 `cases.travel_agency.owner.Agency`、品牌 `cases.brand_strategist.owner.BrandOwner`，按场景名从 `OWNERS` 选）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.Assessor`；通用 Analyst 把这些整理成要求 |
+| `assessor.role.AssessorProtocol.evaluate(sessions) -> Signal` | `cultivation.counterpart.Owner` 的案例子类（旅行社 `cases.travel_agency.owner.Agency`、品牌 `cases.brand_strategist.owner.BrandOwner`，入口取案例目录下 `owner.py` 的 `OWNER`，没有时退回旅行社的 `Agency`，所以新案例要带自己的老板）：老板持有标准，按注入的事实评审并按披露日程交材料；并列的 `assessor.introspect.Introspection`：雇员在副本上自评每单，来源 `self`（`--no-introspection` 关闭）；可选 `assessor.standard.Assessor`；通用 Analyst 把这些整理成要求 |
 | `harness.raven_adapter.worker.Worker` | `cultivation.employee.hire` 雇来的员工，带上 Curator 不能读的评测侧文件（`withheld`）；`cultivation.employee.Replica` 是每张题卡的隔离副本 |
 | `harness.curator.workflow.improve(worker, provider, feedback=…)` | 不改，直接调用 |
 | 入职资料 `opening` | 老板的入职对话与交出的资料 |
@@ -258,7 +258,7 @@ uv run pytest tests/integration/test_research_real_llm.py -k claude_collection_c
 测试脚本只提供环境、输入与证据回放，不另写规划器、审核循环或手动决定修订路径。
 结构化检查通过或按预算正确结束，不等于完整职业画像已经充分，更不等于专家工作能力得到证明。
 
-Scenario 默认在入职前准备信息；`--information-research none` 关闭外部研究渠道，不跳过信息评估。可选 `--information-answer-material <材料名>` 让模拟交互方回答必要问题，私有资料只在回答适配器内使用。离线入口的对应选项是 `--answer-material`。内容审核不代替交互方采纳，研究结果也不自动成为评价标准。
+Scenario 默认在入职前准备信息；`--information-research none` 关闭外部研究渠道，不跳过信息评估。可选 `--information-answer-material <材料名>` 让模拟交互方回答必要问题，私有资料只在回答适配器内使用。培养期间 Curator 报告的缺口由 `--gap-answers {counterpart,research,both,none}` 决定谁来答（默认 `both`，用已配置的渠道）：私有与不明的问题在下一轮评审时问模拟交互方（需 `--information-answer-material`），公开问题和交互方没答的不明问题走同一调研渠道；答复带出处进入下一次改造，`none` 保持只记录问题。离线入口的对应选项是 `--answer-material`。内容审核不代替交互方采纳，研究结果也不自动成为评价标准。
 
 后续信息补充可传 `--previous-information <snapshot.json>`、`--focus knowledge methods` 和
 `--answers-file <带版本的答复JSON>`；已生成的 `guidance/guidance.json` 可以用 `--research-guidance` 复用。答复文件格式为 `{"version": "sha256:上一快照摘要", "answers": {"问题ID": "答复"}}`，版本不匹配时拒绝使用。独立专家入口也可用 `--information <离线result.json>` 复用匹配的已审核结果。

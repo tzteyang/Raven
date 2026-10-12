@@ -103,23 +103,27 @@ class Guard:
     def check_request(self, messages, tools, kwargs, where: str, *, spared=()) -> list[str]:
         """Check a request using only explicitly supplied, entitled speech (see `Sealed.without`). API message
         roles carry no such authority: summaries and internal instructions also use the user role."""
+        spared = list(spared)
         sealed = self.sealed.without(spared) if spared else self.sealed
-        return self.check({"messages": messages, "tools": tools, **kwargs}, where, sealed=sealed)
+        return self.check({"messages": messages, "tools": tools, **kwargs}, where, sealed=sealed, spared=len(spared))
 
-    def record(self, event: str, where: str, hits: list[str] = ()) -> None:
+    def record(self, event: str, where: str, hits: list[str] = (), *, spared: int | None = None) -> None:
         if self.log is None:
             return
         row = {"time": time.time(), "role": self.role, "event": event, "where": where, "hits": list(hits)}
+        # How many streams of entitled speech the check spared tells a reader whether a hit came with none.
+        if spared is not None:
+            row["spared"] = spared
         self.log.parent.mkdir(parents=True, exist_ok=True)
         with self.log.open("a", encoding="utf-8") as handle:
             handle.write(json.dumps(row, ensure_ascii=False) + "\n")
 
-    def check(self, value, where: str, *, sealed: Sealed | None = None) -> list[str]:
+    def check(self, value, where: str, *, sealed: Sealed | None = None, spared: int | None = None) -> list[str]:
         """Scan and apply the policy; the hits are returned when the policy lets the value through."""
         hits = self.scan(value) if sealed is None else self._scan(value, sealed)
         if not hits:
             return []
-        self.record("violation", where, hits)
+        self.record("violation", where, hits, spared=spared)
         if self.policy == "abort":
             raise BoundaryError(self.role, where, hits)
         log.warning("%s compartment: sealed information in %s: %s", self.role, where, ", ".join(hits))

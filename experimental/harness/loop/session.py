@@ -21,6 +21,7 @@ from experimental.harness.assessor.validation import evidence_fingerprint, finge
 from experimental.harness.curator.generation.run import GapReportedError, GenerationInterruptedError
 from experimental.harness.curator.generation.run import Limits as CuratorLimits
 from experimental.harness.curator.workflow import PENDING, improve
+from experimental.harness.loop.gaps import Gaps, heard_answers
 from experimental.harness.loop.history import Entry, entry, read_history
 from experimental.harness.loop.ledger import mark
 from experimental.harness.loop.observability import step
@@ -203,6 +204,7 @@ class Session:
         assessors=(),
         measuring=frozenset(),
         experience=None,
+        gaps: Gaps | None = None,
     ):
         if worker.baseline.task is None:
             raise ValueError("a session requires a worker bound to a current task")
@@ -212,6 +214,7 @@ class Session:
         self.curator = improve if curator is None else curator
         self.prepare = prepare
         self.experience = experience
+        self.gaps = gaps
         if boundaries is not None and boundaries.log is None:
             boundaries = replace(boundaries, log=worker.root / "boundaries.jsonl")
         self.boundaries = boundaries
@@ -410,12 +413,20 @@ class Session:
 
         Returns `done`, `paused` (the call may be repeated to resume) or `asked`: the Curator reported a gap it
         cannot close with what it was given, nothing was revised, and its question waits in the record's
-        `questions` for whoever can answer it, a person on the page or the counterpart's next handover."""
+        `questions` for whoever can answer it: a person on the page, or the answerers of `gaps`, which route it by
+        its kind (`experimental.harness.loop.gaps`). The questions they settled reach the curation with its
+        information as `answers`."""
         self.record["status"] = "running"
         self.record.pop("stop", None)
         feedback = self._heard(feedback)
-        if self.record.get("information", {}).get("status") == "ready":
-            feedback = {**(feedback or {}), "information": self.record["information"]["handoff"]}
+        information = self.record.get("information", {})
+        handoff = information.get("handoff") if information.get("status") == "ready" else None
+        answers = heard_answers(self.record.get("questions", ()))
+        if handoff or answers:
+            feedback = {
+                **(feedback or {}),
+                "information": {**(handoff or {}), **({"answers": answers} if answers else {})},
+            }
         spoken = [*spoken, *self._prior_spoken()]
         experience_before = self.curations._names() if self.experience is not None else set()
         experience_context = self._verification_context() if self.experience is not None else None
@@ -443,9 +454,8 @@ class Session:
             self.record["status"], self.record["stop"] = "paused", str(exc)
             return "paused"
         except GapReportedError as exc:
-            self.record.setdefault("questions", []).append(
-                {"round": len(self.rounds), "stage": exc.stage, "question": exc.reason}
-            )
+            self._ask(exc)
+            await self._research()
             return "asked"
         except Exception as exc:
             self.record["status"], self.record["error"] = "error", str(exc)
@@ -530,6 +540,18 @@ class Session:
         return produced
 
     @step
+    async def baseline(self, trials, assessors) -> tuple[Signal, ...]:
+        """Play held-out trials on the worker before onboarding, as its starting harness meets whatever it was handed,
+        and keep them in the record as `baseline`: the measure a curation is compared with. Like a held-out trial,
+        nothing of it reaches the Analyst or the Curator, and the trials must leave nothing behind in the worker."""
+        self._require(not self.onboarded and not self.rounds, "a baseline exam runs before onboarding")
+        produced = await trial_sessions(self.worker, trials)
+        signals = await assess(tuple(assessors), produced)
+        self.record["baseline"] = {"sessions": produced, "signals": signals}
+        self.save()
+        return signals
+
+    @step
     async def holdout(self, trials, assessors) -> tuple[Signal, ...]:
         """Play held-out trials on the worker as it stands and assess them apart from the round: their sessions
         and signals join the round's record, never the Analyst's reading or the Curator's citations.
@@ -538,20 +560,16 @@ class Session:
         cards), or what they said would reach the Curator through the worker's own state."""
         self._require(self.onboarded and self.review is None, "a held-out trial runs before the round's analysis")
         assessors = tuple(assessors)
-        policies = []
-        for assessor in assessors:
-            constrain = getattr(assessor, "constrain", None)
-            if constrain is not None:
-                constrain(self.external_requirements)
-            policy = deepcopy(getattr(assessor, "verification_policy", lambda: None)())
-            policies.append(policy)
+        # Held-out trials are measured against the same fixed standard every time: the run's own requirements would
+        # make one round's exam incomparable with another's.
+        policies = [deepcopy(getattr(assessor, "verification_policy", lambda: None)()) for assessor in assessors]
         revision, context = self._revision(), self._verification_context()
         produced = await trial_sessions(self.worker, trials)
         if self.held_out.keys() & produced.keys():
             raise ValueError(f"trials produced the same session key: {sorted(self.held_out.keys() & produced.keys())}")
         self.held_out.update(produced)
         evidence = evidence_fingerprint(produced)
-        signals = await assess(assessors, produced, self.history, self.external_requirements)
+        signals = await assess(assessors, produced)
         self.held_out_signals.extend(signals)
         matched = {signal.source: signal for signal in signals}
         training_inputs = {
@@ -622,7 +640,8 @@ class Session:
     @step
     async def assess(self, *assessors) -> tuple[Signal, ...]:
         """Each assessor's signal joins the round and the record as soon as it is given, so one that fails after
-        others have spoken ends the run with their words kept in the round."""
+        others have spoken ends the run with their words kept in the round. With `gaps`, the review is also the
+        counterpart's contact: the questions waiting for it are asked then (`_consult`)."""
         self._require(self.review is None, "assessment comes before the analysis")
         given = []
         witnesses = [] if self.experience is not None else None
@@ -646,7 +665,81 @@ class Session:
         if self.experience is not None:
             await self._experience_outcomes(witnesses)
             self.save()
+        await self._consult()
         return tuple(given)
+
+    def _ask(self, gap: GapReportedError) -> None:
+        """Keep a reported gap's question; with answerers, route it by its kind (see `Gaps.route`)."""
+        questions = self.record.setdefault("questions", [])
+        row = {"round": len(self.rounds), "stage": gap.stage, "question": gap.reason, "kind": gap.kind}
+        if self.gaps is not None:
+            route = self.gaps.route(gap.kind)
+            row = {"id": f"question-{len(questions) + 1}", **row, "status": "pending", "route": route}
+            if route == "unanswered":
+                row.update(status="unanswered", reason="No configured source can settle this kind of question.")
+        questions.append(row)
+        self.save()
+
+    def _answerable(self) -> bool:
+        """Whether a curation can still read an answer given now: one follows the next analysis only before the
+        last round."""
+        return self.gaps is not None and len(self.rounds) + 1 < self.limits.max_rounds
+
+    def _due(self, route: str) -> list[dict]:
+        return [
+            row
+            for row in self.record.get("questions", ())
+            if row.get("status") == "pending" and row.get("route") == route
+        ]
+
+    async def _consult(self) -> None:
+        """The counterpart's turn at its review: every question waiting for it is asked; one it leaves open goes on
+        to research when its kind allows (or the counterpart referred it to public sources), else stays unanswered."""
+        if not self._answerable():
+            return
+        for row in self._due("counterpart"):
+            reply = await self.gaps.answer({"id": row["id"], "question": row["question"], "kind": row["kind"]})
+            if reply.text:
+                row.update(status="answered", answer={"provenance": "counterpart", "text": reply.text})
+            else:
+                route = self.gaps.route(row["kind"], declined=True, referred=reply.public)
+                row.update(route=route, counterpart="referred to public sources" if reply.public else "left open")
+                if route == "unanswered":
+                    row.update(status="unanswered", reason="The counterpart left it open.")
+            self.save()
+        await self._research()
+
+    async def _research(self) -> None:
+        """Research the questions routed to it, inside the Curator's compartment as the information handoff is, at
+        most `research_tasks` between two analyses; the rest wait for the next opportunity."""
+        if not self._answerable():
+            return
+        window = len(self.rounds)
+        spent = sum(1 for row in self.record.get("questions", ()) if row.get("researched") == window)
+        batch = self._due("research")[: max(0, self.gaps.research_tasks - spent)]
+        if not batch:
+            return
+        for row in batch:
+            row["researched"] = window
+        self.save()
+        asked = [{"id": row["id"], "question": row["question"], "kind": row["kind"]} for row in batch]
+        async with self._compartment("curator", spoken=self._prior_spoken()) as scope:
+            found = await self.gaps.research(self.worker, scope.provider(self.provider), asked, admit=scope.admit)
+            found = scope.admit(found, "gaps.research")
+        for row in batch:
+            result = found.get(row["id"]) or {}
+            if result.get("findings"):
+                row.update(
+                    status="answered",
+                    answer={
+                        "provenance": "research",
+                        "findings": result["findings"],
+                        "synthesis": result.get("synthesis", ""),
+                    },
+                )
+            else:
+                row.update(status="unanswered", reason=result.get("reason") or "Research found no admitted answer.")
+        self.save()
 
     async def _experience_outcomes(self, witnesses):
         from experimental.harness.experience.contracts import OutcomeReceipt
@@ -867,6 +960,9 @@ class Session:
     def finish(self, reason: str | None = None) -> None:
         """End the run; without a reason, the loop's own reason from the last outcome stands."""
         self._require(self.review is None, "finish after the round's curation or skip")
+        for row in self.record.get("questions", ()):
+            if row.get("status") == "pending":
+                row.update(status="unanswered", reason="The run finished before it was answered.")
         self.record["status"] = "finished"
         stop = reason if reason is not None else (self.outcome.reason if self.outcome else "")
         if stop:

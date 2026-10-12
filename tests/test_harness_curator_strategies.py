@@ -58,14 +58,14 @@ def values():
     }
 
 
-def make(tmp_path, role, contents=None, task=None):
+def make(tmp_path, role, contents=None, task=None, plan=None):
     package = write_package(tmp_path / "package", Artifact(values={}, files=contents or files()))
     binding, implementation = ROLES[role]
     task = task or Task(id="task", text="Find evidence")
     recorder = Recorder(tmp_path / "records.jsonl")
     recorder.turn_id = "turn"
     config = binding.model_validate(values()[f"{role}.strategy"])
-    kwargs = {}
+    kwargs = {} if plan is None else {"plan": plan}
     if role == "capability":
         kwargs["catalog"] = CapabilityCatalog(
             "candidate", package, tmp_path / "assembly", material_base=tmp_path, recorder=recorder
@@ -252,6 +252,51 @@ async def test_the_validation_probe_runs_the_capability_selection_on_the_install
     mislabelled = make(tmp_path / "mislabelled", "capability", contents)
     with pytest.raises(ValueError, match="selected skill is unknown, ambiguous or unavailable: evidence"):
         await exercise_translations(bound_for(mislabelled))
+
+
+PLAN_BOUND_STRATEGY = '''
+"""Decide every event from the Planning view, which a bound Planning gives each Action event."""
+
+from experimental.harness.contract.action import ActionDecision, ActionEvent
+from experimental.harness.contract.strategies import ActionStrategy
+
+
+class Action(ActionStrategy[None, None]):
+    def __init__(self, state):
+        self.state = state
+
+    async def handle_event(self, event: ActionEvent) -> ActionDecision:
+        if event.plan is None:
+            raise ValueError("the Planning view is missing")
+        return ActionDecision()
+
+
+def create(state, task):
+    return Action(state)
+'''
+
+
+@pytest.mark.asyncio
+async def test_the_validation_probe_gives_action_events_the_planning_view_a_real_turn_would(tmp_path):
+    from experimental.harness.raven_adapter.probe import PROBE, exercise_translations
+
+    owner = make(
+        tmp_path, "action", contents={**files(), "task_action.py": PLAN_BOUND_STRATEGY}, plan=lambda: {"step": "read"}
+    )
+    bound = SimpleNamespace(planning=None, strategies={"action": owner}, recorder=owner.recorder, baseline=None)
+    await exercise_translations(bound)
+    rows = [row for row in owner.recorder.rows if row["kind"] == PROBE and row["strategy"] == "action"]
+    assert [(row["event"], row["status"]) for row in rows] == [
+        ("proposal", "passed"),
+        ("outcome", "passed"),
+        ("failure", "passed"),
+    ]
+    calls = [row for row in owner.recorder.rows if row["kind"] == "action.call"]
+    assert [(row["source"], row["arguments"][0]["plan"]) for row in calls] == [
+        ("proposal", {"step": "read"}),
+        ("outcome", {"step": "read"}),
+        ("failure", {"step": "read"}),
+    ]
 
 
 @pytest.mark.asyncio

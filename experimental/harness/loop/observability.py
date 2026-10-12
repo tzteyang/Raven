@@ -13,7 +13,7 @@ def step(function):
             Ledger(self.worker.root / FILENAME), self.record.get("execution_run_id", self.path.stem)
         )
         round_index = len(self.rounds) + (function.__name__ != "curate")
-        if function.__name__ == "onboard":
+        if function.__name__ in ("onboard", "baseline"):
             round_index = 0
         self.record["execution_run_id"] = context.run_id
         self.save()

@@ -455,7 +455,16 @@ async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_a
     resumed = Session.resume(worker, object(), session.path)
     assert set(resumed.rounds[0].holdout) == {"unseen"} and resumed.rounds[0].holdout_signals == (passing(),)
     (measured,) = load(session.path)["ledger"]["holdout"]
-    assert measured == {"round": 1, "source": "verifier", "satisfied": True, "items": 1, "passed": 1, "failed": 0}
+    assert measured == {
+        "round": 1,
+        "source": "verifier",
+        "satisfied": True,
+        "items": 1,
+        "passed": 1,
+        "failed": 0,
+        "unknown": 0,
+        "not_applicable": 0,
+    }
 
 
 @pytest.mark.asyncio
@@ -476,7 +485,7 @@ async def test_a_reported_gap_keeps_the_question_and_the_run_goes_on_unrevised(t
     assert await session.curate() and session.status == "running"
     assert asked and not session.rounds[-1].curated and session.history[-1].revision is None
     assert session.record["questions"] == [
-        {"round": 1, "stage": "select", "question": "Who approves a refund above the listed amount?"}
+        {"round": 1, "stage": "select", "question": "Who approves a refund above the listed amount?", "kind": "unclear"}
     ]
     await session.trial(student("Hi again"))
     session.signal(Signal("human", "Fine."))

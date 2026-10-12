@@ -536,6 +536,9 @@ export interface Pending {
 export interface Run {
   task_id: string
   task: string
+  /** The held-out trials played once before onboarding, on the starting Harness with whatever it was handed, and
+      their assessment: what every curation is compared with; never read by the Analyst or cited to the Curator. */
+  baseline?: { sessions: Record<string, Exchange[]>; signals: Signal[] }
   status?: RunStatus
   stop?: string
   curator?: string

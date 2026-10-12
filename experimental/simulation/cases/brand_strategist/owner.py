@@ -13,9 +13,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 from experimental.cultivation.counterpart.owner import Owner
-from experimental.harness.participation.channel import said
-from experimental.harness.participation.files import read_delivered
-from experimental.simulation.cases.travel_agency.reference import CONFIG, words
+from experimental.cultivation.counterpart.rulers import CONFIG, delivered, messages, occurrences, words
 
 ONCALL = "Raven-Oncall"
 CAMPAIGN_TOOLS = ("ops_declare", "ops_submit", "ops_check_later", "ops_finish", "ops_ask_owner")
@@ -60,17 +58,7 @@ class Vocabulary:
 
 def forbidden_words(text: str, vocabulary: Vocabulary) -> dict[str, list[str]]:
     """Each forbidden word found, in the order of the list, with the stretch of every line it stands on."""
-    found = {}
-    for word in vocabulary.forbidden:
-        lines = [_around(line.strip(), word) for line in (text or "").splitlines() if word in line]
-        if lines:
-            found[word] = lines
-    return found
-
-
-def _around(line: str, word: str) -> str:
-    start = max(0, min(line.index(word) - (SNIPPET - len(word)) // 2, len(line) - SNIPPET))
-    return line[start : start + SNIPPET]
+    return occurrences(text, vocabulary.forbidden)
 
 
 def slogan_lines(text: str, vocabulary: Vocabulary) -> list[str]:
@@ -85,15 +73,6 @@ def unsourced_figures(text: str, vocabulary: Vocabulary) -> list[str]:
         for line in (text or "").splitlines()
         if vocabulary.figure.search(line) and not any(mark in line for mark in vocabulary.source_marks)
     ]
-
-
-def _files(exchanges) -> dict[str, str]:
-    files = {}
-    for turn in exchanges:
-        for path in turn.execution.deliverables:
-            if Path(path).is_file():
-                files[Path(path).name] = read_delivered(path)
-    return files
 
 
 def oncall_evidence(exchanges, vocabulary: Vocabulary) -> dict:
@@ -111,18 +90,18 @@ def oncall_evidence(exchanges, vocabulary: Vocabulary) -> dict:
                 name = str((row.get("event") or {}).get("name") or "")
                 if name in CAMPAIGN_TOOLS:
                     tools.add(name)
-    delivered = [name for name in _files(exchanges) if vocabulary.report.match(name)]
-    return {"oncall_executions": executions, "campaign_tools": sorted(tools), "watch_reports": delivered}
+    reported = [name for name in delivered(exchanges) if vocabulary.report.match(name)]
+    return {"oncall_executions": executions, "campaign_tools": sorted(tools), "watch_reports": reported}
 
 
 def facts(exchanges, vocabulary: Vocabulary) -> dict:
     """The owner's facts for one drill, keyed by what each measures."""
-    files = _files(exchanges)
-    messages = [said(turn) for turn in exchanges]
+    files = delivered(exchanges)
+    said = messages(exchanges)
     found = {}
     hits = {
         f"message {index}": found_words
-        for index, text in enumerate(messages, 1)
+        for index, text in enumerate(said, 1)
         if (found_words := forbidden_words(text, vocabulary))
     } | {
         f"file {file}": found_words
@@ -138,9 +117,7 @@ def facts(exchanges, vocabulary: Vocabulary) -> dict:
             for file, lines in slogans.items()
         }
     figures = {
-        f"message {index}": rows
-        for index, text in enumerate(messages, 1)
-        if (rows := unsourced_figures(text, vocabulary))
+        f"message {index}": rows for index, text in enumerate(said, 1) if (rows := unsourced_figures(text, vocabulary))
     } | {f"file {file}": rows for file, text in files.items() if (rows := unsourced_figures(text, vocabulary))}
     if figures:
         found["unsourced_figures"] = figures
@@ -161,3 +138,7 @@ class BrandOwner(Owner):
 
     def _facts(self, name, exchanges, card) -> dict:
         return facts(exchanges, self.vocabulary)
+
+
+# The owner the simulation entry judges this case by (`experimental.simulation.__main__.owner_of`).
+OWNER = BrandOwner

@@ -71,11 +71,13 @@ import re
 import shlex
 import shutil
 from collections import Counter
+from dataclasses import asdict
 from datetime import UTC, datetime
 from itertools import islice
 from pathlib import Path
+from types import SimpleNamespace
 
-from experimental.cultivation.counterpart.owner import REFERENCES
+from experimental.cultivation.counterpart.owner import REFERENCES, handles
 from experimental.cultivation.employee import AREA, REPLICAS
 from experimental.harness.analyst.activity import INTERVENTIONS
 from experimental.harness.analyst.activity import classify as _classify
@@ -83,10 +85,16 @@ from experimental.harness.analyst.activity import cut as _cut
 from experimental.harness.analyst.activity import dicts as _dicts
 from experimental.harness.analyst.activity import scope_of as _scope
 from experimental.harness.analyst.activity import scoped as _scoped
+from experimental.harness.assessor.rubric import digest as rubric_digest
+from experimental.harness.assessor.standard import Standard, observations, satisfied
 from experimental.harness.loop import records
 from experimental.harness.participation import model_roles
 from experimental.harness.participation.channel import seen
+from experimental.harness.participation.protocols import Exchange, Item
+from experimental.harness.participation.views import execution_digest
+from experimental.harness.participation.views import transcript as channel_transcript
 from experimental.harness.raven_adapter.targets import catalogue
+from experimental.harness.raven_adapter.worker import Execution
 from experimental.harness.scenario.digest import digest
 from experimental.simulation.bench.attribution import RESULT as ATTRIBUTION
 from experimental.simulation.bench.isolation import RESULT as ISOLATION
@@ -248,6 +256,9 @@ def _local(path, root: Path) -> Path | None:
     raw = Path(str(path))
     candidates = [raw if raw.is_absolute() else root / raw]
     parts = raw.parts
+    if "deliverables" in parts:
+        last = len(parts) - 1 - parts[::-1].index("deliverables")
+        candidates.extend(root.joinpath(*parts[start:]) for start in range(last, -1, -1))
     if "home" in parts:
         start = len(parts) - 1 - parts[::-1].index("home")
         if start >= 1 and parts[start - 1] == AREA:
@@ -317,10 +328,18 @@ def keep_scenario(root: Path, source: Path) -> bool:
         return True
     settings = _json(root / SETTINGS)
     recorded = settings.get("scenario_digest") if isinstance(settings, dict) else None
-    if not recorded or recorded != digest(source):
+    if not recorded or not _scenario_matches(source, settings):
         return False
     shutil.copytree(source, copy)
-    return digest(copy) == recorded
+    return _scenario_matches(copy, settings)
+
+
+def _scenario_matches(root: Path, settings: dict) -> bool:
+    """Check the recorded identity while retaining legacy records that counted generated cache files."""
+    recorded = settings.get("scenario_digest")
+    if not recorded or recorded == digest(root):
+        return True
+    return settings.get("scenario_digest_format") != "source-v2" and recorded == digest(root, include_generated=True)
 
 
 def _scenario_root(scenario_dir, settings: dict, run_root: Path | None = None) -> Path:
@@ -337,7 +356,7 @@ def _scenario_root(scenario_dir, settings: dict, run_root: Path | None = None) -
     if not root.is_dir():
         raise FileNotFoundError(f"the run's scenario {named} is not at {root}; give its directory")
     recorded = settings.get("scenario_digest")
-    if recorded and recorded != digest(root):
+    if recorded and not _scenario_matches(root, settings):
         raise ValueError(f"the scenario at {root} changed since the run; give the directory the run used")
     return root
 
@@ -348,6 +367,9 @@ def _scenario(scenario_dir, settings: dict, run_root: Path | None = None) -> dic
     spec = _json(root / "scenario.json")
     spec = spec if isinstance(spec, dict) else {}
     without = set(settings.get("without") or ())
+    contract = _json(root / "contract.json")
+    declarations = contract.get("checks", {}) if isinstance(contract, dict) else {}
+    criteria = [row for row in _dicts(spec.get("criteria")) if row.get("id")]
 
     def read(name):
         try:
@@ -360,7 +382,15 @@ def _scenario(scenario_dir, settings: dict, run_root: Path | None = None) -> dic
         "name": root.name,
         "profile": read("profile.md"),
         "onboarding": read("onboarding.md"),
-        "criteria": [row for row in _dicts(spec.get("criteria")) if row.get("id")],
+        "criteria": criteria,
+        "owner_criteria": [
+            row
+            for row in criteria
+            if "counterpart" in declarations.get(row["id"], {}).get("visibility", ["counterpart"])
+        ],
+        "exam_criteria": [
+            row for row in criteria if "analyst" in declarations.get(row["id"], {}).get("visibility", ["analyst"])
+        ],
         "initial": [str(name) for name in spec.get("initial") or [] if name not in without],
         "materials": {
             path.parent.name: path.parent
@@ -768,10 +798,13 @@ def _mechanism(rows, session: str, turn: int) -> list[dict]:
 
 
 def _card(session: str, cards: set[str]) -> str:
+    """The card a drill played: its session name without the card set's or the exam's prefix and the repeat suffix
+    (`experimental.simulation.bench.drills.enlist`)."""
     if session in cards:
         return session
-    base = re.sub(r"-\d+$", "", session)
-    return base if base in cards else session
+    played = re.sub(r"^(?:s\d+-|holdout-)", "", session)
+    base = re.sub(r"-\d+$", "", played)
+    return next((name for name in (played, base) if name in cards), session)
 
 
 def _exchange(index: int, customer: str, rows: list[dict], delivered: list[dict], root: Path, **extra) -> dict:
@@ -807,16 +840,146 @@ def _drills(item: dict, root: Path, cards: set[str]) -> tuple[list[dict], list[d
     return drills, evidence, artifacts
 
 
-def _evaluation(item: dict, severity: dict) -> dict:
+def _recorded_sessions(item: dict, root: Path | None = None) -> dict:
+    """Rebuild views from recorded turns, locating delivered snapshots only within the archived run."""
+    sessions = {}
+    recorded = item.get("sessions")
+    for name, exchanges in recorded.items() if isinstance(recorded, dict) else ():
+        turns = []
+        for exchange in _dicts(exchanges):
+            execution = exchange.get("execution") or {}
+            files = execution.get("deliverables") or ()
+            if root is not None:
+                files = [
+                    str(root / (kept["path"] or f"__missing_deliverable__/{Path(path).name}"))
+                    for path in files
+                    for kept in [_delivered(path, root)]
+                ]
+            turns.append(
+                Exchange(
+                    exchange.get("user", ""),
+                    Execution(
+                        turn_id=execution.get("turn_id", ""),
+                        artifact_id=execution.get("artifact_id", ""),
+                        events=[],
+                        records=_dicts(execution.get("records")),
+                        deliverables=tuple(files),
+                        outcome=execution.get("outcome") or {},
+                    ),
+                )
+            )
+        sessions[name] = turns
+    return sessions
+
+
+def _conversation_evidence(item: dict) -> dict:
+    """Reconstruct the exact channel transcript from the recorded executions."""
+    return {name: channel_transcript(turns) for name, turns in _recorded_sessions(item).items()}
+
+
+def _private_scorecard(data: dict, item: dict, scenario: dict | None = None, *, root: Path | None = None) -> dict:
+    """Reject claimed score bindings that disagree with the actual session, source, or rubric."""
+    scorecard = {**data["scorecard"], "source": data["scorecard"].get("source") or data.get("source")}
+    if not {"execution_ids", "scenario_digest", "rubric_version", "criteria"}.intersection(data):
+        return {**scorecard, "binding": "legacy"}
+    errors = []
+    identity = _execution_identity(item)
+    if (
+        not identity
+        or not all(turns and all(turns) for turns in identity.values())
+        or data.get("execution_ids") != identity
+    ):
+        errors.append("execution identities do not match this round")
+    declared = (scenario or {}).get("owner_criteria", (scenario or {}).get("criteria", []))
+    expected = [
+        {
+            "id": row["id"],
+            "check": row.get("check", ""),
+            "severity": row.get("severity", "standard"),
+            "applies_when": row.get("applies_when", ""),
+        }
+        for row in declared
+    ]
+    if scenario is None or data.get("scenario_digest") != digest(scenario["root"]):
+        errors.append("scenario source identity is missing or mismatched")
+    if data.get("criteria") != expected or data.get("rubric_version") != rubric_digest(expected):
+        errors.append("rubric definition or version does not match the scenario")
+    packet = data.get("evidence")
+    named = handles(SimpleNamespace(**row) for row in expected)
+    if not isinstance(data.get("assessment_id"), str) or not data["assessment_id"].strip():
+        errors.append("retained assessment identity is missing")
+    if not isinstance(packet, dict) or not packet:
+        errors.append("retained assessment evidence is missing")
+    else:
+        if data.get("evidence_digest") != rubric_digest(packet):
+            errors.append("retained assessment evidence integrity is missing or changed")
+        if packet.get("conversations") != _conversation_evidence(item):
+            errors.append("assessment conversations do not match the recorded executions")
+        if data.get("criterion_handles") != named or packet.get("criteria") != [
+            {**row, "id": named[row["id"]]} for row in expected
+        ]:
+            errors.append("assessment packet criteria do not match the declared owner rubric")
+    played = _recorded_sessions(item, root)
+    if root is None and any(turn.execution.deliverables for turns in played.values() for turn in turns):
+        errors.append("the retained delivery root is unavailable for execution verification")
+    elif data.get("execution_digest") != execution_digest(played):
+        errors.append("assessment execution records or delivered bytes are missing or changed")
+    if sorted(str(row.get("id")) for row in _dicts(scorecard.get("items"))) != sorted(row["id"] for row in expected):
+        errors.append("scorecard does not cover exactly the owner's declared criteria")
+    if not errors:
+        return {
+            **scorecard,
+            "binding": "session_turn_ids_source_and_rubric",
+            "assessment_id": data.get("assessment_id"),
+        }
+    ids = [row["id"] for row in expected] or [str(row.get("id")) for row in _dicts(scorecard.get("items"))]
+    return {
+        "source": "agency",
+        "binding": "rejected",
+        "binding_errors": errors,
+        "rejected_scorecard": scorecard,
+        "items": [
+            {"id": id, "result": "unknown", "note": "Score binding rejected: " + "; ".join(errors)} for id in ids
+        ],
+    }
+
+
+def _scores(item: dict, scenario: dict | None = None, *, root: Path | None = None) -> list[dict]:
+    """Retain each source's verdicts, supplementing spoken signals with private scorecards."""
+    signals = [
+        {**signal, "binding": "legacy"} if signal.get("source") == "agency" else signal
+        for signal in _dicts(item.get("signals"))
+    ]
+    private = [
+        _private_scorecard(data, item, scenario, root=root)
+        for data in _dicts(item.get("analysis"))
+        if isinstance(data.get("scorecard"), dict)
+    ]
+    seen, scored = set(), []
+    rejected = [signal for signal in private if signal.get("binding") == "rejected"]
+    for signal in [*rejected, *private, *signals]:
+        items = []
+        for entry in _dicts(signal.get("items")):
+            identity = (signal.get("source"), entry.get("id"))
+            if identity not in seen:
+                seen.add(identity)
+                items.append(entry)
+        if items:
+            scored.append({**signal, "items": items})
+    return scored
+
+
+def _evaluation(item: dict, severity: dict, scenario: dict | None = None, *, root: Path | None = None) -> dict:
     """The round's remark as the Curator heard it, and the owner's verdicts: carried on its signal, or, when an Analyst
     read the owner's words, kept apart on the scorecard in the analysis record."""
     signals = _dicts(item.get("signals"))
-    scored = signals
-    if not any(_dicts(signal.get("items")) for signal in signals):
-        scored = [data["scorecard"] for data in _dicts(item.get("analysis")) if isinstance(data.get("scorecard"), dict)]
+    scored = _scores(item, scenario, root=root)
+    rejected_sources = {signal.get("source") for signal in scored if signal.get("binding") == "rejected"}
+    retained = {signal.get("source"): signal for signal in scored if signal.get("binding")}
     metrics = {}
     for signal in [*signals, *scored]:
-        metrics.update(signal.get("metrics") or {})
+        if signal.get("source") not in rejected_sources:
+            metrics.update(retained.get(signal.get("source"), signal).get("metrics") or {})
     return {
         "remark": "\n\n".join(str(signal.get("text")) for signal in signals if signal.get("text")),
         "items": [
@@ -828,12 +991,19 @@ def _evaluation(item: dict, severity: dict) -> dict:
                 "actual": entry.get("actual", ""),
                 "note": entry.get("note", ""),
                 "source": signal.get("source"),
+                "binding": signal.get("binding"),
             }
             for signal in scored
             for entry in _dicts(signal.get("items"))
         ],
         "metrics": metrics,
-        "satisfied": [signal.get("satisfied") for signal in signals],
+        "satisfied": [
+            None
+            if signal.get("source") in rejected_sources
+            else retained.get(signal.get("source"), signal).get("satisfied")
+            for signal in signals
+        ],
+        "rejected_scorecards": [signal for signal in scored if signal.get("binding") == "rejected"],
     }
 
 
@@ -909,11 +1079,23 @@ def _turn_ids(item: dict) -> dict[str, list[str]]:
     return turns
 
 
+def _execution_identity(item: dict) -> dict[str, list[str | None]]:
+    sessions = item.get("sessions")
+    return {
+        name: [
+            (exchange["execution"] if isinstance(exchange.get("execution"), dict) else {}).get("turn_id")
+            for exchange in _dicts(exchanges)
+        ]
+        for name, exchanges in (sessions.items() if isinstance(sessions, dict) else ())
+    }
+
+
 def _rounds(
     run: dict, root: Path, scenario: dict, severity: dict, history: dict[int, dict], reading: dict | None = None
 ) -> list[dict]:
     """Recorded rounds; each drill carries the card values it drew and the figures and deck facts computed for it, the
-    k-th judging of a drill in `references.jsonl` belonging to round k."""
+    judging of a drill in `references.jsonl` numbered k belonging to round k (a record from before the numbering pairs
+    the k-th judging with round k)."""
     cards = {path.stem for path in scenario["cards"]}
     checked: dict[str, list[dict]] = {}
     for row in _jsonl(root / REFERENCES):
@@ -921,13 +1103,49 @@ def _rounds(
     out = []
     for number, item in enumerate(_dicts(run.get("rounds")), start=1):
         drills, evidence, artifacts = _drills(item, root, cards)
+        identity = _execution_identity(item)
+        owner_assessments = [
+            entry
+            for entry in _dicts(item.get("analysis"))
+            if entry.get("source") == "agency"
+            and isinstance(entry.get("evidence"), dict)
+            and identity
+            and all(turns and all(turns) for turns in identity.values())
+            and entry.get("execution_ids") == identity
+            and isinstance(entry.get("scorecard"), dict)
+            and _private_scorecard(entry, item, scenario, root=root).get("binding")
+            == "session_turn_ids_source_and_rubric"
+        ]
         for drill in drills:
             rows = checked.get(drill["session"], [])
-            row = rows[number - 1] if len(rows) >= number else {}
+            bound = [row for row in rows if "execution_ids" in row]
+            if bound:
+                row = next(
+                    (
+                        row
+                        for row in bound
+                        if row.get("execution_ids") == identity.get(drill["session"])
+                        and row.get("scenario_digest") == digest(scenario["root"])
+                    ),
+                    {},
+                )
+                binding = "session_turn_ids_and_source" if row else "unavailable"
+            else:
+                row = next((row for row in rows if row.get("evaluation") == number), None)
+                if row is None:
+                    row = rows[number - 1] if len(rows) >= number and "evaluation" not in rows[number - 1] else {}
+                binding = "legacy_evaluation_index" if row else "unavailable"
             drill["drawn"] = row.get("trip")
             drill["card_text"] = row.get("card")
             drill["references"] = row.get("references") if isinstance(row.get("references"), dict) else {}
-        evaluation = _evaluation(item, severity)
+            drill["references_binding"] = binding
+            if owner_assessments:
+                packet = owner_assessments[-1]["evidence"]
+                drill["filed"] = packet.get("filed", {}).get(drill["session"], {})
+                drill["references"] = packet.get("references", {}).get(drill["session"], {})
+                drill["card_text"] = packet.get("cards", {}).get(drill["session"], drill["card_text"])
+                drill["references_binding"] = "owner_assessment_turn_ids"
+        evaluation = _evaluation(item, severity, scenario, root=root)
         following = [_stem(str(data.get("file") or "")) for data in _dicts(item.get("curation")) if data.get("file")]
         out.append(
             {
@@ -936,12 +1154,131 @@ def _rounds(
                 "partial": False,
                 "drills": drills,
                 "evaluation": evaluation,
+                "owner_assessments": owner_assessments,
+                "owner_assessment_binding": "session_and_turn_ids" if owner_assessments else "unavailable",
                 "analysis": _analysis(item, history.get(number), reading),
                 "mechanism_evidence": evidence,
                 "curation": following[0] if following else None,
             }
         )
     return out
+
+
+def _exam(
+    item: dict,
+    number: int,
+    root: Path,
+    cards: set[str],
+    severity: dict,
+    assessments: list[dict],
+    scenario: dict | None = None,
+) -> dict:
+    """Retain an exam separately, binding its saved judge packets by exact session and execution identities."""
+    drills, mechanisms, artifacts = _drills(item, root, cards)
+    identity = _execution_identity(item)
+    candidates = [
+        assessment
+        for assessment in assessments
+        if identity
+        and all(turns and all(turns) for turns in identity.values())
+        and {
+            name: [execution.get("turn_id") for execution in _dicts(executions)]
+            for name, executions in (assessment.get("evidence", {}).get("executions") or {}).items()
+        }
+        == identity
+    ]
+    matched, rejected = [], []
+    standard = (
+        Standard.declared(
+            ((row["id"], row["check"]) for row in scenario["exam_criteria"]),
+            applies_when={row["id"]: row.get("applies_when", "") for row in scenario["exam_criteria"]},
+        )
+        if scenario is not None
+        else None
+    )
+    expected = json.loads(json.dumps([asdict(criterion) for criterion in standard.criteria])) if standard else None
+    actual_evidence = observations(_recorded_sessions(item, root)) if candidates else {}
+    actual_execution_digest = execution_digest(_recorded_sessions(item, root)) if candidates else None
+    for assessment in candidates:
+        errors = []
+        if assessment.get("execution_digest") != actual_execution_digest:
+            errors.append("assessment execution version or delivered bytes are missing or changed")
+        if assessment.get("evidence_digest") != rubric_digest(assessment.get("evidence")):
+            errors.append("retained examination evidence integrity is missing or changed")
+        if any(
+            assessment.get("evidence", {}).get(key) != actual_evidence.get(key)
+            for key in ("conversations", "executions")
+        ):
+            errors.append("assessment conversations or operations do not match the recorded executions")
+        if standard is None:
+            errors.append("scenario context is unavailable for rubric verification")
+        else:
+            if assessment.get("rubric_version") != standard.version or assessment.get("criteria") != expected:
+                errors.append("assessment rubric does not match the scenario's declared examination")
+            supplied = assessment.get("evidence", {}).get("references") or {}
+            if any(
+                not isinstance(supplied.get(session), dict)
+                or supplied[session].get("scenario_digest") != digest(scenario["root"])
+                for session in identity
+            ):
+                errors.append("assessment source identity is missing or does not match the scenario")
+            verdicts = _dicts(assessment.get("final_items", assessment.get("items")))
+            if (
+                not assessment.get("id")
+                or sorted(str(row.get("id")) for row in verdicts) != sorted(row.id for row in standard.criteria)
+                or any(
+                    row.get("result") not in ("pass", "fail", "unknown", "not_applicable")
+                    or row.get("session") not in (None, "", *identity)
+                    for row in verdicts
+                )
+            ):
+                errors.append("retained assessment verdicts are missing or do not match the declared examination")
+        if errors:
+            rejected.append({"assessment": assessment, "binding_errors": errors})
+        else:
+            matched.append(assessment)
+    references = (matched[-1].get("evidence", {}).get("references") or {}) if matched else {}
+    for drill in drills:
+        drill["references"] = references.get(drill["session"], {})
+    reported = _evaluation(item, severity)
+    evaluation = reported
+    if matched:
+        verdicts = _dicts(matched[-1].get("final_items", matched[-1].get("items")))
+        evaluation = _evaluation(
+            {
+                "signals": [
+                    {
+                        "source": "holdout",
+                        "binding": "assessment_packet",
+                        "items": verdicts,
+                        "satisfied": satisfied(standard, [Item(row["id"], row["result"]) for row in verdicts]),
+                    }
+                ]
+            },
+            severity,
+        )
+    else:
+        targets = (scenario or {}).get("exam_criteria") or [{"id": row["criterion"]} for row in reported["items"]]
+        unknown = [
+            {
+                "id": row["id"],
+                "result": "unknown",
+                "note": "Examination evidence or its session/source/rubric binding is unverified.",
+            }
+            for row in targets
+        ]
+        evaluation = _evaluation({"signals": [{"source": "holdout", "satisfied": None, "items": unknown}]}, severity)
+    return {
+        "number": number,
+        "drills": drills,
+        "evaluation": evaluation,
+        "reported_evaluation": reported,
+        "mechanism_evidence": mechanisms,
+        "revision": Counter(artifacts).most_common(1)[0][0] if artifacts else None,
+        "assessments": matched,
+        "rejected_assessments": rejected,
+        "assessment_binding": "session_and_turn_ids" if matched else "unavailable",
+    }
 
 
 def _opening(rows: list[dict]) -> tuple[str | None, str, bool]:
@@ -1006,7 +1343,7 @@ def _partial_round(number: int, turns, root: Path, scenario: dict) -> dict | Non
         packages += [bound] if bound else []
         drill = drills.setdefault(session, {"session": session, "card": _card(session, cards), "exchanges": []})
         folder = _kept(root, turn_id)
-        kept = sorted(path for path in folder.iterdir() if path.is_file()) if folder.is_dir() else []
+        kept = sorted(path for path in folder.rglob("*") if path.is_file()) if folder.is_dir() else []
         index = len(drill["exchanges"]) + 1
         drill["exchanges"].append(
             _exchange(
@@ -1343,7 +1680,9 @@ def _verdict(passes: int, fails: int) -> str:
 
 
 def _status(timeline: list[dict]) -> str:
-    judged = [(moment["round"], moment["result"]) for moment in timeline if moment["result"] != "unknown"]
+    judged = [
+        (moment["round"], moment["result"]) for moment in timeline if moment["result"] in ("pass", "fail", "mixed")
+    ]
     if not judged:
         return "not_exercised"
     if all(result == "pass" for _, result in judged):
@@ -1362,6 +1701,8 @@ def _moment(criterion: str, number: int, item: dict | None, curations: list[dict
     items = [entry for entry in (item["evaluation"]["items"] if item else []) if entry["criterion"] == criterion]
     passes = sum(entry["result"] == "pass" for entry in items)
     fails = sum(entry["result"] == "fail" for entry in items)
+    unknown = sum(entry["result"] in ("unknown", None) for entry in items)
+    inapplicable = sum(entry["result"] == "not_applicable" for entry in items)
     sedimented = {
         (curation["scope"], change["target"])
         for curation in curations
@@ -1376,9 +1717,18 @@ def _moment(criterion: str, number: int, item: dict | None, curations: list[dict
             evidence[f"{row['kind']}/{row['decision']}"] += row["count"]
     return {
         "round": number,
-        "result": _verdict(passes, fails),
+        "result": (
+            "unknown"
+            if unknown and not fails
+            else "not_applicable"
+            if inapplicable and inapplicable == len(items)
+            else _verdict(passes, fails)
+        ),
         "fails": fails,
         "passes": passes,
+        "unknown": unknown,
+        "not_applicable": inapplicable,
+        "binding_verified": bool(items) and all(entry.get("binding") not in ("legacy", "rejected") for entry in items),
         "requirements": [
             index
             for index, requirement in enumerate(item["analysis"]["requirements"] if item else [])
@@ -1440,14 +1790,10 @@ def ledger(criteria: list[dict], rounds: list[dict], curations: list[dict]) -> l
 
 
 def _criteria(scenario: dict, run: dict) -> list[dict]:
-    """The scenario's criteria in its order, then any other criterion the record judged, with its check text.
-
-    When the record judged a criterion the scenario does not define, the run followed another version of the
-    scenario, and only the judged criteria are listed.
-    """
+    """The frozen scenario's criteria, followed by additional criteria from every assessment source."""
     judged = {}
     for item in _dicts(run.get("rounds")):
-        for signal in _dicts(item.get("signals")):
+        for signal in _scores(item, scenario):
             for entry in _dicts(signal.get("items")):
                 key = str(entry.get("id", ""))
                 if key and key not in judged:
@@ -1456,8 +1802,6 @@ def _criteria(scenario: dict, run: dict) -> list[dict]:
         row["id"]: {"id": row["id"], "check": row.get("check", ""), "severity": row.get("severity", "standard")}
         for row in scenario["criteria"]
     }
-    if not judged.keys() <= found.keys():
-        return [found.get(key, row) for key, row in judged.items()]
     return list(found.values()) + [row for key, row in judged.items() if key not in found]
 
 
@@ -1478,7 +1822,27 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     criteria = _criteria(scenario, run)
     severity = {row["id"]: row["severity"] for row in criteria}
     rounds = _rounds(run, root, scenario, severity, history, reading)
-    recorded = {turn for item in _dicts(run.get("rounds")) for turns in _turn_ids(item).values() for turn in turns}
+    baseline = run.get("baseline") if isinstance(run.get("baseline"), dict) else {}
+    held_standard = _json(root / "holdout-standard.json")
+    assessments = _dicts(held_standard.get("assessments")) if isinstance(held_standard, dict) else []
+    cards = {path.stem for path in scenario["cards"]}
+    exams = [
+        _exam(
+            {"sessions": item.get("holdout", {}), "signals": item.get("holdout_signals", [])},
+            number,
+            root,
+            cards,
+            severity,
+            assessments,
+            scenario,
+        )
+        for number, item in enumerate(_dicts(run.get("rounds")), start=1)
+        if item.get("holdout") or item.get("holdout_signals")
+    ]
+    baseline_exam = _exam(baseline, 0, root, cards, severity, assessments, scenario) if baseline else None
+    recorded_items = [baseline, *_dicts(run.get("rounds"))]
+    recorded_items += [{"sessions": item.get("holdout", {})} for item in _dicts(run.get("rounds"))]
+    recorded = {turn for item in recorded_items for turns in _turn_ids(item).values() for turn in turns}
     partial = _partial_round(len(rounds) + 1, _unrecorded(root, recorded), root, scenario)
     if partial:
         rounds.append(partial)
@@ -1492,7 +1856,11 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     for item in rounds:
         if item["partial"] and item["revision"]:
             item["revision"] = next((full for full in revisions if full.startswith(item["revision"])), item["revision"])
-    played = {drill["card"] for item in rounds for drill in item["drills"]}
+    played = {
+        drill["card"]
+        for item in [*rounds, *exams, *([baseline_exam] if baseline_exam else [])]
+        for drill in item["drills"]
+    }
     started, updated = _times(root, path, settings)
     unknown = sorted({row["id"] for row in criteria} - {row["id"] for row in scenario["criteria"]})
     warnings = []
@@ -1506,7 +1874,7 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
     ]
     linked = {
         file["path"]
-        for item in rounds
+        for item in [*rounds, *exams, *([baseline_exam] if baseline_exam else [])]
         for drill in item["drills"]
         for exchange in drill["exchanges"]
         for file in exchange["delivered"]
@@ -1523,6 +1891,8 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
         "schema": SCHEMA,
         "run": {
             "name": root.name,
+            "scenario_source": str(scenario["root"]),
+            "delivery_root": str(root.resolve()),
             "record_id": path.stem,
             "task_id": run.get("task_id"),
             "status": run.get("status"),
@@ -1546,6 +1916,8 @@ def _build(run_dir, scenario_dir=None, state_root=None) -> tuple[dict, dict]:
         "inputs": inputs,
         "curations": curations,
         "rounds": rounds,
+        "exams": exams,
+        **({"baseline": baseline_exam} if baseline_exam else {}),
         "ledger": ledger(criteria, rounds, curations),
         "requirements_ledger": run.get("ledger"),
         "unlinked_deliverables": [
@@ -1615,7 +1987,11 @@ def _assets(record: dict, root: Path, out: Path) -> set[str]:
 
     files = [
         file
-        for item in record["rounds"]
+        for item in [
+            *record["rounds"],
+            *record.get("exams", []),
+            *([record["baseline"]] if record.get("baseline") else []),
+        ]
         for drill in item["drills"]
         for exchange in drill["exchanges"]
         for file in exchange["delivered"]
@@ -1630,12 +2006,13 @@ def _scenario_assets(record: dict, scenario: dict, out: Path) -> set[str]:
     """Copy the scenario inputs into `assets/scenario/` and point each material at its copy."""
     source = scenario["root"]
     redacted = set()
-    names = ("profile.md", "onboarding.md", "handover.md", "scenario.json", "record.md", "reference.md")
-    wanted = [source / name for name in names]
-    wanted += sorted((source / "personas").rglob("*"))
-    wanted += sorted(path for folder in scenario["materials"].values() for path in Path(folder).rglob("*"))
-    for path in wanted:
-        if path.is_file() and path.name not in NEVER_COPIED and "__pycache__" not in path.parts:
+    for path in sorted(source.rglob("*")):
+        parts = path.relative_to(source).parts
+        if (
+            path.is_file()
+            and not NEVER_COPIED.intersection(parts)
+            and not any(part.startswith(".") or part == "__pycache__" for part in parts)
+        ):
             relative = path.relative_to(source).as_posix()
             if _copy(path, out / "assets" / "scenario" / relative):
                 redacted.add(f"assets/scenario/{relative}")
@@ -1662,6 +2039,9 @@ def export_record(
     record, context = _build(run_dir, scenario_dir, state_root)
     _prepare(out)
     redacted = _assets(record, context["root"], out) | _scenario_assets(record, context["scenario"], out)
+    record["run"]["delivery_root"] = str(out.resolve())
+    record["run"]["scenario_source"] = str((out / "assets" / "scenario").resolve())
+    record["value"] = judge(record)
     (out / "record.json").write_text(json.dumps(record, ensure_ascii=False, indent=2))
     (out / "ledger.json").write_text(json.dumps(record["ledger"], ensure_ascii=False, indent=2))
     (out / "transcript.md").write_text(redact(transcript(record, context["labels"])))
@@ -1807,6 +2187,9 @@ def _drills_md(item: dict, labels: dict) -> list[str]:
         if drill.get("references"):
             lines += ["Figures and deck facts computed for the owner:", ""]
             lines += _fenced(json.dumps(drill["references"], ensure_ascii=False, indent=2), "json")
+        if drill.get("filed"):
+            lines += ["Filed documents as shown to the owner:", ""]
+            lines += _fenced(json.dumps(drill["filed"], ensure_ascii=False, indent=2), "json")
         for exchange in drill["exchanges"]:
             who = labels["follow_up"] if exchange.get("follow_up") else labels["customer"]
             lines += [f"**{exchange['turn']}. {who}**", "", _quote(exchange["customer"]), ""]
@@ -2010,9 +2393,18 @@ def _requirements_md(record: dict, labels: dict) -> list[str]:
     if ledger["holdout"]:
         lines += ["Held-out assessments, which no role saw:", ""]
         lines += _table(
-            ["Round", "Assessor", "Satisfied", "Items", "Passed", "Failed"],
+            ["Round", "Assessor", "Satisfied", "Items", "Passed", "Failed", "Unknown", "Not applicable"],
             [
-                [row["round"], row["source"], row["satisfied"], row["items"], row["passed"], row["failed"]]
+                [
+                    row["round"],
+                    row["source"],
+                    row["satisfied"],
+                    row["items"],
+                    row["passed"],
+                    row["failed"],
+                    row.get("unknown", "not recorded"),
+                    row.get("not_applicable", "not recorded"),
+                ]
                 for row in ledger["holdout"]
             ],
         )
@@ -2126,6 +2518,9 @@ def transcript(record: dict, labels: dict | None = None) -> str:
     ]
     lines += [f"- Warning: {warning}" for warning in run["warnings"]] + [""]
     lines += _inputs_md(record, labels)
+    if baseline := record.get("baseline"):
+        lines += ["## Baseline examination (round 0)", ""]
+        lines += _exam_md(baseline, labels)
     lines += [f"## {labels['onboarding']}", ""]
     onboarding = [curation for curation in record["curations"] if curation["round"] == 0]
     for curation in onboarding:
@@ -2146,6 +2541,9 @@ def transcript(record: dict, labels: dict | None = None) -> str:
         if not following:
             lines += ["No curation followed this round.", ""]
         lines += _mechanism_md(item, labels)
+    for exam in record.get("exams", []):
+        lines += [f"## Held-out examination after round {exam['number']}", ""]
+        lines += _exam_md(exam, labels)
     unplaced = [curation for curation in record["curations"] if curation["round"] is None]
     if unplaced:
         lines += ["## Curations not joined to a round", ""]
@@ -2154,6 +2552,13 @@ def transcript(record: dict, labels: dict | None = None) -> str:
     lines += _ledger_md(record, labels) + _requirements_md(record, labels)
     lines += _value_md(record, labels) + _cost_md(record, labels)
     return "\n".join(lines).rstrip() + "\n"
+
+
+def _exam_md(exam: dict, labels: dict) -> list[str]:
+    lines = [f"Assessment evidence binding: {exam['assessment_binding']}.", ""]
+    for assessment in exam["assessments"]:
+        lines += [f"- Assessment `{assessment.get('id')}`; rubric `{assessment.get('rubric_version')}`."]
+    return lines + [""] + _drills_md(exam, labels) + _pages_md(exam, labels) + _review_md(exam, labels)
 
 
 def main(argv=None) -> Path:

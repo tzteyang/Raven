@@ -1,5 +1,9 @@
 """Durable two-level progress with budgets derived from each generation's own checkpoint, and what every scope's
-attribution spent on its own."""
+attribution spent on its own.
+
+Calls, queries and checks are one budget the scopes share, so the whole curation costs no more than one would.
+Repairs are counted per scope: a root that spends its repairs must not leave a child it gave node requirements
+unable to correct a single failed check, and a composite repair is one more repair of the root."""
 
 from dataclasses import asdict
 from pathlib import Path
@@ -12,6 +16,7 @@ from experimental.harness.curator.generation.run import Generated, GenerationPau
 from experimental.harness.curator.generation.state import GenerationState
 
 COUNTERS = ("calls", "queries", "checks", "repairs")
+SHARED = ("calls", "queries", "checks")
 COMPOSITION = "composition.json"
 SCOPE = "attribution-scope"
 
@@ -59,15 +64,19 @@ class Progress(BaseModel):
         own = self.consumed().get(scope)
         # A scope may spend one call past the budget correcting a refused submission (see `generation.run`), and a
         # resumption may lower the limits: either way nothing is left, and a scope without a call pauses.
-        remaining = {name: max(getattr(limits, f"max_{name}") - spent[name], 0) for name in COUNTERS}
+        remaining = {name: max(getattr(limits, f"max_{name}") - spent[name], 0) for name in SHARED}
         if remaining["calls"] == 0:
             raise self.paused(own.stage if own else "select")
         return Limits(
             **{
                 **asdict(limits),
-                **{f"max_{name}": remaining[name] + (getattr(own, name) if own else 0) for name in COUNTERS},
+                **{f"max_{name}": remaining[name] + (getattr(own, name) if own else 0) for name in SHARED},
             }
         )
+
+    def root_repairs(self):
+        own = self.consumed().get("root")
+        return own.repairs if own else 0
 
     def paused(self, stage="select"):
         return GenerationPausedError(GenerationState(input_id=self.input_id, stage=stage, **self.totals()))

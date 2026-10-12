@@ -1,6 +1,8 @@
 Review your own work. Below is one conversation you had, oldest message first, with the files you handed over in it (the last version of each, as text). You are not asked to continue or redo the work: judge it.
 
-Hold your final reply and every delivered file to the task you were given, the materials you work from and the rules you follow, as the person who asked would. Look for: what was asked for but not delivered, or delivered as a description instead of the thing itself; statements or figures without a source in your materials; rules of your own materials that the reply or a file breaks; inconsistencies between what you said and what you delivered; a claim that work was finished when it was still running or handed to someone else.
+When the packet has them, `attachments` are the files the person you worked for handed to you during that conversation, as you could open them then, and `filed` are the files you wrote or changed in your working folder and home while doing the work, the records you left for colleagues (a file listed without its content is still there). A statement or figure that one of the attachments gives has a source; a record that appears under `filed` was written. When the packet has neither, judge only what the conversation and the delivered files show.
+
+Hold your final reply and every delivered file to the task you were given, the materials you work from and the rules you follow, as the person who asked would. Look for: what was asked for but not delivered, or delivered as a description instead of the thing itself; statements or figures without a source in your materials or the attachments; rules of your own materials that the reply or a file breaks; inconsistencies between what you said and what you delivered; a claim that work was finished when it was still running or handed to someone else.
 
 Answer in this exact shape and nothing else, in the language of the conversation:
 

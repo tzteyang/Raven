@@ -151,6 +151,48 @@ def test_the_owner_sees_a_call_the_action_strategy_refused_as_failed():
     ]
 
 
+@pytest.mark.parametrize("completion,expected", [({}, None), ({"ok": None}, None), ({"ok": True}, True)])
+def test_a_completed_tool_without_a_reported_success_remains_unknown(completion, expected):
+    rows = [
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {
+                "name": "write_file",
+                "phase": "start",
+                "tool_call_id": "one",
+                "arguments": {"path": "record.md"},
+            },
+        },
+        {
+            "kind": "runner.event",
+            "event_type": "ToolEvent",
+            "event": {"phase": "complete", "tool_call_id": "one", **completion},
+        },
+    ]
+    assert back_office([played(rows)]) == [
+        {"turn": 1, "action": "write_file", "target": "record.md", "ok": expected},
+    ]
+
+
+@pytest.mark.parametrize("first,second", [(True, False), (False, True)])
+def test_reused_tool_ids_keep_each_call_outcome_in_chronological_order(first, second):
+    rows = []
+    for name, path, ok in [
+        ("read_file", "input.md", True),
+        ("write_file", "a.md", first),
+        ("write_file", "b.md", second),
+    ]:
+        for event in [
+            {"phase": "start", "tool_call_id": "reused", "name": name, "arguments": {"path": path}},
+            {"phase": "complete", "tool_call_id": "reused", "ok": ok, "result_preview": "denied" if not ok else ""},
+        ]:
+            rows.append({"kind": "runner.event", "event_type": "ToolEvent", "event": event})
+    result = back_office([played(rows)])
+    assert [(row["target"], row["ok"]) for row in result] == [("a.md", first), ("b.md", second)]
+    assert [row.get("error") for row in result] == [None if first else "denied", None if second else "denied"]
+
+
 def test_the_owner_reads_what_each_colleague_was_asked_and_answered_once():
     """A delegation result, and a playbook step's account after a skill catalog that quotes the start of the
     report's marker."""

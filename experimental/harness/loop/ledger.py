@@ -108,11 +108,14 @@ def summary(ledger_rows) -> list[dict]:
     return list(groups.values())
 
 
-def held_out(rounds) -> list[dict]:
-    """Per recorded round, each held-out assessor's verdict and its items' results counted."""
+def held_out(rounds, baseline=None) -> list[dict]:
+    """Per recorded round, each held-out assessor's verdict and its items' results counted; the `baseline` exam,
+    played before onboarding, is round 0."""
+    played = [(0, baseline.get("signals", ()))] if baseline else []
+    played += [(number, value.get("holdout_signals", ())) for number, value in enumerate(rounds, 1)]
     out = []
-    for number, value in enumerate(rounds, 1):
-        for signal in value.get("holdout_signals", ()):
+    for number, signals in played:
+        for signal in signals:
             results = [item["result"] for item in signal.get("items", ())]
             out.append(
                 {
@@ -122,6 +125,8 @@ def held_out(rounds) -> list[dict]:
                     "items": len(results),
                     "passed": results.count("pass"),
                     "failed": results.count("fail"),
+                    "unknown": results.count("unknown"),
+                    "not_applicable": results.count("not_applicable"),
                 }
             )
     return out

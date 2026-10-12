@@ -12,6 +12,7 @@ from experimental.harness.raven_adapter.calls import OperationGroup, owner_opera
 from experimental.harness.raven_adapter.inference import Inference
 from experimental.harness.raven_adapter.observe import Recorder
 from raven.contracts.llm_provider import GenerationSettings, LLMResponse, ToolCallRequest
+from raven.providers.rates import DEFAULT_MAX_OUTPUT_TOKENS
 
 
 class Verdict(BaseModel):
@@ -221,7 +222,7 @@ async def test_the_strategy_chooses_its_sampling_and_the_rest_follows_the_worker
         await judge(infer)
     chosen, inherited = provider.requests
     assert (chosen["max_tokens"], chosen["reasoning_effort"]) == (800, "minimal")
-    assert "max_tokens" not in inherited and "reasoning_effort" not in inherited and "temperature" not in inherited
+    assert inherited["max_tokens"] == 1024 and "reasoning_effort" not in inherited and "temperature" not in inherited
     first, second = [row["parameters"] for row in recorder.rows if row["kind"] == "strategy.inference"]
     assert first["chosen"] == ["max_tokens", "reasoning_effort"] and second["chosen"] == []
     assert (second["max_tokens"], second["reasoning_effort"], second["temperature"]) == (1024, "low", 0.2)
@@ -268,6 +269,21 @@ async def test_a_worker_without_its_own_effort_leaves_a_judgment_none_to_choose(
             await judge(infer, reasoning_effort="minimal")
         await judge(infer, max_output_tokens=50000)
     assert provider.requests[0]["max_tokens"] == 50000
+
+
+@pytest.mark.asyncio
+async def test_a_worker_without_a_pinned_ceiling_names_the_models_own_allowance_on_every_judgment(tmp_path):
+    provider = Provider()
+    provider.generation = GenerationSettings(timeout=20)
+    infer, _, recorder = inference(tmp_path, provider)
+    assert infer.describe()["max_output_tokens"]["ceiling"] == DEFAULT_MAX_OUTPUT_TOKENS
+    async with owner_operation("action", asyncio.Lock(), group=OperationGroup()):
+        await judge(infer)
+        with pytest.raises(ValueError, match=f"output allowance of {DEFAULT_MAX_OUTPUT_TOKENS}"):
+            await judge(infer, 1, max_output_tokens=DEFAULT_MAX_OUTPUT_TOKENS + 1)
+    assert provider.requests[0]["max_tokens"] == DEFAULT_MAX_OUTPUT_TOKENS
+    (record,) = [row for row in recorder.rows if row["kind"] == "strategy.inference"]
+    assert record["parameters"]["max_tokens"] == DEFAULT_MAX_OUTPUT_TOKENS and record["parameters"]["chosen"] == []
 
 
 @pytest.mark.asyncio

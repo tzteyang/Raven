@@ -22,6 +22,7 @@ the requirements. The owner still keeps a scorecard, one verdict per criterion, 
 Curator.
 """
 
+import hashlib
 import json
 from contextlib import nullcontext
 from pathlib import Path
@@ -31,6 +32,7 @@ from uuid import uuid4
 from pydantic import BaseModel, ConfigDict, Field
 
 from experimental.cultivation.collector.curator import INFORMATION_FILE
+from experimental.harness.assessor.rubric import digest
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
 from experimental.harness.participation.allowance import reading_budget
@@ -39,10 +41,19 @@ from experimental.harness.participation.compartment import texts_of
 from experimental.harness.participation.exchange import exchange, messages
 from experimental.harness.participation.files import read_delivered
 from experimental.harness.participation.protocols import Handover, Item, Signal
-from experimental.harness.participation.views import back_office, cut, reports, transcript
+from experimental.harness.participation.views import (
+    PRIVATE,
+    back_office,
+    cut,
+    execution_digest,
+    reports,
+    transcript,
+    written,
+)
 from experimental.harness.raven_adapter.materialize import _write
 from experimental.harness.raven_adapter.observe import plain
 from experimental.harness.scenario import Disclosure
+from experimental.harness.scenario.digest import digest as scenario_digest
 from raven.providers.capabilities import vision_verdict
 from raven.providers.rates import warm_catalog_in_background
 
@@ -56,8 +67,6 @@ NAME = "submit_review"
 # employee wrote, then optional instance and working-directory lines, then the fenced result.
 # Raven's tally of a delegation's failed tool calls, fenced after the result it belongs to.
 # Other marked blocks (a skill catalog, say) may quote the start of a report's marker.
-TEXT_FILES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml"})
-PRIVATE = frozenset({"sessions", "subagents", "uploads", "skills", "memory", "agent_memory", "user_memory", "decks"})
 SOURCE = "agency"
 REFERENCES = "references.jsonl"
 # The parts of the review packet the partner was free to show: what it said, delivered, researched and filed, and the
@@ -80,7 +89,7 @@ class Verdict(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
     id: str
-    result: Literal["pass", "fail", "unknown"]
+    result: Literal["pass", "fail", "unknown", "not_applicable"]
     session: str | None = None
     actual: str = ""
     note: str = ""
@@ -131,6 +140,33 @@ def no_facts(name, exchanges, card) -> dict:
     return {}
 
 
+def delivery_versions(exchanges, *, tokens: int | None = None) -> list[dict]:
+    """Keep each retained delivery tied to its turn; reused mutable paths cannot prove an earlier version."""
+    last = {str(path): index for index, exchange_ in enumerate(exchanges) for path in exchange_.execution.deliverables}
+    versions = []
+    for index, exchange_ in enumerate(exchanges):
+        if not exchange_.execution.deliverables:
+            continue
+        files = deliverables([exchange_], tokens=tokens)
+        unavailable = {}
+        delivered_versions = []
+        for path in exchange_.execution.deliverables:
+            if last[str(path)] != index:
+                name = Path(path).name
+                files.pop(name, None)
+                unavailable[name] = "An earlier delivery reused this path without a separately retained snapshot."
+            elif Path(path).is_file():
+                delivered_versions.append(
+                    {
+                        "name": Path(path).name,
+                        "sha256": hashlib.sha256(Path(path).read_bytes()).hexdigest(),
+                        "content": cut(read_delivered(path, style=True), tokens),
+                    }
+                )
+        versions.append({"turn": index + 1, "files": files, "versions": delivered_versions, "unavailable": unavailable})
+    return versions
+
+
 UNSEEN = (
     "The rendered pages were not shown: the model reviewing this round is not known to take images. Judge the decks "
     "from their text and [style] lines under deliverables, and leave a criterion only their look decides unknown."
@@ -154,36 +190,6 @@ def research(exchanges, *, tokens: int | None = None) -> dict[str, str]:
                 if "Research" in str(node.get("subagent")) and path.is_file():
                     found[str(node["node"])] = cut(path.read_text(errors="replace"), tokens)
     return found
-
-
-def written(folder: Path, before: Path, *, label: str, skip=frozenset(), tokens: int | None = None) -> dict[str, str]:
-    """Files under `folder` that are new or changed against `before`, keyed `label/relative path`.
-
-    Text files come with their content; anything else (decks, scripts, build output) is listed by name only. Hidden
-    entries are the host's and tools' own bookkeeping (Raven's `.raven` checkpoints, a deck engine's dot files), not
-    something the employee filed.
-    """
-    files = {}
-    if not Path(folder).is_dir():
-        return files
-    for path in sorted(Path(folder).rglob("*")):
-        relative = path.relative_to(folder)
-        if (
-            not path.is_file()
-            or skip & set(relative.parts[:1])
-            or "__pycache__" in relative.parts
-            or any(part.startswith(".") for part in relative.parts)
-        ):
-            continue
-        old = Path(before) / relative
-        if old.is_file() and old.read_bytes() == path.read_bytes():
-            continue
-        key = f"{label}/{relative.as_posix()}"
-        if path.suffix.lower() in TEXT_FILES and not relative.parts[0] == "decks":
-            files[key] = cut(path.read_text(errors="replace"), tokens)
-        else:
-            files[key] = f"[{path.suffix or 'file'}; content not shown]"
-    return files
 
 
 def attached(paths, kinds) -> tuple[Handover, ...]:
@@ -236,6 +242,7 @@ class Owner:
         uploads: Path | None = None,
         shared: Path | None = None,
         cards=None,
+        handouts=None,
         records: Path | None = None,
         workdirs: dict | None = None,
         model=None,
@@ -264,6 +271,7 @@ class Owner:
         self.disclosure, self.model, self.effort = disclosure, model, effort
         self.max_calls, self.timeout = max_calls, timeout
         self.cards = cards or dict
+        self._provided_handouts = handouts or (lambda sessions: {})
         self.records = Path(records) if records else None
         self.workdirs = workdirs if workdirs is not None else {}
         self.boundaries = boundaries
@@ -326,6 +334,14 @@ class Owner:
     def withheld(self) -> list[str]:
         return [name for name in self.scenario.handed if name not in self.released]
 
+    @property
+    def never_handed(self) -> list[str]:
+        """Withheld materials this schedule never hands over (every one under `none`): a miss they cover cannot wait
+        on them."""
+        if self.chooses or self.disclosure.completes:
+            return []
+        return [name for name in self.withheld if self.disclosure.step_of(name) is None]
+
     def prepare(self) -> None:
         places = (self.skills, self.uploads, self.shared)
         self.scenario.withdraw(*(place for place in places if place is not None))
@@ -338,8 +354,9 @@ class Owner:
             self._release(opening)
 
     def opening(self) -> tuple[Signal, ...]:
-        """The owner's onboarding message with its uploaded files; nothing when materials went straight to the pool."""
-        if self.deliver != "dialog":
+        """The owner's onboarding message with its uploaded files; nothing when materials went straight to the pool
+        or nothing was handed over, since the message is the handover."""
+        if self.deliver != "dialog" or not self.uploaded:
             return ()
         files = "\n".join(f"- {path}" for path in self.uploaded)
         attachments = attached(self.uploaded, self.kinds)
@@ -370,8 +387,17 @@ class Owner:
         stray = set(review.handover) - set(self.withheld)
         if stray:
             raise ValueError(f"handover may name only withheld materials {self.withheld}; got {sorted(stray)}")
-        coming = {*review.handover, *self.due(self.judged + 1)} if self.chooses else set(self.withheld)
+        never = set(self.never_handed)
+        coming = {*review.handover, *self.due(self.judged + 1)} if self.chooses else set(self.withheld) - never
+        named = handles(self.scenario.criteria)
+        definitions = {named[criterion.id]: criterion for criterion in self.scenario.criteria}
         for verdict in review.verdicts:
+            if verdict.result == "not_applicable":
+                definition = definitions.get(verdict.id)
+                if definition is None or not definition.applies_when.strip():
+                    raise ValueError("an unconditional criterion cannot be marked not_applicable")
+                if not verdict.note.strip():
+                    raise ValueError("not_applicable requires an evidenced explanation of the unmet condition")
             if verdict.waits_on is None:
                 continue
             if verdict.result != "fail":
@@ -380,6 +406,8 @@ class Owner:
                 raise ValueError(
                     f"a verdict waits only on a material still withheld {self.withheld}; got {verdict.waits_on!r}"
                 )
+            if verdict.waits_on in never:
+                raise ValueError(f"{verdict.waits_on!r} is never handed over: judge the miss without waiting on it")
             if verdict.waits_on not in coming:
                 raise ValueError(f"hand over {verdict.waits_on!r}, the material a verdict waits on")
         return review
@@ -388,6 +416,7 @@ class Owner:
         if self.records is None:
             return
         self.records.mkdir(parents=True, exist_ok=True)
+        source = scenario_digest(self.scenario.root)
         with (self.records / REFERENCES).open("a") as log:
             for name in sessions:
                 card = drawn.get(name)
@@ -395,7 +424,10 @@ class Owner:
                 row = {
                     "evaluation": self.judged + 1,
                     "drill": name,
+                    "execution_ids": [exchange_.execution.turn_id for exchange_ in sessions[name]],
+                    "scenario_digest": source,
                     "card": card.text if card else None,
+                    "expected": getattr(card, "expected", None),
                     "trip": trip.facts() if trip else None,
                     "references": found.get(name, {}),
                 }
@@ -410,12 +442,15 @@ class Owner:
     async def evaluate(self, sessions) -> Signal:
         """The owner's words on the round: its remark, whether it is satisfied and what it hands over, never its
         verdicts. The scorecard is recorded first, so a failed round keeps it; a failed judgement is recorded too."""
+        self._review_evidence = {}
         try:
             scorecard, judged, _ = await self._judge(sessions)
         except Exception as exc:
-            self.record({"source": SOURCE, "error": str(exc)})
+            self.record({"source": SOURCE, "error": str(exc), **self._review_evidence})
             raise
-        self.record({"source": SOURCE, "scorecard": scorecard, "waiting_on_material": waiting(judged)})
+        self.record(
+            {"source": SOURCE, "scorecard": scorecard, "waiting_on_material": waiting(judged), **self._review_evidence}
+        )
         return Signal(
             SOURCE,
             scorecard.text,
@@ -438,17 +473,26 @@ class Owner:
             "materials": {
                 name: self.scenario.text(name) for name in self.scenario.materials if self.scenario.stands_behind(name)
             },
+            "material_files": self.scenario.evidence_materials(
+                self.scenario.materials, role="counterpart", tokens=self.reading
+            ),
+            "handouts": self._provided_handouts(sessions),
             "given_to_the_assistant": list(self.released),
             "withheld": self.withheld,
+            "never_handed": self.never_handed,
             "handing_over_now": self.due(self.judged + 1),
             "you_choose_handover": self.chooses,
             "your_earlier_reviews": [
                 {**review, "failed": [named.get(id, id) for id in review["failed"]]} for review in self.reviews
             ],
             "cards": {name: drawn[name].text for name in sessions if name in drawn},
+            "expected": {name: answer for name in sessions if (answer := getattr(drawn.get(name), "expected", None))},
             "references": {name: facts for name, facts in found.items() if facts},
             "conversations": {name: transcript(exchanges) for name, exchanges in sessions.items()},
             "deliverables": {name: files for name, files in delivered.items() if files},
+            "deliveries_by_turn": {
+                name: delivery_versions(exchanges, tokens=self.reading) for name, exchanges in sessions.items()
+            },
             "research": {name: notes for name, notes in researched.items() if notes},
             "colleague_reports": {name: told for name, exchanges in sessions.items() if (told := reports(exchanges))},
             "information": self.information(),
@@ -459,6 +503,22 @@ class Owner:
         if parts and not self.sees_images():
             packet["pictures"] = {"not_shown": UNSEEN, "decks": packet["pictures"]}
             parts = []
+        criteria = [criterion.model_dump() for criterion in self.scenario.criteria]
+        self._review_evidence = {
+            "assessment_id": uuid4().hex,
+            "evaluation": self.judged + 1,
+            "rubric_version": digest(criteria),
+            "scenario_digest": scenario_digest(self.scenario.root),
+            "criteria": criteria,
+            "criterion_handles": named,
+            "execution_ids": {
+                name: [exchange_.execution.turn_id for exchange_ in exchanges] for name, exchanges in sessions.items()
+            },
+            "evidence": packet,
+            "evidence_digest": digest(plain(packet)),
+            "execution_digest": execution_digest(sessions),
+            "image_inputs_shown": len(parts),
+        }
         request = messages(_PROMPT.read_text(), packet)
         if parts:
             request.append({"role": "user", "content": [{"type": "text", "text": lead}, *parts]})
@@ -519,7 +579,11 @@ class Owner:
             SOURCE,
             text,
             items,
-            satisfied=all(item.result == "pass" for item in items),
+            satisfied=(
+                all(item.result == "pass" for item in items if item.result != "not_applicable")
+                if any(item.result != "not_applicable" for item in items)
+                else None
+            ),
             attachments=attached(uploaded, self.kinds),
             authority="external",
         )

@@ -15,7 +15,7 @@ from math import isfinite
 from experimental.harness.contract import Attributed, Candidate, Plan, Validation
 from experimental.harness.contract.commitments import coverage
 from experimental.harness.curator.generation.context import query, render
-from experimental.harness.curator.generation.context.collect import Context
+from experimental.harness.curator.generation.context.collect import Context, read_reference
 from experimental.harness.curator.generation.models import effective_model, resume_model
 from experimental.harness.curator.generation.stages import consistency_review, design, implement, repair, select, shared
 from experimental.harness.curator.generation.stages.consistency_review import ConsistencyReview
@@ -37,9 +37,13 @@ class Limits:
     which also bounds any larger value.
 
     `stage_queries` is how many exploration calls one stage may spend out of `max_queries`: a stage that spends them
-    is told to submit, and the stages after it keep the rest of the pool. None leaves the pool as the only cap."""
+    is told to submit, and the stages after it keep the rest of the pool. None leaves the pool as the only cap.
+
+    `review_reserve` is how many model calls the consistency review and its submission are reckoned to need: a
+    building stage down to that many calls is told to submit its artifact. It is a note, not a cap."""
 
     max_calls: int = 12
+    review_reserve: int = 8
     max_queries: int = 8
     max_repairs: int = 3
     call_timeout: float = 180
@@ -58,6 +62,8 @@ class Limits:
                 for value in (self.max_calls, self.max_queries, self.max_repairs, self.max_checks)
             )
             or self.max_calls < 1
+            or not isinstance(self.review_reserve, int)
+            or self.review_reserve < 0
             or self.max_queries < 0
             or self.max_repairs < 0
             or self.max_checks < 0
@@ -100,11 +106,12 @@ class GenerationPausedError(GenerationInterruptedError):
 
 class GapReportedError(GenerationError):
     """The Curator reported a gap it cannot close with what it was given: missing authority, capability or
-    information. The curation ends without a candidate; the loop keeps the question for whoever can answer it."""
+    information. The curation ends without a candidate; the loop keeps the question, with the `kind` of source the
+    Curator says can settle it (private, public or unclear), for whoever can answer it."""
 
-    def __init__(self, stage, reason, trace=()):
+    def __init__(self, stage, reason, trace=(), kind="unclear"):
         super().__init__(f"{stage}: {reason}", trace)
-        self.stage, self.reason = stage, reason
+        self.stage, self.reason, self.kind = stage, reason, kind
 
 
 CHECK = "check_candidate"
@@ -164,6 +171,7 @@ def _shared_tools(context, tool_registry) -> list[dict]:
         check,
         implement.stage_tool(),
         implement.edit_tool(),
+        implement.stage_source_tool(),
         shared.gap_tool(),
     ]
     names = [item["function"]["name"] for item in tools]
@@ -195,6 +203,8 @@ def _budget(state, limits) -> str:
         repairs=limits.max_repairs - state.repairs,
         stage_queries=min(limits.stage_allowance - state.stage_queries, limits.max_queries - state.queries),
         stage_allowance=limits.stage_allowance,
+        reserve=limits.review_reserve,
+        stage=state.stage,
     )
 
 
@@ -237,7 +247,7 @@ async def ask(
         *parsers,
         shared.GAP,
         *((CHECK,) if check_parser is not None else ()),
-        *((implement.STAGE_FILE, implement.EDIT_FILE) if stage_files else ()),
+        *((implement.STAGE_FILE, implement.EDIT_FILE, implement.STAGE_SOURCE) if stage_files else ()),
     }
     available = {name for name in (item["function"]["name"] for item in tools) if name not in staged} | offered
     if not state.messages:
@@ -356,7 +366,7 @@ async def ask(
                 continue
             trace.append({"stage": stage, "event": call.name, "output": plain(value)})
             if call.name == shared.GAP:
-                raise GapReportedError(stage, value, trace)
+                raise GapReportedError(stage, value.reason, trace, value.kind)
             return call.name, value
         overthought = not response.tool_calls and (
             response.finish_reason == "length" or not (response.content or "").strip()
@@ -396,6 +406,28 @@ async def ask(
                     entry = implement.parse_staged(call.arguments)
                     state.staged[entry.path] = entry.content
                     result = {"staged": entry.path, "chars": len(entry.content), "staged_files": sorted(state.staged)}
+                except (ValueError, TypeError) as exc:
+                    result = {"error": str(exc)[:2000]}
+                trace.append(
+                    {"stage": stage, "event": "file.staged", "path": call.arguments.get("path"), "result": result}
+                )
+                messages.append(
+                    {"role": "tool", "tool_call_id": call.id, "content": json.dumps(result, ensure_ascii=False)}
+                )
+                continue
+            if stage_files and call.name == implement.STAGE_SOURCE:
+                try:
+                    entry = implement.parse_staged_source(call.arguments)
+                    reference = read_reference(context, entry.source)
+                    if reference is None:
+                        raise ValueError(f"unknown registered source: {entry.source}; `sources` lists the names")
+                    state.staged[entry.path] = reference["text"]
+                    result = {
+                        "staged": entry.path,
+                        "source": entry.source,
+                        "chars": len(reference["text"]),
+                        "staged_files": sorted(state.staged),
+                    }
                 except (ValueError, TypeError) as exc:
                     result = {"error": str(exc)[:2000]}
                 trace.append(

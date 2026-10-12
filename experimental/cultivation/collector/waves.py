@@ -22,6 +22,7 @@ from experimental.cultivation.collector.information import (
     _Model,
 )
 from experimental.cultivation.collector.researchers import ResearchError
+from experimental.harness.participation.compartment import BoundaryError
 from experimental.harness.participation.exchange import ExchangeError
 
 
@@ -163,7 +164,9 @@ async def _group(number, group, *, research, limits, window, known, guides, reta
                         }
                     )
             outcome["status"] = "accepted" if review.accepted else ("partial" if outcome["admitted"] else "withheld")
-    except (ExchangeError, ResearchError, OSError, TimeoutError, ValueError, KeyError) as exc:
+    # A group whose pages or findings meet a sealed passage was stopped before the Curator read them; its research is
+    # withheld like any failed group, and the boundary log keeps the hit, rather than ending the whole preparation.
+    except (BoundaryError, ExchangeError, ResearchError, OSError, TimeoutError, ValueError, KeyError) as exc:
         outcome["error"] = str(exc) or type(exc).__name__
         outcome["error_type"] = type(exc).__name__
         if not any(row["attempt"] == running.attempt for row in outcome["attempts"]):

@@ -401,3 +401,27 @@ def test_existing_agent_preparation_reuses_renderer_and_isolates_host_environmen
     assert (root / "prepared.json").stat().st_mode & 0o777 == 0o600
     if name in {"raven-code", "raven-oncall", "raven-research"}:
         assert str(directory / "plugins") in baseline.extensions.plugins.dirs
+
+
+@pytest.mark.asyncio
+async def test_worker_bootstrap_failure_preserves_stderr_and_exit_classification(baseline, tmp_path, monkeypatch):
+    from experimental.harness.raven_adapter import worker
+    from experimental.harness.raven_adapter.launch import Process
+
+    def invalid_bootstrap(arguments, **kwargs):
+        return Process((), **kwargs)
+
+    monkeypatch.setattr(worker, "Process", invalid_bootstrap)
+    employee = worker.Worker(baseline, tmp_path / "employee", timeout=10)
+    employee._diagnostic_root = tmp_path / "durable-diagnostics"
+    with pytest.raises(worker.WorkerError, match="closed its startup pipe"):
+        await employee.start(start_resources=False)
+    records = list(employee._diagnostic_root.glob("*.json"))
+    assert len(records) == 1
+    data = json.loads(records[0].read_text())
+    assert data["exception_type"] == "EOFError"
+    assert data["elapsed_seconds"] < 10
+    stderr = Path(data["stderr_path"])
+    assert "TypeError" in stderr.read_text()
+    assert stderr.stat().st_mode & 0o777 == 0o600
+    assert not employee._process

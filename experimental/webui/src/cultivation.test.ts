@@ -94,6 +94,14 @@ describe('cultivation timeline', () => {
     expect(remark).toMatchObject({ heldOut: ['holdout-1'], holdout: [{ text: 'held-out remark' }] })
   })
 
+  it('sets the baseline exam, played before onboarding, right after the onboarding', () => {
+    const run = cultivated()
+    run.baseline = { sessions: { 'holdout-0': [turn('a0')] }, signals: [{ source: 'holdout', text: '', items: [], metrics: {}, satisfied: false }] }
+    const entries = timeline(run, revisions(run))
+    expect(entries.slice(0, 3).map((entry) => entry.kind)).toEqual(['onboarding', 'baseline', 'reply'])
+    expect(entries[1]).toMatchObject({ heldOut: ['holdout-0'], signals: [{ source: 'holdout', satisfied: false }] })
+  })
+
   it('reads whether each requirement held after its revision from the history', () => {
     const run = cultivated()
     run.history = [{ round: 1, requirements: [{ id: 'R1', behavior: 'Quote only after confirming', strength: 'must_hold', acceptance: 'x', held: true }], revision: [], diagnoses: null, attributor: null }]

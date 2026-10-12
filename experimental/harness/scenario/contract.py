@@ -8,11 +8,13 @@ here reads a file into a role.
 
 The directory layout is the one `experimental/simulation/cases/<name>/` uses: `profile.md`, `materials/<name>/`
 packages (a skill with its SKILL.md, or a folder whose one top-level markdown file is its document),
-`personas/*.md` drill cards, `scenario.json` with the checks and the disclosure plans, the counterpart's `onboarding.md`
+`personas/*.md` drill cards (frontmatter: drawn `values`, handed-over `files`, a labelled card's `expected` answer),
+`scenario.json` with the checks, the disclosure plans and the card schedule, the counterpart's `onboarding.md`
 and `handover.md`, the evaluation-side `reference.md` and `record.md`, `contract.json` for what this module adds
 (each material's kind, each check's derivation, and the counterpart's observation views), and `provenance.json`, which a
 research stage writes (`experimental.cultivation.collector`) to say where each material came from and whether the counterpart stands
-behind it.
+behind it. A `lab/` folder holds what a launcher places on a registered machine for an on-call colleague to run (a
+read-only script and the data it reveals over time); it is no material, so no role is handed it.
 """
 
 import json
@@ -36,6 +38,7 @@ VIEWS = ("conversations", "deliverables", "research", "colleague_reports", "file
 
 SKILL_FILE = "SKILL.md"
 PROVENANCE = "provenance.json"
+LAB = "lab"
 CLAIMED = (
     "profile.md",
     "onboarding.md",
@@ -85,26 +88,56 @@ def _roles(value) -> frozenset[str]:
 
 
 class Case(_Model):
-    """One situation the partner is drilled in: a persona with drawn values, and for a labelled case its expected answer."""
+    """One situation the partner is drilled in: a persona with drawn values, the files the person hands over as the
+    conversation opens (paths inside the scenario directory), and for a labelled case its expected answer."""
 
     id: str = Field(min_length=1)
     text: str = Field(min_length=1)
     values: dict = Field(default_factory=dict)
+    files: tuple[str, ...] = ()
     expected: str | None = None
     visibility: frozenset[str] = Field(default_factory=lambda: default_visibility("case"))
 
 
+class Schedule(_Model):
+    """Which cases are played when: `rounds[k]` in round k + 1 (the last entry for every later round), the held-out
+    cases, judged but kept from whoever improves the partner, and `holdout_rounds`, the rounds they are played in (every
+    round when empty; 0 is before onboarding). Empty when every case is played each round."""
+
+    rounds: tuple[tuple[str, ...], ...] = ()
+    holdout: tuple[str, ...] = ()
+    holdout_rounds: tuple[int, ...] = ()
+
+    def round(self, index: int) -> tuple[str, ...]:
+        """The cases of round `index` (1-based); empty when the schedule names no rounds."""
+        return self.rounds[min(index, len(self.rounds)) - 1] if self.rounds else ()
+
+
 class Situation(_Model):
-    """The work and the world it happens in: the partner's job and the cases it meets."""
+    """The work and the world it happens in: the partner's job, the cases it meets and when it meets them."""
 
     profile: str = Field(min_length=1)
     cases: tuple[Case, ...] = Field(min_length=1)
+    schedule: Schedule = Field(default_factory=Schedule)
 
     @model_validator(mode="after")
     def distinct_cases(self) -> "Situation":
         ids = [case.id for case in self.cases]
         if len(set(ids)) != len(ids):
             raise ValueError(f"case ids repeat: {sorted({i for i in ids if ids.count(i) > 1})}")
+        scheduled = {name for step in self.schedule.rounds for name in step} | set(self.schedule.holdout)
+        unknown = scheduled - set(ids)
+        if unknown:
+            raise ValueError(f"the schedule names cases the scenario does not have: {sorted(unknown)}")
+        if any(not step for step in self.schedule.rounds):
+            raise ValueError("every scheduled round plays at least one case")
+        both = {name for step in self.schedule.rounds for name in step} & set(self.schedule.holdout)
+        if both:
+            raise ValueError(f"a held-out case is not also played for feedback: {sorted(both)}")
+        if self.schedule.holdout_rounds and (
+            not self.schedule.holdout or any(number < 0 for number in self.schedule.holdout_rounds)
+        ):
+            raise ValueError("held-out rounds are rounds (0 before onboarding) of a schedule that holds cases out")
         return self
 
 
@@ -120,6 +153,7 @@ class Check(_Model):
     id: str = Field(min_length=1)
     check: str = Field(min_length=1)
     severity: Literal["red_line", "standard"] = "standard"
+    applies_when: str = ""
     derived_from: tuple[str, ...] = ()
     visibility: frozenset[str] = Field(default_factory=lambda: default_visibility("check"))
 
@@ -134,6 +168,7 @@ class _Criterion(_Model):
     id: str
     check: str
     severity: Literal["red_line", "standard"] = "standard"
+    applies_when: str = ""
 
 
 class _Plan(_Model):
@@ -149,6 +184,7 @@ class _Spec(_Model):
     initial: tuple[str, ...] = ()
     plans: dict[str, _Plan] = Field(default_factory=dict)
     criteria: tuple[_Criterion, ...] = ()
+    schedule: Schedule = Field(default_factory=Schedule)
 
 
 class Statements(_Model):
@@ -331,17 +367,20 @@ def frontmatter(text: str) -> tuple[dict, str]:
     return {}, text.strip()
 
 
-def _unclaimed(root: Path, materials: dict[str, Path], prior: tuple[Path, ...] = ()) -> list[str]:
-    """Files under the scenario that belong to no category; a prior record kept inside it belongs to the prior, and a
-    Python module beside the materials is the case's own code (its owner, its reference figures), not a material."""
-    claimed = {root / name for name in CLAIMED}
+def _unclaimed(
+    root: Path, materials: dict[str, Path], prior: tuple[Path, ...] = (), handed: tuple[Path, ...] = ()
+) -> list[str]:
+    """Files under the scenario that belong to no category; a prior record kept inside it belongs to the prior, a file
+    a case hands over belongs to that case, a Python module beside the materials is the case's own code (its owner,
+    its reference figures), not a material, and the `lab/` folder belongs to the machine it is placed on."""
+    claimed = {root / name for name in CLAIMED} | {Path(path) for path in handed}
     out = []
     for file in sorted(path for path in root.rglob("*") if path.is_file()):
         if file in claimed or "__pycache__" in file.parts or (file.parent == root and file.suffix == ".py"):
             continue
         if file.parent == root / "personas" and file.suffix == ".md":
             continue
-        if any(file.is_relative_to(folder) for folder in (*materials.values(), *prior)):
+        if any(file.is_relative_to(folder) for folder in (*materials.values(), *prior, root / LAB)):
             continue
         out.append(file.relative_to(root).as_posix())
     return out
@@ -356,12 +395,26 @@ def _cases(root: Path, contract: dict) -> tuple[Case, ...]:
         if not isinstance(values, dict):
             raise ValueError(f"the values of case {path.stem} must be a mapping")
         given = labelled.get(path.stem, {})
+        expected = head.get("expected")
+        if expected is not None and (not isinstance(expected, str) or "expected" in given):
+            raise ValueError(f"case {path.stem} states its expected answer twice or not as text")
+        files = head.get("files") or []
+        if not isinstance(files, list) or not all(isinstance(item, str) for item in files):
+            raise ValueError(f"the files of case {path.stem} must be a list of paths")
+        for item in files:
+            file = (root / item).resolve()
+            if not file.is_relative_to(root) or not file.is_file():
+                raise ValueError(f"case {path.stem} hands over a file the scenario does not have: {item}")
+        names = [Path(item).name for item in files]
+        if len(set(names)) != len(names):
+            raise ValueError(f"case {path.stem} hands over two files of one name, which would land on each other")
         cases.append(
             Case(
                 id=path.stem,
                 text=body,
                 values=values,
-                expected=given.get("expected"),
+                files=tuple(files),
+                expected=expected.strip() if expected is not None else given.get("expected"),
                 visibility=_roles(given["visibility"]) if "visibility" in given else default_visibility("case"),
             )
         )
@@ -430,6 +483,7 @@ def _checks(spec: _Spec, contract: dict) -> tuple[Check, ...]:
                 id=row.id,
                 check=row.check,
                 severity=row.severity,
+                applies_when=row.applies_when,
                 derived_from=tuple(given.get("derived_from", ())),
                 visibility=_roles(given["visibility"]) if "visibility" in given else default_visibility("check"),
             )
@@ -469,7 +523,16 @@ def load(root: Path) -> Scenario:
     )
     materials = _materials(root, contract)
     prior = tuple(root / path for path in contract.get("prior", ()))
-    stray = _unclaimed(root, {name: material.path for name, material in materials.items()}, prior)
+    cases = _cases(root, contract)
+    handed = tuple((root / item).resolve() for case in cases for item in case.files)
+    inside = sorted(
+        str(file.relative_to(root))
+        for file in handed
+        if any(file.is_relative_to(material.path.resolve()) for material in materials.values())
+    )
+    if inside:
+        raise ValueError(f"a case hands over files of a material, which would release it early: {inside}")
+    stray = _unclaimed(root, {name: material.path for name, material in materials.items()}, prior, handed)
     if stray:
         raise ValueError(f"files outside every category: {stray}")
     profile = _text(root, "profile.md")
@@ -477,7 +540,7 @@ def load(root: Path) -> Scenario:
         raise ValueError(f"scenario profile is missing or empty: {root}")
     return Scenario(
         root=root,
-        situation=Situation(profile=profile, cases=_cases(root, contract)),
+        situation=Situation(profile=profile, cases=cases, schedule=spec.schedule),
         statements=Statements(
             norms=tuple(name for name, material in materials.items() if material.kind == "norm"),
             checks=_checks(spec, contract),

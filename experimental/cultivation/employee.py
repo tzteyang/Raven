@@ -202,6 +202,7 @@ def replicate(
     *,
     subagent_model: str | None = None,
     timeout=180,
+    connections: Path | None = None,
 ) -> Worker:
     """A replica of the started employee as it stands now, in a new `root`, with processes of its own.
 
@@ -222,7 +223,7 @@ def replicate(
     )
     shutil.copytree(employee.baseline.workdir, workdir, symlinks=True)
     baseline = prepare(config, workdir=workdir, task=employee.baseline.task, home=workspace)
-    housed = house(baseline, model=subagent_model, deployment=area / "deployment")
+    housed = house(baseline, model=subagent_model, deployment=area / "deployment", connections=connections)
     children = confined(prepare_children(baseline, area, ["Raven", *housed]), baseline)
     if children.keys() != employee.children.keys():
         raise ValueError(f"a replica has child harnesses {sorted(children)}, the employee {sorted(employee.children)}")
@@ -310,7 +311,7 @@ def same_revision(employee: Worker, replica: Worker, *, running=False):
         raise ValueError(f"replica {replica.root} bound {bound(replica)}, the employee {bound(employee)}")
 
 
-def house(baseline, housed=HOUSED, *, model=None, deployment=None) -> list[str]:
+def house(baseline, housed=HOUSED, *, model=None, deployment=None, connections=None) -> list[str]:
     """Point each named external subagent's own Agent home into the employee's `subagents/` folder.
 
     Their homes sit in the employee's deployment tree, owned by their own Curator scope and never directly
@@ -327,6 +328,14 @@ def house(baseline, housed=HOUSED, *, model=None, deployment=None) -> list[str]:
     rows = baseline.config.subagents.agents
     configured = {row.name: row for row in rows}
     extra = {name: os.environ[name] for name in FORWARDED if os.environ.get(name)}
+    if connections is not None:
+        extra["RAVEN_CONNECTIONS"] = str(connections)
+        rows = [
+            row.model_copy(update={"env": {**(row.env or {}), "RAVEN_CONNECTIONS": str(connections)}})
+            if row.name == GENERIC_AGENT
+            else row
+            for row in rows
+        ]
     if extra and GENERIC_AGENT not in configured:
         rows = [
             *rows,
@@ -424,6 +433,20 @@ def pin(row, model: str, config, deployment: Path) -> tuple[dict[str, str], str]
     return {secret: key}, f"{row.command} --config {shlex.quote(str(path))}"
 
 
+# The folder of the workdir where whatever the employee is handed lands, as the owner uploads its materials there.
+UPLOADS = "uploads"
+
+
+def hand_over(files, folder: Path) -> None:
+    """Copy the files a person hands over into `folder`; a name already there is refused, never overwritten."""
+    for source in files:
+        target = folder / Path(source).name
+        if target.exists():
+            raise ValueError(f"a handed-over file would replace one already in place: {target.name}")
+        folder.mkdir(parents=True, exist_ok=True)
+        shutil.copy2(source, target)
+
+
 class Together:
     """Trials each played on its own replica of the employee, made from it as the trials begin (see `replicate`)
     and closed when they end; trials of one group run at once.
@@ -433,7 +456,7 @@ class Together:
     `trials` maps each trial's name to it; `spawn(employee, label)` makes an unstarted replica, labelled with the
     trial's opaque session label rather than its name, because the replica's paths show in the records the Curator
     reads. `placed` is filled with the workdir and home each named trial played in, for readers of the files a drill
-    wrote.
+    wrote. A trial that hands files over (its `handed`) finds them in its replica's `uploads/` before it starts.
     """
 
     def __init__(self, trials: dict, spawn, placed: dict | None = None):
@@ -447,10 +470,16 @@ class Together:
         if self.placed is not None:
             self.placed.update(
                 {
-                    name: {"workdir": replica.baseline.workdir, "home": replica.baseline.config.workspace_path}
+                    name: {
+                        "workdir": replica.baseline.workdir,
+                        "home": replica.baseline.config.workspace_path,
+                        **({"lab": dict(replica.lab)} if getattr(replica, "lab", None) else {}),
+                    }
                     for name, replica in replicas.items()
                 }
             )
+        for name, trial in self.trials.items():
+            hand_over(getattr(trial, "handed", ()), Path(replicas[name].baseline.workdir) / UPLOADS)
         tasks = []
         try:
             await asyncio.gather(*(replica.start() for replica in replicas.values()))

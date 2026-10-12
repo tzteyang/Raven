@@ -123,7 +123,8 @@ class BoundAction(BoundStrategy):
         scope = self.scope()
         return scope.session_key, scope.turn_id
 
-    def _base(self, controls, *, can_guide=False):
+    def envelope(self, controls, *, can_guide=False):
+        """The fields every Action event shares, including the Planning view current for this turn."""
         return {
             "scope": self.scope(),
             "event_id": uuid4().hex,
@@ -277,7 +278,7 @@ class BoundAction(BoundStrategy):
                 settled.append(receipt)
         self.pending[self._key()] = remaining
         for receipt in settled:
-            await self.handle_event(ControlEvent(**self._base(("continue",)), receipt=receipt))
+            await self.handle_event(ControlEvent(**self.envelope(("continue",)), receipt=receipt))
 
     async def finish(self, *, emitted_reply=None):
         try:
@@ -326,7 +327,7 @@ class BoundAction(BoundStrategy):
 
             async def before_user_inbound(self, context):
                 async def run():
-                    event = InputEvent(**owner._base(("continue", "finish")), text=context.inbound_content or "")
+                    event = InputEvent(**owner.envelope(("continue", "finish")), text=context.inbound_content or "")
                     return owner._apply(await owner.handle_event(event), event.event_id, context)
 
                 return await owner._guard(context, run)
@@ -334,7 +335,7 @@ class BoundAction(BoundStrategy):
             async def before_iteration(self, context):
                 async def run():
                     event = ProgressEvent(
-                        **owner._base(("continue", "finish"), can_guide=True),
+                        **owner.envelope(("continue", "finish"), can_guide=True),
                         messages=plain(context.messages or []),
                         offered_tools=plain(context.tools or []),
                         previous_capabilities=owner._capabilities(),
@@ -348,7 +349,7 @@ class BoundAction(BoundStrategy):
             async def before_execute_tools(self, context):
                 async def run():
                     event = ProposalEvent(
-                        **owner._base(owner._controls(context)),
+                        **owner.envelope(owner._controls(context)),
                         stage="batch",
                         calls=owner._calls(context.response),
                         text=getattr(context.response, "content", None),
@@ -369,14 +370,14 @@ class BoundAction(BoundStrategy):
                     calls = owner._calls(context.response)
                     if calls:
                         event = OutcomeEvent(
-                            **owner._base(owner._controls(context), can_guide=True),
+                            **owner.envelope(owner._controls(context), can_guide=True),
                             messages=plain(context.messages or []),
                             proposed_calls=calls,
                             capabilities=owner._capabilities(),
                         )
                     else:
                         event = ProposalEvent(
-                            **owner._base(owner._controls(context)),
+                            **owner.envelope(owner._controls(context)),
                             stage="reply",
                             text=getattr(context.response, "content", None),
                             capabilities=owner._capabilities(),
@@ -388,7 +389,7 @@ class BoundAction(BoundStrategy):
             async def terminal_answerless(self, context):
                 async def run():
                     event = FailureEvent(
-                        **owner._base(("continue", "finish")),
+                        **owner.envelope(("continue", "finish")),
                         reason="The native execution ended without a usable final answer.",
                         terminal=True,
                         messages=plain(context.messages or []),
@@ -426,7 +427,7 @@ class BoundAction(BoundStrategy):
                 model to stop resubmitting the call unchanged.
                 """
                 event = ProposalEvent(
-                    **owner._base(("continue", "reject")),
+                    **owner.envelope(("continue", "reject")),
                     stage="dispatch",
                     calls=(ProposedCall(name=name, arguments=plain(params)),),
                     capabilities=owner._capabilities(),
@@ -442,7 +443,7 @@ class BoundAction(BoundStrategy):
                     return None
                 receipt = owner._receipt(event.event_id, result, "applied")
                 try:
-                    await owner.handle_event(ControlEvent(**owner._base(("continue",)), receipt=receipt))
+                    await owner.handle_event(ControlEvent(**owner.envelope(("continue",)), receipt=receipt))
                 except Exception as exc:
                     owner.recorder.add("action.error", operation="control_observation", error=str(exc))
                 repeat = owner._refused(name, params)

@@ -183,6 +183,10 @@ export function replayThread(id: string, run: Run, entry?: RunEntry): Thread {
     return null
   }
 
+  if (run.baseline) {
+    entries.push({ kind: 'trials', key: 'holdout-0', round: 0, version: BASELINE, trials: trialsOf(run.baseline.sessions, 0, BASELINE, { holdout: true }), holdout: true })
+    entries.push(...requests(run, run.baseline.signals, 0, false, true))
+  }
   entries.push(...requests(run, run.opening ?? [], 0, true))
   const onboarding = run.initial_curation ?? []
   const attributions = attributionsOf(run, 0)

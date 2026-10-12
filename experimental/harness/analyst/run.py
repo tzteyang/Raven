@@ -212,7 +212,8 @@ async def analyse(
         feedback = triage(signals)
         if feedback is None:
             inspection = await worker.inspect()
-            skills = sorted(name for name in inspection.sources if name.startswith("skill."))
+            # A material handed over through the conversation sits in the uploads, not the skill pool; both are in hand.
+            skills = sorted(name for name in inspection.sources if name.startswith(("skill.", "upload.")))
             packet = materials(
                 worker.baseline.task.text,
                 signals,

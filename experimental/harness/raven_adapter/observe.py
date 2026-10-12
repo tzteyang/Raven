@@ -1,12 +1,15 @@
 """Record actual provider calls and enforce declared Participant boundaries."""
 
+import hashlib
 import json
+import time
 from collections.abc import Mapping
 from contextvars import ContextVar
 from copy import deepcopy
 from dataclasses import fields, is_dataclass, replace
 from inspect import iscoroutinefunction
 from pathlib import Path
+from uuid import uuid4
 
 from pydantic import BaseModel
 
@@ -63,7 +66,7 @@ def delivered_files(row) -> list[dict]:
     so the manifest is what marks it as a delivery.
     """
     event = row.get("event") or {}
-    if row.get("kind") != "runner.event" or event.get("phase") != "complete" or event.get("ok") is False:
+    if row.get("kind") != "runner.event" or event.get("phase") != "complete" or event.get("ok") is not True:
         return []
     delivery = (event.get("metadata") or {}).get("raven_delivery")
     if not isinstance(delivery, dict):
@@ -75,6 +78,7 @@ class Recorder:
     def __init__(self, path: Path):
         self.path = path
         self.rows: list[dict] = []
+        self.delivery_roots: tuple[Path, ...] = ()
         self._turn_id = ContextVar("curator_recorded_turn", default=None)
         path.parent.mkdir(parents=True, exist_ok=True)
 
@@ -89,11 +93,31 @@ class Recorder:
     def add(self, kind: str, **data) -> None:
         turn = current_turn()
         row = {"kind": kind, "turn_id": self.turn_id or turn.turn_id or None, **plain(data)}
+        row.update(observed_at=time.time(), monotonic_ns=time.monotonic_ns())
         if turn.conversation_id:
             row.setdefault("conversation", turn.conversation_id)
+        if self.delivery_roots:
+            self._retain_deliveries(row)
         self.rows.append(row)
         with self.path.open("a") as stream:
             stream.write(json.dumps(row, ensure_ascii=False) + "\n")
+
+    def _retain_deliveries(self, row: dict) -> None:
+        """Keep the bytes at delivery completion, before another call can overwrite the source."""
+        roots = tuple(path.resolve() for path in self.delivery_roots)
+        for item in delivered_files(row):
+            try:
+                source = Path(str(item["path"]))
+                source = (source if source.is_absolute() else roots[0] / source).resolve()
+                if not any(source.is_relative_to(root) for root in roots):
+                    raise ValueError("delivered path is outside the worker's permitted file roots")
+                content = source.read_bytes()
+                target = self.path.parent / "deliveries" / uuid4().hex / source.name
+                target.parent.mkdir(parents=True, exist_ok=True)
+                target.write_bytes(content)
+                item["retained"] = {"path": str(target), "sha256": hashlib.sha256(content).hexdigest()}
+            except (OSError, RuntimeError, ValueError) as exc:
+                item["retained"] = {"path": None, "error": str(exc)}
 
 
 class ObservedProvider:

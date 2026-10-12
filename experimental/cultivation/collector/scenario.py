@@ -4,6 +4,7 @@ import shutil
 from pathlib import Path
 
 from experimental.cultivation.collector.curator import collect_for_curator, handover_information
+from experimental.cultivation.collector.gaps import research_gaps
 from experimental.cultivation.collector.information import Request
 from experimental.cultivation.counterpart.owner import SOURCE
 from experimental.harness.participation.compartment import Guard
@@ -126,3 +127,27 @@ def scenario_preparer(scenario, released, material_root, *, records, **options):
         return result
 
     return prepare
+
+
+def scenario_researcher(scenario, released, *, records, **options):
+    """Research a round's public questions (`research_gaps`) under the release seal preparation holds: what the
+    counterpart has not handed over yet stays sealed in the requests and the admitted results. `options` reach
+    `research_gaps`."""
+
+    async def research(worker, provider, questions, *, admit=None):
+        guard = release_guard(
+            scenario, tuple(released() if callable(released) else released), log=worker.root / "boundaries.jsonl"
+        )
+
+        def checked(value, where):
+            guard.check(value, where)
+            if admit is not None:
+                admit(value, where)
+
+        found = await research_gaps(
+            worker, guard.provider(provider), questions, records=records, admit=checked, **options
+        )
+        checked(found, "gaps.research")
+        return found
+
+    return research

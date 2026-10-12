@@ -130,9 +130,10 @@ def test_requirement_files_are_read_only_beside_a_playbook_node():
 
 
 def test_the_shared_budget_is_what_the_scopes_consumed_plus_what_a_scope_may_still_spend(tmp_path):
-    """Each scope's generation keeps its own counters; the composite budget is their sum. A scope resumes with its
-    own count plus what the whole composition has left, so the total exceeds the limits by no more than a
-    correction call; with nothing left, lowered limits or such a call included, a scope pauses."""
+    """Each scope's generation keeps its own counters; calls, queries and checks are shared, their budget the sum.
+    A scope resumes with its own count plus what the whole composition has left, so the total exceeds the limits by
+    no more than a correction call; with nothing left, lowered limits or such a call included, a scope pauses.
+    Repairs are each scope's own, so a root that spent them all still leaves a child its full allowance."""
     from experimental.harness.curator.composition.state import Progress
     from experimental.harness.curator.generation.run import GenerationPausedError, Limits
     from experimental.harness.curator.generation.state import GenerationState
@@ -151,13 +152,15 @@ def test_the_shared_budget_is_what_the_scopes_consumed_plus_what_a_scope_may_sti
     root = progress.limits_for("root", limits)
     assert (root.max_calls, root.max_queries, root.max_checks, root.max_repairs) == (8, 6, 3, 3)
     fresh = progress.limits_for("child-b", limits)
-    assert (fresh.max_calls, fresh.max_queries, fresh.max_checks, fresh.max_repairs) == (5, 5, 2, 2)
+    assert (fresh.max_calls, fresh.max_queries, fresh.max_checks, fresh.max_repairs) == (5, 5, 2, 3)
     assert fresh.call_timeout == 9
     with pytest.raises(GenerationPausedError, match="budget exhausted"):
         progress.limits_for("root", Limits(max_calls=4))
     with pytest.raises(GenerationPausedError) as paused:
         progress.limits_for("root", Limits(max_calls=5, max_queries=8))
     assert paused.value.state.stage == "implement" and paused.value.state.calls == 5
+    spent("child-e", repairs=3)
+    assert progress.root_repairs() == 1 and progress.limits_for("child-d", limits).max_repairs == 3
     with pytest.raises(GenerationPausedError) as paused:
         progress.limits_for("child-b", Limits(max_calls=5, max_queries=8))
     assert paused.value.state.stage == "select"
@@ -656,7 +659,8 @@ async def test_a_gap_the_root_reports_leaves_no_composite_progress_behind(tmp_pa
     checkpoint = worker.root / "curation/composition.json"
     assert not checkpoint.exists() and worker.installed == []
     (record,) = records_of(worker)
-    assert record["gap"] == {"stage": "design", "reason": "the brand guide is missing"} and "error" not in record
+    assert record["gap"] == {"stage": "design", "reason": "the brand guide is missing", "kind": "unclear"}
+    assert "error" not in record
     await curated(Composite(tmp_path), feedback={"text": "Here is the brand guide"})
     assert [call["scope"] for call in proposals.calls] == ["root", "root", "child"]
     assert proposals.calls[1]["feedback"] == {"text": "Here is the brand guide"} and not checkpoint.exists()

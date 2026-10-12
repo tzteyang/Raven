@@ -216,10 +216,12 @@ async def test_a_revised_prompt_directory_is_another_attributor_version(context,
 
 @pytest.mark.asyncio
 async def test_a_reported_gap_ends_the_attribution_with_its_question(context):
-    provider = Provider(response("report_gap", {"reason": "The owner never said who approves refunds."}))
+    provider = Provider(
+        response("report_gap", {"reason": "The owner never said who approves refunds.", "kind": "private"})
+    )
     with pytest.raises(GapReportedError) as gap:
         await ModelAttributor().attribute(context, provider)
-    assert gap.value.stage == "diagnose" and "approves refunds" in gap.value.reason
+    assert gap.value.stage == "diagnose" and "approves refunds" in gap.value.reason and gap.value.kind == "private"
 
 
 @pytest.mark.asyncio
@@ -401,7 +403,9 @@ async def test_attributing_alone_continues_its_own_pause_and_hands_its_result_to
 @pytest.mark.asyncio
 async def test_an_attribution_that_reports_a_gap_is_recorded_with_what_it_attributed(worker):  # noqa: F811
     with pytest.raises(GapReportedError):
-        await workflow.improve(worker, Provider(response("report_gap", {"reason": "No refund policy was given."})))
+        await workflow.improve(
+            worker, Provider(response("report_gap", {"reason": "No refund policy was given.", "kind": "private"}))
+        )
     (body,) = [json.loads(path.read_text()) for path in (worker.root / "attribution").glob("*.json")]
     assert body["subjects"] == ["task"] and body["calls"] == 1 and len(body["request"]) == 4
     assert "No refund policy" in body["error"] and body["input_key"] and body["revision"]

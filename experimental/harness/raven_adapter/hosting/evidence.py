@@ -31,6 +31,7 @@ async def snapshots(names):
 
 
 async def record_children(names, before, recorder, conversation, execution):
+    """Record each child's unseen rows and advance its cursor only after they are retained."""
     instances = get_registry().list_instances(conversation)
     runs = {
         row["payload"]["run_id"]
@@ -47,6 +48,7 @@ async def record_children(names, before, recorder, conversation, execution):
             report = await inspect(connection.client, offset=offset)
             records = report["records"]
             if not records and not report["omitted"]:
+                before[identity] = {**report, "total": report["next"]}
                 continue
             sessions = {row.get("conversation") for row in records if row.get("conversation")}
             recorder.add(
@@ -64,3 +66,4 @@ async def record_children(names, before, recorder, conversation, execution):
                 ],
                 records=records,
             )
+            before[identity] = {**report, "total": report["next"]}

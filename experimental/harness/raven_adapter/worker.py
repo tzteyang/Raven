@@ -2,11 +2,13 @@
 
 import asyncio
 import base64
+import hashlib
 import json
 import os
 import shutil
 import signal
 import tempfile
+import time
 import traceback
 from contextlib import asynccontextmanager
 from dataclasses import dataclass, replace
@@ -139,6 +141,7 @@ def _serve(
                 home = children[name].baseline.config.workspace_path
                 restore_content(home, {home / path: value for path, value in content.items()})
             baseline = bind_children(baseline, children, Path(planning_state).parent)
+            recorder.delivery_roots = (baseline.workdir, root_path.parent)
             from experimental.harness.raven_adapter.hosting.lifecycle import configure_role
 
             configure_role(baseline)
@@ -177,6 +180,9 @@ def _serve(
             _send(connection, {"ok": True, "data": {"records": recorder.rows, "prepared": bound.prepared}})
             ready = True
             spoken = {}
+            from experimental.harness.raven_adapter.hosting.evidence import record_children, snapshots
+
+            child_before = await snapshots(children)
             while True:
                 request = await asyncio.to_thread(_receive, connection)
                 offset = len(recorder.rows)
@@ -278,9 +284,6 @@ def _serve(
                                         bound, request_turn, emit, lambda: [], stream=request.get("stream", False)
                                     )
 
-                            from experimental.harness.raven_adapter.hosting.evidence import record_children, snapshots
-
-                            child_before = await snapshots(children)
                             try:
                                 # Announcements that came after the previous exchange ended run before the new message.
                                 await follow_up(busy, announcements, run_turn, away=0)
@@ -434,6 +437,7 @@ class Worker:
         self._process = None
         self._connection = None
         self._generation_root = None
+        self._diagnostic_root = self.root / "startup-diagnostics"
         self._copy_inputs = None
         self.prepared = PreparedHarness()
         self._preview = None
@@ -494,10 +498,13 @@ class Worker:
         if self.confinement is not None:
             data, passed = self.confinement.translate(data), self.confinement.translate(passed)
             self._hand_over()
+        diagnostic = self._diagnostic_root / self._generation_root.name
+        started = time.monotonic()
         process = Process(
             (*data, self.provider_factory, start_resources, probe, *passed, execution.carrier()),
             confinement=self.confinement,
             area=self.area,
+            stderr_path=diagnostic.with_suffix(".stderr"),
         )
         parent = self._connection = process.start()
         self._process = process
@@ -506,15 +513,35 @@ class Worker:
             data = self._check_reply(reply)
             self._assembly_records = data["records"]
             self.prepared = PreparedHarness.model_validate(data["prepared"])
-        except WorkerError:
+        except WorkerError as exc:
+            self._record_startup_failure(diagnostic, started, exc, process)
             await self._terminate(grace=5)
             raise
         except (asyncio.TimeoutError, EOFError) as exc:
+            self._record_startup_failure(diagnostic, started, exc, process)
             await self._terminate()
-            raise WorkerError("worker timed out or exited during startup", self.records()) from exc
+            reason = "timed out" if isinstance(exc, asyncio.TimeoutError) else "closed its startup pipe"
+            raise WorkerError(f"worker {reason}; diagnostics: {diagnostic}", self.records()) from exc
         except BaseException:
             await self._terminate()
             raise
+
+    def _record_startup_failure(self, diagnostic, started, exc, process):
+        data = {
+            "exception_type": type(exc).__name__,
+            "elapsed_seconds": time.monotonic() - started,
+            "timeout_seconds": self.timeout,
+            "pid": process.pid,
+            "exit_code_before_cleanup": process.exitcode,
+            "stderr_path": str(diagnostic.with_suffix(".stderr")),
+            "generation_root": str(self._generation_root),
+            "validation_copy": self._copy_inputs is not None,
+        }
+        diagnostic.parent.mkdir(parents=True, exist_ok=True)
+        with os.fdopen(
+            os.open(diagnostic.with_suffix(".json"), os.O_WRONLY | os.O_CREAT | os.O_EXCL, 0o600), "w"
+        ) as stream:
+            json.dump(data, stream, indent=2)
 
     def _hand_over(self):
         """Give the confinement's user what the process works in; this process writes there between operations."""
@@ -660,11 +687,20 @@ class Worker:
         kept = []
         for row in records:
             for item in delivered_files(row):
-                source = Path(str(item["path"]))
+                retained = item.get("retained")
+                if isinstance(retained, dict) and not retained.get("path"):
+                    continue
+                source = Path(str(retained["path"] if isinstance(retained, dict) else item["path"]))
                 source = (source if source.is_absolute() else self.baseline.workdir / source).resolve()
                 if source.is_file() and any(source.is_relative_to(place) for place in places):
-                    target = self.root / "deliverables" / turn_id / source.name
-                    _write(target, source.read_bytes())
+                    content = source.read_bytes()
+                    if isinstance(retained, dict) and hashlib.sha256(content).hexdigest() != retained.get("sha256"):
+                        continue
+                    folder = self.root / "deliverables" / turn_id
+                    if isinstance(retained, dict):
+                        folder /= source.parent.name
+                    target = folder / source.name
+                    _write(target, content)
                     kept.append(str(target))
         return tuple(kept)
 
@@ -845,6 +881,7 @@ class Worker:
                 confinement=self.confinement,
                 **self.limits,
             )
+            trial._diagnostic_root = self._diagnostic_root
             trial._copy_inputs = (str(self.root), str(temp))
             from experimental.harness.raven_adapter.deployment import child_artifact
 

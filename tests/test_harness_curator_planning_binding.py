@@ -463,6 +463,9 @@ async def test_the_validation_probe_refuses_an_observation_translation_that_keep
         def scope(self):
             return clean.scope()
 
+        def envelope(self, controls, *, can_guide=False):
+            return {"scope": self.scope(), "event_id": "", "allowed_controls": controls, "can_guide": can_guide}
+
         async def handle_event(self, event):
             handled.append((event.kind, event.allowed_controls, event.can_guide))
             if event.kind == "failure":

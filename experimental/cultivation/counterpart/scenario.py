@@ -9,6 +9,8 @@ from typing import Literal
 
 from pydantic import BaseModel, ConfigDict, Field
 
+from experimental.harness.participation.allowance import excerpt, reading_budget
+from experimental.harness.participation.files import read_delivered
 from experimental.harness.scenario import Disclosure, Plan
 from experimental.harness.scenario import Scenario as Contract
 from experimental.harness.scenario.contract import document, frontmatter
@@ -22,6 +24,7 @@ class Criterion(BaseModel):
     id: str = Field(min_length=1)
     check: str = Field(min_length=1)
     severity: Literal["red_line", "standard"] = "standard"
+    applies_when: str = ""
 
 
 @dataclass(frozen=True)
@@ -60,7 +63,10 @@ class Scenario:
             read.root,
             read.situation.profile,
             {name: material.path for name, material in held.items()},
-            tuple(Criterion(id=check.id, check=check.check, severity=check.severity) for check in checks),
+            tuple(
+                Criterion(id=check.id, check=check.check, severity=check.severity, applies_when=check.applies_when)
+                for check in checks
+            ),
             read.exchange.initial,
             read.exchange.onboarding,
             read.exchange.handover,
@@ -108,6 +114,27 @@ class Scenario:
             for name in names
             if self.kinds.get(name) == "norm" and self.stands_behind(name) and self.contract.visible(name, "analyst")
         }
+
+    def evidence_materials(self, names, *, role="analyst", tokens: int | None = None) -> dict[str, str]:
+        """Adopted packages visible to the evaluator, including factual tables and nested source files."""
+        budget = reading_budget() if tokens is None else tokens
+        found = {}
+        for name in names:
+            if name not in self.materials or not self.stands_behind(name) or not self.contract.visible(name, role):
+                continue
+            folder = self.materials[name]
+            primary = document(folder)
+            for path in sorted(folder.rglob("*")):
+                relative = path.relative_to(folder)
+                if (
+                    not path.is_file()
+                    or path.is_symlink()
+                    or any(part.startswith(".") or part == "__pycache__" for part in relative.parts)
+                ):
+                    continue
+                key = name if path == primary else f"{name}/{relative.as_posix()}"
+                found[key] = excerpt(read_delivered(path), budget)
+        return found
 
     def release(self, names, skills: Path) -> None:
         for name in names:

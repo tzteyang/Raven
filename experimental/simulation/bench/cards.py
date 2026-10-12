@@ -59,11 +59,13 @@ class Trip:
 
 @dataclass(frozen=True)
 class Drawn:
-    """One playing of a card: the persona text the conversant reads, and its trip facts (None for a fixed card)."""
+    """One playing of a card: the persona text the conversant reads, its trip facts (None for a fixed card), and a
+    labelled card's expected answer, which the conversant never reads."""
 
     name: str
     text: str
     trip: Trip | None
+    expected: str | None = None
 
 
 def _day(value) -> date:

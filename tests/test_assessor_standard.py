@@ -9,6 +9,7 @@ from experimental.harness.assessor.rubric import (
     AssessmentPlan,
     Basis,
     Definition,
+    EvidenceRequirement,
     LLMCheck,
     ProgramCheck,
     Reference,
@@ -139,6 +140,41 @@ def raised(id, behavior, strength="must_hold", situation="", acceptance=""):
 
 def verdict(id, result, session=None, actual="", note=""):
     return {"id": id, "result": result, "session": session, "actual": actual, "note": note}
+
+
+async def test_factual_evidence_reaches_the_judge_without_becoming_builder_norms(tmp_path):
+    facts = {"listing": "The voucher is valid for 90 days."}
+    rule = Criterion(
+        "validity",
+        Definition("Voucher claim", "Match the supplied validity period."),
+        "declared",
+        "gate",
+        Basis((Reference("check:validity", "Match the supplied validity period."),)),
+        assessment=AssessmentPlan(evidence_requirements=(EvidenceRequirement("material", "listing"),)),
+    )
+    provider = Provider(*[response("submit_verdicts", {"verdicts": [verdict("validity", "pass")]}) for _ in range(2)])
+    assessor = Assessor(
+        provider,
+        Standard((rule,)),
+        sources=("declared",),
+        norms={"policy": "Claims must match the adopted source."},
+        materials=lambda: facts,
+        keep=tmp_path / "standard.json",
+    )
+    sessions = {"one": [Exchange("How long?", execution("turn", "90 days."))]}
+    result = await assessor.evaluate(sessions)
+    assert result.items[0].result == "pass"
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["materials"]["listing"] == facts["listing"]
+    assert packet["criteria"][0]["evidence_gaps"] == []
+    assert assessor.norms() == {"policy": "Claims must match the adopted source."}
+    frozen = assessor.assessments[0]["evidence"]
+    facts["listing"] = "The voucher is valid for 30 days."
+    await assessor._measure(provider, sessions, evidence=frozen)
+    replay = json.loads(provider.requests[1]["messages"][1]["content"])
+    assert replay["materials"]["listing"] == "The voucher is valid for 90 days."
+    saved = json.loads(assessor.keep.read_text())
+    assert saved["assessments"][0]["evidence"]["materials"]["listing"] == "The voucher is valid for 90 days."
 
 
 def test_the_standard_keeps_its_sources_apart_and_the_counterpart_first():
@@ -305,6 +341,27 @@ async def test_a_declared_criterion_is_never_spared_while_a_sedimented_one_may_q
     assert [item.id for item in (await kept.evaluate(sessions)).items] == ["R1"]
 
 
+@pytest.mark.asyncio
+async def test_a_judge_of_held_out_cases_runs_on_the_evaluation_side_where_their_files_are_not_sealed(tmp_path):
+    handout = "Itinerary draft: two adults, one child, Reykjavik, the first week of December, budget open."
+    boundaries = Boundaries(
+        {"analyst": Sealed.of([handout]), "counterpart": Sealed.of([])}, log=tmp_path / "boundaries.jsonl"
+    )
+    sessions = {"holdout-family": [Exchange("Please check this", execution("t1", f"I read it: {handout}"))]}
+    standard = Standard.declared([("surcharge", "Quote the seasonal surcharge first.")])
+    analyst_side = Assessor(Provider(), standard, sources=("declared",), boundaries=boundaries)
+    with pytest.raises(ExchangeError, match="analyst compartment: sealed information"):
+        await analyst_side.evaluate(sessions)
+    judge = Assessor(
+        Provider(response("submit_verdicts", {"verdicts": [verdict("surcharge", "pass")]})),
+        standard,
+        sources=("declared",),
+        boundaries=boundaries,
+        compartment="counterpart",
+    )
+    assert [item.result for item in (await judge.evaluate(sessions)).items] == ["pass"]
+
+
 @pytest.mark.parametrize(
     ("items", "expected"),
     [
@@ -459,3 +516,190 @@ def test_legacy_records_remain_read_only_instead_of_inventing_semantic_contracts
     with pytest.raises(ValueError, match="must be rebuilt"):
         assessor.restore()
     assert json.loads(path.read_text()) == value
+
+
+@pytest.mark.asyncio
+async def test_case_references_join_the_evidence_the_assessor_judges_with():
+    standard = Standard.declared([("send-date", "Send on the date the calendar gives.")])
+    provider = Provider(response("submit_verdicts", {"verdicts": [verdict("send-date", "pass", "exam")]}))
+    sessions = {"exam": [Exchange("When will it go out?", execution("t1", "On 14 October at 10:00."))]}
+    computed = {"exam": {"expected": "14 October, between 10:00 and 20:00", "dates": ["10-14"]}, "idle": {}}
+    assessor = Assessor(provider, standard, sources=("declared",), references=lambda given: computed)
+    signal = await assessor.evaluate(sessions)
+    assert signal.items[0].result == "pass"
+    told = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert told["references"] == {"exam": computed["exam"]}
+    plain = Provider(response("submit_verdicts", {"verdicts": [verdict("send-date", "pass", "exam")]}))
+    await Assessor(plain, standard, sources=("declared",)).evaluate(sessions)
+    assert "references" not in json.loads(plain.requests[0]["messages"][1]["content"])
+
+
+async def test_declared_applicability_survives_judgment_and_retained_standard(tmp_path):
+    condition = "The requested publication date is on or after 2026-10-28."
+    standard = Standard.declared(
+        [("citation", "Include the publication citation.")], applies_when={"citation": condition}
+    )
+    provider = Provider(
+        response(
+            "submit_verdicts",
+            {"verdicts": [verdict("citation", "not_applicable", note="The request is dated 2026-10-20.")]},
+        )
+    )
+    assessor = Assessor(provider, standard, sources=("declared",), keep=tmp_path / "standard.json")
+    sessions = {"earlier": [Exchange("Publish on 2026-10-20.", execution("date", "Confirmed."))]}
+    signal = await assessor.evaluate(sessions)
+    assert signal.items[0].result == "not_applicable" and signal.satisfied is None
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["criteria"][0]["definition"]["applies_when"] == condition
+    saved = json.loads(assessor.keep.read_text())
+    assert saved["criteria"][0]["definition"]["applies_when"] == condition
+
+
+def _named(*points):
+    return "".join(map(chr, points))
+
+
+SCRIPT = _named(0x53E3, 0x64AD, 0x7A3F)
+LEDGER = _named(0x53D1, 0x5E03, 0x53F0, 0x8D26)
+SCRIPT_NORMS = "Deliver every script as a file and register it in the shared ledger."
+
+
+def _script_rule(id, reference):
+    return Criterion(
+        id,
+        Definition("Script files and ledger", SCRIPT_NORMS, "A script is requested."),
+        "derived",
+        "gate",
+        Basis((Reference("script-norms", SCRIPT_NORMS, digest(SCRIPT_NORMS)),)),
+        assessment=AssessmentPlan(
+            evidence_requirements=(
+                EvidenceRequirement("conversation"),
+                EvidenceRequirement("execution"),
+                EvidenceRequirement("delivered_text", reference),
+                EvidenceRequirement("material", "script-norms"),
+            )
+        ),
+    )
+
+
+def _script_sessions(tmp_path):
+    first, revised = tmp_path / f"{SCRIPT}-KB-1020-01.md", tmp_path / f"{SCRIPT}-KB-1020-01-v2.md"
+    first.write_text("# KB-1020-01 v1\n1. First line.")
+    revised.write_text("# KB-1020-01 v2\n1. Revised line.")
+    sessions = {
+        "s1": [
+            Exchange("Write the script.", execution("t1", "Attached.", [str(first)])),
+            Exchange("Revise it.", execution("t2", "Attached.", [str(revised)])),
+        ]
+    }
+    filed = {
+        "s1": {
+            "filed": {
+                f"workdir/{LEDGER}/{LEDGER}.md": "| date | id |\n| 2026-10-20 | KB-1020-01 |",
+                f"workdir/{SCRIPT}/{first.name}": first.read_text(),
+            }
+        }
+    }
+    return sessions, filed
+
+
+async def test_a_descriptive_delivered_text_reference_is_read_as_all_delivered_text(tmp_path):
+    # Shaped after a recorded run whose references described the files instead of naming them.
+    rules = (
+        _script_rule("derived-12", "All initial and revised script files"),
+        _script_rule("derived-13", f"Script versions and the updated {LEDGER}/{LEDGER}.md"),
+    )
+    sessions, filed = _script_sessions(tmp_path)
+    provider = Provider(
+        response("submit_verdicts", {"verdicts": [verdict("derived-12", "pass"), verdict("derived-13", "pass")]})
+    )
+    assessor = Assessor(
+        provider,
+        Standard(rules),
+        sources=("derived",),
+        norms={"script-norms": SCRIPT_NORMS},
+        references=lambda given: filed,
+    )
+    signal = await assessor.evaluate(sessions)
+    assert [item.result for item in signal.items] == ["pass", "pass"] and signal.satisfied is True
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert [job["evidence_gaps"] for job in packet["criteria"]] == [[], []]
+    assert all("names no delivered or filed file" in job["evidence_notes"][0] for job in packet["criteria"])
+    assert all("judged against all delivered text and filed files" in item.note for item in signal.items)
+    assert set(assessor.assessments[0]["evidence_notes"]) == {"derived-12", "derived-13"}
+
+
+async def test_a_reference_naming_a_filed_path_needs_no_delivery_and_no_text_at_all_is_still_a_gap(tmp_path):
+    sessions, filed = _script_sessions(tmp_path)
+    provider = Provider(response("submit_verdicts", {"verdicts": [verdict("ledger", "pass")]}))
+    assessor = Assessor(
+        provider,
+        Standard((_script_rule("ledger", f"{LEDGER}/{LEDGER}.md"),)),
+        sources=("derived",),
+        norms={"script-norms": SCRIPT_NORMS},
+        references=lambda given: filed,
+    )
+    assert (await assessor.evaluate(sessions)).items[0].result == "pass"
+    job = json.loads(provider.requests[0]["messages"][1]["content"])["criteria"][0]
+    assert (job["evidence_gaps"], job["evidence_notes"]) == ([], [])
+
+    silent = {"s1": [Exchange("Write the script.", execution("t1", "I will send it later."))]}
+    provider = Provider(response("submit_verdicts", {"verdicts": [verdict("files", "pass")]}))
+    assessor = Assessor(
+        provider,
+        Standard((_script_rule("files", "All initial and revised script files"),)),
+        sources=("derived",),
+        norms={"script-norms": SCRIPT_NORMS},
+    )
+    item = (await assessor.evaluate(silent)).items[0]
+    assert item.result == "unknown" and "No delivered text is available" in item.note
+
+
+def _resume_rule(*, required=(), reference="", sources=None):
+    acceptance = (
+        "Keep the page within the line limit, cut over-long drafts in the stated order, and describe skills concretely."
+    )
+    return Criterion(
+        "derived-5",
+        Definition("Resume structure and one-page format", acceptance, "A resume revision is requested."),
+        "derived",
+        "gate",
+        Basis(tuple(Reference(name, acceptance, digest(acceptance)) for name in (sources or ("resume-template",)))),
+        assessment=AssessmentPlan(
+            required_checks=tuple(LLMCheck(text) for text in required),
+            evidence_requirements=(EvidenceRequirement("delivered_text", reference),),
+        ),
+    )
+
+
+async def test_an_observed_failure_is_not_hidden_by_an_undecidable_condition_or_an_evidence_gap(tmp_path):
+    # Shaped after a recorded run where one unobservable condition masked a failing one.
+    acceptance = _resume_rule().definition.acceptance
+    norms = {"resume-template": acceptance}
+    resume = tmp_path / "resume.md"
+    resume.write_text("# Name\n## Skills\n- Good at computers")
+    sessions = {"s1": [Exchange("Revise my resume.", execution("t1", "Attached.", [str(resume)]))]}
+    undecided = verdict("derived-5", "unknown", note="The order of cuts is not observable.")
+    failing = verdict(
+        "derived-5:required-1", "fail", "s1", "- Good at computers", "Name an exam or software functions."
+    )
+    rule = _resume_rule(required=("Each computer-skills line names an exam or concrete software functions.",))
+    provider = Provider(response("submit_verdicts", {"verdicts": [undecided, failing]}))
+    signal = await Assessor(provider, Standard((rule,)), sources=("derived",), norms=norms).evaluate(sessions)
+    assert (signal.items[0].result, signal.items[0].actual, signal.satisfied) == ("fail", "- Good at computers", False)
+
+    gapped = _resume_rule(reference="resume.pdf")
+    pdf = tmp_path / "resume.pdf"
+    pdf.write_bytes(b"%PDF")
+    sessions = {"s1": [Exchange("Revise my resume.", execution("t1", "Attached.", [str(resume), str(pdf)]))]}
+    observed = verdict("derived-5", "fail", "s1", "- Good at computers", "Name an exam or software functions.")
+    provider = Provider(response("submit_verdicts", {"verdicts": [observed]}))
+    item = (await Assessor(provider, Standard((gapped,)), sources=("derived",), norms=norms).evaluate(sessions)).items[
+        0
+    ]
+    assert item.result == "fail" and "dedicated verifier" in item.note
+
+    provider = Provider(response("submit_verdicts", {"verdicts": [observed]}))
+    changed = {"resume-template": acceptance + " Revised."}
+    stale = await Assessor(provider, Standard((gapped,)), sources=("derived",), norms=changed).evaluate(sessions)
+    assert stale.items[0].result == "unknown" and "rebuild its interpretation" in stale.items[0].note

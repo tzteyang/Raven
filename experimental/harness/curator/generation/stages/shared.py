@@ -1,6 +1,8 @@
 """What every request of a curation shares: the task, a compact account of the actual worker and its Harness,
 and the gap report any stage or the attribution may end with."""
 
+from typing import Literal
+
 from pydantic import BaseModel, ConfigDict, Field
 
 from experimental.harness.contract.channels import execution_control, model_decision, model_input, tool_interaction
@@ -118,13 +120,21 @@ GAP = "report_gap"
 class Gap(BaseModel):
     model_config = ConfigDict(extra="forbid")
     reason: str = Field(min_length=1)
+    kind: Literal["private", "public", "unclear"] = Field(
+        description="Who can settle it: `private` when only the business itself can state, decide or grant it (its "
+        "own rules, prices, approvers, history or tools); `public` when published sources can (regulation, platform "
+        "rules, common practice of the field); `unclear` when either might."
+    )
 
 
 def gap_tool() -> dict:
     return tool(
-        GAP, "Report missing authority, capability or information instead of inventing a solution.", schema_for(Gap)
+        GAP,
+        "Report missing authority, capability or information instead of inventing a solution, and say who can "
+        "settle it.",
+        schema_for(Gap),
     )
 
 
-def parse_gap(arguments: dict) -> str:
-    return Gap.model_validate(arguments).reason
+def parse_gap(arguments: dict) -> Gap:
+    return Gap.model_validate(arguments)

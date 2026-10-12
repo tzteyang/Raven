@@ -549,7 +549,9 @@ async def test_mixed_read_and_submission_is_rejected_as_an_ambiguous_handoff(con
 
 @pytest.mark.asyncio
 async def test_missing_native_capability_is_reported_without_a_fake_success(context):
-    provider = Provider(response("report_gap", {"reason": "The required host binding is unavailable."}))
+    provider = Provider(
+        response("report_gap", {"reason": "The required host binding is unavailable.", "kind": "private"})
+    )
     with pytest.raises(GenerationError, match="binding is unavailable") as caught:
         await generate(context, provider, validate=None)
     assert caught.value.trace[-1]["event"] == "report_gap"
@@ -1795,3 +1797,79 @@ async def test_a_target_whose_commitments_are_retired_must_leave_with_them(conte
     refused = next(event for event in result.trace if event["event"] == "output.rejected")
     assert "code but no current commitment: ['action.strategy']" in refused["error"]
     assert result.candidate.artifact.remove == ("action.strategy",)
+
+
+@pytest.mark.asyncio
+async def test_several_edits_and_files_in_one_response_apply_in_the_order_given(authored):
+    staged = "def create(state, task):\n    value = 1\n    return value\n"
+    provider = Provider(
+        response("submit_selection", selection("memory.strategy")),
+        response("submit_plan", plan("memory.strategy")),
+        LLMResponse(
+            content=None,
+            tool_calls=[
+                ToolCallRequest("first", "edit_file", {"path": "rules.py", "old": "return None", "new": "return {}"}),
+                ToolCallRequest("second", "edit_file", {"path": "rules.py", "old": "return {}", "new": "return {1}"}),
+                ToolCallRequest("third", "stage_file", {"path": "helper.py", "content": staged}),
+                ToolCallRequest("fourth", "edit_file", {"path": "helper.py", "old": "value = 1", "new": "value = 2"}),
+            ],
+        ),
+        response("submit_artifact", {"values": {"memory.strategy": {"factory": "rules:create"}}}),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    result = await generate(authored, provider, validate=validate)
+    files = result.candidate.artifact.files
+    assert files["rules.py"] == "def create(state, task):\n    return {1}\n"
+    assert files["helper.py"] == staged.replace("value = 1", "value = 2")
+    edits = [event for event in result.trace if event["event"] in ("file.edited", "file.staged")]
+    assert [event["path"] for event in edits] == ["rules.py", "rules.py", "helper.py", "helper.py"]
+    assert all("error" not in event["result"] for event in edits)
+
+
+@pytest.mark.asyncio
+async def test_stage_source_copies_a_registered_source_whole_without_the_model_retyping_it(context):
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("stage_source", {"source": "loop", "path": "assets/loop.md"}),
+        response("stage_source", {"source": "missing", "path": "assets/missing.md"}),
+        response("stage_file", {"path": "planning_impl.py", "content": "def create(state, task):\n    return None\n"}),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "planning_impl:create"}}}),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    result = await generate(context, provider, validate=validate)
+    assert result.candidate.artifact.files["assets/loop.md"] == "native protocol"
+    staged = [event for event in result.trace if event["event"] == "file.staged"]
+    assert staged[0]["result"] == {
+        "staged": "assets/loop.md",
+        "source": "loop",
+        "chars": len("native protocol"),
+        "staged_files": ["assets/loop.md"],
+    }
+    assert "unknown registered source: missing" in staged[1]["result"]["error"]
+    assert "stage_source" in instructions(provider.requests[2])
+
+
+@pytest.mark.asyncio
+async def test_a_building_stage_down_to_the_review_reserve_is_told_to_submit(context):
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("stage_file", {"path": "planning_impl.py", "content": "def create(state, task):\n    return None\n"}),
+        response("submit_artifact", {"values": {"action.strategy": {"factory": "planning_impl:create"}}}),
+    )
+
+    async def validate(candidate):
+        return Validation([], [])
+
+    await generate(context, provider, validate=validate, limits=Limits(max_calls=12, review_reserve=10))
+    notes = [request["messages"][-1]["content"] for request in provider.requests]
+    assert all("need at the end: 10" in note for note in notes)
+    assert "nearly spent" not in notes[0] and "nearly spent" not in notes[1]
+    assert "nearly spent: 10 remain" in notes[2] and "nearly spent: 9 remain" in notes[3]

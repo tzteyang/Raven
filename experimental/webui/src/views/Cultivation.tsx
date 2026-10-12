@@ -768,6 +768,13 @@ export function Cultivation({
             {run.research ? <ResearchBlock research={run.research} /> : null}
           </div>
         )
+      case 'baseline':
+        return (
+          <div key={i} className="say owner heldout-block" data-station={stationKey(0, 'handover')}>
+            <p className="mats"><span className="k">Baseline exam on v0, before the Curator changed anything; never seen by the Analyst or the Curator</span>{entry.heldOut.map((name) => <code key={name}>{name}</code>)}</p>
+            {entry.signals.map((signal, j) => <Scorecard key={j} signal={signal} held />)}
+          </div>
+        )
       case 'remark': {
         const card = summary(entry.round)
         return (

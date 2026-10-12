@@ -281,12 +281,17 @@ evaluation aids, each item with the roles that may receive it (partner, conversa
 analyst, curator). `load` reads a scenario directory and refuses a file outside every category;
 `sealed_for` derives the fingerprints of what a role must not receive; `Disclosure` is the counterpart's
 schedule of handing materials over (`all`, `none`, `staged`, or a named `Plan` whose labelled steps say what
-each step is meant to give), which the loop never reads. `provenance.json` says where each
+each step is meant to give), which the loop never reads. A case may hand files over as its conversation opens
+(`Case.files`, placed in the replica's `uploads/`) and may carry its `expected` answer, which only the evaluation
+side receives; `Schedule` says which cases each round plays, which are held out and in which rounds they are
+played (round 0 is a baseline before onboarding). `provenance.json` says where each
 material came from and whether the counterpart stands behind it (`Scenario.confirmed`).
 _Avoid_: calling a check a norm: a norm is handed over, a check is the counterpart's own standard and stays
 on the evaluation side; writing a check as a translation of a norm sentence: the sealing is differential only
 against verbatim text, so the Curator's own English rendering of a Chinese norm can coincide with a sealed
-window of such a check (seen 2026-10-07) -- a check is the evaluator's instruction in its own words.
+window of such a check (seen 2026-10-07) -- a check is the evaluator's instruction in its own words. A check is
+sealed in windows of ten content words (`check_windows`): function words, numerals and single letters weigh nothing,
+so citing its sections ("By contract-routing 4.3 to 4.5 and 5.3") is no leak, while a copied run of its judgement is.
 
 **Compartment** (`experimental/harness/participation/compartment.py`):
 One model role's context: every value admitted into it and every provider request made inside it
@@ -462,14 +467,18 @@ automated cultivation: `Owner`, the simulated owner that reviews a round's
 sessions against the facts and pictures a case injects (`facts(name, exchanges, card)`, `pictures(sessions)`)
 and hands materials over on its disclosure schedule; `drills.enlist` / `grouped`, which turn a scenario's cards
 into conversants and group them into trials played on replicas; and `case.delivered_for`, the delivery predicate
-the value judge uses for a scenario. A case (`simulation/agency.py`, `simulation/brand.py`) subclasses `Owner`
-with its own facts and nothing else.
+the value judge uses for a scenario. A case's `owner.py` (`simulation/cases/<name>/owner.py`) subclasses `Owner`
+with its own facts and nothing else and names it `OWNER`; a case without one falls back to the travel agency's
+owner (`Agency`), so a new case brings its own.
 _Avoid_: party, the role's former name, which reads as a gathering out of a contract's context; putting a scenario's rule into `counterpart/`; calling the owner an agency outside the travel case.
 
 **Self signal** (`experimental/harness/assessor/introspect.py`):
 The worker's own review of each session of a round, taken on a replica after the trials, as a `Signal` whose
 `source` is `self`: a verdict, the defects it sees and a note per session, with no standard, check or counterpart
-remark shown to it. Its items reach the Analyst only, its text reaches the Curator through hearing, and
+remark shown to it. Its packet is the session's conversation and delivered files and, when the session's replica is
+known (`placed`), what that replica held beyond the worker's baseline: `attachments`, the files the requester handed
+into its `uploads` during the session, and `filed`, what the worker wrote in its workdir and home (the owner's
+`written` view, `experimental/harness/participation/views.py`). Its items reach the Analyst only, its text reaches the Curator through hearing, and
 `satisfied` is always None, so it never ends a run. The Analyst reads it against the external verdicts for
 blind spots.
 _Avoid_: treating a self verdict as a pass or fail of a criterion; feeding the standard into the self review.
@@ -524,6 +533,18 @@ An unresolved question in a description, with the channel that could settle it (
 assumption the description applies meanwhile. Only a user question can block, and the host sets it blocking only
 under `wait_for_input`; every other open point carries an assumption and never holds the result.
 _Avoid_: "blocking research question".
+
+**Curation question** (`Session.record["questions"]`, routed by `experimental/harness/loop/gaps.py`):
+A gap a curation reported (`report_gap`) and could not close, kept with the `kind` of source the Curator says can
+settle it: `private` (only the business can state, decide or grant it), `public` (published sources can) or
+`unclear`. With `Gaps` supplied, a private or unclear one is asked of the counterpart at its next review
+(`Session.assess`), a public one is researched right away on the collector's channel (`collector/gaps.py`), an
+unclear one the counterpart leaves open (or any it refers to public sources) is researched then, and the rest stays
+`unanswered`; research runs in the Curator's compartment, at most `research_tasks` between two analyses. Settled
+questions reach the next curation as `feedback.information.answers`, each with its provenance, `counterpart` or
+`research`; a researched practice is the field's, not the business's rule, until the counterpart confirms it.
+Unlike an `Open point`, it belongs to the loop, not to an information snapshot, and no snapshot is recomposed.
+_Avoid_: "gap answer" for the question itself; "clarification", which in the Analyst's vocabulary is a decision.
 
 **Information input manifest** (`research.information.Manifest`):
 The task, objective, invocation scope, released source digests, context digest and observed environment

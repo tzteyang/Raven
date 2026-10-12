@@ -5,8 +5,10 @@ how each slide is laid out and styled, and looks at every page as rendered.
 """
 
 import re
+import zipfile
 from html.parser import HTMLParser
 from pathlib import Path
+from xml.etree import ElementTree
 
 from pptx import Presentation
 from pptx.enum.dml import MSO_FILL
@@ -98,6 +100,43 @@ def deck_slides(path: Path, *, style: bool = False) -> str:
     return "\n".join(lines)
 
 
+_SHEET = "{http://schemas.openxmlformats.org/spreadsheetml/2006/main}"
+
+
+def sheet_rows(path: Path) -> str:
+    """A workbook's cells as text, sheet by sheet and row by row with tabs between cells, read straight from its XML
+    (shared strings, inline strings and stored values; a formula shows its last computed value)."""
+    with zipfile.ZipFile(path) as book:
+        names = book.namelist()
+        shared = []
+        if "xl/sharedStrings.xml" in names:
+            for item in ElementTree.fromstring(book.read("xl/sharedStrings.xml")).iter(f"{_SHEET}si"):
+                shared.append("".join(node.text or "" for node in item.iter(f"{_SHEET}t")))
+        titles = [
+            sheet.get("name", "")
+            for sheet in ElementTree.fromstring(book.read("xl/workbook.xml")).iter(f"{_SHEET}sheet")
+        ]
+        sheets = sorted(
+            (name for name in names if re.fullmatch(r"xl/worksheets/sheet\d+\.xml", name)),
+            key=lambda name: int(re.search(r"(\d+)\.xml$", name).group(1)),
+        )
+        out = []
+        for number, name in enumerate(sheets):
+            out.append(f"## {titles[number] if number < len(titles) else name}")
+            for row in ElementTree.fromstring(book.read(name)).iter(f"{_SHEET}row"):
+                cells = []
+                for cell in row.iter(f"{_SHEET}c"):
+                    kind, value = cell.get("t"), cell.find(f"{_SHEET}v")
+                    if kind == "s" and value is not None:
+                        cells.append(shared[int(value.text)])
+                    elif kind == "inlineStr":
+                        cells.append("".join(node.text or "" for node in cell.iter(f"{_SHEET}t")))
+                    else:
+                        cells.append(value.text if value is not None and value.text else "")
+                out.append("\t".join(cells))
+        return "\n".join(out)
+
+
 def read_delivered(path: Path, *, style: bool = False) -> str:
     path = Path(path)
     suffix = path.suffix.lower()
@@ -105,6 +144,11 @@ def read_delivered(path: Path, *, style: bool = False) -> str:
         return visible_text(path)
     if suffix == ".pptx":
         return deck_slides(path, style=style)
+    if suffix == ".xlsx":
+        try:
+            return sheet_rows(path)
+        except (zipfile.BadZipFile, KeyError, ElementTree.ParseError, ValueError, IndexError) as exc:
+            return f"(an .xlsx file of {path.stat().st_size} bytes that could not be read: {exc})"
     if suffix in _TEXT:
         return path.read_text(errors="replace")
     return f"(a {suffix or 'binary'} file of {path.stat().st_size} bytes, not readable as text)"

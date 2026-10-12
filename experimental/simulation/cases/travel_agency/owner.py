@@ -67,3 +67,7 @@ class Agency(Owner):
         if not self.rules:
             return {}
         return references(self.rules, exchanges, getattr(card, "trip", None))
+
+
+# The owner the simulation entry judges this case by (`experimental.simulation.__main__.owner_of`).
+OWNER = Agency

@@ -9,7 +9,10 @@ Each drafted criterion contains:
 - definition.subject: the output, action, state or execution process being judged, including the relevant time scope;
 - definition.applies_when: the task context in which it applies; empty means unconditional. Do not make a required
   output's absence an exemption;
-- definition.acceptance: the sole complete statement of what must hold; do not create competing summary and rule text;
+- definition.acceptance: the sole complete statement of what must hold; do not create competing summary and rule text.
+  applies_when and acceptance stay within what the quoted passages say. Do not widen a trigger or an obligation: a rule
+  that applies when something cannot be stated does not apply whenever that thing is absent, and where the source
+  admits an alternative way to satisfy it, the acceptance admits that alternative too;
 - basis.references: source names from norms and supporting quotations. The host assigns content versions; omit version;
 - basis.derivation: explain an inference when the references contain no direct supporting quotation;
 - kind: gate for a necessary result, guardrail for prohibited behavior, quality for an optional quality preference;
@@ -33,14 +36,19 @@ qualify as a whole-criterion decision. Expressions have JSON access and bounded 
 functions all, any, len, sum, min, max, abs, sorted, round, json_loads; no attributes, imports, files or network.
 Both generated expressions and program decisions need independently known positive and negative calibration.
 
-Evidence channels are conversation, execution, delivered_text and material. Material evidence names its reference;
-delivered_text may name a file, or require all delivered text. These are input requirements, not claims that evidence
-was actually observed. Use only channels needed by the judgment; do not add decorative fields or auxiliary scores.
+Evidence channels are conversation, execution, delivered_text and material. Material evidence names its reference.
+delivered_text either names one file exactly as the worker delivers or files it, or leaves reference empty to require
+all delivered text; never describe files in words there, and leave it empty when the name is not fixed in advance. The
+host reads a reference that names no delivered or filed file as all delivered text. These are input requirements,
+not claims that evidence was actually observed. Use only channels needed by the judgment; do not add decorative fields
+or auxiliary scores.
 
 Protect held external meanings, scope and strength. References establish origin, not logical entailment. Necessary
 conditions, collectively sufficient conditions and proxies are different; no relation label grants permission to
 approve a task. Keep supporting observations separate from mandatory checks. If a required condition cannot be
-observed, retain it as unknown rather than deleting or downgrading it.
+observed, retain it as unknown rather than deleting or downgrading it. When an acceptance joins several necessary
+conditions, write the decision so that each is judged on its own and an observed failure of one is reported even while
+another cannot be observed.
 
 Changes are add (new_norm, uncovered or review), rewrite (new_norm, undecided, imprecise, beyond_norm or review), and remove
 (duplicate, beyond_norm, undecided for optional quality, or review). A review reason must match a supplied correction.

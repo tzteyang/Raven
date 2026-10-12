@@ -19,6 +19,7 @@ from experimental.harness.participation import audience
 NAME = "submit_artifact"
 STAGE_FILE = "stage_file"
 EDIT_FILE = "edit_file"
+STAGE_SOURCE = "stage_source"
 
 
 class StagedFile(BaseModel):
@@ -59,6 +60,26 @@ def edit_tool() -> dict:
         "installed file, and the result is staged like a file written with stage_file.",
         schema_for(FileEdit),
     )
+
+
+class StagedSource(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    source: str = Field(min_length=1, description="A registered source, by the name `sources` lists it under.")
+    path: ArtifactPath
+
+
+def stage_source_tool() -> dict:
+    return tool(
+        STAGE_SOURCE,
+        "Copy one registered source, such as a handed-over material, whole into the authored package at `path`, "
+        "as if its text had been written with stage_file; nothing of it passes through your output.",
+        schema_for(StagedSource),
+    )
+
+
+def parse_staged_source(arguments) -> StagedSource:
+    return parse_as(StagedSource, arguments)
 
 
 def edit(arguments, bases) -> tuple[str, str]:

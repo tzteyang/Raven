@@ -58,23 +58,33 @@ def cultivation(path: Path) -> Cultivation:
 
 def load(path: Path) -> dict:
     """The run record with each round's analysis, attribution and curation records read in beside it, and the
-    ledger joined from its history and held-out assessments."""
+    ledger joined from its history and held-out assessments (the baseline exam as round 0)."""
     path = Path(path)
     root = path.parents[1]
     run = json.loads(path.read_text())
     run["initial_curation"] = [_read(root / "curation" / name) for name in run.get("initial_curation", [])]
     run["initial_attribution"] = [_read(root / "attribution" / name) for name in run.get("initial_attribution", [])]
+    for exchanges in run.get("baseline", {}).get("sessions", {}).values():
+        _place(exchanges, root)
     for item in run["rounds"]:
         for exchanges in (*item.get("sessions", {}).values(), *item.get("holdout", {}).values()):
-            for exchange in exchanges:
-                execution = exchange["execution"]
-                execution["deliverables"] = [_here(path, root) for path in execution.get("deliverables", [])]
+            _place(exchanges, root)
         item["analysis"] = [_read(root / "analysis" / name) for name in item.get("analysis", [])]
         item["curation"] = [_read(root / "curation" / name) for name in item.get("curation", [])]
         item["attribution"] = [_read(root / "attribution" / name) for name in item.get("attribution", [])]
     joined = rows(run.get("history", ()))
-    run["ledger"] = {"rows": joined, "summary": summary(joined), "holdout": held_out(run["rounds"])}
+    run["ledger"] = {
+        "rows": joined,
+        "summary": summary(joined),
+        "holdout": held_out(run["rounds"], run.get("baseline")),
+    }
     return run
+
+
+def _place(exchanges, root: Path) -> None:
+    for exchange in exchanges:
+        execution = exchange["execution"]
+        execution["deliverables"] = [_here(path, root) for path in execution.get("deliverables", [])]
 
 
 def _here(path: str, root: Path) -> str:

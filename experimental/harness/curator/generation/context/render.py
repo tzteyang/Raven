@@ -97,10 +97,29 @@ def history(trace) -> list[dict]:
     return rows
 
 
-def budget(*, calls: int, queries: int, checks: int, repairs: int, stage_queries: int, stage_allowance: int) -> str:
+BUILDING = frozenset({"implement", "repair"})
+
+
+def budget(
+    *,
+    calls: int,
+    queries: int,
+    checks: int,
+    repairs: int,
+    stage_queries: int,
+    stage_allowance: int,
+    reserve: int = 0,
+    stage: str = "",
+) -> str:
     """The trailing budget note; once half of a stage's exploration allowance is spent it carries the pacing note
-    that asks for a submission unless a named unknown still blocks it."""
+    that asks for a submission unless a named unknown still blocks it, and once the model calls left in a building
+    stage are down to `reserve`, the calls the consistency review needs, the reserve note that asks for the artifact."""
     pacing = _prompt("pacing") if stage_queries <= stage_allowance // 2 else ""
+    reserve_note = (
+        Template(_prompt("reserve")).substitute(calls=calls, reserve=reserve)
+        if reserve and stage in BUILDING and calls <= reserve
+        else ""
+    )
     return (
         Template((_PROMPTS / "budget.md").read_text())
         .substitute(
@@ -111,6 +130,8 @@ def budget(*, calls: int, queries: int, checks: int, repairs: int, stage_queries
             stage_queries=stage_queries,
             stage_allowance=stage_allowance,
             pacing=pacing,
+            reserve=reserve,
+            reserve_note=reserve_note,
         )
         .strip()
     )

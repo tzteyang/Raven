@@ -43,11 +43,11 @@ from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
 from experimental.harness.experience.governance import fingerprint
 from experimental.harness.participation.allowance import excerpt, reading_budget
-from experimental.harness.participation.audience import EVALUATION, audience
+from experimental.harness.participation.audience import EVALUATION, Role, audience
 from experimental.harness.participation.exchange import exchange, messages
 from experimental.harness.participation.protocols import Item, Sessions, Signal
 from experimental.harness.participation.requirements import ExternalRequirement
-from experimental.harness.participation.views import actions, back_office, reports
+from experimental.harness.participation.views import actions, back_office, execution_digest, reports
 from experimental.harness.raven_adapter.materialize import _write
 
 if TYPE_CHECKING:
@@ -104,13 +104,15 @@ class Standard:
         )
 
     @classmethod
-    def declared(cls, checks: Iterable[tuple[str, str]]) -> "Standard":
-        """The scenario's checks, as (id, text) pairs."""
+    def declared(
+        cls, checks: Iterable[tuple[str, str]], *, applies_when: Mapping[str, str] | None = None
+    ) -> "Standard":
+        """The scenario's checks, as (id, text) pairs, with their explicitly declared applicability conditions."""
         return cls(
             tuple(
                 Criterion(
                     id,
-                    Definition("Worker output and execution", text),
+                    Definition("Worker output and execution", text, (applies_when or {}).get(id, "")),
                     "declared",
                     "gate",
                     Basis((Reference(f"check:{id}", text, digest(text)),)),
@@ -340,9 +342,14 @@ class Assessor:
     revises before every assessment from the norms handed over so far (`norms`, a mapping or a callable returning one,
     read each time, so a norm handed over later is read from then) and the last judging's decidability, and the
     sedimented ones the loop hands it through `sediment`. `boundaries`, when given, run its model calls, the builder's
-    included, in the Analyst's compartment, sparing the round's user messages and the criteria it holds, which were
-    vetted where they came from. With `keep`, its `record` is written there after every assessment, finished or not,
-    so a run stopped between rounds keeps every revision and judging so far.
+    included, in the Analyst's compartment (or the one `compartment` names: a judge of held-out cases sits on the
+    evaluation side, the counterpart's, since those cases are sealed from the Analyst), sparing the round's user
+    messages and the criteria it holds, which were vetted where they came from. With `keep`, its `record` is written there after every assessment, finished or not,
+    so a run stopped between rounds keeps every revision and judging so far. `references`, when given, maps the
+    sessions to the figures a case computes for each of them (and a labelled case's expected answer); they join the
+    evidence the model judges with, the way an owner's facts join its review.
+    `materials` supplies adopted supporting evidence without widening the builder's `norms`; each assessment
+    retains the actual material text so a replay does not silently read a newer source.
     """
 
     def __init__(
@@ -352,12 +359,14 @@ class Assessor:
         *,
         sources: Iterable[Origin] = SOURCES,
         norms: Mapping[str, str] | Callable[[], Mapping[str, str]] | None = None,
+        materials: Mapping[str, str] | Callable[[], Mapping[str, str]] | None = None,
         task: str = "",
         model=None,
         effort=None,
         max_calls=4,
         timeout=300,
         boundaries=None,
+        compartment: Role = "analyst",
         name=NAME,
         builder: "RubricBuilder | None" = None,
         verifiers=None,
@@ -369,8 +378,10 @@ class Assessor:
         replay_corpus=None,
         scope: str | None = None,
         keep: Path | None = None,
+        references: Callable[[Sessions], Mapping[str, Mapping]] | None = None,
     ):
         self.sources = tuple(sources)
+        self.references = references
         unknown = set(self.sources) - set(SOURCES)
         if unknown:
             raise ValueError(f"unknown sources: {sorted(unknown)}")
@@ -396,8 +407,10 @@ class Assessor:
         self.provider, self.standard = provider, standard.of(*self.sources)
         fixed = {} if norms is None or callable(norms) else dict(norms)
         self.norms = norms if callable(norms) else lambda: fixed
+        supporting = {} if materials is None or callable(materials) else dict(materials)
+        self.materials = materials if callable(materials) else lambda: supporting
         self.model, self.effort, self.max_calls, self.timeout = model, effort, max_calls, timeout
-        self.boundaries, self.name, self.keep = boundaries, name, keep
+        self.boundaries, self.compartment, self.name, self.keep = boundaries, compartment, name, keep
         self.trace: list[dict] = []
 
     def restore(self) -> None:
@@ -448,6 +461,7 @@ class Assessor:
             "kind": "external_rubric",
             "task": self.task,
             "norms": dict(self.norms()),
+            "materials": dict(self.materials()),
             "criteria": [asdict(criterion) for criterion in self.standard.criteria],
             "instructions": self.instructions,
             "model": self.model,
@@ -492,12 +506,14 @@ class Assessor:
             self.provider,
             self.standard.select(ids),
             sources=("sedimented",),
+            materials=self.materials,
             task=self.task,
             model=self.model,
             effort=self.effort,
             max_calls=self.max_calls,
             timeout=self.timeout,
             boundaries=self.boundaries,
+            compartment=self.compartment,
             name=f"{self.name}.external",
             verifiers=self.verifiers,
             calibrations=self.calibrations,
@@ -531,7 +547,7 @@ class Assessor:
             )
             if text
         ]
-        return self.boundaries.compartment("analyst", spoken=[*spoken, *handed])
+        return self.boundaries.compartment(self.compartment, spoken=[*spoken, *handed])
 
     async def evaluate(self, sessions: Sessions) -> Signal | None:
         try:
@@ -839,6 +855,7 @@ class Assessor:
                 max_calls=self.max_calls,
                 timeout=self.timeout,
                 boundaries=self.boundaries,
+                compartment=self.compartment,
                 verifiers=self.verifiers,
                 calibrations=self.calibrations,
             )
@@ -900,6 +917,7 @@ class Assessor:
             verifiers=self.verifiers,
             calibrations=self.calibrations,
             boundaries=self.boundaries,
+            compartment=self.compartment,
         )
         decision, error = None, None
         try:
@@ -972,23 +990,43 @@ class Assessor:
         assessment["final_items"] = [asdict(item) for item in final]
         return final
 
-    def _evidence_gaps(self, criterion, evidence, norms):
-        gaps = []
+    def _evidence_gaps(self, criterion, evidence, norms) -> tuple[list[str], list[str]]:
+        """What keeps `criterion` from being judged, and notes on how its evidence requirements were read.
+
+        A delivered_text reference locates a file by the name it was delivered under, or by the path of a file a
+        session left behind (`references[session]["filed"]`, when the case supplies them). A reference that locates
+        neither, a description of the files or a name the worker never used, is judged against all delivered text
+        with a note saying so: whether a required file is missing is part of the judgment, not a gap in the evidence.
+        Only having neither delivered nor filed text, or a located file that cannot be read, is a gap.
+        """
+        gaps, notes = [], []
+        supplied = {**evidence.get("materials", {}), **norms}
         rows = [row for turns in evidence["conversations"].values() for row in turns]
+        filed = {
+            path
+            for found in evidence.get("references", {}).values()
+            if isinstance(found, Mapping) and isinstance(found.get("filed"), Mapping)
+            for path in found["filed"]
+        }
         for need in criterion.assessment.evidence_requirements:
-            if need.kind == "material" and need.reference not in norms:
+            if need.kind == "material" and need.reference not in supplied:
                 gaps.append(f"Required material {need.reference!r} is unavailable.")
             elif need.kind == "delivered_text":
                 files = {name: text for row in rows for name, text in row.get("delivered", {}).items()}
                 unavailable = {name: reason for row in rows for name, reason in row.get("unavailable", {}).items()}
-                wanted = [need.reference] if need.reference else list(files)
-                if not wanted:
+                reference = need.reference
+                if reference and reference not in files:
+                    if any(path == reference or path.endswith("/" + reference) for path in filed):
+                        continue
+                    notes.append(
+                        f"Evidence reference {reference!r} names no delivered or filed file; judged against all "
+                        + ("delivered text and filed files." if filed else "delivered text.")
+                    )
+                    reference = ""
+                wanted = [reference] if reference else list(files)
+                if not wanted and not filed:
                     gaps.append("No delivered text is available for this content judgment.")
-                for name in wanted:
-                    if name not in files:
-                        gaps.append(f"Required delivered text {name!r} is unavailable.")
-                    elif name in unavailable:
-                        gaps.append(f"{name}: {unavailable[name]}")
+                gaps.extend(f"{name}: {unavailable[name]}" for name in wanted if name in unavailable)
             elif need.kind == "conversation" and not rows:
                 gaps.append("Conversation evidence is unavailable.")
             elif need.kind == "execution" and not any(evidence["executions"].values()):
@@ -996,29 +1034,40 @@ class Assessor:
         for ref in criterion.basis.references:
             if criterion.origin == "derived" and (ref.source not in norms or ref.version != digest(norms[ref.source])):
                 gaps.append(f"Source {ref.source!r} changed or is unavailable; rebuild its interpretation.")
-        return gaps
+        return gaps, notes
 
     async def _measure(self, provider, sessions: Sessions, *, evidence=None, norms=None) -> tuple[Item, ...]:
         standard = self.standard
-        evidence = copy.deepcopy(evidence) if evidence is not None else observations(sessions, self.task)
+        if evidence is not None:
+            evidence = copy.deepcopy(evidence)
+        else:
+            evidence = observations(sessions, self.task)
+            computed = self.references(sessions) if self.references is not None else {}
+            figures = {name: dict(found) for name, found in computed.items() if found}
+            if figures:
+                evidence["references"] = figures
         norms = dict(self.norms() if norms is None else norms)
         if self.task:
             norms = {"$task": self.task, **norms}
+        if "materials" not in evidence:
+            evidence["materials"] = copy.deepcopy({**self.materials(), **norms})
         record = {
             "id": f"{self.run_id}:assessment-{len(self.assessments) + 1}",
             "version": len(self.assessments) + 1,
             "rubric_version": standard.version,
             "criteria": [asdict(criterion) for criterion in standard.criteria],
             "evidence": evidence,
+            "evidence_digest": digest(evidence),
+            "execution_digest": execution_digest(sessions),
             "guidance": self.builder.guidance if self.builder is not None else "",
             "guidance_usage": self.guidance_usage,
             "checks": [],
             "construction": {"pending": self.builder.unresolved} if self.builder is not None else {},
         }
         self.assessments.append(record)
-        jobs, checks, gaps = [], {}, {}
+        jobs, checks, gaps, notes = [], {}, {}, {}
         for criterion in standard.criteria:
-            gaps[criterion.id] = self._evidence_gaps(criterion, evidence, norms)
+            gaps[criterion.id], notes[criterion.id] = self._evidence_gaps(criterion, evidence, norms)
             checks[criterion.id] = [
                 (criterion.id, "decision", criterion.assessment.decision),
                 *(
@@ -1041,17 +1090,19 @@ class Assessor:
                                 asdict(need) for need in criterion.assessment.evidence_requirements
                             ],
                             "evidence_gaps": gaps[criterion.id],
+                            "evidence_notes": notes[criterion.id],
                             "instruction": check.instruction,
                         }
                     )
         record["evidence_gaps"] = gaps
+        record["evidence_notes"] = {id: found for id, found in notes.items() if found}
         if len({job["id"] for job in jobs}) != len(jobs):
             raise ValueError("criterion ids collide with generated local-check ids")
         judged = {}
         if jobs:
             _, verdicts = await exchange(
                 provider,
-                messages(self.instructions, {**evidence, "materials": norms, "criteria": jobs}),
+                messages(self.instructions, {**evidence, "criteria": jobs}),
                 [tool(JUDGE, "Submit one verdict per requested check id.", schema_for(Verdicts))],
                 submit={JUDGE: lambda arguments: _checked(jobs, sessions, arguments)},
                 model=self.model,
@@ -1082,7 +1133,11 @@ class Assessor:
                         ref.source not in norms or ref.version != digest(norms[ref.source])
                         for ref in criterion.basis.references
                     )
-                    if gaps[criterion.id] and (finding.result != "not_applicable" or stale):
+                    # A violation seen in the evidence at hand stands despite a gap elsewhere; a stale source
+                    # leaves no current interpretation to have been violated.
+                    if gaps[criterion.id] and finding.result == "fail" and not stale:
+                        finding = replace(finding, note="\n".join(filter(None, (finding.note, *gaps[criterion.id]))))
+                    elif gaps[criterion.id] and (finding.result != "not_applicable" or stale):
                         finding = Finding("unknown", note="; ".join(gaps[criterion.id]))
                 elif gaps[criterion.id]:
                     finding = Finding("unknown", note="; ".join(gaps[criterion.id]))
@@ -1118,7 +1173,7 @@ class Assessor:
                     result.session,
                     criterion.definition.acceptance,
                     result.actual,
-                    result.note,
+                    "\n".join(filter(None, (result.note, *notes[criterion.id]))),
                     BASIS[criterion.origin],
                     criterion.authority,
                     criterion.strength,
