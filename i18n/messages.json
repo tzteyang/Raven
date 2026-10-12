@@ -11150,6 +11150,18 @@
     "dockEnded": {
       "zh": "这次运行已结束，只能查看。"
     },
+    "dockFailedAnalysis": {
+      "zh": "分析失败了：{0}。练习记录和评审结论都还在，重试分析就能接着做。"
+    },
+    "dockFailedAssessment": {
+      "zh": "评审失败了：{0}。练习记录和你的点评都还在，重试会把这一轮重新评审一遍。"
+    },
+    "dockRetry.analyse": {
+      "zh": "重试分析"
+    },
+    "dockRetry.assess": {
+      "zh": "重试评审"
+    },
     "dockStarting": {
       "zh": "正在启动会话：雇用员工、打开记录…"
     },

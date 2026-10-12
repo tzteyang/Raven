@@ -681,6 +681,106 @@ async def test_resuming_rehires_the_employee_on_the_record_and_its_saved_deploym
         await resumed.close()
 
 
+FLAKY = """
+from pathlib import Path
+
+from experimental.iteration.protocols import Item, Signal
+
+
+class Flaky:
+    name = "flaky"
+
+    def __init__(self, spec, employee):
+        self.failed = Path(spec["run_dir"]) / "flaky-failed"
+
+    async def evaluate(self, sessions):
+        if not self.failed.exists():
+            self.failed.write_text("once")
+            raise RuntimeError("assessor: provider error: HTTP 503")
+        return Signal("flaky", "judged", items=tuple(Item(f"{key}:ok", "pass", key) for key in sessions))
+
+
+def make(spec, employee):
+    return Flaky(spec, employee)
+"""
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("detached", [False, True])
+async def test_a_failed_assessment_is_retried_on_the_saved_practice_and_judged_again(
+    tmp_path, curations, analyses, detached
+):
+    (tmp_path / "flaky.py").write_text(FLAKY)
+    hired = []
+    host = Host(spec(tmp_path, assessor=f"{tmp_path / 'flaky.py'}:make"), employment(hired))
+    await host.boot()
+    try:
+        await host.handle({"op": "onboard", "text": "Working instructions"})
+        await settled(host)
+        await play(host, "Saved practice input")
+        await host.handle({"op": "signal", "text": "Saved judgement"})
+        assert (await host.handle({"op": "assess"}))["ok"]
+        state = await settled(host)
+        assert state["status"] == "error" and state["failed"] == "assess" and "HTTP 503" in state["error"]
+        if detached:
+            kept = {**host.spec, "record": str(host.session.path), "retry": "assess"}
+            await host.close()
+            host = Host(kept, employment(hired))
+            await host.boot()
+        else:
+            refused = await host.handle({"op": "retry_analysis"})
+            assert not refused["ok"] and "unfinished failed analysis" in refused["error"]
+            assert (await host.handle({"op": "retry"}))["ok"]
+        state = host.state()
+        assert state["status"] == "running" and state["failed"] is None and state["error"] is None
+        assert state["pending"] == {"sessions": 1, "signals": 1}
+        assert [signal.text for signal in host.session.signals] == ["Saved judgement"]
+        assert (await host.handle({"op": "assess"}))["ok"]
+        assert (await settled(host))["assessed"]
+        assert [signal.source for signal in host.session.signals] == ["human", "flaky"]
+        assert sum(len(item.employee.runs) for item in hired) == 1
+        refused = await host.handle({"op": "retry"})
+        assert not refused["ok"] and "unfinished failed analysis or assessment" in refused["error"]
+    finally:
+        await host.close()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("detached", [False, True])
+async def test_failed_analysis_recovery_restores_evidence_without_running_the_employee(
+    tmp_path, curations, analyses, detached
+):
+    hired = []
+    host = Host(spec(tmp_path), employment(hired))
+    await host.boot()
+    try:
+        await host.handle({"op": "onboard", "text": "Working instructions"})
+        await settled(host)
+        await play(host, "Saved practice input")
+        await host.handle({"op": "signal", "text": "Saved judgement"})
+        answers = stepping.evidence_fingerprint(host.session.sessions)
+        await host.handle({"op": "analyse"})
+        assert (await settled(host))["status"] == "error"
+        if detached:
+            kept = {**host.spec, "record": str(host.session.path), "retry_analysis": True}
+            await host.close()
+            host = Host(kept, employment(hired))
+            await host.boot()
+        else:
+            assert (await host.handle({"op": "retry_analysis"}))["ok"]
+        assert host.state()["status"] == "running" and host.state()["failed"] is None
+        assert host.state()["rounds"] == 0
+        assert stepping.evidence_fingerprint(host.session.sessions) == answers
+        assert host.session.signals[0].text == "Saved judgement"
+        assert sum(len(item.employee.runs) for item in hired) == 1
+        analyses.scripted.append(CURATE)
+        assert (await host.handle({"op": "analyse"}))["ok"]
+        assert (await settled(host))["reviewing"]
+        assert sum(len(item.employee.runs) for item in hired) == 1
+    finally:
+        await host.close()
+
+
 @pytest.mark.asyncio
 async def test_a_session_whose_employee_delegates_cannot_resume_once_its_harness_changed(tmp_path, curations):
     first = Host(spec(tmp_path), employment([], saving=False))
@@ -843,6 +943,39 @@ def test_a_kept_session_whose_process_is_gone_is_read_and_resumed_but_takes_no_s
     assert live.snapshot("../runs") is None and live.step("live-1", "trial", {})[0] == 404
     status, _ = live.step(SESSION, "resume", {})
     assert status == 202 and started[0]["record"] == str(kept / "iteration" / "r.json")
+
+
+def test_resuming_a_failed_analysis_requires_explicit_retry_and_rejects_other_ended_runs(tmp_path):
+    config = LiveConfig.load(write_config(tmp_path))
+    kept = config.root / "runs" / SESSION
+    (kept / "iteration").mkdir(parents=True)
+    (kept / "studio.json").write_text(json.dumps({"id": SESSION, "task": "the job", "created": 1}))
+    record = {
+        "task_id": "t",
+        "task": "the job",
+        "status": "error",
+        "opening": [],
+        "error": "analyst: provider error: HTTP 503",
+        "rounds": [{"sessions": {"practice": []}, "signals": [], "feedback": None, "curated": False}],
+    }
+    path = kept / "iteration" / "r.json"
+    path.write_text(json.dumps(record))
+    started = []
+    live = Live(config, start=lambda spec: started.append(spec) or (SimpleNamespace(is_alive=lambda: False), None))
+    assert live.summary(SESSION)["retry"] == {"step": "analyse", "error": "analyst: provider error: HTTP 503"}
+    assert live.step(SESSION, "resume", {})[0] == 409
+    assert live.step(SESSION, "resume", {"retry": "curate"})[0] == 400
+    assert live.step(SESSION, "resume", {"retry": "assess"})[0] == 409
+    assert live.step(SESSION, "resume", {"retry": "analyse"})[0] == 202
+    assert started[-1]["retry"] == "analyse"
+    assert json.loads(path.read_text()) == record
+    for status, stage in (("finished", "analyse"), ("error", "assess"), ("running", "analyse")):
+        path.write_text(json.dumps({**record, "status": status, "error_step": stage}))
+        assert live.step(SESSION, "resume", {"retry": "analyse"})[0] == 409
+    assert len(started) == 1 and live.summary(SESSION)["retry"] is None
+    path.write_text(json.dumps({**record, "error": "assessor: timed out", "error_step": "assess"}))
+    assert live.summary(SESSION)["retry"] == {"step": "assess", "error": "assessor: timed out"}
+    assert live.step(SESSION, "resume", {"retry": "assess"})[0] == 202 and started[-1]["retry"] == "assess"
 
 
 def test_without_a_live_configuration_the_server_only_replays(tmp_path):

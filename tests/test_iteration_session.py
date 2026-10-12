@@ -2,7 +2,9 @@
 
 import asyncio
 import json
+from copy import deepcopy
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -11,6 +13,7 @@ from experimental.curator.generation.run import GapReportedError, GenerationPaus
 from experimental.curator.generation.run import Limits as CuratorLimits
 from experimental.iteration import session as stepping
 from experimental.iteration.conversation import Conversation
+from experimental.iteration.exchange import ExchangeError
 from experimental.iteration.protocols import Handover, Signal
 from experimental.iteration.records import load, runs
 from experimental.iteration.run import run
@@ -379,6 +382,147 @@ async def test_an_analysis_failure_is_recorded_as_the_loop_records_it(tmp_path, 
     ]
     with pytest.raises(StepError, match="error"):
         await session.trial(student("Again"))
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_retry_analysis_preserves_failed_attempt_and_reuses_only_training_evidence(
+    tmp_path, curations, analyses, monkeypatch, legacy
+):
+    analyses.scripted.extend([CONTINUE, CURATE])
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), limits=Limits(max_rounds=4), measuring={"measurement"})
+    await session.onboard()
+    await session.trial(student("Earlier input"))
+    session.signal(Signal("human", "Earlier judgement"))
+    await session.analyse()
+    previous = session.rounds[-1]
+    await session.trial(student("Current input"))
+    session.signal(Signal("human", "Current judgement"))
+    session.signal(Signal("measurement", "MEASUREMENT_ONLY"))
+    await session.holdout([Conversation(Scripted("unseen", "HOLDOUT_ONLY"), max_turns=1)], [Verifier(passing())])
+    answers, held_out = deepcopy(session.sessions), deepcopy(session.held_out)
+    calls = list(worker.runs)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            session.analyst, "review", AsyncMock(side_effect=ExchangeError("analyst: provider error: HTTP 503"))
+        )
+        with pytest.raises(ExchangeError, match="HTTP 503"):
+            await session.analyse()
+    failed = json.loads(session.path.read_text())
+    if legacy:
+        for key in ("error_step", "error_revision", "error_context"):
+            failed.pop(key)
+        session.path.write_text(json.dumps(failed))
+    restored = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    restored.retry_analysis()
+    saved = json.loads(session.path.read_text())
+    assert saved["status"] == "running" and len(saved["rounds"]) == 1
+    assert len(saved["analysis_failures"]) == 1
+    attempt = saved["analysis_failures"][0]
+    assert attempt["failed_round"] == failed["rounds"][-1]
+    assert (attempt["round"], attempt["revision"], attempt["error"]) == (2, worker.artifact_id, failed["error"])
+    assert attempt["recovered_at"].endswith("+00:00")
+    assert attempt["evidence_ref"] == f"iteration/{session.path.name}#/analysis_failures/0/failed_round"
+    assert restored.previous_feedback == previous.feedback and restored.previous_signals == previous.signals
+    assert stepping.evidence_fingerprint(restored.sessions) == stepping.evidence_fingerprint(answers)
+    assert stepping.evidence_fingerprint(restored.held_out) == stepping.evidence_fingerprint(held_out)
+    assert restored.held_out_signals == [passing()]
+    with pytest.raises(StepError, match="unfinished failed analysis"):
+        restored.retry_analysis()
+    restored = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    assert restored.record["analysis_failures"] == saved["analysis_failures"]
+    assert await restored.analyse() == Outcome("curate")
+    assert worker.runs == calls and len(restored.rounds) == 2
+    assert stepping.evidence_fingerprint(analyses.calls[-1]["sessions"]) == stepping.evidence_fingerprint(answers)
+    assert analyses.calls[-1]["previous"] == previous.feedback
+    assert all(signal.source != "measurement" for signal in analyses.calls[-1]["signals"])
+    assert "HOLDOUT_ONLY" not in str(analyses.calls[-1])
+    await restored.curate()
+    assert "HOLDOUT_ONLY" not in str(curations[-1]) and "MEASUREMENT_ONLY" not in str(curations[-1])
+    assert stepping.evidence_fingerprint(restored.rounds[-1].holdout) == stepping.evidence_fingerprint(held_out)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_assessment_is_retried_on_its_trials_and_the_persons_signals_and_judged_whole_again(
+    tmp_path, curations, analyses
+):
+    from experimental.iteration.records import retryable_step
+
+    analyses.scripted.append(CURATE)
+
+    class Named:
+        def __init__(self, name, fail_once=False):
+            self.name, self.fail_once, self.calls = name, fail_once, 0
+
+        async def evaluate(self, sessions):
+            self.calls += 1
+            if self.fail_once and self.calls == 1:
+                for _ in range(1000):
+                    if any(signal.source == "steady" for signal in session.signals):
+                        break
+                    await asyncio.sleep(0)
+                raise ExchangeError("assessor: provider error: HTTP 503")
+            return Signal(self.name, f"{self.name} spoke")
+
+    steady, flaky = Named("steady"), Named("flaky", fail_once=True)
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), assessors=[steady, flaky])
+    await session.onboard()
+    await session.trial(student("Hi"))
+    session.signal(Signal("human", "Ask the budget first."))
+    calls = list(worker.runs)
+    with pytest.raises(ExchangeError, match="HTTP 503"):
+        await session.assess(steady, flaky)
+    failed = json.loads(session.path.read_text())
+    assert failed["error_step"] == "assess" and retryable_step(failed) == "assess"
+    assert [signal["source"] for signal in failed["rounds"][-1]["signals"]] == ["human", "steady"]
+    restored = Session.resume(worker, object(), session.path, assessors=[steady, flaky])
+    with pytest.raises(StepError, match="unfinished failed analysis"):
+        restored.retry_analysis()
+    assert json.loads(session.path.read_text()) == failed
+    assert restored.retry() == "assess"
+    assert [signal.source for signal in restored.signals] == ["human"]
+    saved = json.loads(session.path.read_text())
+    assert saved["status"] == "running" and saved["rounds"] == [] and "error" not in saved
+    [attempt] = saved["assessment_failures"]
+    assert attempt["error_step"] == "assess" and attempt["failed_round"] == failed["rounds"][-1]
+    assert attempt["evidence_ref"] == f"iteration/{session.path.name}#/assessment_failures/0/failed_round"
+    await restored.assess(steady, flaky)
+    assert [signal.source for signal in restored.signals] == ["human", "steady", "flaky"]
+    assert await restored.analyse() == Outcome("curate") and worker.runs == calls
+    with pytest.raises(StepError, match="unfinished failed analysis or assessment"):
+        restored.retry()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["finished", "assess", "feedback", "revision", "context"])
+async def test_analysis_retry_refuses_unrelated_failure_or_changed_employee_without_writing(
+    tmp_path, curations, analyses, change
+):
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object())
+    await session.onboard()
+    await session.trial(student("Existing answer"))
+    with pytest.raises(IndexError):
+        await session.analyse()
+    record = json.loads(session.path.read_text())
+    if change == "finished":
+        record["status"] = "finished"
+    elif change == "assess":
+        record["error_step"] = "assess"
+    elif change == "feedback":
+        record["rounds"][-1]["feedback"] = CONTINUE.model_dump(mode="json")
+    elif change == "revision":
+        worker.artifact_id = "different-revision"
+    else:
+        record["error_context"] = "different-context"
+    session.path.write_text(json.dumps(record))
+    before = session.path.read_bytes()
+    restored = Session.resume(worker, object(), session.path)
+    with pytest.raises(StepError):
+        restored.retry_analysis()
+    assert session.path.read_bytes() == before
 
 
 @pytest.mark.asyncio

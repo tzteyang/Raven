@@ -60,7 +60,7 @@ from .studio import slim_exchange
 
 SOURCE = "human"
 BACKGROUND = ("onboard", "trial", "script", "exam", "assess", "analyse", "curate", "revert")
-AT_ONCE = ("signal", "skip", "finish")
+AT_ONCE = ("signal", "skip", "finish", "retry_analysis", "retry")
 DEPLOYMENT, PREVIOUS, EXAMS, INQUIRIES = "deployment.json", "previous.json", "exams.json", "inquiries.json"
 # A person's mark on one turn of a trial: what it says of the reply, as the Analyst reads it.
 MARKS = {"right": "right", "fix": "should have been", "wrong": "wrong", "missed": "missed"}
@@ -348,6 +348,10 @@ class Host:
             )
         if spec.get("record"):
             self.session = Session.resume(self.employee, provider, Path(spec["record"]), **options)
+            # `retry_analysis` is how a server started before `retry` named the step asks for it.
+            retry = spec.get("retry") or ("analyse" if spec.get("retry_analysis") else None)
+            if retry:
+                self.session.retry(retry)
         else:
             prior = [cultivation(path) for path in contract.prior.records]
             self.session = Session.open(self.employee, provider, prior=prior, **options)
@@ -916,6 +920,15 @@ class Host:
 
     async def _analyse(self, command: dict) -> None:
         await self.session.analyse()
+
+    async def _retry_analysis(self, command: dict) -> None:
+        self.session.retry_analysis()
+        self.error, self.failed = None, None
+
+    async def _retry(self, command: dict) -> None:
+        """Reopen the round whose analysis or assessment failed, for the person to take that step again."""
+        self.session.retry()
+        self.error, self.failed = None, None
 
     async def _curate(self, command: dict) -> None:
         if (self.root / DEPLOYMENT).is_file() and self._read(DEPLOYMENT).get("revision") == self.employee.revision_id:

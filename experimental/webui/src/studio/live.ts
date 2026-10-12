@@ -235,6 +235,7 @@ export type Phase =
   | { kind: 'unstarted'; error: string }
   | { kind: 'archived' }
   | { kind: 'ended' }
+  | { kind: 'failed'; step: 'analyse' | 'assess'; error: string }
   | { kind: 'detached' }
   | { kind: 'busy'; step: string }
   | { kind: 'trial' }
@@ -246,10 +247,15 @@ export type Phase =
 
 export function livePhase(session: LiveSession): Phase {
   const state = session.state
+  const retry = session.summary.retry
   if (session.archived) return { kind: 'archived' }
   if (state?.failed === 'starting') return { kind: 'unstarted', error: state.error ?? '' }
-  if (!session.summary.attached) return session.run && (session.status === 'finished' || session.status === 'error') ? { kind: 'ended' } : { kind: 'detached' }
+  if (!session.summary.attached) {
+    if (!session.run || (session.status !== 'finished' && session.status !== 'error')) return { kind: 'detached' }
+    return retry ? { kind: 'failed', ...retry } : { kind: 'ended' }
+  }
   if (!state || state.step === 'starting') return { kind: 'starting' }
+  if (state.status === 'error' && retry && !state.ended) return { kind: 'failed', ...retry }
   if (state.status === 'finished' || state.status === 'error' || state.ended) return { kind: 'ended' }
   if (state.trial) return { kind: 'trial' }
   if (state.step) return { kind: 'busy', step: state.step }

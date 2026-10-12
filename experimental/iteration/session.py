@@ -10,6 +10,7 @@ import asyncio
 import json
 from copy import deepcopy
 from dataclasses import dataclass, field, replace
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Literal
 from uuid import uuid4
@@ -32,7 +33,7 @@ from .hearing import heard, heard_activity, heard_history, heard_observations, h
 from .history import Entry, entry
 from .ledger import mark
 from .protocols import Exchange, Handover, Item, Sessions, Signal
-from .records import Cultivation
+from .records import RETRYABLE, Cultivation, retryable_step
 
 
 @dataclass(frozen=True)
@@ -293,6 +294,11 @@ class Session:
                     "initial_attribution",
                     "questions",
                     "error",
+                    "error_step",
+                    "error_revision",
+                    "error_context",
+                    "analysis_failures",
+                    "assessment_failures",
                     "information",
                     "experience_pending",
                 )
@@ -668,7 +674,7 @@ class Session:
             async with asyncio.TaskGroup() as group:
                 tasks = [group.create_task(judged(assessor)) for assessor in assessors]
         except ExceptionGroup as failed:
-            self._abort(failed.exceptions[0], self.signals)
+            self._abort(failed.exceptions[0], self.signals, step="assess")
             raise failed.exceptions[0] from failed
         given = tuple(signal for task in tasks for signal in task.result())
         self.signals[start:] = given
@@ -738,6 +744,7 @@ class Session:
         self._require(self.sessions and self.review is None, "the analysis needs trials and runs once per round")
         signals = tuple(self.signals)
         acted = self._acted(signals)
+        phase = "analyse"
         try:
             review = await self._review(signals)
             added = self._retain_external(review.feedback)
@@ -746,17 +753,19 @@ class Session:
                 for assessor in self.assessors:
                     reassess = getattr(assessor, "assess_external", None)
                     if reassess is not None:
+                        phase = "assess"
                         signal = await reassess(added, self.sessions)
                         if signal is not None:
                             checked.append(signal)
                 self.signals.extend(checked)
                 signals = tuple(self.signals)
                 if any(item.result in ("fail", "unknown") for signal in checked for item in signal.items):
+                    phase = "analyse"
                     review = await self._review(signals)
                     self._retain_external(review.feedback)
             feedback = review.feedback
         except Exception as exc:
-            self._abort(exc, signals)
+            self._abort(exc, signals, step=phase)
             raise
         if self.history:
             self.history[-1] = mark(self.history[-1], feedback, self._acted(signals))
@@ -901,7 +910,64 @@ class Session:
             self.record["stop"] = stop
         self.save()
 
-    def _abort(self, exc, signals) -> None:
+    def retry_analysis(self) -> None:
+        """`retry` held to a failed analysis."""
+        self.retry("analyse")
+
+    def retry(self, step: str | None = None) -> str:
+        """Reopen the round whose analysis or assessment failed (`records.retryable_step`), or only that `step`, on
+        the evidence it recorded, keeping the failed attempt beside the run; the step is returned for the person to
+        take again. The trials, the person's own signals and the held-out exam stay; a failed assessment also drops
+        the signals its assessors gave before it failed, so taking it again judges the round whole once."""
+        found = retryable_step(plain(self.record))
+        name = RETRYABLE.get(step, "analysis or assessment")
+        if (
+            found is None
+            or step not in (None, found)
+            or self.sessions
+            or self.signals
+            or self.held_out
+            or self.review is not None
+        ):
+            raise StepError(f"only an unfinished failed {name} can be retried")
+        failed = self.rounds[-1]
+        revision = self._revision()
+        executions = [exchange.execution for values in failed.sessions.values() for exchange in values]
+        if not revision or not executions or any(execution.artifact_id != revision for execution in executions):
+            raise StepError(f"the employee changed since the failed {RETRYABLE[found]}")
+        if (
+            self.record.get("error_revision", revision) != revision
+            or self.record.get("error_context", self._verification_context()) != self._verification_context()
+        ):
+            raise StepError(f"the employee or requirements changed since the failed {RETRYABLE[found]}")
+        failures = f"{RETRYABLE[found]}_failures"
+        self.record.setdefault(failures, []).append(
+            {
+                "round": len(self.rounds),
+                "error": self.record["error"],
+                "error_step": self.record.get("error_step"),
+                "error_context": self.record.get("error_context"),
+                "revision": revision,
+                "recovered_at": datetime.now(timezone.utc).isoformat(),
+                "evidence_ref": f"iteration/{self.path.name}#/{failures}/{len(self.record[failures])}/failed_round",
+                "failed_round": plain(failed),
+            }
+        )
+        automatic = {getattr(assessor, "name", None) for assessor in self.assessors} if found == "assess" else set()
+        self.rounds.pop()
+        self.sessions = failed.sessions
+        self.signals = [signal for signal in failed.signals if signal.source not in automatic]
+        self.held_out, self.held_out_signals = failed.holdout, list(failed.holdout_signals)
+        self.previous_signals = self._acted(self.rounds[-1].signals) if self.rounds else ()
+        self.previous_feedback = self.rounds[-1].feedback if self.rounds else None
+        self.pending_holdout, self.verification, self.outcome = None, [], None
+        self.record["status"] = "running"
+        for key in ("error", "error_step", "error_revision", "error_context", "stop"):
+            self.record.pop(key, None)
+        self.save()
+        return found
+
+    def _abort(self, exc, signals, *, step) -> None:
         """A failed assessment or analysis ends the run; the round is recorded without feedback."""
         self.rounds.append(
             Round(
@@ -915,6 +981,7 @@ class Session:
             )
         )
         self.record["status"], self.record["error"] = "error", str(exc)
+        self.record.update(error_step=step, error_revision=self._revision(), error_context=self._verification_context())
         self.sessions, self.signals, self.held_out, self.held_out_signals = {}, [], {}, []
         self.pending_holdout = None
         self.save()

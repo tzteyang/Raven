@@ -27,7 +27,7 @@ from functools import lru_cache
 from pathlib import Path
 
 from .. import model_roles
-from ..iteration.records import runs
+from ..iteration.records import RETRYABLE, retryable_step, runs
 from ..scenario import load as load_contract
 from ..scenario.contract import SKILL_FILE as SKILL
 from . import exporting
@@ -64,6 +64,8 @@ STEPS = (
     "signal",
     "assess",
     "analyse",
+    "retry_analysis",
+    "retry",
     "curate",
     "revert",
     "skip",
@@ -75,6 +77,7 @@ POLL_WAIT = 5
 STEP_WAIT = 60
 STOP_WAIT = 30
 TITLE_KEEP = 80
+ERROR_KEEP = 1_000
 # A scenario built on the page: its name, never a word the repository holds, since the Curator may not read a file that
 # names its scenario (`experimental.automation.employee.withheld`), and the limits of what it is built from.
 BUILT = re.compile(r"scn-[0-9a-f]{8}")
@@ -587,6 +590,7 @@ class Live:
             "scenario": meta.get("scenario"),
             "run": f"{session}/{record.stem}" if record is not None else None,
             "status": status,
+            "retry": _retry(str(record), stat.st_mtime_ns, stat.st_size) if status == "error" else None,
             "models": _models(directory),
             "attached": bool(handle and handle.alive),
             "step": (handle.last or {}).get("step") if handle and handle.alive else None,
@@ -652,13 +656,14 @@ class Live:
         with self.guard:
             self.handles[session] = Handle(process, connection)
 
-    def resume(self, session: str) -> tuple[int, dict]:
+    def resume(self, session: str, *, retry: str | None = None) -> tuple[int, dict]:
         """Start a process on a kept session whose process is gone; it rehires the employee and resumes the record,
-        and says on the page why when it cannot."""
+        and says on the page why when it cannot. With `retry`, a run that ended when that step failed is reopened on
+        the round it recorded (`Session.retry`)."""
         with self._session_lock(session):
-            return self._resume(session)
+            return self._resume(session, retry=retry)
 
-    def _resume(self, session: str) -> tuple[int, dict]:
+    def _resume(self, session: str, *, retry: str | None = None) -> tuple[int, dict]:
         directory = self.directory(session)
         if directory is None:
             return 404, {"error": "no such session"}
@@ -671,9 +676,15 @@ class Live:
         if meta.get("archived"):
             return 409, {"error": "the session is archived"}
         stat = record.stat()
-        if _status(str(record), stat.st_mtime_ns, stat.st_size) in ("finished", "error"):
+        ended = _status(str(record), stat.st_mtime_ns, stat.st_size) in ("finished", "error")
+        if retry and retryable_step(json.loads(record.read_text())) != retry:
+            return 409, {"error": f"only an unfinished failed {RETRYABLE[retry]} can be retried"}
+        if ended and not retry:
             return 409, {"error": "the session's run has ended"}
-        self._launch(session, self._spec(meta, directory, meta.get("task", ""), record))
+        spec = self._spec(meta, directory, meta.get("task", ""), record)
+        if retry:
+            spec["retry"] = retry
+        self._launch(session, spec)
         return 202, self.summary(session)
 
     def snapshot(self, session: str, stamp: str | None = None) -> dict | None:
@@ -705,7 +716,9 @@ class Live:
         """Relay one of the page's steps (`STEPS`) to the session's process: 200 with its state when the step was
         taken or started, 409 with the reason when the session refused it."""
         if op == "resume":
-            return self.resume(session)
+            if body.get("retry") not in (None, *RETRYABLE):
+                return 400, {"error": "resume can retry only analyse or assess"}
+            return self.resume(session, retry=body.get("retry"))
         if op == "archive":
             return self.archive(session, body)
         if op == "delete":
@@ -796,6 +809,18 @@ def _exportable(path: Path) -> bool:
 @lru_cache(maxsize=128)
 def _saved_exportable(path: str, mtime_ns: int, size: int) -> bool:
     return exporting.available(Path(path))
+
+
+@lru_cache(maxsize=256)
+def _retry(path: str, mtime_ns: int, size: int) -> dict | None:
+    """The step a failed run may retry and why it failed (`records.retryable_step`), read once per version of the
+    file."""
+    try:
+        value = json.loads(Path(path).read_text())
+    except (OSError, ValueError):
+        return None
+    step = retryable_step(value) if isinstance(value, dict) else None
+    return {"step": step, "error": str(value.get("error", ""))[:ERROR_KEEP]} if step else None
 
 
 @lru_cache(maxsize=256)

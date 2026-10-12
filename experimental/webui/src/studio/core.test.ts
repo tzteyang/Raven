@@ -368,6 +368,13 @@ describe('live session', () => {
     expect(livePhase(gone)).toEqual({ kind: 'detached' })
     const finished = { ...run(), stop: 'archived as Agency v2' }
     expect(livePhase(liveThread(snapshot({ attached: false, state: null }), finished))).toEqual({ kind: 'ended' })
+    const broke: Run = { ...run(), status: 'error' }
+    const retry = { step: 'assess' as const, error: 'assessor: timed out' }
+    expect(livePhase(liveThread(snapshot({ attached: false, state: null, retry }), broke))).toEqual({ kind: 'failed', ...retry })
+    expect(livePhase(liveThread(snapshot({ attached: false, state: null }), broke))).toEqual({ kind: 'ended' })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error' }), retry }), broke))).toEqual({ kind: 'failed', ...retry })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error' }) }), broke))).toEqual({ kind: 'ended' })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error', ended: true }), retry }), broke))).toEqual({ kind: 'ended' })
     const archived = liveThread(snapshot({ attached: false, archived: { name: 'Agency v2', version: 'v2' } }), finished)
     expect(archived.entries.filter((entry) => entry.kind === 'note').map((entry) => entry.key)).toEqual(['archive'])
     expect([archived.archived, livePhase(archived)]).toEqual([{ name: 'Agency v2', version: 'v2' }, { kind: 'archived' }])

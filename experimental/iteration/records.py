@@ -8,6 +8,33 @@ from pathlib import Path
 from .history import Entry
 from .ledger import held_out, rows, summary
 
+RETRYABLE = {"analyse": "analysis", "assess": "assessment"}
+
+
+def retryable_step(record: dict) -> str | None:
+    """The step a run that failed in it may explicitly retry, `analyse` or `assess` (`RETRYABLE`), while the failed
+    round is the last one and nothing came after it; None for every other ended run, which stays ended. A record
+    written before failures named their step counts as a failed analysis when its error says the Analyst's provider
+    failed."""
+    rounds = record.get("rounds") or []
+    if record.get("status") != "error" or not rounds:
+        return None
+    step = record.get("error_step")
+    if step is None and str(record.get("error", "")).startswith("analyst: provider error:"):
+        step = "analyse"
+    if step not in RETRYABLE:
+        return None
+    last = rounds[-1]
+    retryable = (
+        bool(last.get("sessions"))
+        and last.get("feedback") is None
+        and not any(last.get(key) for key in ("curated", "curation", "attribution"))
+        and all(item.get("feedback") is not None for item in rounds[:-1])
+        and not any((record.get("pending") or {}).get(key) for key in ("sessions", "signals", "holdout", "review"))
+        and all(item.get("round", -1) < len(rounds) for item in record.get("history", ()))
+    )
+    return step if retryable else None
+
 
 def runs(root: Path) -> list[Path]:
     """Iteration record files under a worker root, oldest first."""

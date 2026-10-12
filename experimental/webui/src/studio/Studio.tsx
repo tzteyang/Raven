@@ -353,6 +353,22 @@ export function Studio(): JSX.Element {
             actions={[{ label: T.dockResume, icon: 'spark', primary: true, disabled: waiting, onClick: () => act(() => take(phase.step)) }]}
           />
         )
+      case 'failed':
+        return (
+          <StepBar
+            icon="alert"
+            text={phase.step === 'analyse' ? T.dockFailedAnalysis(phase.error) : T.dockFailedAssessment(phase.error)}
+            actions={[
+              {
+                label: T.dockRetry[phase.step],
+                icon: 'spark',
+                primary: true,
+                disabled: waiting,
+                onClick: () => act(() => (session.summary.attached ? take('retry') : take('resume', { retry: phase.step }))),
+              },
+            ]}
+          />
+        )
       case 'detached':
         return (
           <StepBar

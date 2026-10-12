@@ -170,6 +170,24 @@ test('a session whose process is gone offers to resume it, which the server answ
   await waitFor(() => expect(posts.map(([path]) => path)).toEqual([`/api/studio/live/${ID}/resume`]))
 })
 
+test('a run whose analysis failed offers to retry it in the process still serving it', async () => {
+  const error = 'analyst: provider error: HTTP 503'
+  const posts = server(() => ({ ...snapshot({ status: 'error' }, { ...reviewed, status: 'error' }), retry: { step: 'analyse', error } }))
+  await open()
+  expect(await screen.findByText(T.dockFailedAnalysis(error))).toBeTruthy()
+  fireEvent.click(await dock().findByRole('button', { name: T.dockRetry.analyse }))
+  await waitFor(() => expect(posts.map(([path]) => path)).toEqual([`/api/studio/live/${ID}/retry`]))
+})
+
+test('a run whose assessment failed and whose process is gone is started again on the step to retry', async () => {
+  const retry = { step: 'assess' as const, error: 'assessor: timed out' }
+  const posts = server(() => ({ ...snapshot({}, { ...reviewed, status: 'error' }), attached: false, state: null, retry }))
+  await open()
+  expect(await screen.findByText(T.dockFailedAssessment(retry.error))).toBeTruthy()
+  fireEvent.click(await dock().findByRole('button', { name: T.dockRetry.assess }))
+  await waitFor(() => expect(posts).toEqual([[`/api/studio/live/${ID}/resume`, { retry: 'assess' }]]))
+})
+
 test('while a curation waits, a remark goes to the Curator alone and does not close another round', async () => {
   const current = snapshot({ reviewing: true, outcome: { next: 'curate', reason: '' } }, reviewed)
   const posts = server(() => current)

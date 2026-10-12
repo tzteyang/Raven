@@ -61,6 +61,8 @@ export interface LiveSummary {
   scenario?: string | null
   /** The session has a saved employee that can be downloaded. */
   exportable?: boolean
+  /** The step whose failure ended the run and may be taken again on the round it recorded, and why it failed. */
+  retry?: { step: 'analyse' | 'assess'; error: string } | null
 }
 
 /** A scenario sessions may start in: the configured one, or one built on the page. */
