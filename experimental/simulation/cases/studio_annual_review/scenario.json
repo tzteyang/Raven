@@ -1,0 +1,103 @@
+{
+  "initial": [
+    "owner-habits",
+    "price-history",
+    "channel-notes"
+  ],
+  "criteria": [
+    {
+      "id": "yh-headline",
+      "check": "Judge by the review conventions sections 2 to 6 against the computed ledger answer for the period the card asks: fail when the last delivered page gives a different month, channel or rate for any of the three headline questions than the computed one, or when a monthly or channel revenue it states is more than one percent away from the computed figure (use the computed ledger_answer and page_measures). Require all three complete answers: relevant month/change with both monthly amounts, all three channel totals and top channel, repurchase percentage with repeat and valid-order counts. Values must be visibly attributed to their actual period/metric; token presence is insufficient.",
+      "severity": "red_line"
+    },
+    {
+      "id": "yh-errors-listed",
+      "check": "Judge by the review conventions section 7 and the price material: fail when the last delivered page leaves out an entry error or duplicate that the computed answer lists for the period, names one without its order number, or reports as an error an order the computed answer treats as right under sections 7.2 to 7.4 (use the computed entry_errors, duplicates, zero_amount, price_change_orders and page_measures). Each reported error needs the source sheet, order ID, exact originally recorded value, corrected value or duplicate description and explanation. Preserve decimal originals without rounding away the error; do not count an order ID mentioned elsewhere as this full error report.",
+      "severity": "red_line"
+    },
+    {
+      "id": "yh-single-page",
+      "check": "Judge by the review conventions section 8.1: fail unless each request ends with exactly one HTML page handed over as a file (a corrected version replacing it is fine) and no spreadsheet, slide deck, document or second report file is handed over (use the computed delivered_files, html_pages and other_files). Count final actual delivery batches/logical reports, not all historical filenames. Renamed corrections can still replace the same report; simultaneous independent pages (even with identical basenames) are not one file. Missing/deleted final artifacts remain unknown and must not fall back to an older page.",
+      "severity": "standard"
+    },
+    {
+      "id": "yh-page-form",
+      "check": "Judge by the review conventions sections 8.2 to 8.5: fail when the page writes a summary amount with decimals or in ten-thousands (exact original erroneous ledger values in the error details are exempt), runs a paragraph past two sentences, explains itself in analyst jargon, or has no closing line on how its figures were counted (use the computed page_measures). Require the source8.2 order and complete sections: period title, the three headline sections, monthly revenue table with month-on-month, order corrections and final counting line. Percentages are integers. Check actual phone readability, horizontal overflow, hidden/tiny text and the rendered financial values; no arbitrary new font-size threshold. If required rendered/layout evidence is unavailable, that part remains unknown.",
+      "severity": "standard"
+    },
+    {
+      "id": "yh-asked-first",
+      "check": "Judge by the review conventions sections 1.2, 2.4 and 10.1 and the routine section 2.1: fail when the page rests on a counting choice not settled by the supplied conventions, the owner's words in this conversation or an attached earlier page, and the employee did not raise it before its first page; asking again for a choice already settled by those sources fails too (use the computed questions_before_first_page and first_page_turn).",
+      "severity": "standard"
+    },
+    {
+      "id": "yh-checked-kept",
+      "check": "Judge by owner-habits section 9 and review-routine sections 2.10 and 3: when the owner confirms that a raised order is fine, fail unless checked_orders_state shows that order in the year file of owner-habits 9.1 (review-routine 3.3 rules out uploads) and the next delivered page omits the confirmed order from its anomaly or confirmation list. Require a corrected re-delivery only when an earlier delivered page raised that order; confirmation before the first page requires only the first correct delivery, not a duplicate handoff; when a checked-orders file came with the request, fail if the page raises an order on it (use the computed checked_orders_state and native_operations, zero_amount and page_measures). Inspect actual root-contained year file contents with all six source columns and actual dated owner confirmation; ID-only text, suffix-matching external paths, attempted or failed writes and unobserved persistence do not suffice. Read native scoped outcomes and actual final bytes; a present inherited file alone does not prove a new confirmation was added.",
+      "severity": "standard",
+      "applies_when": "The owner confirms a raised order is correct or provides a prior checked-orders file. Persist a new confirmation; re-delivery is required only if an earlier delivered page raised that order."
+    },
+    {
+      "id": "yh-follow-up",
+      "check": "Judge by the routine section 2.9 and the review conventions section 8.5: when the owner questions a figure or asks for more after reading the page, fail unless the reply gives concrete figures that agree with the computed revenue_by_package, orders_and_revenue_by_channel_and_package and days_without_shoots, a figure the computation confirms stands rather than giving way, one it contradicts is corrected on a page handed over again, and the reply asserts nothing beyond the ledger under section 8.5.",
+      "severity": "standard",
+      "applies_when": "The owner asks a substantive follow-up after receiving the page."
+    },
+    {
+      "id": "yh-update-kind",
+      "check": "Judge by the review conventions section 10: on a request to bring an attached earlier page up to date, fail when the new page changes the earlier layout or counting line without saying so, drops one of its sections, or does not say under its title what changed. Compare complete earlier HTML/CSS/DOM and actual rendered layout with the final retained page. Text alone cannot prove unchanged layout. Missing visual/source evidence is unknown; equivalent implementation markup is not automatically a layout change.",
+      "severity": "standard",
+      "applies_when": "The actual task asks to update an attached prior page while preserving its established approach."
+    }
+  ],
+  "plans": {
+    "by-stage": {
+      "steps": [
+        [
+          "owner-habits",
+          "price-history",
+          "channel-notes"
+        ],
+        [
+          "review-routine",
+          "last-year-page",
+          "first-draft-feedback"
+        ]
+      ],
+      "labels": [
+        "review conventions, prices and ledger notes",
+        "review routine and page examples"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "qiansanji",
+        "jiuyue",
+        "sanjidu"
+      ],
+      [
+        "shujia",
+        "genxin",
+        "erjidu"
+      ],
+      [
+        "qiansanji",
+        "sanjidu"
+      ]
+    ],
+    "holdout": [
+      "siji",
+      "shiyue",
+      "shieryue",
+      "shiyiyue",
+      "buqi",
+      "sijiagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

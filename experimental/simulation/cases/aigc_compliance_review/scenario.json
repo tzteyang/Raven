@@ -1,0 +1,113 @@
+{
+  "initial": [
+    "review-standard",
+    "aigc-labeling",
+    "claims-rules",
+    "testimonial-policy",
+    "product-filings",
+    "claim-evidence",
+    "review-ledger",
+    "card-examples"
+  ],
+  "criteria": [
+    {
+      "id": "note-lights-hold",
+      "check": "Judge each actual initial and recheck version by review standard 5 and 11.3, claims rules 2-4 and 6, testimonial policy and AI labeling rules. Fail a wrong light on any issued card, including an earlier card later overwritten. Expected answers and computed table facts describe the original handouts and scripted recheck only. For additional changes actually confirmed by the editor in the conversation, recompute the applicable light from those confirmed facts; an employee's own changed metadata is not confirmation. Historical write snapshots, final filed files and delivered versions are distinct evidence. Missing or unavailable version evidence cannot prove a pass.",
+      "severity": "standard"
+    },
+    {
+      "id": "claims-on-live-evidence",
+      "check": "Judge each card's actual accepted and rejected claims by claims rules 4 and review standard 12. Fail accepting expired, premature, wrong-formula or altered-efficacy evidence, or rejecting a genuinely backed claim. Use the editor-confirmed product and publication date for that version, not employee self-reported metadata. Normal activation/expiry uses publication date; U07 coverage correction uses audit date from October 16 regardless of publication date. Computed cited_evidence compares report mentions with the original handout's whole product and is not an acceptance verdict. A correctly rejected report mention is permitted. A gift-box rewrite explicitly confined to its lotion with the required footnote is permitted; whole-gift-box efficacy is not. Missing date, subject or version evidence is unknown.",
+      "severity": "standard"
+    },
+    {
+      "id": "slip-holds-back-red",
+      "check": "Judge every actual slip version by review standard 5.3, 6.6, 7.4 and 9. Fail release while red on the then-current own card or correctly red for the then-current editor-confirmed input; a later cleared recheck cannot excuse an earlier bad release. All batch cards must precede its slip, yellow release must name concrete correction conditions, and issued slips must remain unchanged with separate supplements for same-batch rechecks. By the end, genuinely cleared notes must have the appropriate delivered slip. Additional editor-confirmed rescheduling may clear a formerly red note after recheck; do not apply its original red answer to that valid changed version. Computed release comparisons to original expected stages are hints only. Missing chronology/version evidence cannot prove a pass.",
+      "severity": "red_line"
+    },
+    {
+      "id": "rewrite-publishable",
+      "check": "Judge every required rewrite by review standard 6.4, claims rules 4.4 and 6, testimonial policy 3-4 and the registration notice. Red/yellow or still-problematic rechecks require a complete editor-usable title, body and applicable marks/footnotes; a blank rewrite or unchanged-remainder shorthand fails. Green/no-issue versions may state no rewrite needed. Fail unresolved forbidden or unsupported claims, fake testimony or loss of a backed point. A-column restrictions apply to ordinary or unregistered products and outside a registered product's permitted efficacy; registered whitening claims/product names remain allowed. Preserve genuine recorded KOC first-person content. Source-supported equivalent durations such as four weeks and 28 days are accepted. Computed word occurrences and literal source-phrase mentions are not semantic verdicts; read actual subject, source and full rewrite.",
+      "severity": "red_line"
+    },
+    {
+      "id": "marks-required-present",
+      "check": "Judge mark detection and correction instructions by AI labeling rules 3-4, testimonial policy 5, claims rules 5 and the registration notice for each actual submitted/recheck version. Fail missing an applicable image-label location, first-body-line AI statement, platform declaration commitment, first-line advert mark before AI, full matching source footnote or exact product registration number. A report ID alone is not a complete sample/time/report footnote, and a mark anywhere below the first line or a wrong registration ID does not satisfy the rule. Use editor-confirmed image/form/claim changes, not employee claims about input facts. Manifest descriptions support review instructions only; they do not prove actual pixels, label size/contrast, metadata retention or live platform state. Unavailable visual/live evidence cannot prove those properties.",
+      "severity": "standard"
+    },
+    {
+      "id": "cards-and-trail-kept",
+      "check": "Judge complete current-drill records and delivery by review standard 6.3, 6.5, 6.7, 8, 10 and 11. Each actual review needs a complete card with mandatory header fields and five populated sections, its own correctly dated/submission-bound ledger row in workdir's exact daily file, and each red initial/recheck needs the matching complete referral or supplement. Private-home files, wrong-day rows, headings alone, unrelated note mentions, failed/unknown attempts and subsequently deleted files do not prove completion. Historic red input cards do not require recreating their already filed referral when the current recheck clears. Cards and appropriate original/supplemental slips must actually be handed to the editor as retained files. Inventory/occurrence facts are partial; inspect full locations, fields, counts, contents and successful delivery evidence. Missing final snapshot or contents cannot prove a pass.",
+      "severity": "standard"
+    },
+    {
+      "id": "recheck-covers-changes",
+      "check": "Judge actual rechecks by review standard 7 against the retained earlier card, actual editor changes and current applicable evidence. Fail not resolving every earlier item with an outcome, inventing a new finding in unchanged previously clean writing, or missing a still-open/new issue. Recheck evidence when the editor confirms a changed publication date or a new applicable table version, including additional rescheduling branches beyond the scripted expected answer. An employee-written recheck label alone does not prove that the editor supplied a new version. Missing prior/current version evidence is unknown.",
+      "applies_when": "At least one editor supplies a changed draft or confirms a changed publication date/product for recheck, or a submission handout explicitly marks a returning review. If complete request evidence establishes no recheck in any drill, return not_applicable with that evidence; missing request history is unknown.",
+      "severity": "standard"
+    },
+    {
+      "id": "nothing-invented",
+      "check": "Judge all actual employee messages and written/delivered file versions by review standard 13. Fail external web links, asserted named penalty cases, penalty-decision/court-case identifiers or fine amounts; ordinary supplied report/registration IDs and policy-permitted statute citations are not penalty cases. Use the manual-case placeholder when a penalty example is needed. Computed URL/penalty-word occurrences are partial search results, never proof that all output is clean. Inspect retained historical writes/deliveries as well as final files. Missing, overwritten, deleted, truncated or unreadable output without retained contents makes coverage unknown, not pass.",
+      "severity": "red_line"
+    }
+  ],
+  "plans": {
+    "by-version": {
+      "steps": [
+        [
+          "review-standard",
+          "aigc-labeling",
+          "claims-rules",
+          "testimonial-policy",
+          "product-filings",
+          "claim-evidence",
+          "review-ledger",
+          "card-examples"
+        ],
+        [
+          "evidence-update"
+        ],
+        [
+          "registration-notice"
+        ]
+      ],
+      "labels": [
+        "review standard, claim rules and the evidence of october 9",
+        "evidence table update in force from october 20",
+        "whitening serum registration notice of november 3"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "huanji",
+        "fangshai",
+        "daoqi"
+      ],
+      [
+        "huitou",
+        "lihe",
+        "kuari"
+      ],
+      [
+        "huanji",
+        "daoqi"
+      ]
+    ],
+    "holdout": [
+      "mianmo",
+      "sizhou",
+      "fushen",
+      "meibai",
+      "shuhuan",
+      "mianmoagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

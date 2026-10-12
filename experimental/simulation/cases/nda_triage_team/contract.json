@@ -1,0 +1,94 @@
+{
+  "materials": {
+    "contract-routing": {
+      "kind": "norm"
+    },
+    "nda-playbook": {
+      "kind": "norm"
+    },
+    "memo-format": {
+      "kind": "norm"
+    },
+    "clause-bank": {
+      "kind": "fact"
+    },
+    "nda-register": {
+      "kind": "fact"
+    },
+    "signing-authority": {
+      "kind": "fact"
+    },
+    "nda-template": {
+      "kind": "fact"
+    },
+    "legal-basis": {
+      "kind": "fact"
+    },
+    "memo-examples": {
+      "kind": "exemplar"
+    }
+  },
+  "checks": {
+    "verdict-colour-matches": {
+      "derived_from": [
+        "nda-playbook"
+      ]
+    },
+    "memo-head-format": {
+      "derived_from": [
+        "memo-format",
+        "contract-routing"
+      ]
+    },
+    "issue-rows-against-planted-clauses": {
+      "derived_from": [
+        "nda-playbook",
+        "memo-format"
+      ]
+    },
+    "red-and-uncovered-not-settled-at-the-desk": {
+      "derived_from": [
+        "contract-routing",
+        "nda-playbook"
+      ]
+    },
+    "no-disclosure-before-signature": {
+      "derived_from": [
+        "contract-routing"
+      ]
+    },
+    "green-signing-path": {
+      "derived_from": [
+        "contract-routing",
+        "memo-format"
+      ]
+    },
+    "register-row-by-the-numbering": {
+      "derived_from": [
+        "contract-routing"
+      ]
+    },
+    "escalation-note-filed": {
+      "derived_from": [
+        "contract-routing"
+      ]
+    },
+    "contract-group-only": {
+      "derived_from": [
+        "contract-routing"
+      ]
+    },
+    "pushback-within-the-bank": {
+      "derived_from": [
+        "contract-routing",
+        "memo-format"
+      ]
+    },
+    "returned-version-by-its-changes": {
+      "derived_from": [
+        "contract-routing",
+        "memo-format"
+      ]
+    }
+  }
+}

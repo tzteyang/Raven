@@ -1,0 +1,111 @@
+{
+  "initial": [
+    "price-list",
+    "group-listings",
+    "care-guarantee",
+    "script-norms",
+    "platform-excerpt",
+    "script-samples",
+    "publish-ledger"
+  ],
+  "criteria": [
+    {
+      "id": "kb-spoken-band",
+      "severity": "standard",
+      "check": "Judge by the script norms sections 4.1 to 4.3 against every delivered version of the script, regardless of filename: fail if a version's computed spoken_count lies outside the band 4.1 sets, if its header states no count at all (4.2), or if its stated_count differs from the computed spoken_count. Reasonable numeral spellings of the same exact count are equivalent."
+    },
+    {
+      "id": "kb-opening-hook",
+      "severity": "standard",
+      "check": "Judge by the script norms sections 3.2 and 3.4 against the first line of the last delivered version, and its second line when section 9.1 applies: fail if the first line misses anything 3.2 asks of it for the promoted deal, or names a pain outside table 3.4 that the account owner 1.4 names did not agree to. For two deals, fail if the first price lacks its style name, if the second line does not immediately give the other deal's group price and style name, or if a price is associated with the wrong style. Use first_line_count, first_line_prices, first_line_pains and the complete line facts with their per-line prices."
+    },
+    {
+      "id": "kb-hook-repeat",
+      "severity": "standard",
+      "check": "Judge by the script norms section 3.3 with the ledger export: fail if the last delivered version opens in a way 3.3 rules out for the task's intended account and publish date, determined independently from the card and any actual customer clarification. An incorrect script header cannot select a different account or window. Use intended_binding, header_binding_differences and opening_history: same_pain_in_window, figure_swap_in_window and the rows behind them; rows of the other account do not count. If uncertain_publication_clauses cannot be resolved from actual customer evidence, leave the dependent history judgment unknown rather than inventing a binding."
+    },
+    {
+      "id": "kb-reading-revision",
+      "severity": "standard",
+      "check": "Judge by the script norms section 4.5 only in drills where the on-camera person made a report of the kind 4.5(2) or 4.5(3) answers: fail if the next version does not answer it as 4.5 sets out, or did not reach the person the way 4.5(4) requires (use the computed versions in order with their spoken_count, line_counts and first_line)."
+    },
+    {
+      "id": "kb-close-and-shots",
+      "severity": "standard",
+      "check": "Judge by the script norms sections 3.6 and 6.1 against every delivered version: fail if the closing line lacks the phrase 3.6 requires, or if any spoken line is without what 6.1 requires beside it (use the computed cta_in_last_line and lines_without_shot)."
+    },
+    {
+      "id": "kb-pet-phrases",
+      "severity": "standard",
+      "check": "Judge by the script norms sections 5.1, 5.2, 5.8 and the ending wording 5.3 rules out, against the spoken lines and shot notes of every delivered version: fail on any entry those sections list or a pattern 5.2 names (use the computed word_hits under catchphrases, clickbait and ending_cliches)."
+    },
+    {
+      "id": "kb-claims-match",
+      "severity": "red_line",
+      "check": "Judge by the script norms sections 5.5, 5.6, 5.8 and 6.4 and the platform excerpt sections 1.1, 4 and 5, with the group-buy listings and the price list: fail if any delivered version's speech or displayed copy states a governed figure or store fact that disagrees with the records for the task's intended publish date, or states a kind of figure 5.5(3) keeps out. Use prices, pickup_times, stores, displayed_claims, and comparison and sold word_hits with the complete raw lines. Match each price to its promoted deal/style and price role, including per-item store prices. Validity durations are not pickup claims; an unclassified duration requires contextual judgment. Camera parameters, scene directions and filming locations are not themselves customer service claims."
+    },
+    {
+      "id": "kb-promises-platform",
+      "severity": "red_line",
+      "check": "Judge by the script norms sections 5.3, 5.4 and 5.7, the care guarantee rules section 8 and the platform excerpt sections 1.2 to 1.4, 2 and 3: fail if any delivered version carries the kind of lead 5.3 keeps out besides its ending wording, an absolute claim, an effect claim of the kind 1.3 and 2.3 name, or anything about compensation beyond the one sentence 5.7 allows (use the computed word_hits under offsite, absolute, exaggeration and overpromise, and the computed guarantee)."
+    },
+    {
+      "id": "kb-ledger-row",
+      "severity": "standard",
+      "check": "Judge by the script norms sections 2.2 and 8: fail if the live ledger file 8.1 names holds no row for this script at the end of the drill, if it was not updated for the last delivered version in the same response or later, if one number stands on more than one row (8.5), or if the row disagrees with the last version or the task's intended account, publish date and number under 8.2 to 8.4, or lacks the fields of 8.6. Registering the current version just before sending its file in the same response satisfies simultaneous registration; merely sending or mentioning an old ledger is not a write. Use ledger.file.new_rows, actual successful mutation and script_delivery_events with the filed ledger and back office. An unknown mutation outcome or ordering does not establish success."
+    }
+  ],
+  "plans": {
+    "by-version": {
+      "steps": [
+        [
+          "price-list",
+          "group-listings",
+          "care-guarantee",
+          "script-norms",
+          "platform-excerpt",
+          "script-samples",
+          "publish-ledger"
+        ],
+        [
+          "flagged-scripts"
+        ]
+      ],
+      "labels": [
+        "price list, listings, guarantee rules, script norms, legal excerpt, samples and ledger",
+        "platform notices on two September videos and their review"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "duanjian",
+        "dayi",
+        "sanjiantao"
+      ],
+      [
+        "huitou",
+        "gaofeng",
+        "tongkuang"
+      ],
+      [
+        "duanjian",
+        "sanjiantao"
+      ]
+    ],
+    "holdout": [
+      "xiezi",
+      "yangrongshan",
+      "chuangpin",
+      "xuedixue",
+      "baozhang",
+      "xieziagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

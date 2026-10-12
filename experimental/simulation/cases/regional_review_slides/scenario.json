@@ -1,0 +1,115 @@
+{
+  "initial": [
+    "meeting-pack-rules",
+    "page-procedure",
+    "vi-excerpt",
+    "room-equipment",
+    "kpi-q3"
+  ],
+  "criteria": [
+    {
+      "id": "figures-from-finance",
+      "check": "Judge by the meeting-material requirements, sections 3.4 to 3.6, against the finance table that applies on the card's date (the expected answer names it): fail if any required data-block item is missing, if a figure on the delivered page is not that table's figure as those sections have it written, if a figure finance corrected or a later issue replaced stays on the page, or if a business figure stands there that the director did not confirm (use the computed data_block, figure matches, corrected or replaced figures and director figures, and read the figures in their row context). Scalar membership is not row/label/unit/period or occurrence correctness. Inspect all actual rendered text and table cells against the source, including explicit Q4 cumulative even when equal to monthly actual, two-decimal region yi, city wan and whole-number rates. Source-only analysis cannot verify script-mutated figures; unavailable render evidence is unknown.",
+      "severity": "red_line"
+    },
+    {
+      "id": "fits-the-projector",
+      "check": "Judge by the meeting-material requirements, sections 3.1 and 4.4, and the equipment list's room for the review: fail if, rendered at that room's resolution, the page scrolls, any text lies outside the screen, is clipped, cut short with an ellipsis, overlapped or hidden, or the region takes more than one screen (use the computed render facts). Rectangles and sampled hit tests are incomplete for opaque overlays, pointer-events:none, pseudo-elements, masks and canvas. Inspect actual screenshots/full rendering evidence; unresolved visibility remains unknown, not pass.",
+      "severity": "red_line"
+    },
+    {
+      "id": "readable-size",
+      "check": "Judge by the September review minutes, comment 2 with the office's supplement 2.1, only for pages made for the October review or later (the computed card facts say whether it is in force): fail if any text other than the logo and the source line renders below the size named there (use the computed smallest size and the texts below it).",
+      "severity": "standard",
+      "applies_when": "The page reports October2026 or later; September pages, including an archive correction, do not exercise the later 28px floor."
+    },
+    {
+      "id": "title-and-points",
+      "check": "Judge by the meeting-material requirements, sections 3.2 and 3.3: fail if the title names a subject rather than the attained percentage together with the location of any shortage or surplus, if there are more points than allowed, or if a point is longer than allowed (use the computed largest text, h1, title topic-word hits and point lengths).",
+      "severity": "standard"
+    },
+    {
+      "id": "company-look",
+      "check": "Judge by the meeting-material requirements, sections 4.1 to 4.3 and 4.5, and the brand excerpt, sections 1 to 5: fail if the page declares or renders a font other than the two allowed, references anything outside the file, uses a colour outside the palette or a translucent one, puts the warning colour on anything but a figure below target, has a gradient, shadow, animation or transition, or lacks the logo at the top left in the stated height (use the computed source and render facts). Apply the source restrictions on filters, decorative pseudo-elements and non-logo decoration to their actual visible use; source token presence is evidence to inspect in context.",
+      "severity": "standard"
+    },
+    {
+      "id": "source-file-version",
+      "check": "Judge by the meeting-material requirements, sections 3.7, 5.3 and 5.4, and the page procedure, sections 5.2 and 8.4: fail if the source line is missing, not at the bottom right or dated other than the reported period's last day, if the page file is not named as section 5.3 has it, or if more than one page was offered for one request, such as styles to pick from, preview pages or a renamed second version (use the computed source line, source date, file names, pages delivered and other pages written). Same-name corrections requested by the customer are permitted versions of one page. Internal temporary render/check files alone are not proof that alternatives were offered; determine purpose from the actual conversation and operations. A renamed second delivered version is not a same-name replacement.",
+      "severity": "standard"
+    },
+    {
+      "id": "gap-reason-recovery",
+      "check": "Judge by the September review minutes, comment 3 with the office's supplement 2.2, only for pages made for the October review or later: fail if a below-target city or region the page has to cover lacks its reason or a dated recovery month together with its monetary size, if those figures did not come from the director, or if a not-yet-realized recovery lacks its forecast mark (use the computed below-target rows and the lines that name them). Already-realized, director-confirmed recovery must be described truthfully as completed with its month/amount/cause under supplement 2.2; do not force a forecast label (the card's expected answer says which recovery is realized).",
+      "severity": "standard",
+      "applies_when": "October2026 or later pages with below-target cities, applying the source priority rule when three points cannot cover every city."
+    },
+    {
+      "id": "revise-only-the-point",
+      "check": "Judge by the page procedure, sections 8 and 9, and for a correction of a page already presented also the minutes' decision 3.1: when the director relays a comment, asks for a correction or asks for last month's page to be updated, fail if the new version changes what that request and any newer rule did not call for, or if the reply does not say what changed and that the rest is unchanged (use the computed revisions and the changes against the page handed over; leave the comparison unknown when an earlier delivery's content was not observed). Declaration multisets omit selector/class/order/script effects; compare complete before/after source and rendered appearance. Harmless equivalent markup need not fail. Missing earlier bytes mean unknown, not unchanged.",
+      "severity": "standard",
+      "applies_when": "A customer requests a correction, relays a comment, or supplies a prior page for monthly updating. Newly authored pages without such a request do not exercise revision preservation."
+    },
+    {
+      "id": "reconciliation-and-delivery-note",
+      "check": "Judge by the page procedure, sections 4.2, 4.3 and 7.2: fail if a delivered page has no reconciliation sheet named after it in the agreed folder, if the sheet leaves out figures on the page, or if the message handing the page over does not identify for the director the draft amounts corrected against finance (use the computed reconciliation sheet facts and the conversation). The actual sheet must be contained in the replica workdir and preserve all five required columns. Check every numeric occurrence separately, including repeated equal values, its page location, table/version/region-or-city/column or dated director confirmation, original source value and consistency. An ID-only row, scalar list, attempted write, suffix-matching external file or final sheet alone cannot prove per-delivery reconciliation.",
+      "severity": "standard"
+    }
+  ],
+  "plans": {
+    "by-version": {
+      "steps": [
+        [
+          "meeting-pack-rules",
+          "page-procedure",
+          "vi-excerpt",
+          "room-equipment",
+          "kpi-q3"
+        ],
+        [
+          "ceo-comments",
+          "good-page"
+        ],
+        [
+          "kpi-oct"
+        ]
+      ],
+      "labels": [
+        "meeting rules, page procedure, brand and Q3 figures",
+        "CEO comments after the first meeting",
+        "October figures and revised target"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "quarter",
+        "north",
+        "crowded"
+      ],
+      [
+        "monthly",
+        "remedy",
+        "archive"
+      ],
+      [
+        "quarter",
+        "crowded"
+      ]
+    ],
+    "holdout": [
+      "northwest",
+      "northeast",
+      "shandong",
+      "stretch",
+      "dense",
+      "northwestagain"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

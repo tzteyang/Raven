@@ -1,0 +1,116 @@
+{
+  "initial": [
+    "quote-rules",
+    "price-list-2026q4",
+    "promo-october",
+    "sample-quotes",
+    "usage-requirements",
+    "tool-procedure",
+    "retired-page"
+  ],
+  "criteria": [
+    {
+      "id": "priced-inputs-agree-with-finance",
+      "check": "Use quote-rules 3.1-3.9 and dated price/promotion documents. For every valid observed input on the actual request date, compare the complete signed payable total and each fee, discount and displayed rate with finance; also judge received chat totals against the card answer. Inspect each rendered observation and full source, not only agree/differ: correct total magnitude does not excuse a negative amount, incorrect breakdown, intermediate whole-yuan rounding, missing cent precision, missing thousands separators or approximate ten-thousand notation. Unsupported controls or incomplete observations are unknown and cannot prove a pass. Reference dates come from the played card; an actual requester correction overrides an unadjusted reference plan.",
+      "severity": "red_line"
+    },
+    {
+      "id": "area-entry-section-four",
+      "check": "Use quote-rules section 4. Valid width forms and terminal units must be accepted within 1..1000 and at most two decimals; only edge whitespace and whitespace between number and unit are removed, not whitespace inside the number. Every invalid input must show the required prompt and no monetary result, including after a valid quote in the same open page. Inspect invalid_after_valid, every observed money field, body text and control refusal; a fresh-load comparison or missing final-total label alone cannot prove cleared results. Unsupported operation/observation is unknown.",
+      "severity": "standard"
+    },
+    {
+      "id": "edition-follows-quote-date",
+      "check": "Use quote-rules 2.3, 3.8, 3.10 and 5.3, tool-procedure 3.1 and the published effective dates. On every applicable observed date, compare actual issue date, active sheet codes, rates and discount with in_force and the finance figures. Apply published future versions automatically from their effective day, retain old pricing before then, and use no promotion after expiry; scheduled data in source/footer is permitted. Judge advice on signing an existing still-valid sheet by that sheet date, not the current calculator. Inspect all dated sheet observations and received messages. If a date/clock or actual request binding cannot be established, leave that part unknown.",
+      "severity": "red_line"
+    },
+    {
+      "id": "sheet-carries-required-items",
+      "check": "Use quote-rules 5.1, usage-requirements 4.5 and the actual task. Every valid customer sheet must meaningfully carry title, correct AJ date and clock-valid issuing hhmmss, +7 validity date/note, input/billing/option details, correct fee/rate/promotion breakdown, measured-area note, active codes and version. Below 60 must carry the billing-minimum note. On one phone a second quote in the same second must be refused/reused without issuing a changed sheet under a duplicate number; inspect same_second_issuance. For baodai, the requested advisor name/eleven-digit phone must be entered, printed and remembered locally on reload; for kehu, customer address form/community must be optional when blank, printed when populated, and not remembered on reload. Inspect requested_fields, all observed sheets, full source and received task; labels are semantic clues, not mandatory exact spellings. Unrecognized field controls or unavailable issuing/visual evidence are unknown, not a pass.",
+      "severity": "standard"
+    },
+    {
+      "id": "one-file-offline-on-a-phone",
+      "check": "Use usage-requirements 3 and 4.3-4.4. The delivered artifact must be a self-contained HTML file with no external or local dependency, and work with network requests refused. Judge the complete populated sheet regions, not only the first/smallest quote: no sideways scrolling at 390px, full sheet within 844px, no hidden/clipped required text, actual text at least 14px, monetary values right-aligned and with thousands separators. Read all rendered layouts/money fields and source. Distinguish an observed defect from a driver failure; a source keyword, absent screenshot, unidentified sheet region or absent metric cannot establish visual success. Leave any visual property requiring an unavailable image/unsupported measurement unknown.",
+      "severity": "standard"
+    },
+    {
+      "id": "no-cost-data-in-page",
+      "check": "Use usage-requirements 5.1 and price-list confidentiality notices. Inspect the complete exact delivered source, including scripts, hidden fields, English-named variables and every candidate line, for cost reference prices, margin/profit rates, internal remarks or discount floors. Candidate matches are clues, not verdicts: a negated no-cost-data statement or incidental numeric match is not a leak. Conversely absence of finite keyword hits does not prove confidentiality. If full source is unavailable or not inspectable, mark unknown rather than pass.",
+      "severity": "red_line"
+    },
+    {
+      "id": "record-before-hand-over",
+      "check": "Use tool-procedure 3.2-3.5, 4.5 and 5. Bind the released page, its exact version/path, preparation and final check-record content snapshots, and the register row to one actual successful native delivery. Expected cases must be independently computed and present before page modification; the final record must show all five historical sheets as complete actual input/date/expected/shown/conclusion rows plus boundaries, threshold/rounding, request and required switch cases, with full regression after the final page change and before handover. Historical input checks must cover both original and current dates. Read exact content and successful operation evidence; IDs-only mentions, copied result claims, version tokens in prose or unknown/failed operations are not completed checks. Require the canonical per-version record and register locations, coherent filename/footer/version increment, an actual complete release row and preserved prior register content. Inspect browser operation results/code for the exact file, date, inputs and offline checks; post-delivery reference verification does not prove employee verification. Unsupported write/verification channels or cross-scope timing are unknown, never success. Old-version reproduction results are not final-version regression claims.",
+      "severity": "standard"
+    },
+    {
+      "id": "reported-fault-reproduced-first",
+      "check": "Use tool-procedure 4.1-4.3 only when an actual requester reports a numeric or input fault. Before any repair, require a source-bound reproduction section for every reported original input and quote date, independent finance result, actual old-page amount or entry refusal, and cause; inspect original_reproduction_rows, missing_original_reproduction_rows and successful native old-page/browser evidence. For an entry-only report whose pricing options were not given, require the expected accepted-input state and actual refusal; disclosed original-page defaults are calibration, not invented customer facts. Judge that entry-state prose semantically. Merely copying one reported amount/number or creating an empty early record is insufficient. Require a cause and affected scope in the received reply and full regression; if two attempts still disagree, stop/escalate as the source requires. Routine new pages and pure field/policy-change requests without a reported fault are not_applicable with an evidenced explanation. Unsupported original operation/date/input binding is unknown.",
+      "severity": "standard",
+      "applies_when": "The actual requester reports a numeric quote discrepancy or an area-input fault in the current drill; routine new-page, field-change and pure policy/price-update requests without such a report do not exercise this criterion."
+    },
+    {
+      "id": "hand-over-note-complete",
+      "check": "Use tool-procedure section 6 on the actual successful handover message/caption. It must convey filename/version, actual changes (first release and basis where applicable), applicable codes and dated switches, real check count/method/offline per-case result and exact check-record location, and deletion of the old file only when an earlier version was in use. Reconcile those claims with the selected retained artifact, complete record and native outcomes; progress text, an attempted/all-failed delivery or unsupported check claim is not a completed handover. Equivalent meaningful prose is valid. Missing needed channel evidence is unknown.",
+      "severity": "standard"
+    }
+  ],
+  "plans": {
+    "by-version": {
+      "steps": [
+        [
+          "quote-rules",
+          "price-list-2026q4",
+          "promo-october",
+          "sample-quotes",
+          "usage-requirements",
+          "tool-procedure",
+          "retired-page"
+        ],
+        [
+          "promo-november"
+        ],
+        [
+          "price-list-2027"
+        ]
+      ],
+      "labels": [
+        "quote rules, Q4 price list, October promotion, checked sheets, page requirements, tool procedure and the retired page",
+        "November promotion",
+        "2027 price list"
+      ]
+    }
+  },
+  "schedule": {
+    "rounds": [
+      [
+        "xinghu",
+        "baodai",
+        "chaijiu"
+      ],
+      [
+        "nuandong",
+        "kuayue",
+        "quanjiao"
+      ],
+      [
+        "xinghu",
+        "chaijiu"
+      ]
+    ],
+    "holdout": [
+      "xiangcheng",
+      "xiangchengagain",
+      "kehu",
+      "kaiye",
+      "xinjiamu",
+      "weishu"
+    ],
+    "holdout_rounds": [
+      0,
+      1,
+      3
+    ]
+  }
+}

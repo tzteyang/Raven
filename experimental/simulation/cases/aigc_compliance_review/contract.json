@@ -1,0 +1,24 @@
+{
+  "materials": {
+    "review-standard": {"kind": "norm"},
+    "aigc-labeling": {"kind": "norm"},
+    "claims-rules": {"kind": "norm"},
+    "testimonial-policy": {"kind": "norm"},
+    "product-filings": {"kind": "fact"},
+    "claim-evidence": {"kind": "fact"},
+    "review-ledger": {"kind": "fact"},
+    "card-examples": {"kind": "exemplar"},
+    "evidence-update": {"kind": "fact"},
+    "registration-notice": {"kind": "fact"}
+  },
+  "checks": {
+    "note-lights-hold": {"derived_from": ["review-standard", "claims-rules", "testimonial-policy", "aigc-labeling"]},
+    "claims-on-live-evidence": {"derived_from": ["claims-rules", "review-standard"]},
+    "slip-holds-back-red": {"derived_from": ["review-standard"]},
+    "rewrite-publishable": {"derived_from": ["review-standard", "claims-rules", "testimonial-policy"]},
+    "marks-required-present": {"derived_from": ["aigc-labeling", "testimonial-policy", "claims-rules"]},
+    "cards-and-trail-kept": {"derived_from": ["review-standard"]},
+    "recheck-covers-changes": {"derived_from": ["review-standard"]},
+    "nothing-invented": {"derived_from": ["review-standard"]}
+  }
+}

@@ -1,0 +1,23 @@
+{
+  "materials": {
+    "price-list": {"kind": "fact"},
+    "group-listings": {"kind": "fact"},
+    "care-guarantee": {"kind": "norm"},
+    "script-norms": {"kind": "norm"},
+    "platform-excerpt": {"kind": "norm"},
+    "script-samples": {"kind": "exemplar"},
+    "flagged-scripts": {"kind": "counterexample"},
+    "publish-ledger": {"kind": "fact"}
+  },
+  "checks": {
+    "kb-spoken-band": {"derived_from": ["script-norms"]},
+    "kb-opening-hook": {"derived_from": ["script-norms"]},
+    "kb-hook-repeat": {"derived_from": ["script-norms"]},
+    "kb-reading-revision": {"derived_from": ["script-norms"]},
+    "kb-close-and-shots": {"derived_from": ["script-norms"]},
+    "kb-pet-phrases": {"derived_from": ["script-norms"]},
+    "kb-claims-match": {"derived_from": ["script-norms", "platform-excerpt"]},
+    "kb-promises-platform": {"derived_from": ["script-norms", "care-guarantee", "platform-excerpt"]},
+    "kb-ledger-row": {"derived_from": ["script-norms"]}
+  }
+}

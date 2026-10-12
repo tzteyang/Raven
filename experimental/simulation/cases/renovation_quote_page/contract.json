@@ -1,0 +1,71 @@
+{
+  "materials": {
+    "quote-rules": {
+      "kind": "norm"
+    },
+    "usage-requirements": {
+      "kind": "norm"
+    },
+    "tool-procedure": {
+      "kind": "norm"
+    },
+    "price-list-2026q4": {
+      "kind": "fact"
+    },
+    "price-list-2027": {
+      "kind": "fact"
+    },
+    "promo-october": {
+      "kind": "fact"
+    },
+    "promo-november": {
+      "kind": "fact"
+    },
+    "sample-quotes": {
+      "kind": "exemplar"
+    },
+    "retired-page": {
+      "kind": "counterexample"
+    }
+  },
+  "checks": {
+    "priced-inputs-agree-with-finance": {"derived_from": [
+        "quote-rules"
+      ]
+    },
+    "area-entry-section-four": {"derived_from": [
+        "quote-rules"
+      ]
+    },
+    "edition-follows-quote-date": {"derived_from": [
+        "quote-rules",
+        "tool-procedure"
+      ]
+    },
+    "sheet-carries-required-items": {"derived_from": [
+        "quote-rules",
+        "usage-requirements"
+      ]
+    },
+    "one-file-offline-on-a-phone": {"derived_from": [
+        "usage-requirements"
+      ]
+    },
+    "no-cost-data-in-page": {"derived_from": [
+        "usage-requirements"
+      ]
+    },
+    "record-before-hand-over": {"derived_from": [
+        "tool-procedure"
+      ]
+    },
+    "reported-fault-reproduced-first": {"derived_from": [
+        "tool-procedure"
+      ]
+    },
+    "hand-over-note-complete": {"derived_from": [
+        "tool-procedure"
+      ]
+    }
+  }
+}
