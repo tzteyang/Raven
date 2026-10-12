@@ -12,13 +12,15 @@ import { useState } from 'react'
 import { grounded, identityLine } from '../../attribution'
 import { hooks } from '../../mechanism'
 import { T } from '../copy'
+import { detail } from '../detail'
 import { STAGES, liveStages } from '../curation'
 import { artifactOf, harnessMap, layers } from '../harness'
 import { Fold, Icon, Markdown, StateChip, Target } from './bits'
 
 import type { JSX } from 'react'
 import type { AttributionView } from '../../attribution'
-import type { Requirement, Selection } from '../../model'
+import type { LiveInquiry } from '../api'
+import type { Example, Requirement, Selection } from '../../model'
 import type { Playbook } from '../harness'
 import type { CurationProgress, CurationView, Footer, Observed, ProcessEntry, Read, Scope, Stage } from '../types'
 
@@ -32,7 +34,13 @@ export interface CardActions {
   onOpenTrial?: () => void
   onArchive?: () => void
   onAttach?: () => void
+  /** The questions asked about the cards' steps. */
+  inquiries?: LiveInquiry[]
+  /** Ask the Analyst or the Curator about its step of a round; absent when the session cannot be asked. */
+  onInquire?: (round: number, role: Asked, question: string) => void
 }
+
+type Asked = LiveInquiry['role']
 
 function curateCrumb(card: ProcessEntry): string {
   const view = card.curation
@@ -101,8 +109,28 @@ function RequirementRow({ requirement, held, onEvidence }: { requirement: Requir
         {(requirement.materials ?? []).length > 0 && (
           <p className="m"><span className="k">{T.materials}</span>{requirement.materials!.map((name) => <code key={name} className="st-mat">{name}</code>)}</p>
         )}
+        {(requirement.examples ?? []).length > 0 && <Examples examples={requirement.examples!} />}
       </div>
     </div>
+  )
+}
+
+/** The requirement's examples, wrong ones first: what the worker did on a quoted input and how it should have been handled. */
+export function Examples({ examples }: { examples: Example[] }): JSX.Element {
+  const ordered = [...examples.filter((item) => item.kind === 'wrong'), ...examples.filter((item) => item.kind === 'right')]
+  const wrong = examples.length - examples.filter((item) => item.kind === 'right').length
+  return (
+    <Fold summary={<span className="st-meta">{T.examples(wrong, examples.length - wrong)}</span>}>
+      {ordered.map((item, i) => (
+        <div key={i} className="st-example" data-kind={item.kind}>
+          <p className="st-meta">{item.kind === 'wrong' ? T.exampleWrong : T.exampleRight} · {item.turn.slice(0, 8)}</p>
+          <p className="m"><span className="k">{T.exampleInput}</span>{item.input}</p>
+          <p className="m"><span className="k">{T.exampleOutput}</span>{item.output}</p>
+          {item.handling && <p className="m"><span className="k">{T.exampleHandling}</span>{item.handling}</p>}
+          <p className="m"><span className="k">{T.exampleWhy}</span>{item.why}</p>
+        </div>
+      ))}
+    </Fold>
   )
 }
 
@@ -406,6 +434,19 @@ function Curation({ card, actions }: { card: ProcessEntry; actions: CardActions 
     if (card.curationState === 'running' && card.progress) return <Progress progress={card.progress} />
     return card.attribution ? <div className="st-seg st-curation"><Diagnoses attribution={card.attribution} selection={null} /></div> : null
   }
+  if (detail === 'simple') {
+    const understanding = view.scopes.map((item) => item.plan?.understanding).find(Boolean)
+    return (
+      <div className="st-seg st-curation">
+        {understanding && (
+          <Fold summary={<><b>{T.understanding}</b><span className="st-peek">{firstLine(understanding)}</span></>}>
+            <Markdown text={understanding} />
+          </Fold>
+        )}
+        {!view.deployed && view.error && <p className="st-bad">{T.curationFailed}</p>}
+      </div>
+    )
+  }
   const scope = view.scopes[Math.min(tab, view.scopes.length - 1)]
   const onTarget = (target: string) => actions.onDiff(card.key, scope.name, scope.root, target)
   const budget = view.budget ? T.budget(view.budget.generation, view.budget.attribution) : ''
@@ -452,6 +493,63 @@ function Curation({ card, actions }: { card: ProcessEntry; actions: CardActions 
           {!view.deployed && view.error ? ` · ${T.curationFailed}` : ''}
           {budget ? ` · ${budget}` : ''}
         </p>
+      )}
+    </div>
+  )
+}
+
+/* The person's questions about this card's steps, each answered from what that step recorded, and a box to ask the
+   Analyst (once it analysed the round) or the Curator (once its curation left a record). Asking changes nothing. */
+function Ask({ card, actions }: { card: ProcessEntry; actions: CardActions }): JSX.Element | null {
+  const [role, setRole] = useState<Asked>('analyst')
+  const [text, setText] = useState('')
+  const roles: Asked[] = [
+    ...(!card.onboarding && card.feedback ? (['analyst'] as const) : []),
+    ...(card.curation && card.curationState !== 'running' ? (['curator'] as const) : []),
+  ]
+  const asked = (actions.inquiries ?? []).filter((item) => item.round === card.round)
+  const open = !!actions.onInquire && roles.length > 0
+  if (!open && !asked.length) return null
+  const current = roles.includes(role) ? role : roles[0]
+  const send = () => {
+    const question = text.trim()
+    if (!question || !current) return
+    actions.onInquire?.(card.round, current, question)
+    setText('')
+  }
+  return (
+    <div className="st-seg st-ask">
+      {asked.map((item, i) => (
+        <div key={i} className="st-ask-qa">
+          <p className="st-ask-q"><b>{T.askWho[item.role]}</b>{item.question}</p>
+          {item.busy ? (
+            <p className="st-quiet"><i className="dot run" /> {T.askBusy}</p>
+          ) : item.error ? (
+            <p className="st-bad">{T.askFailed(item.error)}</p>
+          ) : (
+            <div className="st-ask-a"><Markdown text={item.answer ?? ''} /></div>
+          )}
+        </div>
+      ))}
+      {open && current && (
+        <form
+          className="st-ask-row"
+          title={T.askNote}
+          onSubmit={(event) => {
+            event.preventDefault()
+            send()
+          }}
+        >
+          {roles.length > 1 ? (
+            <select value={current} aria-label={T.askRole} onChange={(event) => setRole(event.target.value as Asked)}>
+              {roles.map((item) => <option key={item} value={item}>{T.askWho[item]}</option>)}
+            </select>
+          ) : (
+            <span className="st-ask-who">{T.askWho[current]}</span>
+          )}
+          <input value={text} maxLength={2000} placeholder={T.askPlaceholder} aria-label={T.askPlaceholder} onChange={(event) => setText(event.target.value)} />
+          <button type="submit" className="st-btn" disabled={!text.trim()}>{T.askSend}</button>
+        </form>
       )}
     </div>
   )
@@ -527,10 +625,11 @@ export function ProcessCard({ card, mode, latest, actions }: { card: ProcessEntr
         <span className="st-kicker">{card.onboarding ? T.onboardingLabel : T.roundLabel(card.round)}</span>
         <Crumbs card={card} />
         <span className="grow" />
-        <button type="button" className="st-link" onClick={() => actions.onInspect(card.key)}><Icon name="eye" size={13} />{T.inspector}</button>
+        {detail === 'full' && <button type="button" className="st-link" onClick={() => actions.onInspect(card.key)}><Icon name="eye" size={13} />{T.inspector}</button>}
       </header>
       <Analysis card={card} actions={actions} />
       <Curation card={card} actions={actions} />
+      <Ask card={card} actions={actions} />
       <FooterRow footer={card.footer} mode={mode} latest={latest} actions={actions} />
     </section>
   )

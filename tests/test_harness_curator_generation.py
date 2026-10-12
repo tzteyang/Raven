@@ -1251,6 +1251,9 @@ def test_observations_reach_a_request_as_an_index_and_are_read_on_demand():
     }
     assert index[1]["records_kinds"] == {"tool": 100} and index[1]["bytes"] > 100_000
     assert len(json.dumps(index).encode()) < 400
+    long = {"kind": "task.execution", "reply": "r" * 3000, "user": "u" * 3000}
+    (entry,) = render.observation_index([long])
+    assert entry["reply"] == long["reply"] and "user" not in entry
     context = Context.__new__(Context)
     object.__setattr__(context, "observations", tuple(rows))
     first = query.execute(context, "read_observation", {"index": 1, "path": ["records", 0], "length": 30})

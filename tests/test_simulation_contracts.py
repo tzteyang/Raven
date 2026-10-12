@@ -369,6 +369,16 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         "expectation": "new",
         "acceptance": "No customer-visible message carries a note meant for colleagues.",
         "strength": "must_hold",
+        "examples": [
+            {
+                "kind": "wrong",
+                "turn": "t1",
+                "input": "We are two adults and one child.",
+                "output": "The reply carried a note meant for colleagues.",
+                "handling": "Answer the family and keep the pending request to colleagues out of the reply.",
+                "why": "The service SOP keeps everything internal away from customers.",
+            }
+        ],
     }
     spoken = {"verdicts": verdicts, "remark": remark, "handover": []}
     analysed = {"decision": "curate", "reason": "The owner's red line broke.", "requirements": [requirement]}
@@ -412,6 +422,7 @@ async def test_with_an_analyst_the_owner_only_speaks_and_its_scorecard_reaches_n
         "history",
         "skills",
         "locations",
+        "available_materials",
     }
     (signal,) = materials["signals"]
     assert signal["text"] == remark and signal["items"] == [] and signal["satisfied"] is False

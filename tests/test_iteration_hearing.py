@@ -1,5 +1,5 @@
-"""What reaches the Curator of a round: projected signals, the cited turns under opaque session keys, and the words
-it hears from the conversant not sealed against it."""
+"""What reaches the Curator of a round: projected signals, every turn with its reply under opaque session keys and
+the cited ones marked, and the words it hears from the conversant not sealed against it."""
 
 import json
 
@@ -110,26 +110,32 @@ def test_the_curator_hears_words_and_satisfaction_never_items_or_metrics():
     }
 
 
-def test_only_the_cited_turns_go_to_the_curator_under_opaque_session_keys():
+def test_every_turn_goes_to_the_curator_with_its_reply_and_the_cited_ones_marked():
+    replied = {"kind": "runner.event", "event_type": "Text", "event": {"content": "Which budget do you have?"}}
     sessions = {
         "family-of-three": [
-            exchange("turn-1", "We are two adults and one child.", [{"kind": "runner.event"}]),
+            exchange("turn-1", "We are two adults and one child.", [replied]),
             exchange("turn-10", "Anything cheaper?"),
         ],
         "honeymoon": [exchange("turn-2", "Just the two of us.")],
     }
     rows = heard_observations(sessions, curate("turn-1"), "task-1")
-    assert [(row["session"], row["turn_id"]) for row in rows] == [(opaque("family-of-three"), "turn-1")]
-    assert rows[0]["user"] == "We are two adults and one child." and rows[0]["records"] == [{"kind": "runner.event"}]
+    assert [(row["session"], row["turn_id"], row["cited"]) for row in rows] == [
+        (opaque("family-of-three"), "turn-1", True),
+        (opaque("family-of-three"), "turn-10", False),
+        (opaque("honeymoon"), "turn-2", False),
+    ]
+    assert rows[0]["user"] == "We are two adults and one child." and rows[0]["records"] == [replied]
+    assert rows[0]["reply"] == "Which budget do you have?" and rows[1]["reply"] == ""
     assert rows[0]["kind"] == "task.execution" and rows[0]["source"] == "trial"
     assert rows[0]["task_id"] == "task-1" and rows[0]["artifact_id"] == "artifact-1"
     assert rows[0]["outcome"] == {"status": "ok"}
     told = json.dumps(rows)
-    assert "family" not in told and "honeymoon" not in told and "turn-10" not in told
+    assert "family" not in told and "honeymoon" not in told
     by_observation = heard_observations(sessions, curate("the reply", observed="turn-2 answered at once."), "t")
-    assert [(row["session"], row["turn_id"]) for row in by_observation] == [(opaque("honeymoon"), "turn-2")]
-    assert heard_observations(sessions, None, "task-1") == []
-    assert heard_observations(sessions, curate("no turn named"), "task-1") == []
+    assert [row["turn_id"] for row in by_observation if row["cited"]] == ["turn-2"]
+    assert not any(row["cited"] for row in heard_observations(sessions, None, "task-1"))
+    assert not any(row["cited"] for row in heard_observations(sessions, curate("no turn named"), "task-1"))
     assert [key for key, _ in cited(sessions, curate("turn-1", "turn-2"))] == [
         opaque("family-of-three"),
         opaque("honeymoon"),
@@ -181,3 +187,17 @@ def test_the_prior_is_heard_as_its_histories_under_opaque_labels():
     (entry,) = heard[0]["history"]
     assert entry["requirements"][0]["id"] == "R1" and "grounds" not in entry["requirements"][0]
     assert not {"results", "failed_in", "attributor"} & set(entry)
+
+
+def test_delivered_files_go_whole_for_uncited_successes(tmp_path):
+    from experimental.analyst.materials import summary
+    from experimental.curator.generation.context.render import observation_index
+
+    path = tmp_path / "report.md"
+    path.write_text("A useful report with evidence")
+    ex = Exchange("Please report", Execution("success", [], [], {}, deliverables=(str(path),)))
+    rows = heard_observations({"practice": [ex]}, None, "task")
+    assert rows[0]["cited"] is False
+    assert rows[0]["deliverables"][0]["text"] == path.read_text()
+    assert observation_index(rows)[0]["deliverables"] == rows[0]["deliverables"]
+    assert summary(ex)["deliverables"] == rows[0]["deliverables"]

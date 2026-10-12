@@ -83,6 +83,16 @@ def _clamped(evidence: dict[str, Any]) -> dict[str, Any]:
     return out
 
 
+_HARNESS_TOOL_MODULES = ("experimental.curator.raven_adapter.interaction_tools",)
+
+
+def harness_supplied(tool: Tool | None) -> bool:
+    """Whether a cultivated Harness supplies this tool: a class in an installed Curator package, or the host's
+    interaction tool fronting one of its strategies. Builtin tools such as exec and write_file never qualify."""
+    module = type(tool).__module__ if tool is not None else ""
+    return module.split(".", 1)[0].startswith("_curator_") or module in _HARNESS_TOOL_MODULES
+
+
 class PermissionGate:
     """Decide about one tool call before dispatch."""
 
@@ -99,7 +109,7 @@ class PermissionGate:
         self._judge_provider_for = judge_provider_for
         self._allow_ask = allow_ask
 
-    async def check(self, tool_name: str, params: dict[str, Any]) -> Decision:
+    async def check(self, tool_name: str, params: dict[str, Any], *, trusted_harness: bool = False) -> Decision:
         """The waterfall: builtin deny, user deny, user
         allow, then the mode's reading of the ask tier."""
         cfg = self._config_source()
@@ -122,6 +132,8 @@ class PermissionGate:
                 reason="This call is blocked by a deny rule in your permissions config",
                 source=DecisionSource.USER_DENY,
             )
+        if trusted_harness and cfg.trust_harness_tools:
+            return Allow(source=DecisionSource.DEFAULT)
         tier = user_tier(tool_name, params, cfg.tools)
         if tier is Tier.ALLOW:
             return Allow(source=DecisionSource.USER_ALLOW)
@@ -215,7 +227,11 @@ class PermissionGate:
                 "User denied this action earlier in the current turn",
                 source="denied_earlier",
             )
-        decision = await self.check(tool_name, params)
+        decision = (
+            await self.check(tool_name, params, trusted_harness=True)
+            if harness_supplied(tool)
+            else await self.check(tool_name, params)
+        )
         if isinstance(decision, Allow):
             self._annotate({"permission.decision": "allow", "permission.source": decision.source.value})
             return None

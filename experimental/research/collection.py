@@ -139,6 +139,16 @@ async def _answer(callback, value):
     return await answer if inspect.isawaitable(answer) else answer
 
 
+async def _together(jobs) -> list:
+    """The jobs' results, run at once; the first to fail stops the others and is raised."""
+    try:
+        async with asyncio.TaskGroup() as group:
+            tasks = [group.create_task(job) for job in jobs]
+    except ExceptionGroup as failed:
+        raise failed.exceptions[0] from failed
+    return [task.result() for task in tasks]
+
+
 def _locations(request, arguments):
     origins, addresses = dict(arguments), []
     for source in request.context.get("interaction_sources", {}).values():
@@ -455,17 +465,29 @@ class _Collection:
         return assessment
 
     async def ask_once(self, assessment):
-        rows = []
-        for item in assessment.questions:
-            question = Question(id=f"question-{uuid4().hex}", blocking=self.wait_for_input, **item.model_dump())
-            answer = await _answer(self.ask, question)
-            if answer is None or not str(answer).strip():
-                self.pending[question.id] = question
-                rows.append({**question.model_dump(mode="json"), "answered": False})
-            else:
-                kept = self.retain("user", question.model_dump_json(), str(answer), dimensions=(question.dimension,))
-                rows.append({**question.model_dump(mode="json"), "answered": True, "evidence": kept["evidence"]})
+        """Every question to the user: all at once when `ask` takes them `together` (a page listing them), otherwise
+        one after another (a terminal reading one line at a time)."""
+        questions = [
+            Question(id=f"question-{uuid4().hex}", blocking=self.wait_for_input, **item.model_dump())
+            for item in assessment.questions
+        ]
+        self.pending.update((question.id, question) for question in questions)
+        rows = [{**question.model_dump(mode="json"), "answered": False} for question in questions]
         self.record("questions.json", rows)
+
+        async def answered(index, question):
+            answer = await _answer(self.ask, question)
+            if answer is not None and str(answer).strip():
+                kept = self.retain("user", question.model_dump_json(), str(answer), dimensions=(question.dimension,))
+                del self.pending[question.id]
+                rows[index].update(answered=True, evidence=kept["evidence"])
+            self.record("questions.json", rows)
+
+        if getattr(self.ask, "together", False):
+            await _together(answered(index, question) for index, question in enumerate(questions))
+        else:
+            for index, question in enumerate(questions):
+                await answered(index, question)
         self.trace.append({"label": "ask", "event": "asked", "questions": len(rows), "unanswered": len(self.pending)})
 
     async def load_guidance(self):
@@ -744,12 +766,19 @@ class _Collection:
 
     async def run(self):
         assessment = await _stage("assessment", self.limits.assessment_timeout, self.assess())
-        if self.channels["user"] and assessment.questions:
-            await self.ask_once(assessment)
-        if self.channels["research"] and assessment.research_needs:
-            await self.load_guidance()
-            await self.research_waves(assessment)
+        # Research serves what the business cannot settle (`planned`), so it need not wait for the user's answers:
+        # both run at once, and a later wave's plan reads the answers kept by then.
+        await _together(
+            [
+                *([self.ask_once(assessment)] if self.channels["user"] and assessment.questions else []),
+                *([self.researched(assessment)] if self.channels["research"] and assessment.research_needs else []),
+            ]
+        )
         return await self.compose_and_review(assessment)
+
+    async def researched(self, assessment):
+        await self.load_guidance()
+        await self.research_waves(assessment)
 
     def unfinished(self, reason, error):
         return _unfinished_result(self.request, self.snapshot, self.evidence, self.pending, reason, error)

@@ -53,6 +53,8 @@ function Request({ entry, origins }: { entry: RequestEntry; origins: Thread['ori
 }
 
 const percent = (rate: number | undefined): string => (typeof rate === 'number' ? `${Math.round(rate * 100)}%` : '—')
+// Past this many verdicts (an examiner's, item by item over several weeks) the rows wait behind a fold.
+const FOLD_ROWS = 12
 const outcome = (result: Item['result']): string => (typeof result === 'number' ? 'score' : result)
 
 /* The standard assessor has no voice: its signal is one verdict per criterion,
@@ -67,6 +69,30 @@ function Score({ entry }: { entry: ScoreEntry }): JSX.Element {
   const fail = items.filter((item) => item.result === 'fail').length
   const who = signal.source === 'standard' ? T.scoreTitle : speaker(signal.source).name
   const text = signal.text?.trim() ?? ''
+  const rows = (
+    <div className="st-scorerows">
+      {items.map((item) => {
+        const criterion = criteria.get(item.id)
+        return (
+          <div key={item.id} className="st-scorerow" data-result={outcome(item.result)}>
+            <span className="st-rid">{item.id}</span>
+            <span className="st-verdict" data-result={outcome(item.result)}>{typeof item.result === 'number' ? item.result.toFixed(2) : T.verdicts[item.result] ?? item.result}</span>
+            <div className="st-scorebody">
+              <p className="b">{item.expected || criterion?.text}</p>
+              {(item.actual || item.note) && <p className="m">{[item.actual, item.note].filter(Boolean).join(' · ')}</p>}
+              <p className="m">
+                {criterion && <span className="st-chip src" title={T.scoreSourceHint[criterion.source] ?? criterion.source}>{T.scoreSources[criterion.source] ?? criterion.source}</span>}
+                {!criterion && item.basis && <span className="st-chip src" title={T.basisHint[item.basis] ?? item.basis}>{T.basis[item.basis] ?? item.basis}</span>}
+                {criterion && <span className={`st-chip ${criterion.strength === 'must_hold' ? 'must' : 'should'}`}>{T.strength[criterion.strength] ?? criterion.strength}</span>}
+                {criterion?.provenance && <code title={criterion.provenance}>{criterion.provenance}</code>}
+                {item.session && <code>{item.session}</code>}
+              </p>
+            </div>
+          </div>
+        )
+      })}
+    </div>
+  )
   return (
     <section className="st-card st-score" data-holdout={entry.holdout || undefined} id={`card-${entry.key}`}>
       <header className="st-card-h">
@@ -84,32 +110,11 @@ function Score({ entry }: { entry: ScoreEntry }): JSX.Element {
       {items.length > 0 && (
         <>
           <p className="st-scoreline">
-            <span><span className="k">{T.scoreMust}</span>{percent(signal.metrics?.must_hold_pass_rate)}</span>
-            <span><span className="k">{T.scoreShould}</span>{percent(signal.metrics?.should_pass_rate)}</span>
+            {signal.metrics?.must_hold_pass_rate !== undefined && <span><span className="k">{T.scoreMust}</span>{percent(signal.metrics.must_hold_pass_rate)}</span>}
+            {signal.metrics?.should_pass_rate !== undefined && <span><span className="k">{T.scoreShould}</span>{percent(signal.metrics.should_pass_rate)}</span>}
             <span className="st-meta">{T.scoreCounts(pass, fail, items.length)}</span>
           </p>
-          <div className="st-scorerows">
-            {items.map((item) => {
-              const criterion = criteria.get(item.id)
-              return (
-                <div key={item.id} className="st-scorerow" data-result={outcome(item.result)}>
-                  <span className="st-rid">{item.id}</span>
-                  <span className="st-verdict" data-result={outcome(item.result)}>{typeof item.result === 'number' ? item.result.toFixed(2) : T.verdicts[item.result] ?? item.result}</span>
-                  <div className="st-scorebody">
-                    <p className="b">{item.expected || criterion?.text}</p>
-                    {(item.actual || item.note) && <p className="m">{[item.actual, item.note].filter(Boolean).join(' · ')}</p>}
-                    <p className="m">
-                      {criterion && <span className="st-chip src" title={T.scoreSourceHint[criterion.source] ?? criterion.source}>{T.scoreSources[criterion.source] ?? criterion.source}</span>}
-                      {!criterion && item.basis && <span className="st-chip src" title={T.basisHint[item.basis] ?? item.basis}>{T.basis[item.basis] ?? item.basis}</span>}
-                      {criterion && <span className={`st-chip ${criterion.strength === 'must_hold' ? 'must' : 'should'}`}>{T.strength[criterion.strength] ?? criterion.strength}</span>}
-                      {criterion?.provenance && <code title={criterion.provenance}>{criterion.provenance}</code>}
-                      {item.session && <code>{item.session}</code>}
-                    </p>
-                  </div>
-                </div>
-              )
-            })}
-          </div>
+          {items.length > FOLD_ROWS ? <Fold summary={<b>{T.items(items.length)}</b>}>{rows}</Fold> : rows}
         </>
       )}
     </section>

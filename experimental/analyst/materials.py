@@ -12,7 +12,7 @@ from pydantic import BaseModel, ConfigDict, Field
 from ..audience import project
 from ..curator.generation.context.render import tool
 from ..curator.harness.declaration import schema_for
-from ..curator.raven_adapter.observe import plain
+from ..curator.raven_adapter.observe import deliverable_texts, plain
 from .activity import activity
 
 RECORDS = "read_records"
@@ -25,6 +25,7 @@ def summary(exchange) -> dict:
         "artifact_id": execution.artifact_id,
         "user": exchange.user,
         "assistant": exchange.assistant,
+        "deliverables": deliverable_texts(execution),
         "record_kinds": dict(Counter(row["kind"] for row in execution.records)),
         "mechanisms": [
             {key: row[key] for key in ("scope", "target", "decision", "count", "acted", "reasons")}

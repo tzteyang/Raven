@@ -64,6 +64,16 @@ REQUIREMENT = {
     "expectation": "new",
     "acceptance": "No itinerary appears before those four items have been asked for.",
     "strength": "must_hold",
+    "examples": [
+        {
+            "kind": "wrong",
+            "turn": "t1",
+            "input": "Plan me a trip",
+            "output": "Here is a three-day itinerary.",
+            "handling": "Reply with questions about the missing trip details and hold any plan until they are answered.",
+            "why": "The intake rule puts the traveller's details before any plan.",
+        }
+    ],
 }
 
 
@@ -191,6 +201,64 @@ async def test_a_query_on_the_last_call_is_retried_under_the_grace(tmp_path, ses
     feedback = await analyse(worker, provider, (Signal("human", "Hm."),), sessions, limits=Limits(max_calls=2))
     assert feedback.decision == "continue"
     assert [entry["function"]["name"] for entry in provider.requests[2]["tools"]] == [NAME]
+
+
+@pytest.mark.asyncio
+async def test_analyst_receives_handed_materials_but_not_files_outside_uploads(tmp_path, sessions):
+    worker = FakeWorker(tmp_path)
+    home = tmp_path / "home"
+    docs = home / "uploads" / "service"
+    docs.mkdir(parents=True)
+    (docs / "README.md").write_text("Typed decisions, local endpoint, request and response examples.")
+    hidden = tmp_path / "holdout.md"
+    hidden.write_text("Held-out source must remain hidden.")
+    (docs / "outside.md").symlink_to(hidden)
+    worker.baseline.config = SimpleNamespace(workspace_path=home)
+    provider = Provider(response(NAME, {"decision": "continue", "reason": "No change needed."}))
+    await analyse(worker, provider, (Signal("owner", "Review the actual outputs."),), sessions)
+    packet = json.loads(provider.requests[0]["messages"][1]["content"])
+    assert packet["available_materials"] == {
+        "service/README.md": "Typed decisions, local endpoint, request and response examples."
+    }
+    assert "Held-out source" not in json.dumps(packet)
+
+
+@pytest.mark.asyncio
+async def test_analyst_must_prioritize_instead_of_submitting_four_requirements(tmp_path, sessions):
+    provider = Provider(
+        response(
+            NAME,
+            {
+                "decision": "curate",
+                "reason": "Too many independent edits.",
+                "requirements": [{**REQUIREMENT, "behavior": f"behavior {i}"} for i in range(4)],
+            },
+        ),
+        response(NAME, {"decision": "continue", "reason": "Further diagnosis is needed."}),
+    )
+    result = await analyse(FakeWorker(tmp_path), provider, (Signal("owner", "Inspect the replies."),), sessions)
+    assert result.decision == "continue"
+    assert any("at most 3" in error for error in rejections(provider))
+
+
+@pytest.mark.asyncio
+async def test_a_requirement_is_returned_until_its_wrong_example_states_the_handling(tmp_path, sessions):
+    wrong = REQUIREMENT["examples"][0]
+    attempts = [
+        {**REQUIREMENT, "examples": []},
+        {**REQUIREMENT, "examples": [{**wrong, "kind": "right", "handling": ""}]},
+        {**REQUIREMENT, "examples": [{**wrong, "handling": " "}]},
+        REQUIREMENT,
+    ]
+    provider = Provider(
+        *(response(NAME, {"decision": "curate", "reason": "r", "requirements": [item]}) for item in attempts)
+    )
+    feedback = await analyse(FakeWorker(tmp_path), provider, (Signal("owner", "No plan before details."),), sessions)
+    (accepted,) = feedback.requirements
+    assert accepted.examples[0].handling == wrong["handling"]
+    errors = rejections(provider)
+    assert len(errors) == 3
+    assert "no wrong example" in errors[0] and "no wrong example" in errors[1] and "states no handling" in errors[2]
 
 
 @pytest.mark.asyncio

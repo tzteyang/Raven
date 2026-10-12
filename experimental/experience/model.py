@@ -58,8 +58,9 @@ class ModelClient:
         limits: ModelLimits = ModelLimits(),
         effort: str | None = None,
         trace: list | None = None,
+        source: str = "experience evidence",
     ):
-        self.provider, self.prompt = provider, prompt
+        self.provider, self.prompt, self.source = provider, prompt, source
         default = getattr(provider, "get_default_model", None)
         self.model = model or (default() if default else None)
         self.limits, self.effort = limits, effort
@@ -90,7 +91,7 @@ class ModelClient:
             {"role": "system", "content": self.prompt},
             {
                 "role": "user",
-                "content": wrap_untrusted(json.dumps(packet, ensure_ascii=False), source="experience evidence"),
+                "content": wrap_untrusted(json.dumps(packet, ensure_ascii=False), source=self.source),
             },
         ]
         if correction:

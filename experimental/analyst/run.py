@@ -20,6 +20,9 @@ from .materials import RECORDS, materials, read_records, record_tool
 
 NAME = "submit_feedback"
 _PROMPT = Path(__file__).resolve().parent / "prompts" / "analyst.md"
+# How to turn a round's signals into few, ordered requirements with their examples, appended to the prompt.
+_SKILL = Path(__file__).resolve().parent / "skills" / "requirements.md"
+MAX_REQUIREMENTS = 3
 
 
 @dataclass(frozen=True)
@@ -230,6 +233,17 @@ async def analyse(
                 }
             locations = ["root", *(f"child/{name}" for name in getattr(worker, "children", {}))]
             packet["locations"] = locations
+            home = getattr(getattr(worker.baseline, "config", None), "workspace_path", None)
+            uploads = Path(home) / "uploads" if home else None
+            packet["available_materials"] = (
+                {
+                    path.relative_to(uploads).as_posix(): path.read_text(errors="replace")
+                    for path in sorted(uploads.rglob("*.md"))
+                    if path.is_file() and path.resolve().is_relative_to(uploads.resolve())
+                }
+                if uploads is not None and uploads.is_dir()
+                else {}
+            )
             schema = schema_for(Feedback)
             external = sorted({signal.source for signal in signals if signal.authority == "external"})
             if external:
@@ -246,6 +260,14 @@ async def analyse(
 
             def accept(arguments):
                 parsed = Feedback.model_validate(arguments)
+                if len(parsed.requirements) > MAX_REQUIREMENTS:
+                    raise ValueError(f"Prioritize at most {MAX_REQUIREMENTS} requirements; defer the rest in filtered.")
+                for item in parsed.requirements:
+                    wrong = [example for example in item.examples if example.kind == "wrong"]
+                    if not wrong:
+                        raise ValueError(f"requirement '{item.behavior[:60]}' gives no wrong example")
+                    if any(not example.handling.strip() for example in wrong):
+                        raise ValueError(f"requirement '{item.behavior[:60]}': a wrong example states no handling")
                 if any(set(item.locations) - set(locations) for item in parsed.requirements):
                     raise ValueError("feedback names a location outside the supplied deployment")
                 parsed = sourced(identified(parsed, known), signals, history)
@@ -255,7 +277,7 @@ async def analyse(
             record["materials"] = packet
             _, feedback = await exchange(
                 provider,
-                messages(_PROMPT.read_text(), packet),
+                messages(_PROMPT.read_text() + "\n\n" + _SKILL.read_text(), packet),
                 [
                     record_tool(sessions),
                     tool(NAME, "Submit this round's decision and requirements.", schema),

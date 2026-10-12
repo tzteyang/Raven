@@ -1636,3 +1636,37 @@ async def test_a_refusal_answered_by_a_person_is_recorded_with_its_own_source():
 
     assert [r.source for r in turn.refusals] == ["approval_denied", "denied_earlier"]
     assert "not in prod" in turn.refusals[0].reason
+
+
+def _tool_from(module: str) -> object:
+    return type("Tool", (), {"__module__": module})()
+
+
+@pytest.mark.asyncio
+async def test_trusted_harness_tools_run_unattended_while_builtins_still_ask():
+    authored = _tool_from("_curator_0123abcd.day_tool")
+    interaction = _tool_from("experimental.curator.raven_adapter.interaction_tools")
+    builtin = _tool_from("raven.agent.tools.filesystem")
+    bind(None)
+    trusting = gate_for(PermissionsConfig(trust_harness_tools=True))
+    assert await trusting.enforce("feedback_day", {"date": "2026-01-19"}, tool=authored) is None
+    assert await trusting.enforce("feedback_plan", {"request": {}}, tool=interaction) is None
+    refusal = await trusting.enforce("write_file", {"path": "a.txt", "content": "x"}, tool=builtin)
+    assert refusal is not None and "not interactive" in refusal.model_text
+    default = gate_for(PermissionsConfig())
+    assert await default.enforce("feedback_day", {"date": "2026-01-19"}, tool=authored) is not None
+    assert PermissionsConfig.model_validate({"trustHarnessTools": True}).trust_harness_tools
+
+
+@pytest.mark.asyncio
+async def test_harness_grant_preserves_explicit_and_builtin_denials():
+    authored = _tool_from("_curator_0123abcd.safe_tool")
+    bind(None)
+    gate = gate_for(PermissionsConfig(trust_harness_tools=True, tools={"feedback_day": "deny"}))
+    denied = await gate.enforce("feedback_day", {}, tool=authored)
+    assert denied is not None
+    assert "deny rule" in denied.model_text
+    bind(None)
+    gate = gate_for(PermissionsConfig(trust_harness_tools=True))
+    denied = await gate.enforce("exec", {"command": "dd if=/dev/zero of=/dev/sda"}, tool=authored)
+    assert denied is not None

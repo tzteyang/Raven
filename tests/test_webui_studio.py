@@ -365,6 +365,21 @@ def test_slim_cuts_the_curators_and_the_attributors_records():
     ]
 
 
+def test_analysis_failure_summary_keeps_audit_reference_without_repeating_saved_answers():
+    attempt = {
+        "round": 1,
+        "error": "analyst: provider error: HTTP 503",
+        "revision": "original-revision",
+        "recovered_at": "2026-10-11T20:00:00+00:00",
+        "evidence_ref": "iteration/run.json#/analysis_failures/0/failed_round",
+        "failed_round": {"sessions": {"practice": [{"user": "full answer"}]}, "holdout": {"unseen": []}},
+    }
+    out = studio.slim({"rounds": [], "analysis_failures": [attempt], "assessment_failures": [attempt]})
+    shown = [{key: value for key, value in attempt.items() if key != "failed_round"}]
+    assert out["analysis_failures"] == shown and out["assessment_failures"] == shown
+    assert attempt["failed_round"]["sessions"]["practice"][0]["user"] == "full answer"
+
+
 def test_a_speaking_assessors_kept_scorecard_stands_in_for_its_signal_among_the_verdicts():
     item = {"id": "wbt-daily", "result": "fail", "session": "family"}
     card = {"source": "agency", "text": "Three things.", "items": [item], "metrics": {}, "satisfied": False}

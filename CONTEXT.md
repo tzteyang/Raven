@@ -220,6 +220,22 @@ history, the curation nor `previous_signals` (`Session._acted`). The simulation'
 owner one, so a run improves from its other assessors alone while the owner still scores every round.
 _Avoid_: calling it a holdout, which plays held-out trials; a measuring source judges the same trials as the loop.
 
+**Studio script** (`experimental/webui/live.py` `scripts`, `experimental/webui/session_host.py`):
+A prepared conversation a live Studio session can play instead of a person: named steps, each a message and the files
+written into the working directory before it is said. A practice script plays as a trial of the round, an exam script
+only as a held-out trial (`Session.holdout`) scored by the session's automatic assessors, each on its own replica of
+the employee. The exam score is kept per revision, so the installed version can be set beside the one before the last
+curation and that one put back (`revert`). A **mark** is the person's verdict on one turn of the round's trials (right,
+should have been, wrong, missed): an `Item` with the turn's reply, read by the Analyst.
+_Avoid_: calling a script a persona or a card, which a simulated conversant plays from; calling the exam a measuring
+source, which judges the round's own trials.
+
+**Studio employee package** (`experimental/webui/exporting.py`, `employee_runtime.py`):
+A downloadable single-employee deployment with its authored Harness, task, content, strategy checkpoints and
+handed materials. Raven discovers its `subagent.json` and serves it over ACP using the Studio runtime from the
+installed source checkout. The package keeps the employee's model settings; provider selection, credentials and
+tool configuration come from the host. The first launch restores the saved state; later launches preserve progress.
+
 **Cultivation scenario** (`experimental/scenario/`):
 The closed set of inputs one cultivation may consist of: the profile, cases, norms, facts,
 exemplars, counterexamples, checks, the exchange's schedule and wording, the prior and the
@@ -390,6 +406,14 @@ A reusable condition quoted from an actual external signal, with its criterion k
 it without reporting a worker defect. Session preserves it across restart and has configured assessors recheck newly
 supplied conditions on the current output; hard failures or unknowns can trigger one additional analysis. It remains
 separate from behavior gaps that need Curator attribution and repair.
+
+**Requirement example** (`experimental/requirements.py`, `Example`):
+A concrete instance the Analyst attaches to a requirement. A `wrong` example quotes the input and what the worker
+produced there, with the handling that follows from the input, the handed-over materials and the requirement's
+behavior alone; a `right` example is a turn of the same kind the worker handled correctly. Examples show the behavior
+on seen inputs; they never carry an assessor's reference, notes or values, and the behavior must still hold on inputs
+the Curator has not seen.
+_Avoid_: calling them cases; a case is a dataset input with its own id (`case:<id>`).
 
 **Harness promotion** (`experimental/assessor/validation.py`, `experimental/iteration/session.py`):
 The host's adoption judgment about an installed experimental revision. A held-out assessment qualifies only with a

@@ -7,11 +7,11 @@
 
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 
-import { createLive, liveInfo, liveSnapshot, liveStep } from './api'
+import { buildScenario, createLive, liveInfo, liveSnapshot, liveStep } from './api'
 import { liveThread } from './live'
 
 import type { Run } from '../model'
-import type { LiveInfo, LiveSnapshot, LiveState, StepReply } from './api'
+import type { LiveInfo, LiveScenario, LiveSnapshot, LiveState, ScenarioDraft, StepReply } from './api'
 import type { LiveSession } from './live'
 
 export const PACE = { info: 15000, active: 1000, idle: 4000, still: 20000 }
@@ -27,11 +27,14 @@ export interface Live {
   /** What a new session starts from; null when the server serves recorded runs only, undefined while it is asked. */
   info: LiveInfo | null | undefined
   sessions: LiveSession[]
-  create: (title: string, task: string) => Promise<string>
+  create: (title: string, task: string, version?: string, scenario?: string) => Promise<string>
+  /** Build a scenario from what the person gave, and offer it. */
+  build: (draft: ScenarioDraft) => Promise<LiveScenario>
   take: (id: string, op: string, body?: Record<string, unknown>) => Promise<StepReply>
   /** Wait until the step under way in a session has ended, and give the state it ended in. */
   settle: (id: string) => Promise<LiveState | null>
   reload: () => void
+  forget: (id: string) => void
 }
 
 const pace = (kept: Kept | undefined): number => {
@@ -108,8 +111,8 @@ export function useLive(selected: string | null): Live {
   )
 
   const create = useCallback(
-    async (title: string, task: string) => {
-      const summary = await createLive(title, task)
+    async (title: string, task: string, version?: string, scenario?: string) => {
+      const summary = await createLive(title, task, version, scenario)
       reload()
       await refresh(summary.id)
       return summary.id
@@ -130,5 +133,25 @@ export function useLive(selected: string | null): Live {
     })
   }, [info, kept])
 
-  return { info, sessions, create, take, settle, reload }
+  /** Drop a session the server no longer keeps, such as one just deleted, from what the page holds. */
+  const forget = useCallback(
+    (id: string) => {
+      const { [id]: _gone, ...rest } = current.current
+      current.current = rest
+      setKept(rest)
+      reload()
+    },
+    [reload],
+  )
+
+  const build = useCallback(
+    async (draft: ScenarioDraft) => {
+      const built = await buildScenario(draft)
+      reload()
+      return built
+    },
+    [reload],
+  )
+
+  return { info, sessions, create, build, take, settle, reload, forget }
 }
