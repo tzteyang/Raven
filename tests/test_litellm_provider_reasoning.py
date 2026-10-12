@@ -7,6 +7,10 @@ saying so. OpenRouter accepts the reasoning object natively; behind that
 gateway the effort is mirrored into ``extra_body.reasoning``, which
 ``drop_params`` never touches. A reasoning entry already present keeps
 priority, and other providers are left as they were.
+
+DeepSeek in thinking mode rejects a tool-calling round whose assistant
+messages do not pass ``reasoning_content`` back; a turn that answered with
+tool calls alone has none, so it rides as an empty string.
 """
 
 from __future__ import annotations
@@ -131,3 +135,63 @@ async def test_other_providers_are_left_as_they_were(monkeypatch):
     await _provider("anthropic").chat(messages=[{"role": "user", "content": "hi"}], reasoning_effort="medium")
     assert seen[0]["reasoning_effort"] == "medium"
     assert "reasoning" not in (seen[0].get("extra_body") or {})
+
+
+def _tool_round_history() -> list[dict[str, Any]]:
+    return [
+        {"role": "user", "content": "weather in Paris?"},
+        {"role": "assistant", "content": "", "reasoning_content": "look it up", "tool_calls": None},
+        {"role": "user", "content": "and now?"},
+        {
+            "role": "assistant",
+            "content": None,
+            "tool_calls": [{"id": "call_1", "type": "function", "function": {"name": "weather", "arguments": "{}"}}],
+        },
+        {"role": "tool", "tool_call_id": "call_1", "name": "weather", "content": "sunny"},
+        {"role": "user", "content": "thanks, and tomorrow?"},
+    ]
+
+
+def _sent_assistants(kwargs: dict[str, Any]) -> list[dict[str, Any]]:
+    return [m for m in kwargs["messages"] if m["role"] == "assistant"]
+
+
+@pytest.mark.asyncio
+async def test_deepseek_gets_reasoning_content_on_every_assistant_message(monkeypatch):
+    seen = _capture_chat(monkeypatch)
+    history = _tool_round_history()
+    await _provider("deepseek").chat(messages=history, model="deepseek-chat")
+    sent = _sent_assistants(seen[0])
+    assert [m["reasoning_content"] for m in sent] == ["look it up", ""]
+    assert "reasoning_content" not in history[3]
+
+
+@pytest.mark.asyncio
+async def test_deepseek_streaming_path_echoes_the_same_way(monkeypatch):
+    seen = _capture_stream(monkeypatch)
+    async for _ in _provider("deepseek").chat_stream(messages=_tool_round_history(), model="deepseek-chat"):
+        pass
+    assert [m["reasoning_content"] for m in _sent_assistants(seen[0])] == ["look it up", ""]
+
+
+@pytest.mark.asyncio
+async def test_a_reasoning_content_of_none_is_sent_as_empty_for_deepseek(monkeypatch):
+    seen = _capture_chat(monkeypatch)
+    history = _tool_round_history()
+    history[3]["reasoning_content"] = None
+    await _provider("deepseek").chat(messages=history, model="deepseek/deepseek-reasoner")
+    assert [m["reasoning_content"] for m in _sent_assistants(seen[0])] == ["look it up", ""]
+
+
+@pytest.mark.asyncio
+async def test_other_models_get_no_reasoning_content_added(monkeypatch):
+    seen = _capture_chat(monkeypatch)
+    await _provider("openai").chat(messages=_tool_round_history(), model="gpt-5")
+    sent = _sent_assistants(seen[0])
+    assert sent[0]["reasoning_content"] == "look it up"
+    assert "reasoning_content" not in sent[1]
+
+    stream_seen = _capture_stream(monkeypatch)
+    async for _ in _provider("openai").chat_stream(messages=_tool_round_history(), model="gpt-5"):
+        pass
+    assert "reasoning_content" not in _sent_assistants(stream_seen[0])[1]
