@@ -477,6 +477,26 @@ class LiteLLMProvider(LLMProvider):
             return _ANTHROPIC_EXTRA_KEYS
         return frozenset()
 
+    @staticmethod
+    def _echo_reasoning_for_deepseek(
+        messages: list[dict[str, Any]], original_model: str, resolved_model: str
+    ) -> list[dict[str, Any]]:
+        """Give every assistant message a ``reasoning_content`` key for DeepSeek.
+
+        DeepSeek in thinking mode rejects a tool-calling round unless each of
+        its assistant messages passes ``reasoning_content`` back, yet a turn
+        that answered with tool calls alone comes back with ``None`` there and
+        the key is then never echoed. An empty string is accepted, so a missing
+        or ``None`` value is sent as ``""``; other providers are left untouched.
+        """
+        spec = find_by_model(original_model) or find_by_model(resolved_model)
+        if not ((spec and spec.name == "deepseek") or "deepseek" in resolved_model.lower()):
+            return messages
+        for msg in messages:
+            if msg.get("role") == "assistant" and msg.get("reasoning_content") is None:
+                msg["reasoning_content"] = ""
+        return messages
+
     def supports_assistant_prefill(self, model: str | None = None) -> bool:
         """Anthropic rejects a trailing assistant message while thinking is on.
 
@@ -590,7 +610,11 @@ class LiteLLMProvider(LLMProvider):
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": self._sanitize_messages(self._sanitize_empty_content(messages), extra_keys=extra_msg_keys),
+            "messages": self._echo_reasoning_for_deepseek(
+                self._sanitize_messages(self._sanitize_empty_content(messages), extra_keys=extra_msg_keys),
+                original_model,
+                model,
+            ),
             "temperature": temperature,
             # Per-phase httpx caps forwarded to the underlying client: connect,
             # write and pool get the first-byte budget, the read keeps the whole
@@ -723,7 +747,11 @@ class LiteLLMProvider(LLMProvider):
 
         kwargs: dict[str, Any] = {
             "model": model,
-            "messages": self._sanitize_messages(self._sanitize_empty_content(messages), extra_keys=extra_msg_keys),
+            "messages": self._echo_reasoning_for_deepseek(
+                self._sanitize_messages(self._sanitize_empty_content(messages), extra_keys=extra_msg_keys),
+                original_model,
+                model,
+            ),
             "temperature": temperature,
             "stream": True,
             # OpenAI-compatible providers only emit the trailing usage chunk
