@@ -342,3 +342,137 @@ def test_a_child_carries_its_commitments_through_export_and_restore(tmp_path):
     child = Child(baseline(tmp_path / "home"))
     child.commitments = (Commitment(id="H1", surface="memory.strategy", statement="Keep the brief", serves=("task",)),)
     assert Child.restore(json.loads(json.dumps(child.export()))).commitments == child.commitments
+
+
+@pytest.mark.asyncio
+async def test_reinstate_returns_exactly_to_a_kept_deployment_and_its_commitments(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from experimental.harness.contract import Commitment, Declaration
+    from experimental.harness.raven_adapter.deployment import keep, reinstate
+    from experimental.harness.raven_adapter.inspection import Inspection
+    from experimental.harness.raven_adapter.targets import catalogue
+
+    home, root = tmp_path / "home", tmp_path / "runtime"
+    root.mkdir()
+    old = Artifact(values={})
+    supplied = Commitment(id="H1", surface="capability.strategy", statement="Supply the norms", serves=("R1",))
+    worker = SimpleNamespace(
+        baseline=baseline(home),
+        root=root,
+        area=root,
+        children={},
+        artifact=old,
+        prepared=PreparedHarness(content={"capability": {"skills/duty/SKILL.md": "old"}}),
+        last_plan="old plan",
+        last_attribution=None,
+        last_selection=None,
+        last_children={},
+        commitments=(supplied,),
+        _lock=asyncio.Lock(),
+        _exchange=AsyncMock(return_value=True),
+        _inspect=AsyncMock(return_value=Inspection(Declaration("old", catalogue()), {}, {})),
+        _preview=None,
+    )
+    (home / "skills/duty").mkdir(parents=True)
+    (home / "skills/duty/SKILL.md").write_text("old")
+    (root / "planning.json").write_text('{"version": "old"}')
+    kept = await keep(worker)
+
+    worker.artifact = Artifact(values={"action.strategy": {"factory": "gate:create"}}, files={"gate.py": "x = 1"})
+    worker.prepared = PreparedHarness(
+        content={"capability": {"skills/duty/SKILL.md": "new", "skills/extra/SKILL.md": "new"}}
+    )
+    worker.last_plan = "new plan"
+    worker.commitments = (
+        supplied,
+        Commitment(id="H2", surface="action.strategy", statement="Gate deliveries", serves=("R2",)),
+    )
+    (home / "skills/duty/SKILL.md").write_text("new")
+    (home / "skills/extra").mkdir(parents=True)
+    (home / "skills/extra/SKILL.md").write_text("new")
+    (root / "planning.json").write_text('{"version": "new"}')
+    (root / "action.json").write_text('{"gate": "new"}')
+    started = []
+
+    async def close():
+        pass
+
+    async def start():
+        started.append((worker.artifact, (home / "skills/duty/SKILL.md").read_text()))
+
+    worker._close, worker._start = close, start
+    await reinstate(worker, kept)
+    assert worker.artifact == old and worker.last_plan == "old plan" and worker.commitments == (supplied,)
+    assert started == [(old, "old")]
+    assert not (home / "skills/extra/SKILL.md").exists()
+    assert (root / "planning.json").read_text() == '{"version": "old"}'
+    assert not (root / "action.json").exists()
+
+
+@pytest.mark.asyncio
+async def test_a_saved_deployment_loads_into_a_new_worker_of_the_same_task_and_refuses_another(tmp_path):
+    import asyncio
+    from unittest.mock import AsyncMock
+
+    from experimental.harness.contract import Commitment, Declaration
+    from experimental.harness.raven_adapter.deployment import load, save
+    from experimental.harness.raven_adapter.inspection import Inspection, fingerprint
+    from experimental.harness.raven_adapter.targets import catalogue
+
+    class Worker(SimpleNamespace):
+        @property
+        def revision_id(self):
+            return fingerprint(self.artifact.model_dump(mode="json"))
+
+    def worker(folder, task):
+        home, area = folder / "home", folder / "area"
+        area.mkdir(parents=True)
+        made = Worker(
+            baseline=baseline(home),
+            root=folder,
+            area=area,
+            children={},
+            artifact=Artifact(values={}),
+            prepared=PreparedHarness(content={}),
+            last_plan=None,
+            last_attribution=None,
+            last_selection=None,
+            last_children={},
+            commitments=(),
+            _lock=asyncio.Lock(),
+            _exchange=AsyncMock(return_value=True),
+            _inspect=AsyncMock(return_value=Inspection(Declaration("old", catalogue()), {}, {})),
+            _close=AsyncMock(),
+            _start=AsyncMock(),
+            _preview=None,
+        )
+        made.baseline.task = task
+        return made
+
+    task = Task(text="Work")
+    source = worker(tmp_path / "first", task)
+    source.artifact = Artifact(values={"action.strategy": {"factory": "gate:create"}}, files={"gate.py": "x = 1"})
+    source.prepared = PreparedHarness(content={"capability": {"skills/duty/SKILL.md": "kept"}})
+    source.commitments = (Commitment(id="H1", surface="action.strategy", statement="Gate", serves=("R1",)),)
+    (source.baseline.config.workspace_path / "skills/duty").mkdir(parents=True)
+    (source.baseline.config.workspace_path / "skills/duty/SKILL.md").write_text("kept")
+    (source.area / "planning.json").write_text('{"version": "kept"}')
+    path = tmp_path / "saved" / "deployment.json"
+    await save(source, path)
+
+    target = worker(tmp_path / "second", task)
+    (target.area / "action.json").write_text('{"gate": "stale"}')
+    await load(target, path)
+    assert target.artifact == source.artifact and target.commitments == source.commitments
+    assert (target.baseline.config.workspace_path / "skills/duty/SKILL.md").read_text() == "kept"
+    assert (target.area / "planning.json").read_text() == '{"version": "kept"}'
+    assert not (target.area / "action.json").exists()
+    assert target._start.await_count == 1
+
+    with pytest.raises(ValueError, match="another task"):
+        await load(worker(tmp_path / "third", Task(text="Work")), path)
+    path.write_text(path.read_text().replace("kept", "edited"))
+    with pytest.raises(ValueError, match="checksum"):
+        await load(worker(tmp_path / "fourth", task), path)

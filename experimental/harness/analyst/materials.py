@@ -13,7 +13,7 @@ from experimental.harness.analyst.activity import activity
 from experimental.harness.contract.declaration import schema_for
 from experimental.harness.curator.generation.context.render import tool
 from experimental.harness.participation.audience import project
-from experimental.harness.raven_adapter.observe import plain
+from experimental.harness.raven_adapter.observe import deliverable_texts, plain
 
 RECORDS = "read_records"
 
@@ -25,6 +25,7 @@ def summary(exchange) -> dict:
         "artifact_id": execution.artifact_id,
         "user": exchange.user,
         "assistant": exchange.assistant,
+        "deliverables": deliverable_texts(execution),
         "record_kinds": dict(Counter(row["kind"] for row in execution.records)),
         "mechanisms": [
             {key: row[key] for key in ("scope", "target", "decision", "count", "acted", "reasons")}

@@ -274,6 +274,103 @@ async def test_user_questions_are_asked_once_and_unanswered_ones_become_open_poi
 
 
 @pytest.mark.asyncio
+async def test_questions_taken_together_wait_at_once_while_the_research_runs(tmp_path):
+    researching = asyncio.Event()
+
+    class Page:
+        together = True
+
+        def __init__(self):
+            self.waiting, self.all = [], asyncio.Event()
+
+        async def __call__(self, item):
+            self.waiting.append(item.question)
+            if len(self.waiting) == 2:
+                self.all.set()
+            await asyncio.wait_for(self.all.wait(), 5)
+            await asyncio.wait_for(researching.wait(), 5)
+            return "The team lead approves exceptions." if item.dimension == "methods" else None
+
+    async def research(task):
+        researching.set()
+        await asyncio.wait_for(page.all.wait(), 5)
+        return delivery()
+
+    def compose(request):
+        [pending] = json.loads(request["messages"][1]["content"])["open_user_questions"]
+        carried = {**pending, "assumption": "Treat worked examples as cases."}
+        return response(SUBMIT, description(evidence=("evidence-3",), unresolved=[carried]))
+
+    page = Page()
+    provider = Provider(
+        response(
+            ASSESS,
+            assessment(
+                questions=[question(), question("cases", "Are there documented incidents?")], research_needs=[need()]
+            ),
+        ),
+        response(PLAN, plan(group())),
+        compose,
+        response(REVIEW, accepted()),
+    )
+    result = await collect_information(
+        provider, Request(objective="Describe the expert."), ask=page, research=research, records=tmp_path / "run"
+    )
+    assert result.ready and page.waiting == ["Who approves exceptions?", "Are there documented incidents?"]
+    assert {source.channel for source in result.snapshot.evidence} >= {"user", "research"}
+    rows = json.loads((tmp_path / "run/questions.json").read_text())
+    assert [row["answered"] for row in rows] == [True, False]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("stop", ["time_limit", "cancelled"])
+async def test_partial_answers_and_waiting_questions_survive_interruption(tmp_path, stop):
+    answered = asyncio.Event()
+    answer = "The team lead approves exceptions."
+
+    class Page:
+        together = True
+
+        async def __call__(self, item):
+            if item.dimension == "methods":
+                answered.set()
+                return answer
+            await asyncio.Event().wait()
+
+    provider = Provider(
+        response(ASSESS, assessment(questions=[question("cases", "Are there documented incidents?"), question()]))
+    )
+    task = asyncio.create_task(
+        collect_information(
+            provider,
+            Request(objective="Describe the expert."),
+            ask=Page(),
+            wait_for_input=True,
+            limits=CollectionLimits(total_timeout=0.1 if stop == "time_limit" else 30),
+            records=tmp_path / "run",
+        )
+    )
+    await asyncio.wait_for(answered.wait(), 5)
+    rows = json.loads((tmp_path / "run/questions.json").read_text())
+    assert [row["dimension"] for row in rows] == ["cases", "methods"]
+    assert [row["answered"] for row in rows] == [False, True]
+    evidence = json.loads((tmp_path / "run/evidence.json").read_text())
+    assert next(item["content"] for item in evidence if item["id"] == rows[1]["evidence"]) == answer
+    if stop == "cancelled":
+        task.cancel()
+        with pytest.raises(asyncio.CancelledError):
+            await task
+        result = Result.model_validate_json((tmp_path / "run/result.json").read_text())
+    else:
+        result = await task
+    assert result.stop_reason == stop and not result.ready
+    assert [item.content for item in result.snapshot.evidence if item.channel == "user"] == [answer]
+    assert [item.id for item in result.snapshot.description.unresolved] == [rows[0]["id"]]
+    assert result.snapshot.description.unresolved[0].blocking
+    assert json.loads((tmp_path / "run/questions.json").read_text()) == rows
+
+
+@pytest.mark.asyncio
 async def test_research_groups_run_concurrently_and_findings_become_evidence_one_by_one(tmp_path):
     timeline = []
 

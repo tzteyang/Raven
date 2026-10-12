@@ -74,6 +74,29 @@ def delivered_files(row) -> list[dict]:
     return [item for item in delivery.get("files") or [] if isinstance(item, dict) and item.get("path")]
 
 
+TEXT_SUFFIXES = frozenset({".md", ".txt", ".csv", ".json", ".yaml", ".yml", ".html"})
+
+
+def deliverable_texts(execution) -> list[dict]:
+    """Each file a turn delivered, with its whole text when it is a readable text file.
+
+    The text is kept complete: the Curator pages it with `read_observation`, so no index budget can hide the later part
+    of a delivered file."""
+    texts = []
+    for number, value in enumerate(execution.deliverables):
+        path = Path(value)
+        entry = {"index": number, "name": path.name}
+        if path.suffix.lower() not in TEXT_SUFFIXES:
+            entry["status"] = "non_text"
+        elif not path.is_file():
+            entry["status"] = "unavailable"
+        else:
+            text = path.read_text(errors="replace")
+            entry.update(status="available", text=text, characters=len(text))
+        texts.append(entry)
+    return texts
+
+
 class Recorder:
     def __init__(self, path: Path):
         self.path = path

@@ -33,6 +33,10 @@
 /* ---- rail ---------------------------------------------------------------- */
 .st-app .wordmark { gap: 7px; }
 .st-sub { font-family: var(--mono); font-size: 10.5px; font-weight: 500; color: var(--faint); margin-left: 2px; letter-spacing: .02em; }
+.st-langs { margin-left: auto; flex: none; display: inline-flex; gap: 2px; white-space: nowrap; }
+.st-lang { font: inherit; font-size: 11px; padding: 2px 6px; border: 0; border-radius: 6px; background: none; color: var(--rail-quiet); cursor: pointer; }
+.st-lang:hover { color: var(--rail-ink-on); }
+.st-lang[aria-pressed="true"] { color: var(--rail-ink-on); background: var(--rail-hover); cursor: default; }
 .st-railempty { margin: 2px 8px 8px; font-size: 12px; color: var(--faint); }
 .st-led { width: 6px; height: 6px; border-radius: 50%; flex: none; background: var(--faint); }
 .st-led.finished { background: var(--moss); }
@@ -54,6 +58,7 @@
 .st-ver[data-on="true"] { color: var(--amber); background: var(--amber-dp); font-weight: 600; }
 .st-ver[data-latest]::after { content: ""; width: 4px; height: 4px; border-radius: 50%; background: var(--amber); opacity: .7; }
 .st-tbtn { position: relative; }
+.st-export { display: inline-flex; flex: none; }
 .st-count { position: absolute; top: 0; right: -2px; font-family: var(--mono); font-size: 9.5px; font-weight: 600; min-width: 15px; height: 15px; padding: 0 4px; border-radius: 8px; background: var(--text); color: var(--ink); display: grid; place-items: center; }
 
 /* ---- conversation --------------------------------------------------------- */
@@ -117,6 +122,10 @@
 .st-req .m { font-size: 12.5px; color: var(--muted); line-height: 1.7; margin-top: 3px; }
 .st-req .k, .st-change .k { font-family: var(--mono); font-size: 10.5px; color: var(--faint); margin-right: 7px; letter-spacing: .03em; }
 .st-req .st-meta { margin-left: 8px; }
+.st-example { margin: 6px 0 0; padding: 6px 10px; border-left: 3px solid var(--line-soft); }
+.st-example[data-kind="wrong"] { border-left-color: #e03131; }
+.st-example[data-kind="right"] { border-left-color: #2f9e44; }
+.st-example .st-meta { margin-left: 0; }
 .st-ev { display: inline; text-align: left; color: var(--link); font-size: 12.5px; margin-right: 8px; }
 .st-ev:hover { text-decoration: underline; }
 .st-observed { margin-top: 12px; padding-top: 10px; border-top: 1px solid var(--line-soft); }
@@ -289,6 +298,48 @@ button.st-target:hover { box-shadow: 0 0 0 1px var(--line); background: var(--ra
 .st-raw > summary { font-size: 12.5px; color: var(--chat-quiet); }
 .st-rawrow { display: grid; gap: 4px; margin-bottom: 6px; }
 .st-rawrow code { font-size: 11px; color: var(--muted); }
+.st-compare { display: grid; gap: 14px; }
+.st-compare-ask { padding: 10px 12px; border-radius: 10px; background: var(--surface); }
+.st-compare-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; align-items: start; }
+.st-compare-col { display: grid; gap: 8px; min-width: 0; }
+.st-compare-pick { display: flex; gap: 8px; align-items: center; font-size: 12.5px; }
+.st-compare-pick select { font: inherit; padding: 2px 6px; border-radius: 6px; border: 1px solid var(--line); background: var(--ink); color: var(--text); }
+.st-compare-fails { margin: 0; padding-left: 18px; font-size: 12px; line-height: 1.6; color: var(--clay); }
+.st-compare-reply { padding: 10px 12px; border-radius: 10px; box-shadow: inset 0 0 0 1px var(--line-soft); min-width: 0; overflow-x: auto; }
+.st-proposals { display: grid; gap: 10px; margin: 0 0 10px; padding: 12px 14px; border-radius: 12px; background: var(--ink); box-shadow: inset 0 0 0 1px var(--line); font-size: 13px; }
+.st-proposals .st-quiet { display: flex; gap: 6px; align-items: center; }
+.st-proposal { display: grid; gap: 8px; }
+.st-proposal-q { margin: 0; display: grid; gap: 2px; }
+.st-proposal-q span { color: var(--muted); font-size: 12px; }
+.st-proposal-done { margin: 0; display: flex; gap: 6px; align-items: center; color: var(--muted); }
+.st-options { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.st-option { display: grid; gap: 6px; align-content: start; padding: 10px; border-radius: 10px; background: var(--surface); }
+.st-option blockquote { margin: 0; padding-left: 8px; border-left: 2px solid var(--line); white-space: pre-wrap; line-height: 1.6; }
+.st-option p { margin: 0; color: var(--muted); font-size: 12px; line-height: 1.6; }
+.st-option .st-btn { justify-self: start; }
+.st-ownrule { display: flex; gap: 8px; }
+.st-ownrule input { flex: 1; border: 0; outline: 0; border-radius: 8px; padding: 6px 10px; background: var(--surface); font: inherit; font-size: 12.5px; color: var(--text); }
+.st-adopted ul { margin: 4px 0 0; padding-left: 18px; display: grid; gap: 2px; }
+.st-trialhint { display: block; line-height: 1.6; margin: 2px 0 12px; }
+.st-aiq { margin: 4px 0 12px; padding: 10px 12px; border-radius: 10px; background: var(--surface); display: grid; gap: 4px; font-size: 12.5px; line-height: 1.6; }
+.st-aiq p { margin: 0; white-space: pre-wrap; }
+.st-aiq b { font-weight: 600; color: var(--muted); margin-right: 8px; }
+.st-dialog.st-dialog-wide { width: min(720px, 94vw); max-height: 90vh; overflow: auto; }
+.st-build { display: grid; gap: 12px; }
+.st-scenario-row { display: flex; gap: 8px; align-items: center; }
+.st-scenario-row select { flex: 1; min-width: 0; }
+.st-collector { max-height: 45vh; overflow: auto; }
+.st-proposal-q .st-collector-q { margin: 0; color: var(--text); font-size: 13.5px; line-height: 1.6; white-space: pre-wrap; }
+.st-ask { display: grid; gap: 10px; }
+.st-ask-qa { display: grid; gap: 4px; padding: 8px 10px; border-radius: 10px; background: var(--surface); }
+.st-ask-q { margin: 0; display: flex; gap: 8px; align-items: baseline; font-size: 12.5px; line-height: 1.6; }
+.st-ask-q b, .st-ask-who { font-weight: 600; color: var(--muted); white-space: nowrap; font-size: 12px; }
+.st-ask-a { font-size: 13px; line-height: 1.65; }
+.st-ask-a > :first-child { margin-top: 0; }
+.st-ask-a > :last-child { margin-bottom: 0; }
+.st-ask-row { display: flex; gap: 8px; align-items: center; }
+.st-ask-row input { flex: 1; min-width: 0; border: 0; outline: 0; border-radius: 8px; padding: 6px 10px; background: var(--surface); font: inherit; font-size: 12.5px; color: var(--text); }
+.st-ask-row select { border: 0; border-radius: 8px; padding: 5px 6px; background: var(--surface); font: inherit; font-size: 12px; color: var(--text); }
 .st-tcomposer { position: sticky; bottom: -18px; margin: 4px -16px -18px; padding: 10px 14px 14px; background: var(--ink); border-top: 1px solid var(--line-soft); display: flex; align-items: flex-end; gap: 8px; }
 .st-tcomposer textarea { flex: 1; resize: none; border: 0; outline: 0; background: var(--surface); border-radius: 10px; padding: 8px 10px; font: inherit; font-size: 13.5px; line-height: 1.6; color: var(--text); }
 
@@ -348,9 +399,9 @@ button.st-target:hover { box-shadow: 0 0 0 1px var(--line); background: var(--ra
 /* ---- dialogs -------------------------------------------------------------- */
 .st-veil { position: fixed; inset: 0; background: rgba(20, 20, 18, .22); display: grid; place-items: center; z-index: 60; animation: st-fade .15s ease; }
 @keyframes st-fade { from { opacity: 0; } }
-.st-dialog { width: min(540px, calc(100vw - 32px)); background: var(--ink); border-radius: 14px; box-shadow: var(--shadow), 0 0 0 1px var(--ring); padding: 20px 22px; display: grid; gap: 14px; }
+.st-dialog { width: min(540px, calc(100vw - 32px)); background: var(--ink); border-radius: 14px; box-shadow: var(--shadow), 0 0 0 1px var(--ring); padding: 20px 22px; display: grid; grid-template-columns: minmax(0, 1fr); gap: 14px; }
 .st-dialog h3 { margin: 0; font-size: 15px; font-weight: 600; }
-.st-field { display: grid; gap: 6px; }
+.st-field { display: grid; grid-template-columns: minmax(0, 1fr); gap: 6px; }
 .st-field > span { font-size: 12px; color: var(--muted); }
 .st-field input, .st-field textarea, .st-field select { font: inherit; font-size: 13.5px; color: var(--text); background: var(--ink); border: 1px solid var(--line); border-radius: var(--ctl-r); padding: 7px 10px; outline: 0; resize: vertical; }
 .st-field input:focus, .st-field textarea:focus, .st-field select:focus { border-color: var(--amber); box-shadow: var(--ctl-focus); }
@@ -486,6 +537,7 @@ button.st-target:hover { box-shadow: 0 0 0 1px var(--line); background: var(--ra
 .st-aev[data-event="admit"] { color: var(--moss); }
 .st-hit { display: inline-block; margin: 0 4px 2px 0; padding: 0 5px; border-radius: 4px; background: var(--surface); }
 .st-auditrows td:first-child { width: 72px; }
+.st-auditrows td:nth-child(2), .st-auditrows td:nth-child(3) { white-space: nowrap; }
 .st-count-bad { background: var(--clay); color: var(--ink); }
 .st-count-warn { background: var(--gold); color: var(--ink); }
 .st-app .top .st-tbtn[aria-pressed="true"] { background: var(--selected); color: var(--text); }
@@ -493,3 +545,16 @@ button.st-target:hover { box-shadow: 0 0 0 1px var(--line); background: var(--ra
 @media (max-width: 1100px) {
   .st-map[data-cols="5"] { grid-template-columns: 84px repeat(5, minmax(0, 1fr)); }
 }
+
+/* A person's marks on a trial's turn, and the scripts picked to play */
+.st-marks { display: flex; flex-wrap: wrap; align-items: center; gap: 6px; margin-top: 8px; }
+.st-mark { display: inline-flex; gap: 6px; font-size: 12px; padding: 3px 8px; border-radius: 6px; background: var(--surface); border-left: 3px solid var(--line-soft); }
+.st-mark[data-kind="right"] { border-left-color: #2f9e44; }
+.st-mark[data-kind="fix"], .st-mark[data-kind="wrong"], .st-mark[data-kind="missed"] { border-left-color: #e03131; }
+.st-markbtns { display: inline-flex; gap: 4px; }
+.st-markbtns .st-btn { font-size: 11.5px; padding: 2px 8px; }
+.st-markbtns .st-btn[aria-pressed="true"] { box-shadow: 0 0 0 1px var(--line); }
+.st-markask { display: flex; gap: 6px; width: 100%; align-items: flex-end; }
+.st-markask textarea { flex: 1; font: inherit; font-size: 12.5px; padding: 6px 8px; border-radius: 6px; border: 1px solid var(--line-soft); background: var(--ink); color: inherit; resize: vertical; }
+.st-scripts { display: flex; flex-direction: column; gap: 2px; max-height: 320px; overflow: auto; margin: 8px 0; }
+.st-scripts .st-pickrow { cursor: pointer; }

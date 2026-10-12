@@ -395,6 +395,16 @@ async def test_model_tool_arguments_cannot_select_host_identity_or_observation_p
 
 
 @pytest.mark.asyncio
+async def test_a_command_sent_as_a_json_string_reaches_its_owner(owners):
+    await owners.memory.initialize_context("session:a", owners.frame)
+    await owners.memory.tool().execute(request='{"text": "encoded"}')
+    assert owners.memory.scopes.shared["notes"] == ["encoded"]
+    with pytest.raises(ValueError):
+        await owners.memory.tool().execute(request="not json")
+    assert owners.memory.scopes.shared["notes"] == ["encoded"]
+
+
+@pytest.mark.asyncio
 @pytest.mark.parametrize("text", ["read", "attempted-write"])
 async def test_planning_query_propagates_readonly_to_memory(owners, tmp_path, text):
     from experimental.harness.raven_adapter.planning.runtime import BoundPlanning

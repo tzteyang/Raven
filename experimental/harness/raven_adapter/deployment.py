@@ -1,5 +1,7 @@
 """Host-owned child baselines, immutable launch definitions and native registration bindings."""
 
+import base64
+import hashlib
 import json
 import os
 import shlex
@@ -218,6 +220,149 @@ def _settle(worker, candidate, children, commitments):
     worker.last_selection = getattr(candidate, "selection", None)
     worker.last_children = {name: submitted for name, submitted in (children or {}).items() if submitted is not None}
     worker.commitments = commitments
+
+
+_STATE_FILES = ("assembly/content-state.json", "memory.json", "planning.json", "capability.json", "action.json")
+
+
+@dataclass(frozen=True)
+class Kept:
+    """One activation as it stood, enough to return to it exactly after later activations replaced it."""
+
+    artifact: Artifact
+    prepared: object
+    plan: Plan | None
+    attribution: object
+    selection: object
+    children: dict
+    commitments: tuple[Commitment, ...]
+    content: dict
+    files: dict
+
+
+async def keep(worker) -> Kept:
+    """Record the active single-layer deployment: artifact, prepared content, strategy state, the plan behind it and
+    the commitments it carries out."""
+    from experimental.harness.raven_adapter.content import snapshot
+
+    async with worker._lock:
+        if worker.children:
+            raise ValueError("keeping a deployment with child Harnesses is not supported")
+        files = {}
+        for name in _STATE_FILES:
+            path = worker.area / name
+            files[path] = path.read_bytes() if path.exists() else None
+        return Kept(
+            worker.artifact,
+            worker.prepared,
+            worker.last_plan,
+            worker.last_attribution,
+            worker.last_selection,
+            dict(worker.last_children),
+            worker.commitments,
+            snapshot(worker.baseline.config.workspace_path, worker.prepared.files().keys()),
+            files,
+        )
+
+
+async def reinstate(worker, kept: Kept):
+    """Activate a kept deployment again exactly as it was. Unlike `activate`, nothing is merged into the current
+    artifact: content and strategy state later revisions wrote are undone, then the worker restarts."""
+    from experimental.harness.contract.artifact import relative_path
+    from experimental.harness.raven_adapter.materialize import restore_content
+
+    async with worker._lock:
+        if not await worker._exchange({"operation": "idle"}):
+            raise ValueError("reinstating a deployment requires an idle worker")
+        home = worker.baseline.config.workspace_path
+        stale = {home / relative_path(name): (None, 0) for name in worker.prepared.files()}
+        await worker._close()
+        restore_content(home, {**stale, **kept.content})
+        for path, content in kept.files.items():
+            if content is None:
+                path.unlink(missing_ok=True)
+            else:
+                _write(path, content)
+        worker.artifact, worker.prepared = kept.artifact, kept.prepared
+        await worker._start()
+        installed = await worker._inspect()
+        worker.last_plan, worker.last_attribution, worker.last_selection = kept.plan, kept.attribution, kept.selection
+        worker.last_children = dict(kept.children)
+        worker.commitments = kept.commitments
+        worker._preview = None
+        return installed
+
+
+def _digest(value) -> str:
+    return hashlib.sha256(json.dumps(value, sort_keys=True, ensure_ascii=False).encode()).hexdigest()
+
+
+async def save(worker, path: Path) -> dict:
+    """Write the active deployment (`keep`) to `path` as JSON with its checksum, paths relative to the worker's home
+    and area, so `load` can put it back in this worker or in a new one hired on the same task."""
+    from experimental.harness.raven_adapter.observe import plain
+
+    kept = await keep(worker)
+    home = worker.baseline.config.workspace_path
+
+    def encoded(content):
+        return None if content is None else base64.b64encode(content).decode()
+
+    value = {
+        "artifact": kept.artifact.model_dump(mode="json"),
+        "prepared": kept.prepared.model_dump(mode="json"),
+        "plan": kept.plan.model_dump(mode="json") if kept.plan else None,
+        "attribution": plain(kept.attribution),
+        "selection": plain(kept.selection),
+        "children": plain(kept.children),
+        "commitments": [item.model_dump(mode="json") for item in kept.commitments],
+        "content": {str(name.relative_to(home)): [encoded(data), mode] for name, (data, mode) in kept.content.items()},
+        "state": {str(name.relative_to(worker.area)): encoded(data) for name, data in kept.files.items()},
+        "revision": worker.revision_id,
+        "task": worker.baseline.task.model_dump(mode="json"),
+    }
+    value["sha256"] = _digest(value)
+    _write(Path(path), json.dumps(value, ensure_ascii=False).encode())
+    return value
+
+
+async def load(worker, path: Path) -> Kept:
+    """Put the deployment `save` wrote back into `worker` (`reinstate`); the worker must hold the same task, id and
+    text, since the saved strategy state is bound to it."""
+    from experimental.harness.contract import Task
+    from experimental.harness.raven_adapter.preparation import PreparedHarness
+
+    value = json.loads(Path(path).read_text())
+    if _digest({key: item for key, item in value.items() if key != "sha256"}) != value.get("sha256"):
+        raise ValueError("the saved deployment does not match its checksum")
+    if Task.model_validate(value["task"]) != worker.baseline.task:
+        raise ValueError("the saved deployment belongs to another task")
+    home = worker.baseline.config.workspace_path
+
+    def inside(root: Path, name: str) -> Path:
+        found = (root / name).resolve()
+        if not found.is_relative_to(root.resolve()):
+            raise ValueError(f"a saved path leaves its folder: {name}")
+        return found
+
+    def decoded(content):
+        return None if content is None else base64.b64decode(content)
+
+    kept = Kept(
+        artifact=Artifact.model_validate(value["artifact"]),
+        prepared=PreparedHarness.model_validate(value["prepared"]),
+        plan=Plan.model_validate(value["plan"]) if value["plan"] else None,
+        attribution=value["attribution"],
+        selection=value["selection"],
+        children=value["children"],
+        commitments=tuple(Commitment.model_validate(item) for item in value.get("commitments", ())),
+        content={inside(home, name): (decoded(data), mode) for name, (data, mode) in value["content"].items()},
+        files={inside(worker.area, name): decoded(data) for name, data in value["state"].items()},
+    )
+    await reinstate(worker, kept)
+    if worker.revision_id != value["revision"]:
+        raise ValueError("the loaded deployment is not the revision that was saved")
+    return kept
 
 
 def child_artifact(child, candidate, inspection, *, restoring=False):

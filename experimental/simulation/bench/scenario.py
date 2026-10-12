@@ -56,9 +56,9 @@ class Scenario(CounterpartScenario):
         return cls.of(read_contract(root))
 
     @classmethod
-    def of(cls, read: Contract) -> "Scenario":
+    def of(cls, read: Contract, **options) -> "Scenario":
         return replace(
-            super().of(read),
+            super().of(read, **options),
             personas=tuple(
                 Persona(case.id, case.text, case.values, tuple(read.root / item for item in case.files), case.expected)
                 for case in read.situation.cases

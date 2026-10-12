@@ -446,6 +446,27 @@ class Assessor:
         if self.reviewer is not None:
             self.reviewer.restore(record.get("meta_reviewer", {}))
 
+    def twin(self) -> "Assessor":
+        """An assessor holding sessions to this very standard with records of its own, so twins may judge at once;
+        `adopt` takes their records back. Only an assessor whose judging leaves its standard and review state as they
+        are has twins: one without a builder, a reviewer or open review issues."""
+        if self.builder is not None or self.reviewer is not None or self.open_issues:
+            raise ValueError("an assessor that revises its standard while judging has no twins")
+        twin = copy.copy(self)
+        twin.assessments, twin.trace, twin.keep = [], [], None
+        return twin
+
+    def adopt(self, twins: Iterable["Assessor"]) -> None:
+        """The twins' judging joins this assessor's record, numbered after its own, and is kept."""
+        for twin in twins:
+            self.trace.extend(twin.trace)
+            for episode in twin.assessments:
+                episode["id"] = f"{self.run_id}:assessment-{len(self.assessments) + 1}"
+                episode["version"] = len(self.assessments) + 1
+                self.assessments.append(episode)
+        if self.keep is not None:
+            _write(Path(self.keep), json.dumps(self.record(), ensure_ascii=False, indent=2).encode())
+
     def sediment(self, history: Sequence[Mapping]) -> None:
         """The loop's history so far, as the Analyst reads it."""
         if "sedimented" in self.sources:

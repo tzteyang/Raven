@@ -273,7 +273,7 @@ export function LedgerPane({ thread }: { thread: Thread }): JSX.Element {
   return (
     <div className="st-ledger">
       <p className="st-meta">{T.ledgerNote}</p>
-      {missing.length > 0 && <p className="st-warn">{T.ledgerMissing} ({missing.map((row) => row.requirement).join(', ')})</p>}
+      {missing.length > 0 && <p className="st-warn">{T.ledgerMissing}{T.inParens(missing.map((row) => row.requirement).join(', '))}</p>}
       {questions.length > 0 && (
         <section className="st-lsec">
           <p className="st-label">{T.questions}</p>
@@ -353,7 +353,7 @@ export function LedgerPane({ thread }: { thread: Thread }): JSX.Element {
       </section>
       {holdout.length > 0 && (
         <section className="st-lsec">
-          <p className="st-label">{T.ledgerHoldout} · {T.scoreHeldOut}</p>
+          <p className="st-label">{T.scoreHeldOut}</p>
           <table className="st-table">
             <thead>
               <tr><th>{T.ledgerCols.round}</th><th>{T.ledgerSource}</th><th>{T.ledgerSatisfied}</th><th>{T.ledgerItems}</th></tr>

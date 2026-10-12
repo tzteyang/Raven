@@ -256,6 +256,11 @@ def slim(run: dict) -> dict:
         "initial_curation": [_slim_curation(record) for record in run.get("initial_curation") or ()],
         "initial_attribution": [_slim_attribution(record) for record in run.get("initial_attribution") or ()],
     }
+    for failures in ("analysis_failures", "assessment_failures"):
+        if failures in run:
+            out[failures] = [
+                {key: value for key, value in attempt.items() if key != "failed_round"} for attempt in run[failures]
+            ]
     pending = run.get("pending")
     if isinstance(pending, dict):
         out["pending"] = {

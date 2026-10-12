@@ -81,6 +81,7 @@ SEARCH_PROVIDERS: dict[str, SearchProviderSpec] = {
         "firecrawl", "Firecrawl", WEB_VENDOR_ENV_VARS["firecrawl"], "https://firecrawl.dev"
     ),
     "serply": SearchProviderSpec("serply", "Serply", WEB_VENDOR_ENV_VARS["serply"], "https://serply.io"),
+    "jina": SearchProviderSpec("jina", "Jina Reader", WEB_VENDOR_ENV_VARS["jina"], "https://jina.ai/reader"),
 }
 
 FETCH_PROVIDERS: dict[str, FetchProviderSpec] = {
@@ -489,6 +490,18 @@ class WebSearchTool(Tool):
                 headers={"Accept": "application/json", "X-Api-Key": key},
                 timeout=10.0,
             )
+        if vendor == "jina":
+            # ``no-content`` returns the result rows without reading each page, which the reader does on demand.
+            return await client.get(
+                "https://s.jina.ai/",
+                params={"q": query, "num": n},
+                headers={
+                    "Accept": "application/json",
+                    "Authorization": f"Bearer {key}",
+                    "X-Respond-With": "no-content",
+                },
+                timeout=10.0,
+            )
         return await client.post(
             "https://api.anysearch.com/v1/search",
             json={"query": query, "max_results": n},
@@ -548,6 +561,8 @@ class WebSearchTool(Tool):
         if vendor == "serply":
             # Google SERP rows under ``results``; the snippet is ``description``.
             return {"organic": _rows(data.get("results"), url="link", snippet="description")}
+        if vendor == "jina":
+            return {"organic": _rows(data.get("data"), url="url", snippet="description")}
         # AnySearch publishes the request shape but not the response: results may
         # sit at the top level or inside a ``{code, message, data}`` envelope, and
         # an item spells the URL ``url`` or ``link``, the text ``snippet`` or

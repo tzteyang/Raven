@@ -117,6 +117,26 @@ def test_pages_are_revalidated_on_every_load_and_api_answers_are_not_marked(serv
         assert response.headers["Cache-Control"] is None
 
 
+def test_the_connection_stays_open_after_an_answer_so_a_relay_never_cuts_a_files_tail(served):
+    from http.client import HTTPConnection
+    from urllib.parse import urlsplit
+
+    base, runs = served
+    write(runs, "w", "r", {"task": "T" * 50_000, "rounds": []})
+    connection = HTTPConnection(urlsplit(base).hostname, urlsplit(base).port, timeout=10)
+    for path in ("/api/runs/w/r", "/api/runs", "/api/runs/w/missing"):
+        connection.request("GET", path)
+        response = connection.getresponse()
+        body = response.read()
+        assert response.version == 11 and not response.will_close
+        assert len(body) == int(response.headers["Content-Length"])
+    connection.request("POST", "/api/studio/live", body=b"{}", headers={"Content-Type": "application/json"})
+    refused = connection.getresponse()
+    refused.read()
+    assert refused.status == 404 and refused.will_close
+    connection.close()
+
+
 def test_the_root_opens_the_run_viewer_and_the_studio_has_its_own_path():
     assert page("/") == page("") == page("/viewer") == page("/viewer?run=x") == "/index.html"
     assert page("/studio") == page("/studio/") == "/studio.html"

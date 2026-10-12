@@ -27,6 +27,33 @@ class ExternalRequirement(BaseModel):
         return "external-" + hashlib.sha256(f"{self.source}\0{self.quote}".encode()).hexdigest()[:16]
 
 
+class Example(BaseModel):
+    """One concrete instance behind a requirement, so the Curator sees what right looks like and not only what failed.
+
+    A `wrong` example pairs what the worker did with how that input should have been handled; the handling follows
+    from the input's own words, the handed-over materials and the requirement's behavior alone, never from what only
+    the evaluation side holds. A `right` example is a turn of the same kind the worker handled correctly.
+    """
+
+    model_config = ConfigDict(extra="forbid", frozen=True)
+    AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
+        name: frozenset({"analyst", "curator"}) for name in ("kind", "turn", "input", "output", "handling", "why")
+    }
+
+    kind: Literal["wrong", "right"]
+    turn: str = Field(min_length=1, description="The turn id of this round where the example occurred.")
+    input: str = Field(min_length=1, description="The part of the input the example concerns, quoted.")
+    output: str = Field(
+        min_length=1, description="What the worker wrote or did there, quoted or described from the records."
+    )
+    handling: str = Field(
+        default="",
+        description="wrong examples: the decision and how to express it for this input, following from the input, "
+        "the handed-over materials and the requirement's behavior alone; right examples: empty.",
+    )
+    why: str = Field(min_length=1, description="The rule from the materials and why the output breaks or keeps it.")
+
+
 class Requirement(BaseModel):
     """One behavior the worker should show, with the evidence that it currently does not.
 
@@ -54,6 +81,7 @@ class Requirement(BaseModel):
                 "recurrence",
                 "repeats",
                 "materials",
+                "examples",
             )
         },
         "grounds": frozenset({"counterpart", "analyst"}),
@@ -86,4 +114,7 @@ class Requirement(BaseModel):
         description="The judgements this rests on: assessor:<name>, check:<item id> or case:<id>.",
     )
     materials: tuple[str, ...] = Field(default=(), description="The handed-over materials this draws on, by name.")
+    examples: tuple[Example, ...] = Field(
+        default=(), description="Every wrong instance of this round, and turns of the same kind handled right."
+    )
     authority: Authority = Field(default="model", description="Original requirement authority, assigned by the host.")

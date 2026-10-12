@@ -23,3 +23,5 @@ Submit once with the diagnosis action. Selection reads these diagnoses and must 
 ## Completion check
 
 Does every required input have a diagnosis with a state, evidence and, where a mechanism exists, its name? Would the evidence contradict a different state?
+
+Before diagnosing, read all available replies and delivered files, including uncited successful turns. A later failure on a different input does not establish that the previous revision caused it. Separate observed effects from causal hypotheses.

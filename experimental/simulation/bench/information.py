@@ -36,7 +36,10 @@ class Answer(BaseModel):
 
 
 class CounterpartAnswers:
-    """An optional user-answer callback; adoption is a counterpart choice, never an information review verdict."""
+    """An optional user-answer callback; adoption is a counterpart choice, never an information review verdict. Each
+    question is answered on its own, so they are taken `together`."""
+
+    together = True
 
     def __init__(self, provider, scenario, knows, released, *, records: Path, model=None, effort=None, timeout=300):
         for name in knows:

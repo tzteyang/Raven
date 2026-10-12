@@ -3,7 +3,9 @@
    from the pill above the composer) and, once a trial is picked, its whole
    process in the side pane -- each turn's tool calls, the mechanisms that
    stepped in (mechanisms.ts), playbook runs and sub-harnesses, the model
-   inputs, the reply and what was delivered. */
+   inputs, the reply and what was delivered. In a live session the person
+   marks a turn of the round in progress right, wrong, missed or what it
+   should have been; each mark goes to the Analyst with the round. */
 
 import { useEffect, useRef, useState } from 'react'
 
@@ -15,11 +17,64 @@ import { Icon, Json, Markdown, fileName } from './bits'
 
 import type { JSX } from 'react'
 import type { Exchange, RecordRow } from '../../model'
-import type { RawRef } from '../api'
+import type { LiveQuestion, RawRef } from '../api'
 import type { TurnEvent } from '../mechanisms'
 import type { TrialView, TrialsEntry } from '../types'
 
 type Row = RecordRow & Record<string, unknown>
+
+/** A person's mark on one turn (session_host.py MARKS). */
+export interface Mark {
+  turn: number
+  kind: string
+  note: string
+}
+
+export interface Marking {
+  given: Mark[]
+  onMark: (turn: number, kind: string, note: string) => void
+}
+
+const KINDS = ['right', 'fix', 'wrong', 'missed']
+// What it should have been and what it missed say nothing without the person's words.
+const WORDED = ['fix', 'missed']
+
+function Marks({ given, onMark }: { given: Mark[]; onMark?: (kind: string, note: string) => void }): JSX.Element | null {
+  const [open, setOpen] = useState<string | null>(null)
+  const [note, setNote] = useState('')
+  if (!given.length && !onMark) return null
+  const send = () => {
+    if (!open || !onMark || (WORDED.includes(open) && !note.trim())) return
+    onMark(open, note.trim())
+    setOpen(null)
+    setNote('')
+  }
+  return (
+    <div className="st-marks">
+      {given.map((mark, i) => (
+        <span key={i} className="st-mark" data-kind={mark.kind}>
+          <b>{T.marks[mark.kind] ?? mark.kind}</b>
+          {mark.note && <span>{mark.note}</span>}
+        </span>
+      ))}
+      {onMark && (
+        <span className="st-markbtns">
+          {KINDS.map((kind) => (
+            <button key={kind} type="button" className="st-btn" data-kind={kind} aria-pressed={open === kind} onClick={() => setOpen(open === kind ? null : kind)}>
+              {T.marks[kind]}
+            </button>
+          ))}
+        </span>
+      )}
+      {open && (
+        <div className="st-markask">
+          <textarea rows={2} value={note} autoFocus placeholder={T.markAsk[open]} onChange={(event) => setNote(event.target.value)} />
+          <button type="button" className="st-btn primary" disabled={WORDED.includes(open) && !note.trim()} onClick={send}>{T.markSend}</button>
+        </div>
+      )}
+    </div>
+  )
+}
 
 const obj = (value: unknown): Record<string, unknown> =>
   value && typeof value === 'object' && !Array.isArray(value) ? (value as Record<string, unknown>) : {}
@@ -154,7 +209,7 @@ function RawInput({ run, reference }: { run: string; reference: RawRef }): JSX.E
   }
   return (
     <button type="button" className="st-link" onClick={load} disabled={state.loading}>
-      {state.loading ? T.loading : state.error ? `${T.loadFailed}: ${state.error}` : T.loadRaw}
+      {state.loading ? T.loading : state.error ? `${T.loadFailed}${T.colon}${state.error}` : T.loadRaw}
     </button>
   )
 }
@@ -205,7 +260,7 @@ function Mechanism({ event }: { event: TurnEvent }): JSX.Element {
         <p className="st-act">
           <Icon name="tool" size={13} />
           <b>{T.selected(event.count)}</b>
-          <span>{T.selectedTools(event.tools)}; {T.selectedSkills(event.skills)}</span>
+          <span>{T.selectedTools(event.tools)}{T.semi}{T.selectedSkills(event.skills)}</span>
         </p>
       )
     case 'register':
@@ -289,7 +344,13 @@ function Activity({ exchange, run }: { exchange: Exchange; run: string | null })
   )
 }
 
-function Turn({ exchange, run, busy }: { exchange: Exchange; run: string | null; busy: boolean }): JSX.Element {
+function Turn({ exchange, run, busy, marks, onMark }: {
+  exchange: Exchange
+  run: string | null
+  busy: boolean
+  marks: Mark[]
+  onMark?: (kind: string, note: string) => void
+}): JSX.Element {
   const text = replyText(exchange.execution)
   const late = timedOut(exchange.execution)
   const files = exchange.execution.deliverables ?? []
@@ -310,18 +371,37 @@ function Turn({ exchange, run, busy }: { exchange: Exchange; run: string | null;
               ))}
             </div>
           )}
+          <Marks given={marks} onMark={onMark} />
         </div>
       )}
     </div>
   )
 }
 
-export function TrialPane({ trial, run, onSay, onEnd }: { trial: TrialView; run: string | null; onSay?: (text: string) => void; onEnd?: () => void }): JSX.Element {
+export function TrialPane({ trial, run, onSay, onEnd, marking, question }: {
+  trial: TrialView
+  run: string | null
+  onSay?: (text: string) => void
+  onEnd?: () => void
+  marking?: Marking
+  /** The AI question of a trial the person holds: its last draft, and asking for another. */
+  question?: { state: LiveQuestion | null; onAsk: () => void }
+}): JSX.Element {
   const [draft, setDraft] = useState('')
   const end = useRef<HTMLDivElement>(null)
   useEffect(() => {
     end.current?.scrollIntoView({ block: 'end' })
   }, [trial.exchanges.length, trial.busy])
+  const asked = question?.state ?? null
+  const sent = !!asked?.message && trial.exchanges.some((exchange) => exchange.user === asked.message)
+  const [filled, setFilled] = useState<number | null>(null)
+  useEffect(() => {
+    // A new draft goes into the box once; one already sent is not put back when the pane opens again.
+    if (asked?.message && asked.at !== filled && !sent) {
+      setDraft(asked.message)
+      setFilled(asked.at)
+    }
+  }, [asked?.at, asked?.message, filled, sent])
   const running = trial.status === 'running'
   const s = stats(trial)
   const send = () => {
@@ -339,14 +419,42 @@ export function TrialPane({ trial, run, onSay, onEnd }: { trial: TrialView; run:
         <span>· {T.trialTurns(s.turns)}</span>
         {s.interceptions > 0 && <span>· {T.trialInterceptions(s.interceptions)}</span>}
         <span className="grow" />
+        {running && question && (
+          <button type="button" className="st-btn" title={T.questionHint} disabled={!!asked?.busy || !!trial.busy} onClick={question.onAsk}>
+            <Icon name="spark" size={13} />
+            {asked?.busy ? T.questionBusy : T.questionAsk}
+          </button>
+        )}
         {running && onEnd && <button type="button" className="st-btn" onClick={onEnd}>{T.trialEnd}</button>}
       </div>
       <div className="st-turns">
+        {marking && <p className="st-quiet">{T.marked}</p>}
+        {running && question && !trial.exchanges.length && <p className="st-quiet st-trialhint">{T.trialHint}</p>}
         {trial.exchanges.map((exchange, i) => (
-          <Turn key={i} exchange={exchange} run={run} busy={!!trial.busy && i === trial.exchanges.length - 1} />
+          <Turn
+            key={i}
+            exchange={exchange}
+            run={run}
+            busy={!!trial.busy && i === trial.exchanges.length - 1}
+            marks={(marking?.given ?? []).filter((mark) => mark.turn === i)}
+            onMark={marking ? (kind, note) => marking.onMark(i, kind, note) : undefined}
+          />
         ))}
         <div ref={end} />
       </div>
+      {running && asked && (asked.aim || asked.error) && (
+        <div className="st-aiq">
+          {asked.error ? (
+            <p className="st-bad">{T.questionFailed(asked.error)}</p>
+          ) : (
+            <>
+              <p><b>{T.questionAim}</b>{asked.aim}</p>
+              <p><b>{T.questionGood}</b>{asked.good}</p>
+              {!sent && <p className="st-quiet">{T.questionNote}</p>}
+            </>
+          )}
+        </div>
+      )}
       {running && onSay && (
         <div className="st-tcomposer">
           <textarea

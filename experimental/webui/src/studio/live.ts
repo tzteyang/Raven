@@ -9,13 +9,15 @@
    the person can do next, and `sendRemark` takes the steps one message
    stands for. */
 
+import { revisions, versionOf } from '../derive'
 import { T } from './copy'
 import { STAGES } from './curation'
-import { replayThread, requests } from './replay'
+import { replayThread, requests, trialsOf as sessionTrials } from './replay'
 
-import type { Exchange, Run, RunEntry } from '../model'
+import type { Exchange, Run, RunEntry, Signal } from '../model'
 import type { LiveSnapshot, LiveState, LiveSummary, StepReply } from './api'
 import type { CurationProgress, Entry, Footer, ProcessEntry, StageId, Thread, TrialView, TrialsEntry } from './types'
+import type { Mark } from './views/Trials'
 
 export interface LiveSession extends Thread {
   mode: 'live'
@@ -41,7 +43,7 @@ export function lastFooter(session: Thread): Footer | null {
 }
 
 const TRIAL = /^trial-(\d+)$/
-const BUSY = ['onboard', 'trial', 'assess', 'analyse', 'curate']
+const BUSY = ['onboard', 'trial', 'script', 'exam', 'assess', 'analyse', 'curate', 'revert']
 
 const trialTitle = (name: string, fallback: string): string => {
   const match = TRIAL.exec(name)
@@ -112,8 +114,16 @@ export function liveThread(snapshot: LiveSnapshot, run: Run | null): LiveSession
   }
   const base = run ? replayThread(snapshot.run ?? snapshot.id, run, entry) : null
   const versions = base?.versions ?? ['v0']
-  const current = base?.current ?? 'v0'
-  const head: Entry = { kind: 'head', key: 'head', task: run?.task ?? snapshot.task, baseline: T.liveBaseline, models: snapshot.models }
+  // A version put back after a later one names the installed version; the last one deployed otherwise.
+  const installed = run && state?.revision ? versionOf(state.revision, revisions(run)) : null
+  const current = installed ?? base?.current ?? 'v0'
+  const head: Entry = {
+    kind: 'head',
+    key: 'head',
+    task: run?.task ?? snapshot.task,
+    baseline: snapshot.start ? T.liveStartedFrom(snapshot.start) : T.liveBaseline,
+    models: snapshot.models,
+  }
   let entries: Entry[] = [head, ...(base?.entries.slice(1) ?? [])]
   const step = state?.step ?? null
   const running = snapshot.attached && step !== null && BUSY.includes(step)
@@ -165,8 +175,14 @@ export function liveThread(snapshot: LiveSnapshot, run: Run | null): LiveSession
     if (recorded) entries = entries.map((item) => (item === recorded ? { ...recorded, trials: [...recorded.trials, holding] } : item))
     else entries.push({ kind: 'trials', key: pendingKey, round, version: current, trials: [holding], pending: true })
   }
+  const heldOut = run?.pending?.holdout ?? {}
+  if (Object.keys(heldOut).length) {
+    entries.push({ kind: 'trials', key: `holdout-${round}`, round, version: current, trials: sessionTrials(heldOut, round, current, { holdout: true }), holdout: true })
+  }
   const remarks = run?.pending?.signals ?? []
   if (remarks.length) entries.push(...requests(run!, remarks, round, false))
+  const examined = run?.pending?.holdout_signals ?? []
+  if (examined.length) entries.push(...requests(run!, examined, round, false, true))
   if (running && step === 'assess') entries.push({ kind: 'note', key: 'assessing', tone: 'choice', text: T.liveAssessing })
   if (running && step === 'analyse') {
     entries.push(card(round, false, { kind: 'analysing' }, { analysis: 'running', signals: remarks }))
@@ -200,12 +216,26 @@ export function liveThread(snapshot: LiveSnapshot, run: Run | null): LiveSession
   }
 }
 
+const MARKED = /^(.*)#(\d+):(right|fix|wrong|missed)$/
+
+/** The person's marks on the turns of one trial, from the signals that carried them (session_host.py `_marks`). */
+export function marksOf(signals: Signal[], session: string): Mark[] {
+  return signals.flatMap((signal) =>
+    signal.items.flatMap((item) => {
+      const hit = MARKED.exec(item.id)
+      if (!hit || hit[1] !== session) return []
+      return [{ turn: Number(hit[2]) - 1, kind: hit[3], note: item.expected || item.note.replace(/^\[[^\]]*\] turn [^\s:]+:? ?/, '') }]
+    }),
+  )
+}
+
 /** What the person can do next in a live session. */
 export type Phase =
   | { kind: 'starting' }
   | { kind: 'unstarted'; error: string }
   | { kind: 'archived' }
   | { kind: 'ended' }
+  | { kind: 'failed'; step: 'analyse' | 'assess'; error: string }
   | { kind: 'detached' }
   | { kind: 'busy'; step: string }
   | { kind: 'trial' }
@@ -217,10 +247,15 @@ export type Phase =
 
 export function livePhase(session: LiveSession): Phase {
   const state = session.state
+  const retry = session.summary.retry
   if (session.archived) return { kind: 'archived' }
   if (state?.failed === 'starting') return { kind: 'unstarted', error: state.error ?? '' }
-  if (!session.summary.attached) return session.run && (session.status === 'finished' || session.status === 'error') ? { kind: 'ended' } : { kind: 'detached' }
+  if (!session.summary.attached) {
+    if (!session.run || (session.status !== 'finished' && session.status !== 'error')) return { kind: 'detached' }
+    return retry ? { kind: 'failed', ...retry } : { kind: 'ended' }
+  }
   if (!state || state.step === 'starting') return { kind: 'starting' }
+  if (state.status === 'error' && retry && !state.ended) return { kind: 'failed', ...retry }
   if (state.status === 'finished' || state.status === 'error' || state.ended) return { kind: 'ended' }
   if (state.trial) return { kind: 'trial' }
   if (state.step) return { kind: 'busy', step: state.step }
@@ -246,16 +281,17 @@ export async function closeRound(take: Take, settle: () => Promise<LiveState | n
   return take('analyse')
 }
 
-/** One message from the composer: the onboarding before the session is onboarded, else a remark that joins the round
-    in progress and, once the round has a trial, closes it (`closeRound`). */
+/** One message from the composer: the onboarding before the session is onboarded; a remark on the analysis while
+    the round waits for its curation, which the Curator hears; else a remark that joins the round in progress and,
+    once the round has a trial, closes it (`closeRound`). */
 export async function sendRemark(
   take: Take,
   settle: () => Promise<LiveState | null>,
-  message: { text: string; materials: string[]; onboarded: boolean; assess: boolean },
+  message: { text: string; materials: string[]; onboarded: boolean; assess: boolean; reviewing?: boolean },
 ): Promise<StepReply> {
   const body = { text: message.text, materials: message.materials }
   if (!message.onboarded) return take('onboard', body)
   const said = await take('signal', body)
-  if (!said.ok || !said.state?.pending?.sessions) return said
+  if (message.reviewing || !said.ok || !said.state?.pending?.sessions) return said
   return closeRound(take, settle, message.assess)
 }

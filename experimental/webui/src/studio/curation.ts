@@ -9,6 +9,7 @@
 
 import { attributionOf } from '../attribution'
 import { failure, overlay } from '../derive'
+import { T } from './copy'
 import { EMPTY, preparedPlaybooks } from './harness'
 
 import type { AttributionView } from '../attribution'
@@ -158,7 +159,7 @@ export function prepared(observations: Record<string, unknown>[]): Prepared[] {
       if (operation === 'playbook') {
         const spec = obj(obj(value).spec)
         const nodes = Array.isArray(spec.nodes) ? spec.nodes.map((node) => text(obj(node).id)).filter(Boolean) : []
-        summary = [text(spec.name), nodes.length ? `${nodes.length} nodes: ${nodes.join(', ')}` : ''].filter(Boolean).join(' · ')
+        summary = [text(spec.name), nodes.length ? T.nodes(nodes.length, nodes.join(', ')) : ''].filter(Boolean).join(' · ')
       } else if (value && typeof value === 'object' && !Array.isArray(value)) {
         summary = Object.keys(value).join(', ')
       } else if (Array.isArray(value)) {

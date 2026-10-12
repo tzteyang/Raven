@@ -8,7 +8,7 @@ ProgressEvent describes a pre-decision observation. Its offered tools can still 
 
 Only selected event kinds are delivered. Use allowed_controls and can_guide from the host. continue means no intervention, not permission. reject refuses a dispatch; revise supplies correction feedback for bounded resampling; finish supplies a truthful terminal reply. continue with unverified lets a dispatch through that the strategy could not judge (an exhausted or failed inference), naming why; it is never a refusal. Guidance and diagnostic reasons have different consumers.
 
-A valid decision is an intention. Read the host receipt before claiming a control was applied. Repeated observations, exhausted budgets and unsupported effects require explicit behavior. Mandatory per-call constraints need the binding's native dispatch gate; a voluntary self-check tool is insufficient.
+A valid decision is an intention. Read the host receipt before claiming a control was applied. Repeated observations, exhausted budgets and unsupported effects require explicit behavior. A prohibition on a specific external action needs the binding's native dispatch gate; this does not turn ordinary quality preferences into mandatory gates.
 
 ## Agent and peer requests
 
@@ -18,7 +18,7 @@ Use StrategyPeers to read a plan or effective capability view, request a plan re
 
 ## Initial behavior and revision
 
-Use deterministic checks for explicit, mechanically decidable constraints. When
+Only after lighter treatments prove insufficient, use narrow deterministic checks for explicit, mechanically decidable constraints. Ordinary output-quality checks must preserve useful deliverables and annotate uncertainty rather than suppressing the whole result. Explicit prohibitions and authorization boundaries still apply. When
 the task needs interpretation of meaning, joint requirements or evidence, the
 same operation may invoke the supplied infer dependency once. Curator authors
 the mechanism; the running worker model supplies the judgment. A separate

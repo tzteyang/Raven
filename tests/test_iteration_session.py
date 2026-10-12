@@ -1,7 +1,10 @@
 """A session performs the loop's steps one call each, records what `run` records, and resumes from its record."""
 
+import asyncio
 import json
+from copy import deepcopy
 from types import SimpleNamespace
+from unittest.mock import AsyncMock
 
 import pytest
 
@@ -13,9 +16,18 @@ from experimental.harness.loop import session as stepping
 from experimental.harness.loop.records import load, runs
 from experimental.harness.loop.run import run
 from experimental.harness.loop.session import Limits, Outcome, Session, StepError
+from experimental.harness.participation.exchange import ExchangeError
 from experimental.harness.participation.protocols import Handover, Signal
-from tests.test_iteration_run import CONTINUE, CURATE, FakeWorker, Scripted, Verifier, failing, passing
-from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
+from tests.test_iteration_run import (  # noqa: F401 -- the loop test's Analyst stand-in
+    CONTINUE,
+    CURATE,
+    FakeWorker,
+    Scripted,
+    Verifier,
+    failing,
+    passing,
+)
+from tests.test_iteration_run import analyses as analyses
 
 
 @pytest.fixture
@@ -240,6 +252,36 @@ async def test_the_caller_decides_after_each_analysis(tmp_path, curations, analy
 
 
 @pytest.mark.asyncio
+async def test_a_remark_on_the_analysis_reaches_the_curator_and_the_next_analysis(tmp_path, curations, analyses):
+    analyses.scripted.extend([CURATE, CONTINUE])
+    session = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3))
+    await session.onboard()
+    with pytest.raises(StepError, match="before its curation"):
+        session.remark(Signal("human", "Too early."))
+    await session.trial(student("Plan a trip"))
+    session.signal(Signal("human", "No budget question."))
+    assert await session.analyse() == Outcome("curate")
+    with pytest.raises(StepError, match="before its analysis"):
+        session.signal(Signal("human", "Not a round signal now."))
+    session.remark(Signal("human", "Keep the greeting as it is.", authority="external"))
+    resumed = Session.resume(FakeWorker(tmp_path), object(), session.path, limits=Limits(max_rounds=3))
+    assert [signal.text for signal in resumed.rounds[-1].signals] == [
+        "No budget question.",
+        "Keep the greeting as it is.",
+    ]
+    assert await resumed.curate()
+    assert [signal["text"] for signal in curations[1]["feedback"]["signals"]] == [
+        "No budget question.",
+        "Keep the greeting as it is.",
+    ]
+    with pytest.raises(StepError, match="before its curation"):
+        resumed.remark(Signal("human", "Too late."))
+    await resumed.trial(student("Plan again"))
+    await resumed.analyse()
+    assert analyses.calls[-1]["previous_signals"][-1].text == "Keep the greeting as it is."
+
+
+@pytest.mark.asyncio
 async def test_a_session_resumes_from_its_record_in_a_new_process(tmp_path, curations, analyses):
     analyses.scripted.extend([CURATE])
     first = Session.open(FakeWorker(tmp_path), object(), limits=Limits(max_rounds=3))
@@ -379,6 +421,147 @@ async def test_an_analysis_failure_is_recorded_as_the_loop_records_it(tmp_path, 
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("legacy", [False, True])
+async def test_retry_analysis_preserves_failed_attempt_and_reuses_only_training_evidence(
+    tmp_path, curations, analyses, monkeypatch, legacy
+):
+    analyses.scripted.extend([CONTINUE, CURATE])
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), limits=Limits(max_rounds=4), measuring={"measurement"})
+    await session.onboard()
+    await session.trial(student("Earlier input"))
+    session.signal(Signal("human", "Earlier judgement"))
+    await session.analyse()
+    previous = session.rounds[-1]
+    await session.trial(student("Current input"))
+    session.signal(Signal("human", "Current judgement"))
+    session.signal(Signal("measurement", "MEASUREMENT_ONLY"))
+    await session.holdout([Conversation(Scripted("unseen", "HOLDOUT_ONLY"), max_turns=1)], [Verifier(passing())])
+    answers, held_out = deepcopy(session.sessions), deepcopy(session.held_out)
+    calls = list(worker.runs)
+    with monkeypatch.context() as patch:
+        patch.setattr(
+            session.analyst, "review", AsyncMock(side_effect=ExchangeError("analyst: provider error: HTTP 503"))
+        )
+        with pytest.raises(ExchangeError, match="HTTP 503"):
+            await session.analyse()
+    failed = json.loads(session.path.read_text())
+    if legacy:
+        for key in ("error_step", "error_revision", "error_context"):
+            failed.pop(key)
+        session.path.write_text(json.dumps(failed))
+    restored = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    restored.retry_analysis()
+    saved = json.loads(session.path.read_text())
+    assert saved["status"] == "running" and len(saved["rounds"]) == 1
+    assert len(saved["analysis_failures"]) == 1
+    attempt = saved["analysis_failures"][0]
+    assert attempt["failed_round"] == failed["rounds"][-1]
+    assert (attempt["round"], attempt["revision"], attempt["error"]) == (2, worker.artifact_id, failed["error"])
+    assert attempt["recovered_at"].endswith("+00:00")
+    assert attempt["evidence_ref"] == f"iteration/{session.path.name}#/analysis_failures/0/failed_round"
+    assert restored.previous_feedback == previous.feedback and restored.previous_signals == previous.signals
+    assert stepping.evidence_fingerprint(restored.sessions) == stepping.evidence_fingerprint(answers)
+    assert stepping.evidence_fingerprint(restored.held_out) == stepping.evidence_fingerprint(held_out)
+    assert restored.held_out_signals == [passing()]
+    with pytest.raises(StepError, match="unfinished failed analysis"):
+        restored.retry_analysis()
+    restored = Session.resume(worker, object(), session.path, limits=Limits(max_rounds=4))
+    assert restored.record["analysis_failures"] == saved["analysis_failures"]
+    assert await restored.analyse() == Outcome("curate")
+    assert worker.runs == calls and len(restored.rounds) == 2
+    assert stepping.evidence_fingerprint(analyses.calls[-1]["sessions"]) == stepping.evidence_fingerprint(answers)
+    assert analyses.calls[-1]["previous"] == previous.feedback
+    assert all(signal.source != "measurement" for signal in analyses.calls[-1]["signals"])
+    assert "HOLDOUT_ONLY" not in str(analyses.calls[-1])
+    await restored.curate()
+    assert "HOLDOUT_ONLY" not in str(curations[-1]) and "MEASUREMENT_ONLY" not in str(curations[-1])
+    assert stepping.evidence_fingerprint(restored.rounds[-1].holdout) == stepping.evidence_fingerprint(held_out)
+
+
+@pytest.mark.asyncio
+async def test_a_failed_assessment_is_retried_on_its_trials_and_the_persons_signals_and_judged_whole_again(
+    tmp_path, curations, analyses
+):
+    from experimental.harness.loop.records import retryable_step
+
+    analyses.scripted.append(CURATE)
+
+    class Named:
+        def __init__(self, name, fail_once=False):
+            self.name, self.fail_once, self.calls = name, fail_once, 0
+
+        async def evaluate(self, sessions):
+            self.calls += 1
+            if self.fail_once and self.calls == 1:
+                for _ in range(1000):
+                    if any(signal.source == "steady" for signal in session.signals):
+                        break
+                    await asyncio.sleep(0)
+                raise ExchangeError("assessor: provider error: HTTP 503")
+            return Signal(self.name, f"{self.name} spoke")
+
+    steady, flaky = Named("steady"), Named("flaky", fail_once=True)
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), assessors=[steady, flaky])
+    await session.onboard()
+    await session.trial(student("Hi"))
+    session.signal(Signal("human", "Ask the budget first."))
+    calls = list(worker.runs)
+    with pytest.raises(ExchangeError, match="HTTP 503"):
+        await session.assess(steady, flaky)
+    failed = json.loads(session.path.read_text())
+    assert failed["error_step"] == "assess" and retryable_step(failed) == "assess"
+    assert [signal["source"] for signal in failed["rounds"][-1]["signals"]] == ["human", "steady"]
+    restored = Session.resume(worker, object(), session.path, assessors=[steady, flaky])
+    with pytest.raises(StepError, match="unfinished failed analysis"):
+        restored.retry_analysis()
+    assert json.loads(session.path.read_text()) == failed
+    assert restored.retry() == "assess"
+    assert [signal.source for signal in restored.signals] == ["human"]
+    saved = json.loads(session.path.read_text())
+    assert saved["status"] == "running" and saved["rounds"] == [] and "error" not in saved
+    [attempt] = saved["assessment_failures"]
+    assert attempt["error_step"] == "assess" and attempt["failed_round"] == failed["rounds"][-1]
+    assert attempt["evidence_ref"] == f"iteration/{session.path.name}#/assessment_failures/0/failed_round"
+    await restored.assess(steady, flaky)
+    assert [signal.source for signal in restored.signals] == ["human", "steady", "flaky"]
+    assert await restored.analyse() == Outcome("curate") and worker.runs == calls
+    with pytest.raises(StepError, match="unfinished failed analysis or assessment"):
+        restored.retry()
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("change", ["finished", "assess", "feedback", "revision", "context"])
+async def test_analysis_retry_refuses_unrelated_failure_or_changed_employee_without_writing(
+    tmp_path, curations, analyses, change
+):
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object())
+    await session.onboard()
+    await session.trial(student("Existing answer"))
+    with pytest.raises(IndexError):
+        await session.analyse()
+    record = json.loads(session.path.read_text())
+    if change == "finished":
+        record["status"] = "finished"
+    elif change == "assess":
+        record["error_step"] = "assess"
+    elif change == "feedback":
+        record["rounds"][-1]["feedback"] = CONTINUE.model_dump(mode="json")
+    elif change == "revision":
+        worker.artifact_id = "different-revision"
+    else:
+        record["error_context"] = "different-context"
+    session.path.write_text(json.dumps(record))
+    before = session.path.read_bytes()
+    restored = Session.resume(worker, object(), session.path)
+    with pytest.raises(StepError):
+        restored.retry_analysis()
+    assert session.path.read_bytes() == before
+
+
+@pytest.mark.asyncio
 async def test_a_measuring_source_is_recorded_with_the_round_but_reaches_neither_the_analyst_the_stop_nor_the_curator(
     tmp_path, curations, analyses
 ):
@@ -424,6 +607,120 @@ async def test_an_assessor_failing_after_another_spoke_ends_the_run_with_the_spo
         ["Never asked the budget."]
     ]
     assert "pending" not in record
+
+
+@pytest.mark.asyncio
+async def test_assessment_failure_keeps_every_verdict_returned_before_cancellation(tmp_path):
+    released = asyncio.Event()
+    returned = []
+
+    class Immediate:
+        async def evaluate(self, sessions):
+            returned.append("Immediate verdict")
+            return failing(returned[-1])
+
+    class Completed:
+        async def evaluate(self, sessions):
+            await released.wait()
+            returned.append("The completed verdict must survive.")
+            return failing(returned[-1])
+
+    class Broken:
+        async def evaluate(self, sessions):
+            asyncio.get_running_loop().call_soon(released.set)
+            raise RuntimeError("the other judge failed")
+
+    session = Session.open(FakeWorker(tmp_path), object())
+    with pytest.raises(RuntimeError, match="other judge failed"):
+        await session.assess(Immediate(), Completed(), Broken())
+    assert returned[0] == "Immediate verdict"
+    record = json.loads(session.path.read_text())
+    assert [signal["text"] for signal in record["rounds"][0]["signals"]] == returned
+
+
+@pytest.mark.asyncio
+async def test_failed_holdout_assessment_keeps_answers_for_retry_after_resume(tmp_path, curations):
+    seen = []
+
+    class Judge:
+        async def evaluate(self, sessions):
+            seen.append(sessions)
+            if len(seen) == 1:
+                raise TimeoutError("judge deadline")
+            return passing()
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object())
+    await session.onboard()
+    judge = Judge()
+    trial = Conversation(Scripted("unseen", "Held-out question"), max_turns=1)
+    with pytest.raises(TimeoutError, match="judge deadline"):
+        await session.holdout([trial], [judge])
+    record = json.loads(session.path.read_text())
+    assert list(record["pending"]["holdout"]) == ["unseen"]
+    assert record["pending"]["holdout_assessment"]["sessions"] == ["unseen"]
+    resumed = Session.resume(worker, object(), session.path)
+    with pytest.raises(StepError, match="unfinished held-out assessment first"):
+        await resumed.holdout([trial], [judge])
+    revision = worker.artifact_id
+    worker.artifact_id = "different-revision"
+    with pytest.raises(StepError, match="employee or requirements changed"):
+        await resumed.holdout([], [judge], retry=True)
+    worker.artifact_id = revision
+    assert await resumed.holdout([], [judge], retry=True) == (passing(),)
+    assert len(worker.runs) == 1 and stepping.evidence_fingerprint(seen[0]) == stepping.evidence_fingerprint(seen[1])
+    assert resumed.pending_holdout is None and resumed.held_out_signals == [passing()]
+    assert "holdout_assessment" not in json.loads(session.path.read_text())["pending"]
+    with pytest.raises(StepError, match="only an unfinished"):
+        await resumed.holdout([], [judge], retry=True)
+
+
+class Meeting:
+    """Assessors that answer only once all of them are judging, each after its own delay; a failing one raises as
+    soon as it starts."""
+
+    def __init__(self, count):
+        self.count, self.started, self.finished, self.all = count, [], [], asyncio.Event()
+
+    def assessor(self, name, delay=0.0, fail=False):
+        meeting = self
+
+        class Judging:
+            async def evaluate(self, sessions):
+                meeting.started.append(name)
+                if fail:
+                    raise FileNotFoundError(f"{name}.md")
+                if len(meeting.started) == meeting.count:
+                    meeting.all.set()
+                await asyncio.wait_for(meeting.all.wait(), 5)
+                await asyncio.sleep(delay)
+                meeting.finished.append(name)
+                return Signal(name, f"{name} spoke")
+
+        return Judging()
+
+
+@pytest.mark.asyncio
+async def test_assessors_judge_at_once_and_the_round_holds_their_signals_in_their_order(tmp_path, curations, analyses):
+    meeting = Meeting(2)
+    session = Session.open(FakeWorker(tmp_path), object())
+    await session.onboard()
+    await session.trial(student("Hi"))
+    given = await session.assess(meeting.assessor("slow", 0.05), meeting.assessor("quick"))
+    assert meeting.finished == ["quick", "slow"] and [signal.source for signal in given] == ["slow", "quick"]
+    record = json.loads(session.path.read_text())
+    assert [signal["source"] for signal in record["pending"]["signals"]] == ["slow", "quick"]
+
+    held = Meeting(2)
+    signals = await stepping.assess((held.assessor("first", 0.05), held.assessor("second")), session.sessions)
+    assert held.finished == ["second", "first"] and [signal.source for signal in signals] == ["first", "second"]
+    stopped = Meeting(3)
+    with pytest.raises(FileNotFoundError, match="broken.md"):
+        await stepping.assess(
+            (stopped.assessor("waiting"), stopped.assessor("broken", fail=True), stopped.assessor("late")),
+            session.sessions,
+        )
+    assert stopped.started == ["waiting", "broken", "late"] and stopped.finished == []
 
 
 @pytest.mark.asyncio

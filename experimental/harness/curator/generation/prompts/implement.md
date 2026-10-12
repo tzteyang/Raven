@@ -47,3 +47,5 @@ Every selected value has its required implementation or resource; references res
 The artifact schema contains only targets selected in the current plan. available_targets also lists the
 other host-granted strategy choices. If an implementation needs another strategy owner (for example Capability to prepare new Skills), revise selection first and complete the new design. A supporting Prompt belongs to its consuming strategy and does not need a separate target.
 Do not add an unselected value to the artifact or omit required resource admission to fit the current schema.
+
+Keeping failures visible means an honest diagnostic alongside grounded usable output, not automatically replacing the entire deliverable. Preserve explicitly prohibited-action gates.

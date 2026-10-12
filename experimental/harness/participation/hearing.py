@@ -9,16 +9,19 @@ signal, history entry and execution observation bound for the Curator through he
 Earlier cultivations the counterpart brings (the scenario's prior) reach the Curator the same way: their histories,
 projected, under opaque labels (`heard_prior`).
 
-Of the round's executions the Curator receives the turns the Analyst cited: a requirement's evidence names turn ids,
-and only those turns' exchanges go. A session goes by an opaque label (`opaque`) wherever the Curator can see it,
-in the cited turns, in the mechanisms' activity rows and in the history, since a trial's name would say which
-situation the round played; the label is the same for the same trial in every round, so those views line up.
+Of the round's executions the Curator receives every turn, each with the worker's reply, and the turns the Analyst
+cited marked: a requirement's evidence names turn ids. The turns that went well go too, since a revision made from
+the failures alone cannot tell what it must not break. Held-out turns never go. A session goes by an opaque label
+(`opaque`) wherever the Curator can see it, in the turns, in the mechanisms' activity rows and in the history, since a
+trial's name would say which situation the round played; the label is the same for the same trial in every round, so
+those views line up.
 """
 
 import hashlib
 import re
 
 from experimental.harness.participation.audience import project
+from experimental.harness.raven_adapter.observe import deliverable_texts
 
 
 def opaque(name: str) -> str:
@@ -74,21 +77,27 @@ def cited(sessions, feedback) -> list[tuple[str, object]]:
 
 
 def heard_observations(sessions, feedback, task_id) -> list[dict]:
-    """Execution observations of the cited turns, under opaque session keys, in the rows the Curator reads."""
+    """Execution observations of every turn, under opaque session keys, in the rows the Curator reads: `cited` marks
+    the turns a requirement names, `reply` is what the worker handed back."""
+    named = {id(exchange) for _, exchange in cited(sessions, feedback)}
     rows = []
-    for key, exchange in cited(sessions, feedback):
-        seen = project(exchange, "curator")
-        rows.append(
-            {
-                "kind": "task.execution",
-                "task_id": task_id,
-                "session": key,
-                "turn_id": seen["execution"]["turn_id"],
-                "artifact_id": seen["execution"]["artifact_id"],
-                "source": "trial",
-                "user": seen["user"],
-                "outcome": seen["execution"]["outcome"],
-                "records": seen["execution"]["records"],
-            }
-        )
+    for key, exchanges in sessions.items():
+        for exchange in exchanges:
+            seen = project(exchange, "curator")
+            rows.append(
+                {
+                    "kind": "task.execution",
+                    "task_id": task_id,
+                    "session": opaque(key),
+                    "turn_id": seen["execution"]["turn_id"],
+                    "artifact_id": seen["execution"]["artifact_id"],
+                    "source": "trial",
+                    "cited": id(exchange) in named,
+                    "reply": exchange.assistant,
+                    "deliverables": deliverable_texts(exchange.execution),
+                    "user": seen["user"],
+                    "outcome": seen["execution"]["outcome"],
+                    "records": seen["execution"]["records"],
+                }
+            )
     return rows

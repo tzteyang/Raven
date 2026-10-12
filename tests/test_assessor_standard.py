@@ -1,5 +1,6 @@
 """The evaluation side's standard keeps its three sources apart and its automatic Assessor judges faithfully."""
 
+import asyncio
 import json
 
 import pytest
@@ -284,6 +285,45 @@ async def test_the_assessor_judges_every_criterion_and_refuses_a_partial_scoreca
         "no reply within 600 seconds; the turn was stopped"
     )
     assert await Assessor(Provider(), Standard(), sources=("declared",)).evaluate(sessions) is None
+
+
+@pytest.mark.asyncio
+async def test_twins_judge_apart_at_once_by_the_same_standard_and_their_records_join_the_original(tmp_path):
+    class Meeting(Provider):
+        def __init__(self):
+            super().__init__()
+            self.both = asyncio.Event()
+
+        async def chat_with_retry(self, messages=None, tools=None, model=None, **kwargs):
+            self.requests.append(messages)
+            if len(self.requests) == 2:
+                self.both.set()
+            await asyncio.wait_for(self.both.wait(), 5)
+            [key] = json.loads(messages[1]["content"])["conversations"]
+            return response(
+                "submit_verdicts", {"verdicts": [verdict("asks-budget", "pass" if key == "a" else "fail", key)]}
+            )
+
+    keep = tmp_path / "standard.json"
+    standard = Standard.declared([("asks-budget", "Ask the budget first.")])
+    assessor = Assessor(Meeting(), standard, sources=("declared",), keep=keep)
+    sessions = {key: [Exchange("Plan a trip", execution(f"t-{key}", "What is your budget?"))] for key in ("a", "b")}
+    twins = [assessor.twin(), assessor.twin()]
+    signals = await asyncio.gather(
+        *(twin.evaluate({key: turns}) for twin, (key, turns) in zip(twins, sessions.items()))
+    )
+    assert [[(item.result, item.session) for item in signal.items] for signal in signals] == [
+        [("pass", "a")],
+        [("fail", "b")],
+    ]
+    assert assessor.assessments == [] and not keep.exists()
+    assessor.adopt(twins)
+    kept = json.loads(keep.read_text())
+    assert [row["id"] for row in kept["assessments"]] == [f"{assessor.run_id}:assessment-{n}" for n in (1, 2)]
+    assert [row["items"][0]["session"] for row in kept["assessments"]] == ["a", "b"]
+    assert len(kept["trace"]) == len(twins[0].trace) + len(twins[1].trace)
+    with pytest.raises(ValueError, match="no twins"):
+        Assessor(Provider(), sources=("derived",), builder=object()).twin()
 
 
 @pytest.mark.asyncio

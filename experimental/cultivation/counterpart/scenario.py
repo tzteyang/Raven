@@ -52,11 +52,12 @@ class Scenario:
     handed: tuple[str, ...] = ()
 
     @classmethod
-    def of(cls, read: Contract) -> "Scenario":
-        """The counterpart's view of a loaded contract: the materials and checks it may receive. The counterpart judges
-        by checks, so a scenario without any it may read is refused."""
+    def of(cls, read: Contract, *, judged: bool = True) -> "Scenario":
+        """The counterpart's view of a loaded contract: the materials and checks the counterpart may receive. The agency judges
+        by checks, so a scenario without any it may read is refused, unless the counterpart does not judge it (`judged`), as
+        in a person's live session, whose checks may come later."""
         checks = [check for check in read.statements.checks if "counterpart" in check.visibility]
-        if not checks:
+        if judged and not checks:
             raise ValueError(f"the scenario has no checks for the counterpart to judge by: {read.root}")
         held = {name: material for name, material in read.materials.items() if "counterpart" in material.visibility}
         return cls(

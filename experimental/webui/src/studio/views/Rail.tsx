@@ -4,7 +4,8 @@
 
 import { useState } from 'react'
 
-import { T } from '../copy'
+import { LANGS, T, lang, switchLang } from '../copy'
+import { detail, switchDetail } from '../detail'
 import { Icon, RavenMark } from './bits'
 
 import type { JSX, ReactNode } from 'react'
@@ -57,6 +58,16 @@ export function Rail({ live, runs, loading, selected, onSelect, onNew }: {
     <aside className="rail">
       <div className="railtop">
         <span className="wordmark"><RavenMark />RAVEN<span className="st-sub">{T.product}</span></span>
+        <span className="st-langs" role="group" aria-label={T.langTitle}>
+          {LANGS.map((item) => (
+            <button key={item.code} type="button" className="st-lang" title={item.name} aria-label={item.name} aria-pressed={item.code === lang} onClick={() => item.code !== lang && switchLang(item.code)}>
+              {item.short}
+            </button>
+          ))}
+        </span>
+        <button type="button" className="st-lang" title={T.detailTitle} onClick={() => switchDetail(detail === 'full' ? 'simple' : 'full')}>
+          {detail === 'full' ? T.detailSimple : T.detailFull}
+        </button>
       </div>
       {live && (
         <nav className="rail-nav">

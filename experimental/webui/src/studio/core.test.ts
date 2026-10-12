@@ -11,7 +11,7 @@ import { outputs, prepared, reads } from './curation'
 import { counts, hunks, lineDiff } from './diff'
 import { LOOSE, documents, harnessMap, layers, preparedPlaybooks, targetState } from './harness'
 import { leaks } from './inspect'
-import { closeRound, livePhase, liveThread, processes, sendRemark } from './live'
+import { closeRound, livePhase, liveThread, marksOf, processes, sendRemark } from './live'
 import { interventions, modelInputs, turnEvents } from './mechanisms'
 import { observedOf, replayThread } from './replay'
 import { versionAt } from './spy'
@@ -378,9 +378,43 @@ describe('live session', () => {
     expect(livePhase(gone)).toEqual({ kind: 'detached' })
     const finished = { ...run(), stop: 'archived as Agency v2' }
     expect(livePhase(liveThread(snapshot({ attached: false, state: null }), finished))).toEqual({ kind: 'ended' })
+    const broke: Run = { ...run(), status: 'error' }
+    const retry = { step: 'assess' as const, error: 'assessor: timed out' }
+    expect(livePhase(liveThread(snapshot({ attached: false, state: null, retry }), broke))).toEqual({ kind: 'failed', ...retry })
+    expect(livePhase(liveThread(snapshot({ attached: false, state: null }), broke))).toEqual({ kind: 'ended' })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error' }), retry }), broke))).toEqual({ kind: 'failed', ...retry })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error' }) }), broke))).toEqual({ kind: 'ended' })
+    expect(livePhase(liveThread(snapshot({ state: state({ status: 'error', ended: true }), retry }), broke))).toEqual({ kind: 'ended' })
     const archived = liveThread(snapshot({ attached: false, archived: { name: 'Agency v2', version: 'v2' } }), finished)
     expect(archived.entries.filter((entry) => entry.kind === 'note').map((entry) => entry.key)).toEqual(['archive'])
     expect([archived.archived, livePhase(archived)]).toEqual([{ name: 'Agency v2', version: 'v2' }, { kind: 'archived' }])
+  })
+
+  it('shows the exam beside the round, names the version put back, and reads the marks on a trial', () => {
+    const fix = { id: 'week-1#1:fix', result: 'fail' as const, session: 'week-1', expected: 'list the urgent posts', actual: '', note: '[should have been] turn z: list the urgent posts' }
+    const wrong = { ...fix, id: 'week-1#2:wrong', expected: '', note: '[wrong] turn y: made up a post' }
+    const examined: Run = {
+      ...inProgress(),
+      pending: {
+        sessions: { 'week-1': [{ user: 'Monday', execution: { turn_id: 'z', artifact_id: '', records: [] } }] },
+        signals: [{ ...signal('week-1 turn 1: should have been', [], [], 'human'), items: [fix, wrong] }],
+        holdout: { 'exam-1': [{ user: 'Exam week', execution: { turn_id: 'e', artifact_id: '', records: [] } }] },
+        holdout_signals: [signal('scored', [{ id: 'exam-1:report', result: 'fail' }], [], 'examiner')],
+      },
+    }
+    const latest = liveThread(snapshot({ state: state({ pending: { sessions: 1, signals: 1 } }) }), examined)
+    expect(latest.current).toBe('v2')
+    const v1 = run().initial_curation[0].active_artifact_id ?? ''
+    const back = liveThread(snapshot({ state: state({ revision: v1, pending: { sessions: 1, signals: 1 } }), start: 'exp14 after-A' }), examined)
+    expect([back.current, back.versions]).toEqual(['v1', ['v0', 'v1', 'v2']])
+    expect(back.entries[0]).toMatchObject({ kind: 'head', baseline: T.liveStartedFrom('exp14 after-A') })
+    expect(back.entries.find((entry) => entry.kind === 'trials' && entry.holdout)).toMatchObject({ key: 'holdout-3', trials: [{ id: '3:holdout:exam-1', holdout: true }] })
+    expect(back.entries.some((entry) => entry.kind === 'score' && entry.holdout && entry.signal.source === 'examiner')).toBe(true)
+    expect(marksOf(examined.pending!.signals!, 'week-1')).toEqual([
+      { turn: 0, kind: 'fix', note: 'list the urgent posts' },
+      { turn: 1, kind: 'wrong', note: 'made up a post' },
+    ])
+    expect(marksOf(examined.pending!.signals!, 'week')).toEqual([])
   })
 
   it('sends a message as the steps it stands for, and stops the chain at a step that fails', async () => {
@@ -400,6 +434,8 @@ describe('live session', () => {
     expect(ops()).toEqual(['signal', 'analyse'])
     await sendRemark(take(1), settle, { text: 'fix the quote', materials: [], onboarded: true, assess: true })
     expect(ops()).toEqual(['signal', 'assess', 'analyse'])
+    await sendRemark(take(1), settle, { text: 'keep the greeting', materials: [], onboarded: true, assess: true, reviewing: true })
+    expect(ops()).toEqual(['signal'])
     expect((await sendRemark(take(1, 'signal'), settle, { text: 'x', materials: [], onboarded: true, assess: false })).ok).toBe(false)
     expect(ops()).toEqual(['signal'])
     const failed = await closeRound(take(1), async () => state({ failed: 'assess', error: 'boom' }), true)
