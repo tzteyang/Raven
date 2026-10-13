@@ -1,0 +1,878 @@
+{
+  "cutoff": 1791754965.8643477,
+  "items": [
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-a6acd033c4b6-2",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791754968.2170181,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-a6acd033c4b6-2",
+      "question": "x08",
+      "stage": "scored",
+      "started": 1791755087.9605331,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-a6acd033c4b6-2",
+      "question": "x09",
+      "stage": "scored",
+      "started": 1791755149.0872037,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-a6acd033c4b6-2",
+      "question": "x10",
+      "stage": "dispatching",
+      "started": 1791755181.8491569,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y02",
+      "stage": "scored",
+      "started": 1791754913.0855253,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y03",
+      "stage": "scored",
+      "started": 1791754955.8981712,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y04",
+      "stage": "scored",
+      "started": 1791755091.5567017,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y05",
+      "stage": "scored",
+      "started": 1791755152.5078459,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y06",
+      "stage": "dispatching",
+      "started": 1791755186.301763,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791754931.722934,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y02",
+      "stage": "scored",
+      "started": 1791754981.452515,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y03",
+      "stage": "scored",
+      "started": 1791755100.1713958,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y04",
+      "stage": "scored",
+      "started": 1791755119.4495087,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y05",
+      "stage": "scored",
+      "started": 1791755161.981202,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y06",
+      "stage": "dispatching",
+      "started": 1791755190.9671729,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-8f4bd586e294-1",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791755091.6325467,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-8f4bd586e294-1",
+      "question": "y02",
+      "stage": "scored",
+      "started": 1791755141.5257142,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-8f4bd586e294-1",
+      "question": "y03",
+      "stage": "dispatching",
+      "started": 1791755178.9178238,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-1",
+      "question": "y07",
+      "stage": "scored",
+      "started": 1791754938.450113,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-1",
+      "question": "y08",
+      "stage": "scored",
+      "started": 1791754975.5438254,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-1",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791755091.3019161,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-1",
+      "question": "y10",
+      "stage": "scored",
+      "started": 1791755150.7415075,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-2",
+      "question": "x01",
+      "stage": "judging",
+      "started": 1791755185.429929,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "x09",
+      "stage": "scored",
+      "started": 1791754985.3452067,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "x10",
+      "stage": "scored",
+      "started": 1791755105.2905211,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791755149.6601992,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "y02",
+      "stage": "dispatching",
+      "started": 1791755182.2700167,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y05",
+      "stage": "scored",
+      "started": 1791754947.9834235,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y06",
+      "stage": "dispatching",
+      "started": 1791755240.8580184,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-v0-2",
+      "question": "x10",
+      "stage": "scored",
+      "started": 1791754906.2744007,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791755093.6538303,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y02",
+      "stage": "scored",
+      "started": 1791755159.8071206,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y03",
+      "stage": "dispatching",
+      "started": 1791755193.9083455,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-0f2eaf8f25a4-2",
+      "question": "y07",
+      "stage": "scored",
+      "started": 1791754974.9544635,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-0f2eaf8f25a4-2",
+      "question": "y08",
+      "stage": "scored",
+      "started": 1791755099.4783123,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-0f2eaf8f25a4-2",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791755122.0898025,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-0f2eaf8f25a4-2",
+      "question": "y10",
+      "stage": "dispatching",
+      "started": 1791755171.7318878,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x01",
+      "stage": "scored",
+      "started": 1791754920.7719364,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x02",
+      "stage": "scored",
+      "started": 1791754987.3307815,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x03",
+      "stage": "scored",
+      "started": 1791755110.4578173,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x04",
+      "stage": "scored",
+      "started": 1791755160.2574062,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x05",
+      "stage": "dispatching",
+      "started": 1791755191.9516795,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791754938.981331,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y10",
+      "stage": "dispatching",
+      "started": 1791755238.527887,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x03",
+      "stage": "scored",
+      "started": 1791754927.9769185,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x04",
+      "stage": "scored",
+      "started": 1791754981.4213057,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x05",
+      "stage": "scored",
+      "started": 1791755107.6313958,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x06",
+      "stage": "scored",
+      "started": 1791755136.5308757,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x07",
+      "stage": "dispatching",
+      "started": 1791755179.521025,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "question": "x04",
+      "stage": "scored",
+      "started": 1791754965.2496898,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "question": "x05",
+      "stage": "scored",
+      "started": 1791755081.5412767,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "question": "x06",
+      "stage": "scored",
+      "started": 1791755110.0402606,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791755154.5192928,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "question": "x08",
+      "stage": "dispatching",
+      "started": 1791755184.8043473,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-plain-2",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791754956.5119102,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-plain-2",
+      "question": "x08",
+      "stage": "dispatching",
+      "started": 1791755174.5658941,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791754982.6252716,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-v0-1",
+      "question": "y10",
+      "stage": "scored",
+      "started": 1791755098.23869,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-v0-2",
+      "question": "x01",
+      "stage": "dispatching",
+      "started": 1791755116.4488916,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-rewrite",
+      "run_id": "parallel-v1-v0-1",
+      "question": "x02",
+      "stage": "dispatching",
+      "started": 1791755251.1485054,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "question": "x08",
+      "stage": "scored",
+      "started": 1791754937.666811,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "question": "x09",
+      "stage": "scored",
+      "started": 1791754975.994414,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "question": "x10",
+      "stage": "scored",
+      "started": 1791755102.2467444,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791755123.3370361,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "question": "y02",
+      "stage": "dispatching",
+      "started": 1791755172.4733214,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "x09",
+      "stage": "scored",
+      "started": 1791754913.4307585,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "x10",
+      "stage": "scored",
+      "started": 1791754953.143569,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y01",
+      "stage": "scored",
+      "started": 1791754988.861477,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y02",
+      "stage": "scored",
+      "started": 1791755111.4683719,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y03",
+      "stage": "scored",
+      "started": 1791755165.8935735,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "question": "y04",
+      "stage": "dispatching",
+      "started": 1791755196.593164,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x05",
+      "stage": "scored",
+      "started": 1791754922.6228018,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x06",
+      "stage": "scored",
+      "started": 1791754962.5213022,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791755087.9805398,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x08",
+      "stage": "scored",
+      "started": 1791755127.984752,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x09",
+      "stage": "dispatching",
+      "started": 1791755176.7612927,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "review-digest",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791754958.2601447,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "review-digest",
+      "run_id": "parallel-v1-v0-2",
+      "question": "y10",
+      "stage": "scored",
+      "started": 1791754991.6835718,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "review-digest",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x01",
+      "stage": "dispatching",
+      "started": 1791755124.6246452,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "saas-metric",
+      "run_id": "parallel-v1-v0-3",
+      "question": "y09",
+      "stage": "scored",
+      "started": 1791755062.8802278,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "saas-metric",
+      "run_id": "parallel-v1-v0-3",
+      "question": "y10",
+      "stage": "scored",
+      "started": 1791755148.8969069,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "weekly-report",
+      "run_id": "parallel-v1-v0-3",
+      "question": "y07",
+      "stage": "scored",
+      "started": 1791754915.254059,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "weekly-report",
+      "run_id": "parallel-v1-v0-3",
+      "question": "y08",
+      "stage": "scored",
+      "started": 1791754952.7100759,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "weekly-report",
+      "run_id": "parallel-v1-v0-3",
+      "question": "y09",
+      "stage": "dispatching",
+      "started": 1791755243.027779,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-f2d14854e9a6-2",
+      "question": "x06",
+      "stage": "scored",
+      "started": 1791754988.8148952,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-f2d14854e9a6-2",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791755122.0361576,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-f2d14854e9a6-2",
+      "question": "x08",
+      "stage": "dispatching",
+      "started": 1791755172.726092,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x04",
+      "stage": "scored",
+      "started": 1791754919.130501,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x05",
+      "stage": "scored",
+      "started": 1791754938.9846232,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x06",
+      "stage": "scored",
+      "started": 1791754963.4153259,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x07",
+      "stage": "scored",
+      "started": 1791754984.2507446,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x08",
+      "stage": "scored",
+      "started": 1791755110.8523333,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x09",
+      "stage": "scored",
+      "started": 1791755166.5842586,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "question": "x10",
+      "stage": "dispatching",
+      "started": 1791755198.3091044,
+      "error": false,
+      "error_marker": false
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x02",
+      "stage": "scored",
+      "started": 1791755058.793703,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x03",
+      "stage": "scored",
+      "started": 1791755163.0108035,
+      "error": false,
+      "error_marker": true
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-v0-3",
+      "question": "x04",
+      "stage": "dispatching",
+      "started": 1791755196.7947984,
+      "error": false,
+      "error_marker": false
+    }
+  ]
+}

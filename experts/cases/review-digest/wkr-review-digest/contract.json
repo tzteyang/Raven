@@ -1,0 +1,32 @@
+{
+ "checks": {
+  "R-rank": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "R-quote": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "R-team": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "R-form": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  }
+ }
+}

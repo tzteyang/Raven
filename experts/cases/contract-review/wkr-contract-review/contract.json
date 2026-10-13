@@ -1,0 +1,32 @@
+{
+ "checks": {
+  "V-fix": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "V-track": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "V-comment": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "V-file": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  }
+ }
+}

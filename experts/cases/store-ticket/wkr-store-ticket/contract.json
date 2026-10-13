@@ -1,0 +1,32 @@
+{
+ "checks": {
+  "D-answer": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "D-first": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "D-reason": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "D-scope": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  }
+ }
+}

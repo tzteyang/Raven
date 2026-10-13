@@ -1,0 +1,32 @@
+{
+ "checks": {
+  "T-title": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "T-words": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "T-points": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "T-format": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  }
+ }
+}

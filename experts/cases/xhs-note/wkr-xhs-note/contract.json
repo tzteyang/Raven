@@ -1,0 +1,39 @@
+{
+ "checks": {
+  "XN-title": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "XN-body": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "XN-clean": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "XN-tags": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  },
+  "XN-format": {
+   "visibility": [
+    "counterpart",
+    "analyst",
+    "curator"
+   ]
+  }
+ }
+}

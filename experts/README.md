@@ -1,22 +1,34 @@
 # Studio 培养出来的 22 个专家
 
-每个子目录（`agents/expert-<名字>/`）是一个 Raven ACP agent，都是用户确认验收的那一版：
+这个目录是 Studio 自进化循环的批量产出和全部材料。完整的操作手册（怎么配 key、用什么模型、怎么跑 Studio 和批量流水线、
+怎么把专家装进宿主 Raven）见 [GUIDE.md](GUIDE.md)；怎么做一个新案例见 [BUILDING.md](BUILDING.md)。
+
+| 目录 | 内容 |
+|---|---|
+| `agents/expert-<名字>/` | 22 个用户确认验收的专家，每个是一个 Raven ACP agent |
+| `cases/<案例>/` | 每个专家的培养和考试数据：三套工作规则、40 道题、40 个脚本、场景包、生成和复核脚本；`records/` 是我们的验收原始记录，`probes/` 是评审探测答卷 |
+| `common/` | 批量流水线：培养驱动、导出、验收、评审、成绩单 |
+| `reports/` | 我们跑这批专家时的成绩单和审计记录（含 10-11 OpenRouter 额度事故的处理记录） |
+
+每个专家目录里：
 
 - `subagent.json`：派活说明，宿主 Raven 按其中的 `description` / `owns` 决定把什么活交给它；
 - `harness.json`：培养出来的 Harness、它的策略状态和任务说明；
-- `config.json`：培养时用的模型设置，不含任何 key；
-- `run.py`：启动器，从宿主 Raven 的配置里借模型服务，按 ACP 在 stdio 上提供服务。
+- `config.json`：验收时员工用的模型设置（`z-ai/glm-5.3-flash`，`reasoningEffort` medium），不含任何 key；
+- `run.py`：启动器，通过 `import raven` 找到宿主所在的 Raven 源码检出，从宿主 Raven 的配置里借模型服务，按 ACP 在 stdio 上提供服务。
 
 ## 怎么用
 
 把要用的专家目录拷进宿主 Raven 的 agents 目录（`$RAVEN_HOME/agents/`，默认 `~/.raven/agents/`），宿主会自动发现它们。
+宿主要从这个仓库的源码检出运行（`uv run raven ...`），配置里要有能调到 `z-ai/glm-5.3-flash` 的模型服务（例如 OpenRouter）。
 不要把这些目录放进仓库根目录的 `agents/`：从源码检出运行的 Raven 会自动发现那里的 agent，所有员工都会多出这些专家。
-
-`run.py` 里写死了培养时那台机器上 Raven-port 检出的路径（`REPOSITORY`），换一台机器要改成那里的检出路径。
+详细步骤见 [GUIDE.md](GUIDE.md)。
 
 ## 验收结果
 
-每个专家用三个版本各跑 3 次验收：原版 Raven → 初始配置 v0 → 训练后。数字是 3 次合计完全答对的答卷数 / 答卷总数，每组 10 道题、3 次共 30 份答卷。
+每个专家用三个版本跑验收：原版 Raven → 初始配置 v0 → 训练后，原则上每个版本 3 次。数字是合计完全答对的答卷数 / 答卷总数，每组 10 道题跑一次就是 10 份答卷，分母是 20 或 10 的就是只跑了 2 次或 1 次。
+这些数字都能从 `cases/<案例>/records/` 里的原始记录复算：在仓库根目录运行 `uv run python experts/common/scorecard.py --records <案例>`。
+验收时员工用的是 `z-ai/glm-5.3-flash`：93% 的答卷走 OpenRouter，其余是 2026-10-11 21:59 UTC OpenRouter 额度用完之后，走我们内部网关上的同名模型 `glm-5.3-flash`（两边是否完全等价没有独立验证）。评审：有检查点的 153 次验收都登记为 kimi-k3（effort high）；最早 5 个专家（refund-desk、poster-review、store-ticket、compete-table、complaint-desk）的 39 份报告早于这项登记，记录里没有评审模型。
 同规则：考题在培养时没出现过，但用的是培养时那两套工作规则（R1、R2）；新规则：用的是员工从没见过的第三套工作规则（R3）。
 
 ### 网课退款客服（`agents/expert-refund-desk`）

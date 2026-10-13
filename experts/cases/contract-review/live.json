@@ -1,0 +1,30 @@
+{
+  "config": "../../../../secrets/raven-experts.json",
+  "root": "../../../../runs/experts/contract-review",
+  "scenario": "wkr-contract-review",
+  "rounds": 12,
+  "turns": 8,
+  "timeout": 1800,
+  "models": {
+    "curator": "openai/gpt-6-astra",
+    "attribution": "openai/gpt-6-astra",
+    "analyst": "openai/gpt-6-astra",
+    "assessor": "moonshotai/kimi-k3"
+  },
+  "efforts": {
+    "curator": "high",
+    "attribution": "high",
+    "analyst": "high",
+    "assessor": "high"
+  },
+  "curator_calls": 160,
+  "curator_queries": 240,
+  "attribution_calls": 16,
+  "attribution_queries": 48,
+  "delegation": false,
+  "scripts": "scripts.json",
+  "assessor": "../../common/examiner.py:make",
+  "standard": [
+    "sedimented"
+  ]
+}

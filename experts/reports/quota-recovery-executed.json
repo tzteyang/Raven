@@ -1,0 +1,347 @@
+{
+ "at": 1791755954.9740674,
+ "changes": [
+  {
+   "case": "amazon-listing",
+   "run_id": "parallel-v1-a6acd033c4b6-2",
+   "questions": [
+    "x07",
+    "x08",
+    "x09",
+    "x10",
+    "y01"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-a6acd033c4b6-2/incidents/quota-20261011",
+   "retained_unchanged": 6
+  },
+  {
+   "case": "amazon-listing",
+   "run_id": "parallel-v1-plain-2",
+   "questions": [
+    "y03",
+    "y04",
+    "y05",
+    "y06",
+    "y07"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-plain-2/incidents/quota-20261011",
+   "retained_unchanged": 12
+  },
+  {
+   "case": "amazon-listing",
+   "run_id": "parallel-v1-v0-2",
+   "questions": [
+    "y02",
+    "y03",
+    "y04",
+    "y05",
+    "y06",
+    "y07"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-v0-2/incidents/quota-20261011",
+   "retained_unchanged": 11
+  },
+  {
+   "case": "booking-page",
+   "run_id": "parallel-v1-8f4bd586e294-1",
+   "questions": [
+    "x10",
+    "y01",
+    "y02",
+    "y03"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-8f4bd586e294-1/incidents/quota-20261011",
+   "retained_unchanged": 9
+  },
+  {
+   "case": "booking-page",
+   "run_id": "parallel-v1-plain-1",
+   "questions": [
+    "y08",
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-plain-1/incidents/quota-20261011",
+   "retained_unchanged": 17
+  },
+  {
+   "case": "booking-page",
+   "run_id": "parallel-v1-plain-2",
+   "questions": [
+    "x01",
+    "x02",
+    "x03"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-plain-2/incidents/quota-20261011",
+   "retained_unchanged": 0
+  },
+  {
+   "case": "booking-page",
+   "run_id": "parallel-v1-v0-1",
+   "questions": [
+    "x09",
+    "x10",
+    "y01",
+    "y02",
+    "y03"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-v0-1/incidents/quota-20261011",
+   "retained_unchanged": 8
+  },
+  {
+   "case": "cafe-copy",
+   "run_id": "parallel-v1-v0-1",
+   "questions": [
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/cafe-copy/accept-runs/parallel-v1-v0-1/incidents/quota-20261011",
+   "retained_unchanged": 19
+  },
+  {
+   "case": "contract-review",
+   "run_id": "parallel-v1-plain-2",
+   "questions": [
+    "y05",
+    "y06",
+    "y07"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-review/accept-runs/parallel-v1-plain-2/incidents/quota-20261011",
+   "retained_unchanged": 14
+  },
+  {
+   "case": "contract-review",
+   "run_id": "parallel-v1-v0-2",
+   "questions": [
+    "x10",
+    "y01",
+    "y02",
+    "y03",
+    "y04"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-review/accept-runs/parallel-v1-v0-2/incidents/quota-20261011",
+   "retained_unchanged": 9
+  },
+  {
+   "case": "contract-sheet",
+   "run_id": "parallel-v1-0f2eaf8f25a4-2",
+   "questions": [
+    "y07",
+    "y08",
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-0f2eaf8f25a4-2/incidents/quota-20261011",
+   "retained_unchanged": 16
+  },
+  {
+   "case": "contract-sheet",
+   "run_id": "parallel-v1-plain-3",
+   "questions": [
+    "x02",
+    "x03",
+    "x04",
+    "x05",
+    "x06"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-plain-3/incidents/quota-20261011",
+   "retained_unchanged": 1
+  },
+  {
+   "case": "contract-sheet",
+   "run_id": "parallel-v1-v0-2",
+   "questions": [
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-v0-2/incidents/quota-20261011",
+   "retained_unchanged": 18
+  },
+  {
+   "case": "discovery-coach",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "x04",
+    "x05",
+    "x06",
+    "x07"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/discovery-coach/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 3
+  },
+  {
+   "case": "landing-page",
+   "run_id": "parallel-v1-d1d627d32b26-3",
+   "questions": [
+    "x04",
+    "x05",
+    "x06",
+    "x07",
+    "x08",
+    "x09",
+    "x10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-d1d627d32b26-3/incidents/quota-20261011",
+   "retained_unchanged": 3
+  },
+  {
+   "case": "landing-page",
+   "run_id": "parallel-v1-plain-2",
+   "questions": [
+    "x07",
+    "x08",
+    "x09",
+    "x10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-plain-2/incidents/quota-20261011",
+   "retained_unchanged": 6
+  },
+  {
+   "case": "landing-page",
+   "run_id": "parallel-v1-v0-1",
+   "questions": [
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-v0-1/incidents/quota-20261011",
+   "retained_unchanged": 18
+  },
+  {
+   "case": "landing-page",
+   "run_id": "parallel-v1-v0-2",
+   "questions": [
+    "x01"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-v0-2/incidents/quota-20261011",
+   "retained_unchanged": 0
+  },
+  {
+   "case": "resume-rewrite",
+   "run_id": "parallel-v1-v0-1",
+   "questions": [
+    "x02",
+    "x03"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-rewrite/accept-runs/parallel-v1-v0-1/incidents/quota-20261011",
+   "retained_unchanged": 1
+  },
+  {
+   "case": "resume-screen",
+   "run_id": "parallel-v1-44acc1a36688-3",
+   "questions": [
+    "x09",
+    "x10",
+    "y01",
+    "y02",
+    "y03",
+    "y04"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-44acc1a36688-3/incidents/quota-20261011",
+   "retained_unchanged": 8
+  },
+  {
+   "case": "resume-screen",
+   "run_id": "parallel-v1-plain-2",
+   "questions": [
+    "y01",
+    "y02",
+    "y03",
+    "y04",
+    "y05"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-plain-2/incidents/quota-20261011",
+   "retained_unchanged": 10
+  },
+  {
+   "case": "resume-screen",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "x06",
+    "x07",
+    "x08",
+    "x09",
+    "x10",
+    "y01"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 5
+  },
+  {
+   "case": "review-digest",
+   "run_id": "parallel-v1-v0-2",
+   "questions": [
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/review-digest/accept-runs/parallel-v1-v0-2/incidents/quota-20261011",
+   "retained_unchanged": 19
+  },
+  {
+   "case": "review-digest",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "x01"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/review-digest/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 0
+  },
+  {
+   "case": "saas-metric",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/saas-metric/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 18
+  },
+  {
+   "case": "weekly-report",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "y08",
+    "y09",
+    "y10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/weekly-report/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 17
+  },
+  {
+   "case": "xhs-note",
+   "run_id": "parallel-v1-f2d14854e9a6-2",
+   "questions": [
+    "x06",
+    "x07",
+    "x08",
+    "x09",
+    "x10"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-f2d14854e9a6-2/incidents/quota-20261011",
+   "retained_unchanged": 5
+  },
+  {
+   "case": "xhs-note",
+   "run_id": "parallel-v1-plain-3",
+   "questions": [
+    "x07",
+    "x08",
+    "x09",
+    "x10",
+    "y01"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-plain-3/incidents/quota-20261011",
+   "retained_unchanged": 6
+  },
+  {
+   "case": "xhs-note",
+   "run_id": "parallel-v1-v0-3",
+   "questions": [
+    "x02",
+    "x03",
+    "x04",
+    "x05"
+   ],
+   "backup": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-v0-3/incidents/quota-20261011",
+   "retained_unchanged": 1
+  }
+ ],
+ "questions": 109
+}

@@ -1,0 +1,39 @@
+{
+  "checks": {
+    "RW-fact": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "RW-writing": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "RW-keyword": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "RW-role": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "RW-format": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    }
+  }
+}

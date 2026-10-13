@@ -1,0 +1,32 @@
+[
+  {
+    "name": "t12",
+    "label": "right",
+    "expect": [],
+    "answer": "## Listing Title\nTailHaven TH-212 Automatic Pet Feeder, 5000 mL, Black Color, Dry Food Dispenser\n\n## Key Features\n- FOOD CAPACITY — Holds 5000 mL (21.13 cups) of dry food.\n- KIBBLE AND MEALS — For dry kibble 4-14 mm; schedule up to 5 meals per day.\n- VOICE AND POWER — Record your 8-second message; USB powered; black color.\n- SIZE AND WEIGHT — Body (L x W x H): 224 x 172 x 363 mm (8.82 x 6.77 x 14.29 inches); net weight: 2180 g (4.81 lb).\n- DOCUMENTED DETAILS — ETL Listed."
+  },
+  {
+    "name": "t12",
+    "label": "wrong",
+    "expect": ["AL-title", "AL-units", "AL-safe"],
+    "answer": "## Listing Title\nTailHaven Automatic Pet Feeder, 5000 mL, Black Color, Dry Food Dispenser\n\n## Key Features\n- FOOD CAPACITY — Holds 5000 mL (20.0 cups) of dry food.\n- KIBBLE AND MEALS — For dry kibble 4-14 mm; schedule up to 5 meals per day.\n- VOICE AND POWER — Record your 8-second message; USB powered; black colour.\n- SIZE AND WEIGHT — Body (L x W x H): 224 x 172 x 363 mm (8.82 x 6.77 x 14.29 inches); net weight: 2180 g (4.81 lb).\n- DOCUMENTED DETAILS — ETL Listed; FCC Part 15 compliant; U.L. Listed. Guaranteed convenience."
+  },
+  {
+    "name": "y06",
+    "label": "right",
+    "expect": [],
+    "answer": "## Product Title\nWhiskerWay WW-406 Automatic Pet Feeder, 3 L, Gray Color, Dry Food Dispenser\n\n## Highlights\n- FOOD STORAGE: Holds 3 L (12.68 cups). Not for wet food; place the feeder on a level indoor surface.\n- KIBBLE SCHEDULE: Use dry kibble 2-12 mm; set up to 6 meals per day.\n- VOICE AND POWER: Record your 10-second message; gray color; DC adapter powered.\n- PRODUCT SIZE: Body (L x W x H): 19.2 x 18.1 x 31.8 cm (7.56 x 7.13 x 12.52 inches); net weight: 1.88 kg (4.14 lb).\n- DOCUMENTED DETAILS: RoHS compliant."
+  },
+  {
+    "name": "y06",
+    "label": "wrong",
+    "expect": ["AL-facts", "AL-safe", "AL-format"],
+    "answer": "## Product Title\nWhiskerWay WW-406 Automatic Pet Feeder, 3 L, Gray Color, Dry Food Dispenser\n\n## Highlights\n- Food Storage: Holds 3 L (12.68 cups).\n- KIBBLE SCHEDULE: Use dry kibble 2-12 mm; set up to 6 meals per day.\n- VOICE AND POWER: Record your 10-second message; gray color; DC adapter powered.\n- PRODUCT SIZE: Body (L x W x H): 19.2 x 18.1 x 31.8 cm (7.56 x 7.13 x 12.52 inches); net weight: 1.88 kg (4.14 lb).\n- DOCUMENTED DETAILS: RoHS compliant; FCC Part 15 compliant; CE marked."
+  },
+  {
+    "name": "t12",
+    "label": "right+wrapper",
+    "expect": ["AL-format"],
+    "answer": "以下为已核查版本，已去除 Guaranteed、UL、colour 这些不合规文字。\n\n## Listing Title\nTailHaven TH-212 Automatic Pet Feeder, 5000 mL, Black Color, Dry Food Dispenser\n\n## Key Features\n- FOOD CAPACITY — Holds 5000 mL (21.13 cups) of dry food.\n- KIBBLE AND MEALS — For dry kibble 4-14 mm; schedule up to 5 meals per day.\n- VOICE AND POWER — Record your 8-second message; USB powered; black color.\n- SIZE AND WEIGHT — Body (L x W x H): 224 x 172 x 363 mm (8.82 x 6.77 x 14.29 inches); net weight: 2180 g (4.81 lb).\n- DOCUMENTED DETAILS — ETL Listed.\n\n补充说明：没用 no.1、FCC，也没有误写成 99 cups。"
+  }
+]

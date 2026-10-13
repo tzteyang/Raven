@@ -1,0 +1,14 @@
+[
+ {"name": "t12", "label": "right", "expect": [],
+  "answer": "结论：建议面试\n\n依据：相关年限 6.6 年，满足 2 年；带团队 16 人（只算直接下属），满足 12 人；收银系统用过，满足。\n\n面试时追问：\n（1）在家乐超市带“8 到 14 人的班组”，实际常态带多少人？\n（2）2023.07 到 2023.11 之间有 3 个月空档，这段时间在做什么？"},
+ {"name": "t12", "label": "wrong: lower-level members counted, part-time counted fully, age and gender mentioned, 3 questions incl. a clear fact, preface",
+  "expect": ["H-reason", "H-sensitive", "H-followup", "H-format"],
+  "answer": "初筛如下：\n结论：建议面试\n\n依据：相关年限 7.3 年，满足 2 年；带团队 22 人，满足 12 人；收银系统用过，满足。候选人 44 岁，女，稳定性尚可。\n\n面试时追问：\n（1）在家乐超市带“8 到 14 人的班组”，实际常态带多少人？\n（2）在好邻居便利带了多少人？\n（3）2023.07 到 2023.11 之间有 3 个月空档，这段时间在做什么？"},
+ {"name": "y07", "label": "right", "expect": [],
+  "answer": "结论：不通过\n\n理由：相关年限 4.5 年（只算近 5 年），满足 3 年；带团队 26 人，满足 20 人；MES 没写用过，不满足。\n\n追问：\n1. “日常使用 Excel 台账”，在华锐五金排产和报工用的是什么系统，MES 接触过多少？\n2. “带 19 到 23 人的班组”，在瑞丰汽配实际常态带多少人？\n3. “精工机械，生产计划员（兼职）”，这份兼职每周投入多少时间、和华锐五金的全职怎么兼顾？"},
+ {"name": "y07", "label": "wrong: wrong verdict, no 5-year window, a question without a quote, a misquote",
+  "expect": ["H-verdict", "H-reason", "H-followup"],
+  "answer": "结论：通过\n\n理由：相关年限 6.3 年，满足 3 年；带团队 26 人，满足 20 人；MES 没写用过，但用过 ERP，可以接受。\n\n追问：\n1. 在华锐五金排产和报工用的是什么系统，MES 接触过多少？\n2. “带 20 人班组”，在瑞丰汽配实际常态带多少人？\n3. “精工机械，生产计划员（兼职）”，这份兼职每周投入多少时间、和华锐五金的全职怎么兼顾？"},
+ {"name": "t12", "label": "wrapped: correct delivery with a preface and notes", "expect": ["H-format"],
+  "answer": "简历和岗位条件已读完，按规则逐条核对如下：\n\n结论：建议面试\n\n依据：相关年限 6.6 年，满足 2 年；带团队 16 人（只算直接下属），满足 12 人；收银系统用过，满足。\n\n面试时追问：\n（1）在家乐超市带“8 到 14 人的班组”，实际常态带多少人？\n（2）2023.07 到 2023.11 之间有 3 个月空档，这段时间在做什么？\n\n说明：兼职和全职重叠的月份没有再算；茶语时光只算 2 名班组长。"}
+]

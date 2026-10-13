@@ -1,0 +1,1319 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 54,
+  "error": null,
+  "full_reply": "现在用本地 Playwright/Chromium 做双端实看检查（375×667 与 1280×800，屏蔽外部网络）。\n\n路由处理写法有误（应为 route.request.url），修正后重跑。\n\n两端截图已实看：手机首屏内三款价格与“立即预订”按钮完整可见，店名在页顶 120px 内、左缘约 20px；桌面 main 居中、宽约 960px；无横向滚动、无脚本错误、无外部资源请求。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>麦穗烘焙｜品牌预订</title>\n<style>\n  :root {\n    --primary: #8B5E3C;\n    --bg: #F6EFE3;\n    --ink: #2B2B2B;\n    --deco: #C9A063;\n    --white: #FFFFFF;\n  }\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  body {\n    background: var(--bg);\n    color: var(--ink);\n    font-family: \"Noto Sans SC\", sans-serif;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: \"Noto Serif SC\", serif;\n  }\n  .site-header {\n    padding: 18px 20px 0 20px;\n  }\n  .logo {\n    font-family: \"Noto Serif SC\", serif;\n    font-size: 22px;\n    font-weight: 700;\n    color: var(--primary);\n    letter-spacing: 2px;\n  }\n  .logo-line {\n    border: none;\n    border-top: 2px solid var(--deco);\n    margin-top: 10px;\n  }\n  main {\n    max-width: 1000px;\n    margin: 0 auto;\n    padding: 0 20px 32px 20px;\n  }\n  .hero {\n    padding: 18px 0 6px 0;\n  }\n  .hero h1 {\n    font-size: 30px;\n    color: var(--primary);\n    line-height: 1.3;\n  }\n  .hero p {\n    margin-top: 8px;\n    font-size: 16px;\n    color: var(--ink);\n  }\n  .products {\n    margin-top: 14px;\n  }\n  .product {\n    background: var(--white);\n    border: 1px solid var(--deco);\n    border-radius: 8px;\n    padding: 12px 16px;\n    margin-bottom: 10px;\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n  }\n  .product .name {\n    font-size: 16px;\n    font-weight: 600;\n    color: var(--ink);\n  }\n  .product .price {\n    font-size: 16px;\n    font-weight: 700;\n    color: var(--primary);\n    white-space: nowrap;\n  }\n  .info {\n    margin-top: 14px;\n    border-top: 2px solid var(--deco);\n    padding-top: 12px;\n  }\n  .info p {\n    font-size: 15px;\n    line-height: 1.7;\n    color: var(--ink);\n  }\n  .cta {\n    margin-top: 18px;\n    text-align: center;\n  }\n  .cta a {\n    display: inline-block;\n    background: var(--primary);\n    color: var(--white);\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 18px;\n    font-weight: 700;\n    text-decoration: none;\n    border-radius: 8px;\n    padding: 14px 48px;\n  }\n  @media (min-width: 700px) {\n    .site-header { padding-left: 0; }\n    .hero h1 { font-size: 38px; }\n    .hero p { font-size: 18px; }\n    .product { padding: 16px 20px; }\n    .product .name, .product .price { font-size: 18px; }\n  }\n</style>\n</head>\n<body>\n<header class=\"site-header\">\n  <div class=\"logo\">麦穗烘焙</div>\n  <hr class=\"logo-line\">\n</header>\n<main id=\"预订\">\n  <section class=\"hero\">\n    <h1>一盒心意，正好分享</h1>\n    <p>每日手作，按约定日期到店领取。</p>\n  </section>\n  <section class=\"products\">\n    <div class=\"product\">\n      <span class=\"name\">低糖莲蓉蛋黄月饼</span>\n      <span class=\"price\">68元 / 6枚</span>\n    </div>\n    <div class=\"product\">\n      <span class=\"name\">陈皮红豆月饼</span>\n      <span class=\"price\">178元 / 6枚</span>\n    </div>\n    <div class=\"product\">\n      <span class=\"name\">桂花乌龙月饼</span>\n      <span class=\"price\">73元 / 6枚</span>\n    </div>\n  </section>\n  <section class=\"info\">\n    <p>预订截止：11月5日18:00。</p>\n    <p>到店自提：清河路26号，10:00—19:00。</p>\n    <p>添加店长企业微信 maisui021 预订。</p>\n  </section>\n  <section class=\"cta\">\n    <a href=\"#预订\">立即预订</a>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（名称价格同卡片）、截止说明、自提说明、预订方式均原样可见，各产品只显示一次，主按钮文字精确为“立即预订”；状态展示本题不适用。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "  .logo {\n    font-family: \"Noto Serif SC\", serif;",
+      "problem": "规则要求h1至h6标题字体首项为“Noto Serif SC”，其他文字首项必须为“Noto Sans SC”。店名标志用的是div.logo而非标题元素（测量值s1 heading:false），属于其他文字，font-family第一项应为“Noto Sans SC”，却写成了“Noto Serif SC”。"
+     }
+    ],
+    "reason": "五色、装饰色仅作边框、对比度（最低4.88≥4.5）均合格；仅店名标志作为非标题文字误用Noto Serif SC作首项字体，计一处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值effects与restrictedElements均为空，无渐变/阴影/滤镜/混合模式，无图片、canvas、视频、iframe、外部资源与脚本；主按钮四角实测均为8px。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口文档宽度等于视口宽度无横向滚动；手机首屏内三款价格（底边≤341）与主按钮（底边517.5）完整可见；店名底边50≤120、左边缘20在16–28内；桌面main宽1000且两侧空白各140，居中合格。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无额外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 31,
+  "error": null,
+  "full_reply": "我先读取本次的工作规则和内容数据。\n\n规则与内容已读齐。现在按本次规则制作自包含 landing.html。\n\n页面已写好。现在用本地 Playwright/Chromium 做双端实检并截图。\n\n指标全部达标。现在实际查看两端截图。\n\n两端截图均已实看：手机首屏内三款价格与主按钮完整可见，店名居中于页顶，无横向滚动、无遮挡；桌面布局居中、样式符合品牌规则。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>青叶茶事 · 把秋日装进礼盒</title>\n<style>\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  html, body { background: #F0F4E8; }\n  body {\n    font-family: Arial, sans-serif;\n    color: #24312B;\n    -webkit-text-size-adjust: 100%;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: Georgia, serif;\n    color: #245546;\n  }\n  main {\n    max-width: 920px;\n    margin: 0 auto;\n    padding: 0 20px 40px;\n  }\n  .logo {\n    text-align: center;\n    padding-top: 18px;\n  }\n  .logo span {\n    font-family: Georgia, serif;\n    font-size: 26px;\n    letter-spacing: 6px;\n    color: #245546;\n    display: inline-block;\n    border-bottom: 2px solid #AAB97D;\n    padding-bottom: 6px;\n  }\n  .hero {\n    text-align: center;\n    padding: 26px 0 6px;\n  }\n  .hero h1 {\n    font-size: 34px;\n    line-height: 1.3;\n  }\n  .hero p {\n    margin-top: 10px;\n    font-size: 16px;\n    line-height: 1.6;\n  }\n  .rule {\n    border: 0;\n    border-top: 1px solid #AAB97D;\n    margin: 22px 0;\n  }\n  .cards {\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n  }\n  .card {\n    background: #FFFFFF;\n    border: 1px solid #AAB97D;\n    border-radius: 0;\n    padding: 14px 16px;\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n  }\n  .card h2 {\n    font-size: 19px;\n    line-height: 1.4;\n  }\n  .price {\n    font-size: 16px;\n    color: #24312B;\n    white-space: nowrap;\n  }\n  .info {\n    margin-top: 22px;\n    background: #FFFFFF;\n    border: 1px solid #AAB97D;\n    padding: 16px;\n  }\n  .info p {\n    font-size: 15px;\n    line-height: 1.7;\n  }\n  .info p + p { margin-top: 4px; }\n  .cta-wrap {\n    text-align: center;\n    margin-top: 26px;\n  }\n  .cta {\n    display: inline-block;\n    background: #245546;\n    color: #FFFFFF;\n    font-family: Arial, sans-serif;\n    font-size: 17px;\n    text-decoration: none;\n    border-radius: 0;\n    padding: 14px 34px;\n    border: 2px solid #245546;\n  }\n  .book {\n    margin-top: 26px;\n    text-align: center;\n  }\n  .book h2 {\n    font-size: 20px;\n    margin-bottom: 8px;\n  }\n  .book p {\n    font-size: 15px;\n    line-height: 1.7;\n  }\n  .leaf {\n    display: block;\n    margin: 26px auto 0;\n  }\n  @media (max-width: 480px) {\n    .hero h1 { font-size: 28px; }\n    .card { flex-direction: column; gap: 4px; align-items: flex-start; }\n    .card h2 { font-size: 18px; }\n  }\n</style>\n</head>\n<body>\n<main>\n  <div class=\"logo\"><span>青叶茶事</span></div>\n\n  <section class=\"hero\">\n    <h1>把秋日装进礼盒</h1>\n    <p>每日手作，按约定日期到店领取。</p>\n  </section>\n\n  <hr class=\"rule\">\n\n  <section class=\"cards\">\n    <div class=\"card\">\n      <h2>炭焙铁观音茶礼</h2>\n      <div class=\"price\">193元 / 10包</div>\n    </div>\n    <div class=\"card\">\n      <h2>金骏眉便携茶礼</h2>\n      <div class=\"price\">153元 / 10包</div>\n    </div>\n    <div class=\"card\">\n      <h2>陈皮普洱随行盒</h2>\n      <div class=\"price\">98元 / 12包</div>\n    </div>\n  </section>\n\n  <section class=\"info\">\n    <p>预订截止：11月6日18:00。</p>\n    <p>到店自提：花园巷9号，10:00—19:00。</p>\n  </section>\n\n  <div class=\"cta-wrap\">\n    <a class=\"cta\" href=\"#book\">查看预订方式</a>\n  </div>\n\n  <section class=\"book\" id=\"book\">\n    <h2>预订方式</h2>\n    <p>添加店长企业微信 qingye022 预订。</p>\n  </section>\n\n  <svg class=\"leaf\" width=\"46\" height=\"24\" viewBox=\"0 0 46 24\" aria-hidden=\"true\">\n    <line x1=\"0\" y1=\"12\" x2=\"46\" y2=\"12\" stroke=\"#AAB97D\" stroke-width=\"1\"/>\n    <path d=\"M23 3 C 30 8, 30 16, 23 21 C 16 16, 16 8, 23 3 Z\" fill=\"none\" stroke=\"#AAB97D\" stroke-width=\"1.5\"/>\n  </svg>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题（h1内）、简介、三款产品名称与价格（每款一次且同卡）、截止说明、自提说明、预订方式均原样可见，主按钮文字精确为“查看预订方式”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "<line x1=\"0\" y1=\"12\" x2=\"46\" y2=\"12\" stroke=\"#AAB97D\" stroke-width=\"1\"/>",
+      "problem": "该SVG line未设fill，浏览器实际渲染出默认填充色#000000（测量值paints记录svg-fill actual #000000），违反颜色规则：只可用五色（#245546/#F0F4E8/#24312B/#AAB97D/#FFFFFF），SVG填充也须遵守；应加fill=\"none\"。"
+     },
+     {
+      "quote": ".logo span {\n    font-family: Georgia, serif;",
+      "problem": "店名标志是span而非h1-h6标题（测量style s1 heading:false），按规则“其他文字font-family第一项必须是Arial”，此处第一项为Georgia，违反字体规则；应改为Arial为首项（或改用标题元素）。"
+     }
+    ],
+    "reason": "五色中出现了测量确认的SVG默认填充黑#000000；店名非标题文字字体首项用了Georgia而非Arial。其余文字对比度均≥4.5、装饰色未作文字色。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角实测均为0px，无图片/canvas/视频/iframe/外部资源/脚本，SVG仅画非文字图形。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口文档宽度等于视口宽度无横向滚动；手机首屏内三款价格（底边最大470.55）与主按钮（底边679.55）完整落在0-700内；店名底边63≤110且水平中心195与视口中心195误差0；桌面main宽920≤920，两侧空白260/260差0。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无额外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 67,
+  "error": null,
+  "full_reply": "我先读取工作目录中的工作规则和内容数据。\n\n规则与内容已读齐。要点：五色限制（装饰色只作边框/图形）、字体首项要求、无 JS/外部资源、手机 375×667 首屏须含全部价格与主按钮、店名顶部 120px 内左缘 16–28px、桌面 main ≤1000px 居中。现在编写 landing.html。\n\n现在用本地 Playwright/Chromium 做双端实检（375×667 与 1280×800），屏蔽外部网络并截图。\n\n桌面与首屏几何均达标，但手机端店名文字左缘在 60px（SVG 标志在前推挤），超出 16–28px 要求。调整顺序：文字标志在前、SVG 移到其后。\n\n几何全部达标。现在实际查看两端截图。\n\n两端截图实看通过：手机首屏含全部价格与主按钮、店名位置合规、无横向滚动、无加载/脚本错误（外部网络已屏蔽仍正常渲染）；桌面 main 1000px 居中、样式一致。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 check_page.py】\nimport asyncio, sys\nfrom playwright.async_api import async_playwright\n\nURL = \"file:///tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/x03/landing.html\"\nOUT = \"/tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/x03/\"\n\nasync def main():\n    async with async_playwright() as p:\n        browser = await p.chromium.launch()\n        for name, w, h in [(\"mobile\", 375, 667), (\"desktop\", 1280, 800)]:\n            ctx = await browser.new_context(viewport={\"width\": w, \"height\": h})\n            page = await ctx.new_page()\n            errors = []\n            page.on(\"pageerror\", lambda e: errors.append(str(e)))\n            page.on(\"requestfailed\", lambda r: errors.append(\"REQFAIL \" + r.url))\n            await page.goto(URL, wait_until=\"load\")\n            # block external network then reload to verify offline rendering\n            await page.route(\"**/*\", lambda route: asyncio.ensure_future(\n                route.abort()) if route.request.url.startswith(\"http\") else asyncio.ensure_future(route.continue_()))\n            await page.reload(wait_until=\"load\")\n            hscroll = await page.evaluate(\"document.documentElement.scrollWidth > document.documentElement.clientWidth\")\n            await page.screenshot(path=OUT + f\"shot_{name}_top.png\")\n            await page.screenshot(path=OUT + f\"shot_{name}_full.png\", full_page=True)\n            # geometry checks\n            geo = await page.evaluate(\"\"\"() => {\n                const r = s => { const e = document.querySelector(s); if(!e) return null;\n                    const b = e.getBoundingClientRect(); return {t:b.top,b:b.bottom,l:b.left,r:b.right}; };\n                const m = document.querySelector('main').getBoundingClientRect();\n                return { brand: r('.brand'), lastPrice: r('.cards .card:last-child .price'),\n                         cta: r('.cta'), mainW: m.width, mainL: m.left, mainR: m.right,\n                         vw: document.documentElement.clientWidth };\n            }\"\"\")\n            print(name, \"hscroll:\", hscroll, \"errors:\", errors)\n            print(name, \"geo:\", geo)\n            await ctx.close()\n        await browser.close()\n\nasyncio.run(main())\n\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>麦穗烘焙｜品牌预订</title>\n<style>\n  * { box-sizing: border-box; margin: 0; padding: 0; }\n  html, body { background: #F6EFE3; }\n  body {\n    font-family: \"Noto Sans SC\", sans-serif;\n    color: #2B2B2B;\n    line-height: 1.6;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: \"Noto Serif SC\", serif;\n    color: #2B2B2B;\n  }\n  main {\n    max-width: 1000px;\n    margin: 0 auto;\n    padding: 0 20px 48px;\n  }\n  .topbar {\n    display: flex;\n    align-items: center;\n    gap: 10px;\n    padding: 18px 0 10px;\n  }\n  .brand {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-weight: 700;\n    font-size: 22px;\n    letter-spacing: 2px;\n    color: #2B2B2B;\n  }\n  .hero {\n    border-top: 2px solid #C9A063;\n    padding-top: 22px;\n    margin-top: 6px;\n  }\n  .hero h1 {\n    font-size: 34px;\n    line-height: 1.3;\n  }\n  .intro {\n    margin-top: 10px;\n    font-size: 16px;\n    color: #2B2B2B;\n  }\n  .cards {\n    margin-top: 22px;\n    display: flex;\n    flex-direction: column;\n    gap: 12px;\n  }\n  .card {\n    background: #FFFFFF;\n    border: 1px solid #C9A063;\n    border-radius: 8px;\n    padding: 14px 18px;\n    display: flex;\n    align-items: baseline;\n    justify-content: space-between;\n    gap: 12px;\n  }\n  .card h2 {\n    font-size: 19px;\n  }\n  .price {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 17px;\n    font-weight: 700;\n    color: #8B5E3C;\n    white-space: nowrap;\n  }\n  .cta-row {\n    margin-top: 22px;\n  }\n  .cta {\n    display: inline-block;\n    background: #8B5E3C;\n    color: #FFFFFF;\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 18px;\n    font-weight: 700;\n    text-decoration: none;\n    text-align: center;\n    border: 0;\n    border-radius: 8px;\n    padding: 13px 46px;\n  }\n  .notes {\n    margin-top: 30px;\n    border-top: 2px solid #C9A063;\n    padding-top: 18px;\n    display: flex;\n    flex-direction: column;\n    gap: 8px;\n  }\n  .notes p {\n    font-size: 15px;\n    color: #2B2B2B;\n  }\n  .notes .book {\n    font-weight: 700;\n    color: #8B5E3C;\n  }\n  .deco {\n    display: block;\n    margin: 26px auto 0;\n  }\n  @media (min-width: 700px) {\n    main { padding: 0 20px 64px; }\n    .topbar { padding: 26px 0 14px; }\n    .brand { font-size: 26px; }\n    .hero h1 { font-size: 44px; }\n    .intro { font-size: 18px; }\n    .cards {\n      flex-direction: row;\n      gap: 16px;\n      margin-top: 30px;\n    }\n    .card {\n      flex: 1;\n      flex-direction: column;\n      align-items: flex-start;\n      gap: 6px;\n      padding: 20px 22px;\n    }\n    .card h2 { font-size: 21px; }\n    .price { font-size: 18px; }\n    .cta-row { margin-top: 30px; }\n    .notes { margin-top: 40px; }\n    .notes p { font-size: 16px; }\n  }\n</style>\n</head>\n<body>\n<main>\n  <header class=\"topbar\">\n    <span class=\"brand\">麦穗烘焙</span>\n    <svg class=\"mark\" width=\"30\" height=\"30\" viewBox=\"0 0 30 30\" aria-hidden=\"true\">\n      <path d=\"M15 27 C15 18 15 12 15 4\" stroke=\"#C9A063\" stroke-width=\"2\" fill=\"none\" stroke-linecap=\"round\"/>\n      <path d=\"M15 8 C11 7 9 5 9 2 C13 3 15 5 15 8 Z\" fill=\"#C9A063\"/>\n      <path d=\"M15 8 C19 7 21 5 21 2 C17 3 15 5 15 8 Z\" fill=\"#C9A063\"/>\n      <path d=\"M15 14 C11 13 9 11 9 8 C13 9 15 11 15 14 Z\" fill=\"#C9A063\"/>\n      <path d=\"M15 14 C19 13 21 11 21 8 C17 9 15 11 15 14 Z\" fill=\"#C9A063\"/>\n      <path d=\"M15 20 C11 19 9 17 9 14 C13 15 15 17 15 20 Z\" fill=\"#C9A063\"/>\n      <path d=\"M15 20 C19 19 21 17 21 14 C17 15 15 17 15 20 Z\" fill=\"#C9A063\"/>\n    </svg>\n  </header>\n\n  <section class=\"hero\">\n    <h1>见面时，带上这一份</h1>\n    <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n  </section>\n\n  <section class=\"cards\" aria-label=\"产品与价格\">\n    <div class=\"card\">\n      <h2>黑芝麻核桃酥</h2>\n      <p class=\"price\">158元 / 6枚</p>\n    </div>\n    <div class=\"card\">\n      <h2>豆沙蛋黄月饼</h2>\n      <p class=\"price\">88元 / 4枚</p>\n    </div>\n    <div class=\"card\">\n      <h2>桂花乌龙月饼</h2>\n      <p class=\"price\">113元 / 6枚</p>\n    </div>\n  </section>\n\n  <div class=\"cta-row\">\n    <a class=\"cta\" href=\"#booking\">立即预订</a>\n  </div>\n\n  <svg class=\"deco\" width=\"120\" height=\"10\" viewBox=\"0 0 120 10\" aria-hidden=\"true\">\n    <line x1=\"0\" y1=\"5\" x2=\"46\" y2=\"5\" stroke=\"#C9A063\" stroke-width=\"1.5\"/>\n    <circle cx=\"60\" cy=\"5\" r=\"3.5\" fill=\"#C9A063\"/>\n    <line x1=\"74\" y1=\"5\" x2=\"120\" y2=\"5\" stroke=\"#C9A063\" stroke-width=\"1.5\"/>\n  </svg>\n\n  <section class=\"notes\" id=\"booking\">\n    <p>预订截止：11月7日18:00。</p>\n    <p>到店自提：滨河路32号，10:00—19:00。</p>\n    <p class=\"book\">添加店长企业微信 maisui023 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格、截止说明、自提说明、预订方式均按内容.json原样可见，每款产品各显示一次且名称价格同卡片，主标题在h1、店名为文字标志、主要内容在main中，主按钮文字精确为“立即预订”，无新增价格/产品/承诺。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "<line x1=\"0\" y1=\"5\" x2=\"46\" y2=\"5\" stroke=\"#C9A063\" stroke-width=\"1.5\"/>",
+      "problem": "违反规则2五色限制：装饰SVG中的line元素未设置fill，浏览器默认填充为黑色，测量值记录实际绘制svg-fill #000000（2处），#000000不在允许的五色（#8B5E3C/#F6EFE3/#2B2B2B/#C9A063/#FFFFFF）之内；应给line加fill=\"none\"。"
+     }
+    ],
+    "reason": "文字色、背景、边框、装饰色用途及对比度（最低4.88≥4.5）、字体首项（标题Noto Serif SC、正文Noto Sans SC）均合规；但测量显示SVG line默认填充实际画出#000000，超出五色，计一个根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量effects与restrictedElements均为空、无外部请求：无渐变/阴影/滤镜/混合模式，主按钮四角实测均为8px，无图片/canvas/视频/iframe/脚本，内联SVG仅画非文字图形，无伪元素文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "375×667与1280×800均无横向滚动、无裁切覆盖；三款价格（顶210–382）与主按钮（422–477）完整落在手机首屏667内；店名底边53.19≤120、左缘20在16–28内；桌面main宽1000≤1000且两侧空白各140、差0。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 check_page.py】",
+      "problem": "违反规则5“只交一个完整HTML文档”：除landing.html外额外交付了check_page.py脚本文件；方案一只允许landing.html文件加空/“已完成：landing.html”/单行链接的正文，不应附带其他交付文件。"
+     }
+    ],
+    "reason": "landing.html本身可打开、正文“已完成：landing.html”合规，但多交了一个check_page.py文件，违反只交一个HTML文档的要求，计一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 31,
+  "error": null,
+  "full_reply": "现在用本地 Playwright/Chromium 做双端实看检查。\n\n两端截图已实看：手机首屏内三款价格与主按钮完整可见，店名居中于页顶 110px 内，无横向滚动；桌面 main 宽 920px 居中，样式与颜色规则一致，无脚本错误、无外部资源加载。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>青叶茶事｜把当季的好味带回家</title>\n<style>\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  html, body { background: #F0F4E8; }\n  body {\n    font-family: Arial, sans-serif;\n    color: #24312B;\n    -webkit-text-size-adjust: 100%;\n  }\n  header {\n    padding: 18px 16px 10px;\n    text-align: center;\n  }\n  .logo {\n    display: inline-block;\n    font-family: Arial, sans-serif;\n    font-size: 22px;\n    font-weight: bold;\n    letter-spacing: 6px;\n    color: #245546;\n    border-bottom: 3px solid #AAB97D;\n    padding-bottom: 6px;\n    line-height: 1;\n  }\n  main {\n    max-width: 920px;\n    margin: 0 auto;\n    padding: 0 16px 40px;\n  }\n  h1 {\n    font-family: Georgia, serif;\n    font-size: 30px;\n    color: #24312B;\n    text-align: center;\n    margin: 14px 0 8px;\n  }\n  .intro {\n    text-align: center;\n    font-size: 15px;\n    color: #24312B;\n    margin-bottom: 16px;\n  }\n  .cards {\n    border-top: 2px solid #AAB97D;\n  }\n  .card {\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n    padding: 12px 4px;\n    border-bottom: 2px solid #AAB97D;\n  }\n  .card h2 {\n    font-family: Georgia, serif;\n    font-size: 18px;\n    font-weight: bold;\n    color: #24312B;\n  }\n  .price {\n    font-family: Arial, sans-serif;\n    font-size: 16px;\n    font-weight: bold;\n    color: #245546;\n    white-space: nowrap;\n  }\n  .notes {\n    margin: 16px 0;\n    font-size: 14px;\n    line-height: 1.7;\n    color: #24312B;\n  }\n  .cta {\n    display: block;\n    width: 100%;\n    max-width: 420px;\n    margin: 0 auto;\n    text-align: center;\n    background: #245546;\n    color: #FFFFFF;\n    font-family: Arial, sans-serif;\n    font-size: 17px;\n    font-weight: bold;\n    text-decoration: none;\n    border-radius: 0;\n    padding: 14px 0;\n  }\n  .booking {\n    margin: 18px auto 0;\n    max-width: 420px;\n    border: 2px solid #AAB97D;\n    padding: 12px 14px;\n    font-size: 14px;\n    line-height: 1.7;\n    color: #24312B;\n  }\n  .leaf {\n    display: block;\n    margin: 6px auto 0;\n  }\n  @media (min-width: 700px) {\n    header { padding-top: 26px; }\n    h1 { font-size: 40px; margin: 22px 0 10px; }\n    .intro { font-size: 17px; margin-bottom: 26px; }\n    .card { padding: 16px 8px; }\n    .card h2 { font-size: 22px; }\n    .price { font-size: 18px; }\n    .notes { font-size: 15px; }\n  }\n</style>\n</head>\n<body>\n<header>\n  <span class=\"logo\">青叶茶事</span>\n</header>\n<main>\n  <h1>把当季的好味带回家</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"cards\" aria-label=\"产品与价格\">\n    <div class=\"card\">\n      <h2>炭焙铁观音茶礼</h2>\n      <span class=\"price\">93元 / 12包</span>\n    </div>\n    <div class=\"card\">\n      <h2>金骏眉便携茶礼</h2>\n      <span class=\"price\">78元 / 10包</span>\n    </div>\n    <div class=\"card\">\n      <h2>碧螺春分享装</h2>\n      <span class=\"price\">188元 / 12包</span>\n    </div>\n  </section>\n\n  <p class=\"notes\">预订截止：11月8日18:00。<br>到店自提：梧桐街18号，10:00—19:00。</p>\n\n  <a class=\"cta\" href=\"#booking\">查看预订方式</a>\n\n  <div class=\"booking\" id=\"booking\">\n    添加店长企业微信 qingye024 预订。\n  </div>\n\n  <svg class=\"leaf\" width=\"46\" height=\"18\" viewBox=\"0 0 46 18\" aria-hidden=\"true\">\n    <line x1=\"0\" y1=\"9\" x2=\"46\" y2=\"9\" stroke=\"#AAB97D\" stroke-width=\"2\"/>\n    <path d=\"M18 9 Q23 2 28 9 Q23 16 18 9 Z\" fill=\"#AAB97D\"/>\n  </svg>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（各自同卡片）、截止说明、自提说明、预订方式均按内容.json原样可见，主按钮文字精确为“查看预订方式”，每款产品只显示一次；R3状态口径本题不适用。无错误。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "<line x1=\"0\" y1=\"9\" x2=\"46\" y2=\"9\" stroke=\"#AAB97D\" stroke-width=\"2\"/>",
+      "problem": "违反“只可用五种颜色”：该SVG line未设置fill，浏览器默认填充黑色，实际渲染测量到svg-fill #000000，不在允许的五色（#245546/#F0F4E8/#24312B/#AAB97D/#FFFFFF）之内；应显式设置fill=\"none\"或使用允许色。"
+     }
+    ],
+    "reason": "文字颜色、对比度（最低7.64）、字体首项（标题Georgia、其他Arial）均合规，装饰色仅用于边框和SVG图形；但浏览器实测到一处svg-fill为#000000，超出允许五色，计一处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "实测effects为空，无渐变/阴影/滤镜；主按钮四角圆角均为0px；无图片、canvas、视频、iframe、外部资源与脚本；内联SVG仅画非文字图形。无错误。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两种视口文档宽度等于视口宽度，无横向滚动，无裁切/覆盖；手机首屏内三款价格（底边≤320px）与主按钮（底边452.59px）完整可见；店名底边49px≤110px且水平中心195与视口中心195误差0；桌面main宽920px且两侧空白各260px。无错误。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，无额外说明，符合方案一。无错误。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 27,
+  "error": null,
+  "full_reply": "现在用本地 Playwright/Chromium 做双端实看检查。\n\n已完成：landing.html\n\n已完成：landing.html（已交付，双端实看通过：375×667 首屏含全部价格与主按钮，1280×800 main 居中 1000px，无横向滚动、无脚本错误、离线自包含）。",
+  "product": "已完成：landing.html（已交付，双端实看通过：375×667 首屏含全部价格与主按钮，1280×800 main 居中 1000px，无横向滚动、无脚本错误、离线自包含）。\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>麦穗烘焙 · 预订一份相聚的甜</title>\n<style>\n  :root{\n    --main:#8B5E3C;\n    --bg:#F6EFE3;\n    --ink:#2B2B2B;\n    --deco:#C9A063;\n    --white:#FFFFFF;\n  }\n  *{margin:0;padding:0;box-sizing:border-box;}\n  body{\n    background:var(--bg);\n    color:var(--ink);\n    font-family:\"Noto Sans SC\",sans-serif;\n    line-height:1.6;\n  }\n  header{\n    padding:20px 16px 0 16px;\n  }\n  .logo{\n    font-family:\"Noto Serif SC\",serif;\n    font-size:22px;\n    font-weight:700;\n    color:var(--main);\n    letter-spacing:2px;\n  }\n  .logo-line{\n    border:none;\n    border-top:2px solid var(--deco);\n    margin-top:10px;\n  }\n  main{\n    max-width:1000px;\n    margin:0 auto;\n    padding:0 16px 40px 16px;\n  }\n  h1{\n    font-family:\"Noto Serif SC\",serif;\n    font-size:30px;\n    color:var(--ink);\n    margin-top:22px;\n    line-height:1.3;\n  }\n  .intro{\n    margin-top:10px;\n    font-size:15px;\n    color:var(--ink);\n  }\n  .products{\n    margin-top:22px;\n    border-top:2px solid var(--deco);\n  }\n  .product{\n    display:flex;\n    justify-content:space-between;\n    align-items:baseline;\n    gap:12px;\n    padding:14px 0;\n    border-bottom:1px solid var(--deco);\n  }\n  .product h2{\n    font-family:\"Noto Serif SC\",serif;\n    font-size:18px;\n    font-weight:600;\n    color:var(--ink);\n  }\n  .price{\n    font-size:16px;\n    font-weight:600;\n    color:var(--main);\n    white-space:nowrap;\n  }\n  .cta-wrap{\n    margin-top:26px;\n    text-align:center;\n  }\n  .cta{\n    display:inline-block;\n    background:var(--main);\n    color:var(--white);\n    font-family:\"Noto Sans SC\",sans-serif;\n    font-size:17px;\n    font-weight:600;\n    text-decoration:none;\n    padding:13px 46px;\n    border-radius:8px;\n    border:2px solid var(--main);\n  }\n  .info{\n    margin-top:26px;\n    border:1px solid var(--deco);\n    padding:16px;\n  }\n  .info p{\n    font-size:14px;\n    color:var(--ink);\n  }\n  .info p + p{\n    margin-top:8px;\n  }\n  .deco-row{\n    margin-top:26px;\n    display:flex;\n    justify-content:center;\n  }\n  footer{\n    text-align:center;\n    padding:0 16px 28px 16px;\n  }\n  footer p{\n    font-size:13px;\n    color:var(--main);\n  }\n  @media (min-width:768px){\n    header{padding-left:0;padding-right:0;}\n    .logo{font-size:26px;}\n    h1{font-size:38px;margin-top:34px;}\n    .intro{font-size:17px;}\n    .product{padding:18px 0;}\n    .product h2{font-size:21px;}\n    .price{font-size:18px;}\n    .info{padding:20px 24px;}\n    .info p{font-size:15px;}\n  }\n</style>\n</head>\n<body>\n<header>\n  <div class=\"logo\">麦穗烘焙</div>\n  <hr class=\"logo-line\">\n</header>\n<main>\n  <h1>预订一份相聚的甜</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"products\" aria-label=\"可预订产品\">\n    <div class=\"product\">\n      <h2>鲜肉月饼</h2>\n      <span class=\"price\">78元 / 8枚</span>\n    </div>\n    <div class=\"product\">\n      <h2>海盐芝士奶黄酥</h2>\n      <span class=\"price\">173元 / 4枚</span>\n    </div>\n    <div class=\"product\">\n      <h2>低糖莲蓉蛋黄月饼</h2>\n      <span class=\"price\">188元 / 8枚</span>\n    </div>\n  </section>\n\n  <div class=\"cta-wrap\">\n    <a class=\"cta\" href=\"#booking\">立即预订</a>\n  </div>\n\n  <section class=\"info\" id=\"booking\" aria-label=\"预订说明\">\n    <p>预订截止：11月9日18:00。</p>\n    <p>到店自提：清河路26号，10:00—19:00。</p>\n    <p>添加店长企业微信 maisui025 预订。</p>\n  </section>\n\n  <div class=\"deco-row\" aria-hidden=\"true\">\n    <svg width=\"120\" height=\"10\" viewBox=\"0 0 120 10\" xmlns=\"http://www.w3.org/2000/svg\">\n      <line x1=\"0\" y1=\"5\" x2=\"120\" y2=\"5\" stroke=\"#C9A063\" stroke-width=\"1\"/>\n      <circle cx=\"60\" cy=\"5\" r=\"4\" fill=\"#C9A063\"/>\n    </svg>\n  </div>\n</main>\n<footer>\n  <p>麦穗烘焙</p>\n</footer>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（名称价格同组同行）、截止说明、自提说明、预订方式均原样可见，每款产品显示一次，主按钮文字精确为“立即预订”，无新增价格/产品/承诺；本题不要求展示状态。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": ".logo{\n    font-family:\"Noto Serif SC\",serif;",
+      "problem": "规则要求h1至h6以外的文字font-family第一项必须是“Noto Sans SC”。店名标志用的是div.logo（非标题元素，测量样式s1 heading:false），其字体首项却为“Noto Serif SC”，应改为“Noto Sans SC”。"
+     },
+     {
+      "quote": "<line x1=\"0\" y1=\"5\" x2=\"120\" y2=\"5\" stroke=\"#C9A063\" stroke-width=\"1\"/>",
+      "problem": "规则只允许五种颜色且SVG填充须遵守颜色规则。该line元素未设置fill，浏览器测量到svg-fill实际色#000000（paints中记录actual #000000），不在允许五色内；应显式设置fill=\"none\"。"
+     }
+    ],
+    "reason": "对比度全部≥4.5（最低4.88），装饰色仅用于边框和SVG图形未作文字色；但logo非标题文字字体首项错用Noto Serif SC，且SVG line默认填充实测为#000000超出五色，各计一处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量effects为空，无渐变/阴影/滤镜/mix-blend-mode；主按钮四角实测均为8px；无图片、canvas、视频、iframe、外部请求与脚本，内联SVG仅画非文字图形，无伪元素文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "375×667下文档宽375无横向滚动，三款价格（顶201-342px）与主按钮（385-442px）完整落在首屏0-667内；店名标志底边55.19≤120、左边缘16在16-28范围内；桌面main宽1000≤1000且两侧空白140/140差为0；无裁切与覆盖。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "已完成：landing.html（已交付，双端实看通过：375×667 首屏含全部价格与主按钮，1280×800 main 居中 1000px，无横向滚动、无脚本错误、离线自包含）。",
+      "problem": "方案一要求正文只可为空、“已完成：landing.html”或单行文件链接。员工在允许文字后附加了括号内的核对说明（且正文中还有“【交付文件 landing.html】”及粘贴的页面源码等额外内容），违反交付格式；所有前后额外文字只在本项记一处。"
+     }
+    ],
+    "reason": "交付了可打开的landing.html单文件，但正文超出允许的“已完成：landing.html”，附加了说明文字及额外内容，按规则前后额外文字统一记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 26,
+  "error": null,
+  "full_reply": "我先读取本次的工作规则、内容数据和旧稿。\n\n规则与内容已明确。现在写 landing.html：五色约束、Georgia/Arial 字体、无 JS 无外部资源、手机首屏（390×700）需含全部价格与主按钮、店名居中于页顶 110px 内、桌面 main ≤920px 居中。\n\n现在用本地 Playwright/Chromium 实际检查两端渲染并截图。\n\n路由拦截把 file:// 也挡了，改为只拦截 http(s) 外部请求重试。\n\n两端截图检查通过：手机 390×700 首屏内三款价格与主按钮完整可见（按钮底边 439px），店名居中于页顶 110px 内；桌面 main 居中、宽 920px；无横向滚动、无外部请求、无脚本错误。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>青叶茶事 · 这周的手作小食上新</title>\n<style>\n  :root{\n    --primary:#245546;\n    --paper:#F0F4E8;\n    --ink:#24312B;\n    --accent:#AAB97D;\n    --white:#FFFFFF;\n  }\n  *{box-sizing:border-box}\n  body{\n    margin:0;\n    background:var(--paper);\n    color:var(--ink);\n    font-family:Arial,sans-serif;\n  }\n  main{\n    max-width:920px;\n    margin:0 auto;\n    padding:0 20px 40px;\n  }\n  .brand{\n    text-align:center;\n    padding:18px 0 10px;\n    border-bottom:1px solid var(--accent);\n  }\n  .brand .logo{\n    font-family:Georgia,serif;\n    font-size:22px;\n    letter-spacing:6px;\n    color:var(--primary);\n    display:inline-block;\n  }\n  h1{\n    font-family:Georgia,serif;\n    font-size:30px;\n    line-height:1.3;\n    color:var(--primary);\n    margin:26px 0 10px;\n    text-align:center;\n  }\n  .intro{\n    text-align:center;\n    font-size:15px;\n    line-height:1.7;\n    margin:0 auto 22px;\n    max-width:560px;\n  }\n  .cards{\n    border-top:1px solid var(--accent);\n  }\n  .card{\n    display:flex;\n    justify-content:space-between;\n    align-items:baseline;\n    gap:12px;\n    padding:13px 4px;\n    border-bottom:1px solid var(--accent);\n  }\n  .card h2{\n    font-family:Georgia,serif;\n    font-size:16px;\n    font-weight:normal;\n    margin:0;\n    color:var(--ink);\n  }\n  .card .price{\n    margin:0;\n    font-size:15px;\n    color:var(--primary);\n    white-space:nowrap;\n  }\n  .cta-row{\n    text-align:center;\n    margin:26px 0 8px;\n  }\n  .cta{\n    display:inline-block;\n    background:var(--primary);\n    color:var(--white);\n    font-family:Arial,sans-serif;\n    font-size:16px;\n    text-decoration:none;\n    padding:13px 34px;\n    border-radius:0;\n  }\n  .info{\n    margin-top:30px;\n    border:1px solid var(--accent);\n    padding:18px 20px;\n  }\n  .info h2{\n    font-family:Georgia,serif;\n    font-size:17px;\n    margin:0 0 10px;\n    color:var(--primary);\n  }\n  .info p{\n    margin:6px 0;\n    font-size:14px;\n    line-height:1.7;\n  }\n  @media (min-width:768px){\n    main{padding:0 20px 56px}\n    .brand{padding:26px 0 14px}\n    .brand .logo{font-size:26px}\n    h1{font-size:40px;margin:40px 0 14px}\n    .intro{font-size:16px;margin-bottom:34px}\n    .card{padding:18px 8px}\n    .card h2{font-size:18px}\n    .card .price{font-size:16px}\n    .cta{font-size:17px;padding:15px 44px}\n    .info{padding:24px 28px}\n  }\n</style>\n</head>\n<body>\n<main>\n  <header class=\"brand\"><span class=\"logo\">青叶茶事</span></header>\n\n  <h1>这周的手作小食上新</h1>\n  <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n\n  <section class=\"cards\">\n    <article class=\"card\">\n      <h2>桂花乌龙茶礼 · 家庭分享装</h2>\n      <p class=\"price\">73元 / 12包</p>\n    </article>\n    <article class=\"card\">\n      <h2>茉莉白茶礼盒 · 轻礼组合</h2>\n      <p class=\"price\">133元 / 12包</p>\n    </article>\n    <article class=\"card\">\n      <h2>陈皮普洱随行盒 · 门店限定装</h2>\n      <p class=\"price\">88元 / 12包</p>\n    </article>\n  </section>\n\n  <p class=\"cta-row\"><a class=\"cta\" href=\"#order-info\">查看预订方式</a></p>\n\n  <section class=\"info\" id=\"order-info\">\n    <h2>预订方式</h2>\n    <p>预订截止：11月10日18:00。</p>\n    <p>到店自提：花园巷9号，10:00—19:00。</p>\n    <p>添加店长企业微信 qingye026 预订。</p>\n  </section>\n</main>\n</body>\n</html>",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格、截止/自提/预订方式均按内容.json原样可见，每款名称与价格同卡片且各显示一次，主按钮文字精确为“查看预订方式”；本题不要求展示状态。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": ".brand .logo{\n    font-family:Georgia,serif;",
+      "problem": "规则要求h1至h6标题字体首项为Georgia，其他文字首项必须为Arial；店名标志用的是span（非标题元素），属于“其他文字”，却用了Georgia为首项，应改为Arial为首项。"
+     }
+    ],
+    "reason": "五色使用合规（装饰色#AAB97D仅用于边框），各文字对比度均≥4.5；但店名文字标志是非标题文字却使用Georgia首项字体，违反字体规则，计一个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角实测均为0px，无图片/脚本/外部资源（externalRequests为空）。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "手机390×700与桌面1440×900均无横向滚动；三款价格（顶225–348）与主按钮（389–439）完整落在手机首屏；店名底边50≤110且水平中心195与视口中心195误差0；桌面main宽920≤上限且两侧空白均为260、差0。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 24,
+  "error": null,
+  "full_reply": "我先读取本次的依据材料：工作规则、内容数据和旧稿。\n\n依据已明确：内容以 内容.json 为准，五色限制、字体规则、无 JS/外部资源、手机 375×667 首屏须含全部价格与主按钮、店名顶部 120px 内左缘 16–28px、桌面 main ≤1000px 居中。旧稿配色/字体/按钮样式均不符合本次规则，重写。\n\n现在用本地 Playwright/Chromium 在两种视口实际加载并截图（屏蔽外部网络）。\n\n两端截图已实看：手机首屏内店名、三款价格与“立即预订”按钮完整可见，无横向滚动；桌面 main 居中、样式符合五色与字体规则；无脚本错误、无外部资源请求。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>麦穗烘焙｜给周末留一点慢时光</title>\n<style>\n  * { box-sizing: border-box; }\n  body {\n    margin: 0;\n    background: #F6EFE3;\n    color: #2B2B2B;\n    font-family: \"Noto Sans SC\", sans-serif;\n  }\n  h1, h2, h3 {\n    font-family: \"Noto Serif SC\", serif;\n  }\n  main {\n    max-width: 1000px;\n    margin: 0 auto;\n    padding: 0 20px 40px;\n  }\n  .topbar {\n    padding: 24px 0 8px;\n  }\n  .logo {\n    font-family: \"Noto Serif SC\", serif;\n    font-size: 22px;\n    font-weight: 700;\n    color: #2B2B2B;\n    border-left: 4px solid #C9A063;\n    padding-left: 10px;\n    line-height: 1.2;\n  }\n  .hero {\n    padding: 16px 0 8px;\n  }\n  h1 {\n    font-size: 30px;\n    line-height: 1.3;\n    margin: 0 0 12px;\n    color: #2B2B2B;\n  }\n  .intro {\n    margin: 0;\n    font-size: 15px;\n    line-height: 1.7;\n    color: #2B2B2B;\n  }\n  .products {\n    margin: 20px 0 0;\n    border-top: 2px solid #C9A063;\n  }\n  .product {\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n    padding: 12px 0;\n    border-bottom: 1px solid #C9A063;\n  }\n  .product h2 {\n    font-size: 16px;\n    margin: 0;\n    color: #2B2B2B;\n    line-height: 1.4;\n  }\n  .price {\n    margin: 0;\n    font-size: 16px;\n    font-weight: 700;\n    color: #2B2B2B;\n    white-space: nowrap;\n  }\n  .cta {\n    display: block;\n    width: 100%;\n    max-width: 360px;\n    margin: 24px auto 0;\n    padding: 14px 24px;\n    background: #8B5E3C;\n    color: #FFFFFF;\n    border-radius: 8px;\n    text-align: center;\n    text-decoration: none;\n    font-size: 17px;\n    font-weight: 700;\n  }\n  .order {\n    margin: 32px 0 0;\n    border: 1px solid #C9A063;\n    padding: 16px;\n  }\n  .order h3 {\n    margin: 0 0 10px;\n    font-size: 17px;\n    color: #2B2B2B;\n  }\n  .order p {\n    margin: 6px 0;\n    font-size: 14px;\n    line-height: 1.6;\n    color: #2B2B2B;\n  }\n  @media (min-width: 700px) {\n    main { padding: 0 40px 56px; }\n    .topbar { padding: 40px 0 12px; }\n    .logo { font-size: 26px; }\n    h1 { font-size: 40px; margin-bottom: 16px; }\n    .intro { font-size: 17px; max-width: 640px; }\n    .products { margin-top: 32px; }\n    .product { padding: 16px 0; }\n    .product h2 { font-size: 19px; }\n    .price { font-size: 18px; }\n    .cta { margin-top: 32px; }\n    .order { margin-top: 48px; padding: 24px; }\n  }\n</style>\n</head>\n<body>\n<main>\n  <div class=\"topbar\">\n    <div class=\"logo\">麦穗烘焙</div>\n  </div>\n  <section class=\"hero\">\n    <h1>给周末留一点慢时光</h1>\n    <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  </section>\n  <section class=\"products\">\n    <div class=\"product\">\n      <h2>黑芝麻核桃酥 · 门店限定装</h2>\n      <p class=\"price\">128元 / 4枚</p>\n    </div>\n    <div class=\"product\">\n      <h2>低糖莲蓉蛋黄月饼 · 家庭分享装</h2>\n      <p class=\"price\">103元 / 8枚</p>\n    </div>\n    <div class=\"product\">\n      <h2>流心奶黄月饼 · 门店限定装</h2>\n      <p class=\"price\">158元 / 4枚</p>\n    </div>\n  </section>\n  <a class=\"cta\" href=\"#order-info\">立即预订</a>\n  <section class=\"order\" id=\"order-info\">\n    <h3>预订方式</h3>\n    <p>预订截止：11月11日18:00。</p>\n    <p>到店自提：滨河路32号，10:00—19:00。</p>\n    <p>添加店长企业微信 maisui027 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（名称价格同组同行）、截止说明、自提说明、预订方式均原样可见，每款产品显示一次，主按钮文字精确为“立即预订”，无新增价格/产品/承诺。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": ".logo {\n    font-family: \"Noto Serif SC\", serif;",
+      "problem": "店名标志放在div中、不是h1至h6标题，属于“其他文字”，其font-family列表第一项必须是“Noto Sans SC”，却写成了“Noto Serif SC”（浏览器实测该文字样式heading:false、首项为Noto Serif SC）。"
+     }
+    ],
+    "reason": "实际用色均在五色内，装饰色#C9A063仅用于边框，对比度12.39与5.58均≥4.5；仅店名文字字体首项违反“其他文字须为Noto Sans SC”的规定，计一处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter、mix-blend-mode；主按钮四角实测均为8px；无图片、canvas、视频、iframe、外部资源或脚本。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "375与1280视口均无横向滚动、无裁切覆盖；三款价格（底边≤343px）与主按钮（底边434.56px）完整落在手机首屏667px内；店名底边50.39≤120、左边缘20在16–28范围内；桌面main宽1000且两侧空白各140px居中。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 32,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料。\n\n三份材料已读完。依据：内容.json 的全部文字原样使用；五色限制、Georgia/Arial 字体、无 JS 无外部资源、手机 390×700 首屏含全部价格与主按钮、店名 110px 内居中、桌面 main ≤920px 居中。旧稿仅作结构参考，配色/文案全部重写。现在写 landing.html。\n\n现在用本地 Playwright/Chromium 在 390×700 与 1440×900 两个视口实际渲染并截图。\n\n指标全部达标（无横向滚动、价格与按钮在手机首屏内、店名居中且在 110px 内、桌面 main 920px 居中）。现在实际查看截图。\n\n两端截图均已实际查看：手机首屏内三款价格与主按钮完整可见，店名居中在页顶；桌面布局居中、无横向滚动、无遮挡，品牌色与字体符合规则。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>青叶茶事 · 街角的新鲜味道</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F0F4E8;color:#24312B;font-family:Arial,Helvetica,sans-serif}\nmain{max-width:920px;margin:0 auto;padding:0 20px 40px}\nheader{padding:18px 0 10px;text-align:center}\n.logo{font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:bold;color:#245546;letter-spacing:2px;margin:0}\n.rule{border:none;border-top:2px solid #AAB97D;margin:10px auto 0;width:120px}\nh1{font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.25;color:#245546;margin:22px 0 10px;text-align:center}\n.intro{font-size:15px;line-height:1.7;margin:0 auto 22px;max-width:560px;text-align:center}\n.cards{border-top:2px solid #AAB97D}\n.card{border-bottom:2px solid #AAB97D;padding:14px 4px;display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}\n.card h2{font-family:Georgia,'Times New Roman',serif;font-size:17px;line-height:1.4;color:#24312B;margin:0;flex:1 1 220px}\n.price{font-size:16px;font-weight:bold;color:#245546;margin:0;white-space:nowrap}\n.cta{display:block;text-align:center;margin:26px 0 8px}\n.cta a{display:inline-block;background:#245546;color:#FFFFFF;font-family:Arial,Helvetica,sans-serif;font-size:17px;font-weight:bold;text-decoration:none;padding:14px 40px;border-radius:0;border:2px solid #245546}\n.info{margin-top:26px;border:2px solid #AAB97D;padding:16px 18px}\n.info p{font-size:15px;line-height:1.7;margin:0 0 8px}\n.info p:last-child{margin-bottom:0}\n@media (min-width:768px){\n  h1{font-size:44px}\n  .intro{font-size:16px}\n  .cards{display:flex;border-top:2px solid #AAB97D;border-bottom:2px solid #AAB97D}\n  .card{flex:1;border-bottom:none;border-right:2px solid #AAB97D;flex-direction:column;align-items:flex-start;gap:8px;padding:18px 16px}\n  .card:last-child{border-right:none}\n  .card h2{flex:none}\n}\n</style>\n</head>\n<body>\n<main>\n  <header>\n    <p class=\"logo\">青叶茶事</p>\n    <hr class=\"rule\">\n  </header>\n  <h1>街角的新鲜味道</h1>\n  <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  <section class=\"cards\">\n    <article class=\"card\">\n      <h2>茉莉白茶礼盒 · 家庭分享装</h2>\n      <p class=\"price\">153元 / 16包</p>\n    </article>\n    <article class=\"card\">\n      <h2>炭焙铁观音茶礼 · 轻礼组合</h2>\n      <p class=\"price\">148元 / 10包</p>\n    </article>\n    <article class=\"card\">\n      <h2>金骏眉便携茶礼 · 轻礼组合</h2>\n      <p class=\"price\">103元 / 16包</p>\n    </article>\n  </section>\n  <p class=\"cta\"><a href=\"#order-info\">查看预订方式</a></p>\n  <section class=\"info\" id=\"order-info\">\n    <p>预订截止：11月12日18:00。</p>\n    <p>到店自提：梧桐街18号，10:00—19:00。</p>\n    <p>添加店长企业微信 qingye028 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格、截止/自提/预订方式均原样可见，每款一次且名称价格同卡片；主按钮文字精确为“查看预订方式”；本题不要求展示状态。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": ".logo{font-family:Georgia,'Times New Roman',serif;font-size:22px;font-weight:bold;color:#245546;letter-spacing:2px;margin:0}",
+      "problem": "店名“青叶茶事”放在<p class=\"logo\">中，不是h1-h6标题，属于“其他文字”，其font-family列表第一项必须是Arial；实测该文字（样式s1，heading:false）首项为Georgia，违反字体规则。正确应为font-family:Arial,...。"
+     }
+    ],
+    "reason": "实际用色均在五色内，装饰色#AAB97D仅用于边框，各文字对比度均≥4.5；唯一问题是店名标志作为非标题文字却用了Georgia为首的字体族，计一个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角实测均为0px；无图片、canvas、视频、iframe、外部资源或脚本（externalRequests为空）。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口文档宽度等于视口宽度，无横向滚动，无裁切/覆盖；手机首屏内三款价格（底边≤388.89）与主按钮（底边471.89）完整落在0-700px内；店名底边50≤110且文字中心195与视口中心195误差0≤8；桌面main宽920≤920，两侧空白260/260差0≤2。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无多余说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 47,
+  "error": null,
+  "full_reply": "规则和内容已明确：五色限制、无JS/外部资源、手机首屏需含全部价格和主按钮、店名左缘16–28px且底边≤120px、桌面main≤1000px居中。旧稿仅作结构参考（其配色/阴影/圆角均违规，将重写）。现在写 landing.html。\n\n用本地 Playwright/Chromium 做双端实看检查（屏蔽外部网络，375×667 与 1280×800）。\n\n双端截图已实看：手机首屏含全部价格与主按钮、无横向溢出、店名位置合规；桌面居中、卡片三列、文字可读，无脚本错误、无外部资源请求失败。交付。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>麦穗烘焙 · 一盒心意，正好分享</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F6EFE3;color:#2B2B2B;font-family:\"Noto Sans SC\",sans-serif}\nheader{padding:16px 20px 8px}\n.logo{font-family:\"Noto Sans SC\",sans-serif;font-size:21px;font-weight:700;letter-spacing:2px;margin:0;color:#2B2B2B}\nmain{max-width:1000px;margin:0 auto;padding:0 20px 40px}\n.hero{padding:10px 0 6px}\nh1{font-family:\"Noto Serif SC\",serif;font-size:30px;line-height:1.3;margin:0 0 10px;color:#2B2B2B}\n.intro{font-size:14px;line-height:1.7;margin:0 0 18px;color:#2B2B2B}\n.cards{display:flex;flex-wrap:wrap;gap:12px;margin:0 0 22px}\n.card{flex:1 1 260px;background:#FFFFFF;border:1px solid #C9A063;border-radius:8px;padding:14px 16px;display:flex;align-items:baseline;justify-content:space-between;gap:12px}\n.card h2{font-family:\"Noto Serif SC\",serif;font-size:16px;line-height:1.5;margin:0;color:#2B2B2B;font-weight:700}\n.price{font-size:15px;font-weight:700;margin:0;white-space:nowrap;color:#2B2B2B}\n.cta{display:block;width:100%;max-width:320px;margin:0 auto 26px;background:#8B5E3C;color:#FFFFFF;border:0;border-radius:8px;padding:14px 24px;font-size:17px;font-weight:700;text-align:center;text-decoration:none;font-family:\"Noto Sans SC\",sans-serif}\n.info{border-top:1px solid #C9A063;padding-top:16px}\n.info p{font-size:14px;line-height:1.8;margin:0 0 6px;color:#2B2B2B}\n.wheat{display:block;margin:0 0 14px}\n@media (min-width:760px){\n  h1{font-size:40px}\n  .intro{font-size:16px;max-width:640px}\n  .hero{padding:24px 0 12px}\n  .card{flex-direction:column;align-items:flex-start;gap:8px;padding:20px 22px}\n  .card h2{font-size:18px}\n  .price{font-size:17px}\n}\n</style>\n</head>\n<body>\n<header><p class=\"logo\">麦穗烘焙</p></header>\n<main>\n  <section class=\"hero\">\n    <svg class=\"wheat\" width=\"72\" height=\"30\" viewBox=\"0 0 72 30\" aria-hidden=\"true\">\n      <g fill=\"none\" stroke=\"#C9A063\" stroke-width=\"2\" stroke-linecap=\"round\">\n        <path d=\"M4 26 Q36 22 68 26\"/>\n        <path d=\"M14 24 q4 -8 8 -10\"/>\n        <path d=\"M30 22 q4 -8 8 -10\"/>\n        <path d=\"M46 23 q4 -8 8 -10\"/>\n      </g>\n    </svg>\n    <h1>一盒心意，正好分享</h1>\n    <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  </section>\n  <section class=\"cards\">\n    <article class=\"card\"><h2>海盐芝士奶黄酥 · 门店限定装</h2><p class=\"price\">108元 / 4枚</p></article>\n    <article class=\"card\"><h2>豆沙蛋黄月饼 · 家庭分享装</h2><p class=\"price\">88元 / 4枚</p></article>\n    <article class=\"card\"><h2>低糖莲蓉蛋黄月饼 · 家庭分享装</h2><p class=\"price\">128元 / 4枚</p></article>\n  </section>\n  <a class=\"cta\" href=\"#order-info\">立即预订</a>\n  <section class=\"info\" id=\"order-info\">\n    <p>预订截止：11月13日18:00。</p>\n    <p>到店自提：清河路26号，10:00—19:00。</p>\n    <p>添加店长企业微信 maisui029 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（同名同价同卡片、各显示一次）、截止说明、自提说明、预订方式均按内容.json原样可见；主按钮文字精确为“立即预订”；本题不要求显示产品状态。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "实际渲染颜色仅#F6EFE3、#2B2B2B、#FFFFFF、#8B5E3C及装饰色#C9A063（仅用于边框和SVG描边，未作文字色或大面积背景）；所有文字对比度最低5.58≥4.5；标题字体首项Noto Serif SC、其余首项Noto Sans SC，均符合。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等禁用效果（effects为空）；主按钮四角实测均为8px；无图片/canvas/视频/iframe/外部资源/脚本；内联SVG仅画非文字麦穗图形且描边用允许的装饰色。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "375与1280视口均无横向滚动、无裁切覆盖；手机首屏内三款价格（top 243–396）与主按钮（460–513）完整落在0–667内；店名底边46≤120、左边缘20在16–28区间；桌面main宽1000且左右各140px居中。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无额外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 30,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料。\n\n规则与内容已明确：五色限制、装饰色不作文字、Georgia/Arial 字体首项、无 JS 无外部资源、手机 390×700 首屏含全部价格与主按钮、店名居中于页顶 110px 内、桌面 main ≤920px 居中。旧稿配色/字体/文案均不符，重写。现在写 landing.html。\n\n现在用本地 Playwright/Chromium 在 390×700 与 1440×900 两个视口实际渲染并截图。\n\n两端截图均已实际查看：手机首屏内三款价格与主按钮完整可见，店名居中于页顶；桌面布局居中、无横向滚动、无加载错误。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>青叶茶事 · 把秋日装进礼盒</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F0F4E8;color:#24312B;font-family:Arial,Helvetica,sans-serif}\nmain{max-width:920px;margin:0 auto;padding:20px 24px 40px}\nheader{display:flex;justify-content:center;padding:14px 0 10px}\n.logo{font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;color:#245546;letter-spacing:2px}\n.rule{border:0;border-top:2px solid #AAB97D;margin:0 0 18px}\nh1{font-family:Georgia,'Times New Roman',serif;font-size:34px;line-height:1.25;color:#245546;margin:0 0 10px;text-align:center}\n.intro{font-size:15px;line-height:1.6;color:#24312B;margin:0 auto 18px;max-width:560px;text-align:center}\n.cards{display:flex;flex-direction:column;gap:10px;margin:0 0 18px}\n.card{background:#FFFFFF;border:2px solid #AAB97D;padding:12px 16px;display:flex;justify-content:space-between;align-items:baseline;gap:12px}\n.card h2{font-family:Georgia,'Times New Roman',serif;font-size:16px;line-height:1.4;color:#24312B;margin:0}\n.price{font-size:16px;font-weight:bold;color:#245546;white-space:nowrap;margin:0}\n.cta{display:block;width:100%;max-width:360px;margin:0 auto 22px;background:#245546;color:#FFFFFF;text-align:center;text-decoration:none;font-size:17px;font-weight:bold;padding:14px 20px;border-radius:0}\n.info{border-top:2px solid #AAB97D;padding-top:14px}\n.info p{font-size:14px;line-height:1.7;color:#24312B;margin:0 0 8px}\n@media (min-width:700px){\n  h1{font-size:44px}\n  .intro{font-size:16px}\n  .cards{flex-direction:row}\n  .card{flex:1;flex-direction:column;align-items:flex-start;gap:6px;padding:18px 20px}\n  .card h2{font-size:17px}\n}\n</style>\n</head>\n<body>\n<main>\n<header><div class=\"logo\">青叶茶事</div></header>\n<hr class=\"rule\">\n<h1>把秋日装进礼盒</h1>\n<p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n<section class=\"cards\">\n  <article class=\"card\"><h2>茉莉白茶礼盒 · 门店限定装</h2><p class=\"price\">73元 / 16包</p></article>\n  <article class=\"card\"><h2>桂花乌龙茶礼 · 家庭分享装</h2><p class=\"price\">108元 / 10包</p></article>\n  <article class=\"card\"><h2>碧螺春分享装 · 家庭分享装</h2><p class=\"price\">158元 / 10包</p></article>\n</section>\n<a class=\"cta\" href=\"#order-info\">查看预订方式</a>\n<section class=\"info\" id=\"order-info\">\n  <p>预订截止：11月14日18:00。</p>\n  <p>到店自提：花园巷9号，10:00—19:00。</p>\n  <p>添加店长企业微信 qingye030 预订。</p>\n</section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、三款产品名称与价格（名称价格同卡片）、截止/自提/预订方式均原样可见，每款显示一次；主按钮文字精确为“查看预订方式”；本题不要求展示状态。测量值确认全部可见。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": ".logo{font-family:Georgia,'Times New Roman',serif;font-size:24px;font-weight:bold;color:#245546;letter-spacing:2px}",
+      "problem": "规则要求h1至h6标题字体首项为Georgia，其他文字首项必须为Arial。店名标志用的是div.logo而非h1-h6标题（测量值s1 heading:false），属于“其他文字”，font-family首项应为Arial而非Georgia。"
+     }
+    ],
+    "reason": "实际用色均在五色内，装饰色#AAB97D仅用于边框，各文字对比度均≥4.5；但店名标志（非h1-h6元素）字体首项用了Georgia，违反“其他文字第一项必须是Arial”。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空）；主按钮四角实测均为0px；无图片、canvas、视频、iframe、外部资源或脚本（externalRequests为空）。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "手机390视口文档宽390无横向滚动；三款价格（底边最大397.67）与主按钮（底边468.67）完整落在0-700首屏内；店名底边69≤110且水平中心195与视口中心195误差0≤8；桌面main宽920≤上限，左右空白各260差0≤2px；无裁切或覆盖。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无多余说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 45,
+  "error": null,
+  "full_reply": "我先读取工作目录中的工作规则和内容数据。\n\n规则与内容已明确：五色限制、字体首项要求、无JS/外部资源、320×568 与 1024×768 双端检查、三款可预订价格与主按钮须在手机首屏。现在编写 landing.html。\n\n修正一处：预订方式原文不含“预订方式：”前缀，去掉以免添加文字。\n\n现在用 Playwright/Chromium 在两个视口实际渲染并截图（屏蔽外部网络，检查加载错误）。\n\n数据达标（无横向滚动、店名位置合规、按钮与三个可预订价格均在568内、桌面main宽880居中）。现在实际查看截图。\n\n两端截图均已实际查看：手机首屏内店名、主标题、四款产品（含价格与状态）与主按钮完整可见、无横向溢出；桌面布局居中、信息完整，品牌色与字体符合规则。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心｜预订</title>\n<style>\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  html, body { background: #F2F4F6; }\n  body {\n    color: #252A30;\n    font-family: \"Noto Serif SC\", serif;\n    font-size: 16px;\n    line-height: 1.6;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: \"Noto Sans SC\", sans-serif;\n    color: #304F68;\n  }\n  main {\n    max-width: 880px;\n    margin: 0 auto;\n    padding: 24px 20px 40px 20px;\n  }\n  .brand {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 20px;\n    font-weight: 700;\n    color: #304F68;\n    letter-spacing: 2px;\n  }\n  .brandline {\n    border: 0;\n    border-top: 2px solid #ADBCC9;\n    margin: 12px 0 20px 0;\n  }\n  h1 {\n    font-size: 30px;\n    line-height: 1.3;\n    margin-bottom: 8px;\n  }\n  .intro {\n    font-size: 16px;\n    margin-bottom: 20px;\n  }\n  .cards { border-top: 2px solid #ADBCC9; }\n  .card {\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n    padding: 12px 0;\n    border-bottom: 2px solid #ADBCC9;\n  }\n  .card .name {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    color: #252A30;\n  }\n  .card .meta {\n    text-align: right;\n    white-space: nowrap;\n  }\n  .card .price {\n    font-size: 15px;\n    color: #252A30;\n  }\n  .card .status {\n    display: block;\n    font-size: 14px;\n    color: #304F68;\n  }\n  .cta-wrap { margin: 24px 0 28px 0; }\n  .cta {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    width: 100%;\n    min-height: 48px;\n    background: #304F68;\n    color: #FFFFFF;\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 17px;\n    font-weight: 700;\n    text-decoration: none;\n    border-radius: 12px;\n  }\n  .info p {\n    font-size: 15px;\n    margin-bottom: 6px;\n  }\n  .info .label { color: #304F68; font-weight: 700; }\n  .footline {\n    margin-top: 20px;\n    border-top: 2px solid #ADBCC9;\n    padding-top: 12px;\n  }\n  @media (min-width: 700px) {\n    main { padding: 40px 20px 56px 20px; }\n    h1 { font-size: 38px; }\n    .card { padding: 16px 0; }\n  }\n</style>\n</head>\n<body>\n<main>\n  <div class=\"brand\">汐岸点心</div>\n  <hr class=\"brandline\">\n  <h1>见面时，带上这一份</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"cards\">\n    <div class=\"card\">\n      <span class=\"name\">海盐焦糖蝴蝶酥</span>\n      <span class=\"meta\"><span class=\"price\">163元 / 8块</span><span class=\"status\">可预订</span></span>\n    </div>\n    <div class=\"card\">\n      <span class=\"name\">莓果燕麦分享盒</span>\n      <span class=\"meta\"><span class=\"price\">198元 / 6块</span><span class=\"status\">可预订</span></span>\n    </div>\n    <div class=\"card\">\n      <span class=\"name\">黑芝麻玄米曲奇</span>\n      <span class=\"meta\"><span class=\"price\">153元 / 4块</span><span class=\"status\">可预订</span></span>\n    </div>\n    <div class=\"card\">\n      <span class=\"name\">桂花酒酿小方</span>\n      <span class=\"meta\"><span class=\"price\">83元 / 4块</span><span class=\"status\">已售罄</span></span>\n    </div>\n  </section>\n\n  <div class=\"cta-wrap\">\n    <a class=\"cta\" href=\"#booking\">获取自提信息</a>\n  </div>\n\n  <section class=\"info\" id=\"booking\">\n    <p><span class=\"label\">预订截止：</span>11月15日18:00。</p>\n    <p><span class=\"label\">到店自提：</span>滨河路32号，10:00—19:00。</p>\n    <p class=\"footline\">添加店长企业微信 xian031 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式均原样可见且各出现一次，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "  .brand {\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "违反字体规则：h1至h6以外的文字font-family第一项必须是“Noto Serif SC”。店名用的是div.brand（非标题元素，测量heading:false），却用Noto Sans SC作首项，应改为Noto Serif SC。"
+     },
+     {
+      "quote": "  .card .name {\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "违反字体规则：产品名称是span（非h1-h6标题，测量heading:false），font-family首项应为“Noto Serif SC”，却写成Noto Sans SC。"
+     },
+     {
+      "quote": "  .cta {\n    display: flex;\n    align-items: center;\n    justify-content: center;\n    width: 100%;\n    min-height: 48px;\n    background: #304F68;\n    color: #FFFFFF;\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "违反字体规则：主按钮是a元素（非h1-h6标题，测量heading:false），其文字font-family首项应为“Noto Serif SC”，却写成Noto Sans SC。"
+     }
+    ],
+    "reason": "五种实际用色均合规、装饰色仅用于边框、各文字对比度均≥4.5、非标题字号均≥14px；但店名、产品名、主按钮三处非标题文字字体首项误用Noto Sans SC，三个独立样式根因各计一处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变/阴影/滤镜/混合模式（effects为空），主按钮四角实测均为12px，无图片、canvas、视频、iframe、外部资源或脚本（externalRequests为空）。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两种视口均无横向滚动；手机首屏内三个可预订价格（202–368px）与主按钮（508–556px，高48≥44）完整可见；店名底边56≤100、左缘20在16–28内；桌面main宽880居中，两侧空白均72px。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 30,
+  "error": null,
+  "full_reply": "我先读取本次的工作规则和内容数据。\n\n规则与内容已读完。要点：五色限制、装饰色不作文字、双端视口 320×568 / 1024×768、可预订价格与主按钮须在手机首屏、无 JS 无外部资源。现在写 landing.html。\n\n现在用 Playwright 做双端实际检查（320×568 与 1024×768，屏蔽外部网络）。\n\n双端截图均已实际查看：手机首屏内三款可预订价格与主按钮完整可见，店名在页顶 100px 内、左缘约 16px；桌面 main 居中且宽度合规；两端无横向滚动、无脚本或资源加载错误。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 check.py】\nimport asyncio, pathlib\nfrom playwright.async_api import async_playwright\n\nHTML = pathlib.Path(\"landing.html\").resolve().absolute().as_uri()\n\nasync def main():\n    async with async_playwright() as p:\n        browser = await p.chromium.launch()\n        for name, w, h in [(\"mobile\", 320, 568), (\"desktop\", 1024, 768)]:\n            ctx = await browser.new_context(viewport={\"width\": w, \"height\": h})\n            page = await ctx.new_page()\n            errors = []\n            page.on(\"pageerror\", lambda e: errors.append(str(e)))\n            page.on(\"requestfailed\", lambda r: errors.append(\"REQFAIL \" + r.url))\n            await page.route(\"**/*\", lambda route: route.abort() if route.request.url != HTML else route.continue_())\n            await page.goto(HTML)\n            await page.screenshot(path=f\"shot_{name}_top.png\")\n            await page.screenshot(path=f\"shot_{name}_full.png\", full_page=True)\n            hscroll = await page.evaluate(\"document.documentElement.scrollWidth > document.documentElement.clientWidth\")\n            print(name, \"hscroll:\", hscroll, \"errors:\", errors)\n            await ctx.close()\n        await browser.close()\n\nasyncio.run(main())\n\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心｜品牌预订</title>\n<style>\n  :root {\n    --brand: #304F68;\n    --bg: #F2F4F6;\n    --ink: #252A30;\n    --deco: #ADBCC9;\n    --white: #FFFFFF;\n  }\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  body {\n    background: var(--bg);\n    color: var(--ink);\n    font-family: \"Noto Serif SC\", serif;\n    font-size: 15px;\n    line-height: 1.5;\n  }\n  main {\n    max-width: 880px;\n    margin: 0 auto;\n    padding: 16px 16px 40px;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: \"Noto Sans SC\", sans-serif;\n  }\n  .logo {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 22px;\n    font-weight: 700;\n    color: var(--brand);\n    letter-spacing: 2px;\n  }\n  h1 {\n    font-size: 28px;\n    color: var(--brand);\n    margin-top: 14px;\n    line-height: 1.3;\n  }\n  .intro {\n    margin-top: 6px;\n    font-size: 15px;\n  }\n  .cards {\n    margin-top: 18px;\n    display: flex;\n    flex-direction: column;\n    gap: 10px;\n  }\n  .card {\n    background: var(--white);\n    border: 1px solid var(--deco);\n    border-radius: 10px;\n    padding: 12px 14px;\n  }\n  .card h2 {\n    font-size: 16px;\n    color: var(--ink);\n  }\n  .price {\n    margin-top: 2px;\n    font-size: 15px;\n    color: var(--brand);\n    font-weight: 700;\n  }\n  .status {\n    display: inline-block;\n    margin-top: 6px;\n    font-size: 14px;\n    color: var(--ink);\n    border: 1px solid var(--deco);\n    border-radius: 999px;\n    padding: 1px 10px;\n  }\n  .cta {\n    display: block;\n    margin-top: 20px;\n    background: var(--brand);\n    color: var(--white);\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    text-align: center;\n    text-decoration: none;\n    border-radius: 12px;\n    padding: 13px 16px;\n    min-height: 44px;\n    line-height: 1.2;\n  }\n  .info {\n    margin-top: 22px;\n    border-top: 1px solid var(--deco);\n    padding-top: 14px;\n  }\n  .info p {\n    font-size: 14px;\n    margin-top: 6px;\n  }\n  .info p:first-child { margin-top: 0; }\n  @media (min-width: 700px) {\n    main { padding: 40px 16px 56px; }\n    h1 { font-size: 34px; margin-top: 18px; }\n    .cards {\n      flex-direction: row;\n      flex-wrap: wrap;\n    }\n    .card {\n      flex: 1 1 40%;\n    }\n    .cta {\n      display: inline-block;\n      padding: 13px 48px;\n    }\n  }\n</style>\n</head>\n<body>\n<main>\n  <div class=\"logo\">汐岸点心</div>\n  <h1>把当季的好味带回家</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"cards\">\n    <div class=\"card\">\n      <h2>柠檬伯爵玛德琳</h2>\n      <p class=\"price\">173元 / 8块</p>\n      <span class=\"status\">可预订</span>\n    </div>\n    <div class=\"card\">\n      <h2>海盐焦糖蝴蝶酥</h2>\n      <p class=\"price\">153元 / 4块</p>\n      <span class=\"status\">可预订</span>\n    </div>\n    <div class=\"card\">\n      <h2>莓果燕麦分享盒</h2>\n      <p class=\"price\">128元 / 8块</p>\n      <span class=\"status\">可预订</span>\n    </div>\n  </section>\n\n  <a class=\"cta\" href=\"#booking\">获取自提信息</a>\n\n  <div class=\"card\" style=\"margin-top: 20px;\">\n    <h2>乌龙白巧曲奇</h2>\n    <p class=\"price\">68元 / 4块</p>\n    <span class=\"status\">已售罄</span>\n  </div>\n\n  <section class=\"info\" id=\"booking\">\n    <p>预订截止：11月16日18:00。</p>\n    <p>到店自提：梧桐街18号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian032 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式均原样可见，每款产品只显示一次且名称价格同卡，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "  .logo {\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "规则要求h1-h6以外的文字font-family第一项必须是“Noto Serif SC”。店名标志用的是div.logo（非标题元素，测量heading:false），却用Noto Sans SC作首项，应改为Noto Serif SC。"
+     },
+     {
+      "quote": "  .cta {\n    display: block;\n    margin-top: 20px;\n    background: var(--brand);\n    color: var(--white);\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "主按钮是a元素（非h1-h6标题，测量heading:false），其font-family首项应为“Noto Serif SC”，却写了Noto Sans SC，违反字体规则。"
+     }
+    ],
+    "reason": "五种实际用色均在允许色板内，装饰色#ADBCC9只用于边框，所有文字对比度≥7.79，非标题字号最小14px均合规；但店名标志和主按钮两处非标题文字字体首项误用Noto Sans SC，为两个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角实测均为12px，无图片/canvas/iframe/外部资源/脚本（externalRequests为空、restrictedElements为空）。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "手机320宽无横向滚动；三个可预订价格（184-438px）和主按钮（502-547.58px）完整落在首屏568px内，已售罄价格在首屏下方符合R3；店名底边49px≤100、左缘16px在16-28范围；桌面main宽880px且两侧空白均72px；按钮高45.19px≥44px。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 check.py】\nimport asyncio, pathlib\nfrom playwright.async_api import async_playwright",
+      "problem": "规则要求只交一个完整HTML文档（landing.html加允许的简短正文，或单个html代码块）。员工除landing.html外额外交付了check.py脚本文件，违反“只交一个完整HTML文档”的交付要求。"
+     }
+    ],
+    "reason": "landing.html本身完整可打开、正文“已完成：landing.html”合规，但额外交付了check.py文件，交付物不唯一，计一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 116,
+  "error": null,
+  "full_reply": "我先读取工作目录中的工作规则和内容数据。\n\n已读取依据。本次约束：内容全部取自内容.json（汐岸点心，4 款可预订产品）；只用五种指定颜色、装饰色不作文字；标题 Noto Sans SC / 正文 Noto Serif SC；无 JS、无外部资源、无渐变阴影；手机 320×568 首屏需完整容纳全部价格与主按钮，店名底边 ≤100px、左缘 16–28px；桌面 main ≤880px 居中。现在制作单文件 HTML。\n\n页面已写好。现在用本地 Playwright/Chromium 做双端实机检查（320×568 与 1024×768），并测量关键位置。\n\n数值检查通过（无横向滚动、无脚本错误、无失败请求），但手机端主按钮底边 564px 距首屏下缘仅约 4px，余量太小。我收紧间距后复测。\n\n数值全部达标（手机首屏按钮底边 542px、价格最底 408px；店名底边 47px、左缘 20px；桌面 main 880px 居中，两侧各 72px）。现在实际查看两端截图。\n\n两端截图已实看：手机首屏完整呈现店名、主标题、四款产品价格与主按钮，无横向溢出、无遮挡；桌面居中双列布局正常，样式与内容符合本次规则。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心 · 预订一份相聚的甜</title>\n<style>\n*{margin:0;padding:0;box-sizing:border-box}\n:root{\n  --primary:#304F68;\n  --bg:#F2F4F6;\n  --ink:#252A30;\n  --decor:#ADBCC9;\n  --white:#FFFFFF;\n}\nbody{\n  background:var(--bg);\n  color:var(--ink);\n  font-family:\"Noto Serif SC\",serif;\n  font-size:15px;\n  line-height:1.5;\n}\nmain{\n  max-width:880px;\n  margin:0 auto;\n  padding:0 20px 36px;\n}\n.brand{\n  padding-top:20px;\n  font-size:18px;\n  letter-spacing:2px;\n  color:var(--ink);\n}\n.wave{\n  display:block;\n  margin-top:6px;\n}\nh1{\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-weight:700;\n  color:var(--primary);\n  font-size:28px;\n  line-height:1.3;\n  margin-top:10px;\n}\n.intro{\n  margin-top:6px;\n}\n.products{\n  list-style:none;\n  margin-top:12px;\n  display:flex;\n  flex-direction:column;\n  gap:6px;\n}\n.card{\n  background:var(--white);\n  border:1px solid var(--decor);\n  border-radius:10px;\n  padding:9px 12px;\n}\n.row{\n  display:flex;\n  justify-content:space-between;\n  align-items:baseline;\n  gap:8px;\n}\n.pname{\n  font-weight:700;\n}\n.price{\n  font-size:14px;\n  white-space:nowrap;\n}\n.status{\n  margin-top:4px;\n  align-self:flex-start;\n  font-size:14px;\n  color:var(--primary);\n  border:1px solid var(--decor);\n  border-radius:999px;\n  padding:0 8px;\n  display:inline-block;\n}\n.deadline{\n  margin-top:12px;\n}\n.cta{\n  display:flex;\n  align-items:center;\n  justify-content:center;\n  margin-top:14px;\n  min-height:48px;\n  padding:12px 16px;\n  background:var(--primary);\n  color:var(--white);\n  text-decoration:none;\n  border-radius:12px;\n  font-size:16px;\n}\n.pickup{\n  margin-top:16px;\n  padding:14px 12px;\n  background:var(--white);\n  border:1px solid var(--decor);\n  border-radius:10px;\n}\n.pickup p + p{\n  margin-top:4px;\n}\n@media (min-width:640px){\n  h1{font-size:36px}\n  .products{display:grid;grid-template-columns:1fr 1fr;gap:12px}\n  .card{padding:16px}\n}\n</style>\n</head>\n<body>\n<main>\n  <header>\n    <p class=\"brand\">汐岸点心</p>\n    <svg class=\"wave\" width=\"120\" height=\"10\" viewBox=\"0 0 120 10\" aria-hidden=\"true\" focusable=\"false\">\n      <path d=\"M0 5 Q15 0 30 5 T60 5 T90 5 T120 5\" fill=\"none\" stroke=\"#ADBCC9\" stroke-width=\"2\"/>\n    </svg>\n  </header>\n  <h1>预订一份相聚的甜</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n  <ul class=\"products\">\n    <li class=\"card\">\n      <div class=\"row\"><span class=\"pname\">桂花酒酿小方</span><span class=\"price\">123元 / 6块</span></div>\n      <p class=\"status\">可预订</p>\n    </li>\n    <li class=\"card\">\n      <div class=\"row\"><span class=\"pname\">乌龙白巧曲奇</span><span class=\"price\">128元 / 4块</span></div>\n      <p class=\"status\">可预订</p>\n    </li>\n    <li class=\"card\">\n      <div class=\"row\"><span class=\"pname\">柠檬伯爵玛德琳</span><span class=\"price\">198元 / 8块</span></div>\n      <p class=\"status\">可预订</p>\n    </li>\n    <li class=\"card\">\n      <div class=\"row\"><span class=\"pname\">山楂乳酪小饼</span><span class=\"price\">93元 / 8块</span></div>\n      <p class=\"status\">可预订</p>\n    </li>\n  </ul>\n  <p class=\"deadline\">预订截止：11月17日18:00。</p>\n  <a class=\"cta\" href=\"#ziti\">获取自提信息</a>\n  <section class=\"pickup\" id=\"ziti\">\n    <p>到店自提：清河路26号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian033 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题（h1内）、简介、四款产品名称+价格同行同卡各显示一次、状态逐款原样显示“可预订”、截止说明、自提说明、预订方式均实际可见且未改写；主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "实际渲染颜色仅#304F68/#F2F4F6/#252A30/#ADBCC9/#FFFFFF五色；装饰色#ADBCC9只用于边框和SVG描边；所有文字对比度最低7.79≥4.5；标题字体首项Noto Sans SC、正文首项Noto Serif SC；非标题文字最小14px，均合规。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等禁用效果（effects为空）；主按钮四角圆角实测均为12px；无图片/canvas/视频/iframe/外部资源/脚本；内联SVG仅画非文字波浪线且描边用装饰色，合规。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "手机320视口文档宽320无横向滚动；四个可预订产品价格最底408.39px、主按钮底542.39px均完整落在568px首屏内；按钮高48≥44px；店名底边47≤100、左边缘20在16-28区间；桌面main宽880≤880且左右各72px居中，无裁切覆盖。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无额外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 53,
+  "error": null,
+  "full_reply": "我先读取工作规则和内容数据。\n\n规则与内容已读齐。本次依据：五色限制、字体首项要求、无JS/无外部资源、手机320×568首屏需含可预订价格与主按钮、店名标志顶部100px内左缘16–28px、桌面main≤880px居中。现在写 landing.html。\n\n现在用本地 Playwright/Chromium 在 320×568 和 1024×768 两个视口实际渲染并截图检查。\n\n手机端主按钮底部 595.9px 超出首屏 568px，且店名左缘 32px 超出 16–28px 范围。修正这两处后复看。\n\n数值指标全部达标。现在实际查看两端截图。\n\n两端渲染均正常：手机首屏内四款价格与主按钮完整可见，店名标志位置合规，无横向滚动，桌面 main 880px 居中。交付。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心｜这周的手作小食上新</title>\n<style>\n  :root {\n    --primary: #304F68;\n    --bg: #F2F4F6;\n    --ink: #252A30;\n    --deco: #ADBCC9;\n    --white: #FFFFFF;\n  }\n  * { margin: 0; padding: 0; box-sizing: border-box; }\n  body {\n    background: var(--bg);\n    color: var(--ink);\n    font-family: \"Noto Serif SC\", serif;\n    font-size: 14px;\n    line-height: 1.6;\n  }\n  h1, h2, h3, h4, h5, h6 {\n    font-family: \"Noto Sans SC\", sans-serif;\n    color: var(--primary);\n  }\n  main {\n    width: min(880px, 100% - 32px);\n    margin: 0 auto;\n    padding: 12px 0 40px;\n  }\n  .logo {\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 20px;\n    font-weight: 700;\n    color: var(--ink);\n    letter-spacing: 2px;\n    margin-left: 0;\n    padding-top: 16px;\n  }\n  h1 {\n    font-size: 26px;\n    margin: 12px 0 6px;\n  }\n  .intro {\n    margin-bottom: 14px;\n  }\n  .cards {\n    display: flex;\n    flex-direction: column;\n    gap: 8px;\n    margin-bottom: 14px;\n  }\n  .card {\n    background: var(--white);\n    border: 1px solid var(--deco);\n    border-radius: 8px;\n    padding: 10px 16px;\n  }\n  .card h2 {\n    font-size: 16px;\n    margin-bottom: 2px;\n  }\n  .meta {\n    display: flex;\n    justify-content: space-between;\n    align-items: baseline;\n    gap: 12px;\n    flex-wrap: wrap;\n  }\n  .price {\n    font-size: 15px;\n    font-weight: 700;\n    color: var(--primary);\n  }\n  .status {\n    font-size: 14px;\n    color: var(--ink);\n  }\n  .cta {\n    display: block;\n    width: 100%;\n    min-height: 48px;\n    background: var(--primary);\n    color: var(--white);\n    font-family: \"Noto Sans SC\", sans-serif;\n    font-size: 16px;\n    font-weight: 700;\n    text-align: center;\n    text-decoration: none;\n    line-height: 48px;\n    border: none;\n    border-radius: 12px;\n    margin-bottom: 24px;\n  }\n  .info p {\n    margin-bottom: 6px;\n  }\n  @media (min-width: 700px) {\n    main { padding: 32px 0 56px; }\n    h1 { font-size: 32px; margin: 24px 0 10px; }\n    .cards {\n      display: grid;\n      grid-template-columns: 1fr 1fr;\n      gap: 14px;\n      margin-bottom: 24px;\n    }\n    .cta {\n      width: auto;\n      padding: 0 48px;\n      display: inline-block;\n    }\n    .cta-row { text-align: center; margin-bottom: 28px; }\n  }\n</style>\n</head>\n<body>\n<main>\n  <p class=\"logo\">汐岸点心</p>\n  <h1>这周的手作小食上新</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"cards\">\n    <div class=\"card\">\n      <h2>柠檬伯爵玛德琳</h2>\n      <div class=\"meta\">\n        <span class=\"price\">188元 / 8块</span>\n        <span class=\"status\">可预订</span>\n      </div>\n    </div>\n    <div class=\"card\">\n      <h2>海盐焦糖蝴蝶酥</h2>\n      <div class=\"meta\">\n        <span class=\"price\">143元 / 4块</span>\n        <span class=\"status\">可预订</span>\n      </div>\n    </div>\n    <div class=\"card\">\n      <h2>莓果燕麦分享盒</h2>\n      <div class=\"meta\">\n        <span class=\"price\">108元 / 6块</span>\n        <span class=\"status\">已售罄</span>\n      </div>\n    </div>\n    <div class=\"card\">\n      <h2>黑芝麻玄米曲奇</h2>\n      <div class=\"meta\">\n        <span class=\"price\">93元 / 6块</span>\n        <span class=\"status\">可预订</span>\n      </div>\n    </div>\n  </section>\n\n  <div class=\"cta-row\">\n    <a class=\"cta\" href=\"#pickup\">获取自提信息</a>\n  </div>\n\n  <section class=\"info\" id=\"pickup\">\n    <p>预订截止：11月18日18:00。</p>\n    <p>到店自提：花园巷9号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian034 预订。</p>\n  </section>\n</main>\n</body>\n</html>",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式均原样可见，每款一次且名称价格同卡片，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "  .logo {\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "规则要求h1-h6以外的文字font-family第一项必须是“Noto Serif SC”。店名标志用的是<p class=\"logo\">而非标题元素（测量s1 heading:false），却用了Noto Sans SC，应改为Noto Serif SC。"
+     },
+     {
+      "quote": "  .cta {\n    display: block;\n    width: 100%;\n    min-height: 48px;\n    background: var(--primary);\n    color: var(--white);\n    font-family: \"Noto Sans SC\", sans-serif;",
+      "problem": "主按钮文字不是h1-h6标题（测量s7 heading:false），按规则其font-family第一项必须是“Noto Serif SC”，却写为Noto Sans SC。"
+     }
+    ],
+    "reason": "实际用色均在五色内、装饰色仅用于边框、对比度全部≥4.5、非标题字号均≥14px；但店名标志和主按钮两处非标题文字字体首项误用Noto Sans SC，为两个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变/阴影/滤镜/mix-blend-mode（effects为空），主按钮四角实测均为12px，无图片、canvas、iframe、脚本或外部请求，无伪元素文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两种视口均无横向滚动、无裁切覆盖；手机首屏内三个可预订价格（194-464px）与主按钮（489-537px）完整落在0-568内；店名底边60≤100、左边缘16在16-28内；桌面main宽880且两侧空白均72；按钮高48≥44。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无多余说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 72,
+  "error": null,
+  "full_reply": "我先读取工作规则和内容数据。\n\n规则与内容已读齐。本次依据：五色限制、字体首项要求、无JS/无外部资源、手机320×568首屏需含三款可预订价格与主按钮、店名标志顶部100px内左缘16–28px、桌面main≤880px居中。现在写 landing.html。\n\n现在用本地 Playwright/Chromium 在 320×568 和 1024×768 两个视口实际渲染并截图。\n\n手机端主按钮落在 646px，超出 568px 首屏，需要压缩纵向间距并把状态改为行内。进行修正。\n\n再更新卡片 HTML 结构（名称一行，价格+状态一行）：\n\n检查输出显示的内容与我的页面不符（疑似 /tmp 下的检查脚本被并行任务覆盖）。我重新核实 landing.html 内容，并用唯一命名的脚本重跑检查。\n\n文件内容正确。用唯一脚本名重跑双端检查：\n\n数据全部达标。现在实际查看两端截图：\n\n两端渲染均正常：手机首屏内三款可预订价格与主按钮完整可见，店名标志在顶部100px内、左缘20px；桌面 main 宽880px 居中，无横向滚动、无控制台错误、无外部资源请求。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 check_xi_an.py】\nfrom playwright.sync_api import sync_playwright\nurl = \"file:///tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/y05/landing.html\"\nwith sync_playwright() as p:\n    b = p.chromium.launch()\n    for name, w, h in [(\"mobile\",320,568),(\"desktop\",1024,768)]:\n        ctx = b.new_context(viewport={\"width\":w,\"height\":h})\n        pg = ctx.new_page()\n        errs = []\n        pg.on(\"console\", lambda m: errs.append(m.text) if m.type==\"error\" else None)\n        pg.on(\"requestfailed\", lambda r: errs.append(\"REQFAIL \"+r.url))\n        pg.goto(url, timeout=15000); pg.wait_for_timeout(300)\n        hs = pg.evaluate(\"document.documentElement.scrollWidth > document.documentElement.clientWidth\")\n        title = pg.title()\n        cta = pg.eval_on_selector(\".cta\",\"e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,h:r.height}}\")\n        logo = pg.eval_on_selector(\".logo\",\"e=>{const r=e.getBoundingClientRect();return {top:r.top,bottom:r.bottom,left:r.left}}\")\n        cards = pg.eval_on_selector_all(\".card\",\"els=>els.map(e=>{const r=e.getBoundingClientRect();return [e.querySelector('h2').textContent, Math.round(r.bottom)]})\")\n        mainw = pg.eval_on_selector(\"main\",\"e=>{const r=e.getBoundingClientRect();return [r.left,r.right,r.width]}\")\n        print(name,\"title:\",title,\"hscroll:\",hs,\"errs:\",errs)\n        print(\" cta:\",cta,\"logo:\",logo,\"main:\",mainw)\n        print(\" cards:\",cards)\n        pg.screenshot(path=f\"xa_{name}_top.png\")\n        pg.screenshot(path=f\"xa_{name}_full.png\", full_page=True)\n        ctx.close()\n    b.close()\nprint(\"DONE\")\n\n\n【交付文件 landing.html】\n<!DOCTYPE html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"UTF-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心｜给周末留一点慢时光</title>\n<style>\n  :root{\n    --primary:#304F68;\n    --bg:#F2F4F6;\n    --ink:#252A30;\n    --decor:#ADBCC9;\n    --white:#FFFFFF;\n  }\n  *{margin:0;padding:0;box-sizing:border-box;}\n  body{\n    background:var(--bg);\n    color:var(--ink);\n    font-family:\"Noto Serif SC\",serif;\n    font-size:15px;\n    line-height:1.5;\n  }\n  header{\n    padding:14px 20px 0;\n  }\n  .logo{\n    font-family:\"Noto Sans SC\",sans-serif;\n    font-size:20px;\n    font-weight:700;\n    color:var(--primary);\n    letter-spacing:2px;\n    display:inline-block;\n    border-bottom:2px solid var(--decor);\n    padding-bottom:4px;\n  }\n  main{\n    max-width:880px;\n    margin:0 auto;\n    padding:0 20px 32px;\n  }\n  h1{\n    font-family:\"Noto Sans SC\",sans-serif;\n    font-size:26px;\n    color:var(--primary);\n    margin-top:10px;\n    line-height:1.35;\n  }\n  .intro{\n    margin-top:6px;\n    font-size:15px;\n  }\n  .products{\n    margin-top:12px;\n    display:flex;\n    flex-direction:column;\n    gap:8px;\n  }\n  .card{\n    background:var(--white);\n    border:1px solid var(--decor);\n    border-radius:12px;\n    padding:9px 14px;\n  }\n  .card h2{\n    font-family:\"Noto Sans SC\",sans-serif;\n    font-size:16px;\n    color:var(--ink);\n    font-weight:700;\n  }\n  .meta{\n    display:flex;\n    justify-content:space-between;\n    align-items:baseline;\n    gap:8px;\n  }\n  .price{\n    font-size:15px;\n    color:var(--primary);\n    font-weight:700;\n    white-space:nowrap;\n  }\n  .status{\n    font-size:14px;\n    color:var(--ink);\n    white-space:nowrap;\n  }\n  .status-dot{\n    display:inline-block;\n    width:8px;\n    height:8px;\n    border-radius:50%;\n    background:var(--decor);\n    margin-right:6px;\n    vertical-align:middle;\n  }\n  .info{\n    margin-top:12px;\n    border-top:1px solid var(--decor);\n    padding-top:10px;\n  }\n  .info p{\n    font-size:14px;\n    margin-top:2px;\n  }\n  .cta{\n    margin-top:12px;\n    display:block;\n    text-align:center;\n    background:var(--primary);\n    color:var(--white);\n    font-family:\"Noto Sans SC\",sans-serif;\n    font-size:16px;\n    font-weight:700;\n    text-decoration:none;\n    border:none;\n    border-radius:12px;\n    padding:12px 0;\n    min-height:48px;\n  }\n  .method{\n    margin-top:10px;\n    font-size:14px;\n    text-align:center;\n  }\n  @media (min-width:700px){\n    header{\n      max-width:880px;\n      margin:0 auto;\n      padding:32px 20px 0;\n    }\n    h1{\n      font-size:34px;\n      margin-top:24px;\n    }\n    .products{\n      margin-top:28px;\n      gap:14px;\n    }\n    .card{\n      padding:14px 24px;\n    }\n    .card h2{\n      font-size:18px;\n    }\n    .info{\n      margin-top:28px;\n    }\n    .cta{\n      margin-top:28px;\n      max-width:360px;\n      margin-left:auto;\n      margin-right:auto;\n    }\n  }\n</style>\n</head>\n<body>\n<header>\n  <span class=\"logo\">汐岸点心</span>\n</header>\n<main>\n  <h1>给周末留一点慢时光</h1>\n  <p class=\"intro\">每日手作，按约定日期到店领取。</p>\n\n  <section class=\"products\" aria-label=\"产品\">\n    <div class=\"card\">\n      <h2>乌龙白巧曲奇</h2>\n      <p class=\"meta\"><span class=\"price\">198元 / 6块</span><span class=\"status\"><span class=\"status-dot\" aria-hidden=\"true\"></span>可预订</span></p>\n    </div>\n    <div class=\"card\">\n      <h2>山楂乳酪小饼</h2>\n      <p class=\"meta\"><span class=\"price\">83元 / 6块</span><span class=\"status\"><span class=\"status-dot\" aria-hidden=\"true\"></span>可预订</span></p>\n    </div>\n    <div class=\"card\">\n      <h2>柠檬伯爵玛德琳</h2>\n      <p class=\"meta\"><span class=\"price\">178元 / 6块</span><span class=\"status\"><span class=\"status-dot\" aria-hidden=\"true\"></span>可预订</span></p>\n    </div>\n    <div class=\"card\">\n      <h2>莓果燕麦分享盒</h2>\n      <p class=\"meta\"><span class=\"price\">103元 / 6块</span><span class=\"status\"><span class=\"status-dot\" aria-hidden=\"true\"></span>已售罄</span></p>\n    </div>\n  </section>\n\n  <section class=\"info\" id=\"pickup\" aria-label=\"预订与自提信息\">\n    <p>预订截止：11月19日18:00。</p>\n    <p>到店自提：滨河路32号，10:00—19:00。</p>\n  </section>\n\n  <a class=\"cta\" href=\"#pickup\">获取自提信息</a>\n  <p class=\"method\">添加店长企业微信 xian035 预订。</p>\n</main>\n</body>\n</html>",
+  "failed": [
+   "LP-brand",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式均原样可见，每款一次且名称价格同卡片，主按钮文字精确为「获取自提信息」，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": ".logo{\n    font-family:\"Noto Sans SC\",sans-serif;",
+      "problem": "规则要求h1至h6标题字体第一项才是\"Noto Sans SC\"，其他文字第一项必须是\"Noto Serif SC\"。店名标志是span而非标题（测量s1 heading:false），却用\"Noto Sans SC\"作首项，应改为\"Noto Serif SC\"。"
+     },
+     {
+      "quote": "color:var(--white);\n    font-family:\"Noto Sans SC\",sans-serif;",
+      "problem": "主按钮文字不是h1-h6标题（测量s8 heading:false），属其他文字，font-family第一项必须是\"Noto Serif SC\"，实际为\"Noto Sans SC\"，违反字体规则。"
+     }
+    ],
+    "reason": "五色、对比度（最低7.79）、装饰色用法、字号（非标题均≥14px）均合格；但店名标志和主按钮两处非标题文字字体首项误用Noto Sans SC，为两个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变/阴影/滤镜/blend（effects为空），主按钮四角实测均为12px，无图片、canvas、视频、iframe、脚本与外部请求，状态圆点为普通span背景非文字图形，无伪元素文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口均无横向滚动、无裁切覆盖；手机首屏内三个可预订价格（192/266/341px底边）与主按钮（506-554px）完整落在0-568内；店名底边50≤100、左缘20在16-28内；桌面main宽880且两侧空白72/72居中；按钮高48≥44。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 check_xi_an.py】",
+      "problem": "规则要求只交一个完整HTML文档，方案一正文只可为空、「已完成：landing.html」或单行文件链接。员工除landing.html外额外交付了check_xi_an.py脚本文件及说明，超出允许的交付范围。"
+     }
+    ],
+    "reason": "landing.html本身可打开且正文「已完成：landing.html」合规，但额外交付了一个Python脚本文件，交付格式记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 38,
+  "error": null,
+  "full_reply": "现在用本地 Playwright/Chromium 做双端实看检查。\n\n两端实看均正常：手机首屏内四款价格与主按钮完整可见，店名在页顶左侧；桌面 main 宽 880px 居中，无横向滚动、无外部资源与脚本错误。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>汐岸点心｜街角的新鲜味道</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F2F4F6;color:#252A30;font-family:\"Noto Serif SC\",serif;font-size:14px;line-height:1.5}\nmain{max-width:880px;margin:0 auto;padding:16px 16px 40px}\n.logo{margin:0;padding:0;font-family:\"Noto Sans SC\",sans-serif;font-weight:700;font-size:22px;color:#304F68;line-height:1.2}\nh1{font-family:\"Noto Sans SC\",sans-serif;font-size:30px;line-height:1.25;color:#304F68;margin:18px 0 8px}\n.intro{margin:0 0 16px}\n.rule{border:0;border-top:1px solid #ADBCC9;margin:16px 0}\n.card{background:#FFFFFF;border:1px solid #ADBCC9;border-radius:12px;padding:10px 14px;margin:0 0 10px}\n.card h2{font-family:\"Noto Sans SC\",sans-serif;font-size:15px;font-weight:700;color:#252A30;margin:0 0 2px;line-height:1.35}\n.meta{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}\n.price{font-weight:700;color:#304F68;margin:0}\n.status{color:#252A30;margin:0}\n.btn{display:flex;align-items:center;justify-content:center;min-height:48px;background:#304F68;color:#FFFFFF;border-radius:12px;text-decoration:none;font-family:\"Noto Sans SC\",sans-serif;font-size:16px;font-weight:700;margin:18px 0 6px}\n.info{margin:14px 0 0}\n.info p{margin:0 0 6px}\n@media (min-width:700px){\n  main{padding:32px 32px 56px}\n  h1{font-size:40px;margin-top:24px}\n  .intro{font-size:16px;max-width:620px}\n  .cards{display:grid;grid-template-columns:1fr 1fr;gap:14px}\n  .card{margin:0;padding:16px 18px}\n  .card h2{font-size:17px}\n  .btn{display:inline-flex;min-width:260px;padding:0 32px}\n  .btnwrap{text-align:center;margin:24px 0 8px}\n}\n</style>\n</head>\n<body>\n<main>\n  <p class=\"logo\">汐岸点心</p>\n  <h1>街角的新鲜味道</h1>\n  <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  <section class=\"cards\">\n    <article class=\"card\">\n      <h2>莓果燕麦分享盒 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">168元 / 4块</p><p class=\"status\">可预订</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>山楂乳酪小饼 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">153元 / 4块</p><p class=\"status\">可预订</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>柠檬伯爵玛德琳 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">133元 / 8块</p><p class=\"status\">可预订</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>黑芝麻玄米曲奇 · 门店限定装</h2>\n      <div class=\"meta\"><p class=\"price\">88元 / 4块</p><p class=\"status\">可预订</p></div>\n    </article>\n  </section>\n  <div class=\"btnwrap\"><a class=\"btn\" href=\"#ziti\">获取自提信息</a></div>\n  <hr class=\"rule\">\n  <section class=\"info\" id=\"ziti\">\n    <p>预订截止：11月20日18:00。</p>\n    <p>到店自提：梧桐街18号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian036 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称+价格+状态（均为可预订）、截止说明、自提说明、预订方式均原样可见且各出现一次，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": ".logo{margin:0;padding:0;font-family:\"Noto Sans SC\",sans-serif;font-weight:700;font-size:22px;color:#304F68;line-height:1.2}",
+      "problem": "店名标志是<p>元素而非h1-h6标题，属于“其他文字”，font-family第一项必须是“Noto Serif SC”，却写成了“Noto Sans SC”（测量样式s1确认heading:false）。"
+     },
+     {
+      "quote": ".btn{display:flex;align-items:center;justify-content:center;min-height:48px;background:#304F68;color:#FFFFFF;border-radius:12px;text-decoration:none;font-family:\"Noto Sans SC\",sans-serif;font-size:16px;font-weight:700;margin:18px 0 6px}",
+      "problem": "主按钮文字不是h1-h6标题，属于“其他文字”，font-family第一项必须是“Noto Serif SC”，却写成了“Noto Sans SC”（测量样式s7确认heading:false）。"
+     }
+    ],
+    "reason": "实际用色均在五色内，装饰色#ADBCC9仅用于边框，所有文字对比度≥4.5，非标题字号均≥14px；但店名标志和主按钮两处非标题文字的字体首项误用Noto Sans SC，为两个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角圆角均为12px，无图片/canvas/视频/iframe/外部资源/脚本（externalRequests为空），未用伪元素生成文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "手机320视口文档宽320无横向滚动，四个可预订价格（最底443.89px）和主按钮（底520.89px，高48≥44）完整落在首屏568px内；店名底边42.39≤100、左边缘16在16-28范围内；桌面main宽880≤880且两侧空白均为72px居中；无裁切覆盖。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无额外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 108,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料。\n\n规则与内容已明确：五色限制、无JS无外部资源、手机320×568首屏需含三个可预订价格与主按钮、店名顶部100px内左侧16–28px、桌面main≤880px居中。旧稿配色/结构不符，重写。\n\n现在用 Playwright 做双端实际检查。\n\n数值指标全部达标。现在实际查看截图。\n\n双端截图均已实际查看：手机端四个价格与主按钮完整落在首屏内，店名在页顶左侧16px处；桌面端 main 880px 居中、双列卡片，无横向滚动、无脚本错误、无外部资源请求。交付最终文件。\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 check.py】\nimport asyncio\nfrom playwright.async_api import async_playwright\n\nURL = \"file:///tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/y07/landing.html\"\nVIEWPORTS = [(\"mobile\", 320, 568), (\"desktop\", 1024, 768)]\n\nasync def main():\n    async with async_playwright() as p:\n        browser = await p.chromium.launch()\n        for name, w, h in VIEWPORTS:\n            ctx = await browser.new_context(viewport={\"width\": w, \"height\": h})\n            page = await ctx.new_page()\n            errors = []\n            page.on(\"pageerror\", lambda e: errors.append(str(e)))\n            failed = []\n            page.on(\"requestfailed\", lambda r: failed.append(r.url))\n            await page.goto(URL, wait_until=\"load\")\n            await page.screenshot(path=f\"shot_{name}_top.png\")\n            await page.screenshot(path=f\"shot_{name}_full.png\", full_page=True)\n            hscroll = await page.evaluate(\"document.documentElement.scrollWidth > document.documentElement.clientWidth\")\n            btn = page.locator(\".cta\")\n            bb = await btn.bounding_box()\n            prices = {}\n            for card in await page.locator(\".card\").all():\n                nm = await card.locator(\"h2\").inner_text()\n                pb = await card.locator(\".price\").bounding_box()\n                prices[nm] = (pb[\"y\"], pb[\"y\"] + pb[\"height\"])\n            logo = await page.locator(\".logo\").bounding_box()\n            mainbb = await page.locator(\"main\").bounding_box()\n            print(f\"== {name} {w}x{h}\")\n            print(\"hscroll:\", hscroll, \"errors:\", errors, \"failed_reqs:\", failed)\n            print(\"button box:\", bb)\n            print(\"logo box:\", logo)\n            print(\"main box:\", mainbb)\n            for k, v in prices.items():\n                print(f\"  price {k}: y {v[0]:.0f}-{v[1]:.0f} in-first-screen={v[1] <= h}\")\n            await ctx.close()\n        await browser.close()\n\nasyncio.run(main())\n\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>汐岸点心｜一盒心意，正好分享</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F2F4F6;color:#252A30;font-family:\"Noto Serif SC\",serif;font-size:14px;line-height:1.5}\nmain{max-width:880px;margin:0 auto;padding:14px 16px 32px}\nh1,h2,h3{font-family:\"Noto Sans SC\",sans-serif;color:#304F68;margin:0}\n.logo{font-family:\"Noto Sans SC\",sans-serif;color:#304F68;font-size:20px;font-weight:700;line-height:28px;margin:0 0 10px}\nh1{font-size:26px;line-height:1.3;margin:0 0 8px}\n.intro{margin:0 0 14px}\n.cards{display:flex;flex-direction:column;gap:8px;margin:0 0 14px}\n.card{background:#FFFFFF;border:1px solid #ADBCC9;border-radius:8px;padding:10px 12px}\n.card h2{font-size:15px;line-height:1.4;color:#252A30;margin:0 0 2px}\n.meta{display:flex;justify-content:space-between;align-items:baseline;gap:8px;flex-wrap:wrap}\n.price{font-family:\"Noto Sans SC\",sans-serif;color:#304F68;font-size:15px;font-weight:700;margin:0}\n.status{font-size:14px;color:#252A30;margin:0}\n.cta{display:flex;align-items:center;justify-content:center;height:48px;background:#304F68;color:#FFFFFF;border-radius:12px;font-family:\"Noto Sans SC\",sans-serif;font-size:16px;text-decoration:none;margin:0 0 18px}\n.info{border-top:1px solid #ADBCC9;padding-top:12px}\n.info p{margin:0 0 6px}\n@media (min-width:700px){\n  main{padding:28px 32px 40px}\n  h1{font-size:36px}\n  .intro{font-size:16px;max-width:560px}\n  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}\n  .card{padding:16px 18px}\n  .card h2{font-size:17px}\n  .price{font-size:17px}\n  .cta{display:flex;max-width:320px}\n}\n</style>\n</head>\n<body>\n<main>\n  <p class=\"logo\">汐岸点心</p>\n  <h1>一盒心意，正好分享</h1>\n  <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  <section class=\"cards\">\n    <article class=\"card\">\n      <h2>山楂乳酪小饼 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">93元 / 8块</p><p class=\"status\">可预订</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>海盐焦糖蝴蝶酥 · 轻礼组合</h2>\n      <div class=\"meta\"><p class=\"price\">193元 / 4块</p><p class=\"status\">已售罄</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>柠檬伯爵玛德琳 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">158元 / 8块</p><p class=\"status\">可预订</p></div>\n    </article>\n    <article class=\"card\">\n      <h2>桂花酒酿小方 · 家庭分享装</h2>\n      <div class=\"meta\"><p class=\"price\">98元 / 8块</p><p class=\"status\">可预订</p></div>\n    </article>\n  </section>\n  <a class=\"cta\" href=\"#自提信息\">获取自提信息</a>\n  <section class=\"info\" id=\"自提信息\">\n    <p>预订截止：11月21日18:00。</p>\n    <p>到店自提：清河路26号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian037 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式均按内容.json原样可见，每款一次且名称价格同卡，主按钮文字精确为“获取自提信息”，与参考答案和测量值一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": ".logo{font-family:\"Noto Sans SC\",sans-serif;color:#304F68;font-size:20px;font-weight:700;line-height:28px;margin:0 0 10px}",
+      "problem": "店名标志是<p>非标题文字，按规则“其他文字第一项必须是Noto Serif SC”，其font-family首项却为Noto Sans SC（测量s1：heading=false，fontFamily=\"Noto Sans SC\"）。"
+     },
+     {
+      "quote": ".price{font-family:\"Noto Sans SC\",sans-serif;color:#304F68;font-size:15px;font-weight:700;margin:0}",
+      "problem": "价格文字在<p>中、非标题，font-family首项应为Noto Serif SC，实际为Noto Sans SC（测量s5：heading=false，fontFamily=\"Noto Sans SC\"）。"
+     },
+     {
+      "quote": ".cta{display:flex;align-items:center;justify-content:center;height:48px;background:#304F68;color:#FFFFFF;border-radius:12px;font-family:\"Noto Sans SC\",sans-serif;font-size:16px;text-decoration:none;margin:0 0 18px}",
+      "problem": "主按钮文字为<a>非标题文字，font-family首项应为Noto Serif SC，实际为Noto Sans SC（测量s7：heading=false，fontFamily=\"Noto Sans SC\"）。"
+     }
+    ],
+    "reason": "实际用色均在五色内、装饰色#ADBCC9仅用于边框、各文字对比度均≥4.5、非标题字号均≥14px；但logo、价格、按钮三处非标题文字的字体首项误用Noto Sans SC，为三个独立样式根因，计3处。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量effects与restrictedElements均为空，无渐变/阴影/滤镜/混合模式，无图片、canvas、视频、iframe、外部资源与脚本；主按钮四角实测均为12px。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口文档宽度等于视口宽度无横向滚动，无裁切/覆盖；手机首屏内三个可预订价格（底边206.3/358.3/434.3）与主按钮（459.8–507.8，高48≥44）完整落在568px内；店名底边42≤100、左缘16在16–28范围；桌面main宽880且左右各72px居中。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 check.py】",
+      "problem": "规则要求“只交一个完整HTML文档”，方案一只允许landing.html文件加简短正文；员工除landing.html外额外交付了check.py脚本文件，违反只交一个HTML文档的要求。"
+     }
+    ],
+    "reason": "正文“已完成：landing.html”本身合规且landing.html可打开，但额外交付了check.py文件，交付格式计一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 92,
+  "error": null,
+  "full_reply": "我先读取本次的依据材料：工作规则、内容数据和旧稿。\n\n规则与内容已明确：五色限制、无JS无外部资源、手机320×568首屏需含三款\"可预订\"价格与主按钮、桌面main≤880px居中。旧稿配色/字体/文案均不符，将重写。现在写 landing.html。\n\n现在用本地 Playwright/Chromium 在 320×568 和 1024×768 两个视口实际加载页面并截图（屏蔽外部网络）。\n\n手机端主按钮底部到 604px，超出 568 首屏，需压缩纵向间距。调整后复检。\n\n数值已达标（三款可预订价格与主按钮均在 568px 内）。现在实际查看两端截图。\n\n两端截图检查通过：手机首屏含店名、主标题、三款可预订价格与主按钮且无横向溢出；桌面 main 居中、布局正常；屏蔽外部网络后渲染无错误，页面自包含。交付最终文件。已完成：landing.html\n\n已完成：landing.html",
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>汐岸点心｜把秋日装进礼盒</title>\n<style>\n*{box-sizing:border-box}\nbody{margin:0;background:#F2F4F6;color:#252A30;font-family:'Noto Serif SC',serif;font-size:14px;line-height:1.5}\nh1,h2,h3,h4,h5,h6{font-family:'Noto Sans SC',sans-serif;margin:0}\nmain{max-width:880px;margin:0 auto;background:#FFFFFF;min-height:100vh;padding:20px 20px 40px}\n.logo{font-family:'Noto Sans SC',sans-serif;font-size:20px;font-weight:700;color:#304F68;margin:0 0 4px;letter-spacing:2px}\n.rule{border:0;border-top:1px solid #ADBCC9;margin:12px 0 0}\nh1{font-size:30px;line-height:1.3;color:#252A30;margin:12px 0 6px}\n.intro{margin:0 0 12px;color:#252A30}\n.card{border:1px solid #ADBCC9;border-radius:8px;padding:8px 14px;margin:0 0 8px;background:#FFFFFF}\n.card-row{display:flex;justify-content:space-between;align-items:baseline;gap:12px;flex-wrap:wrap}\n.card h2{font-size:16px;color:#252A30}\n.price{font-size:15px;font-weight:700;color:#304F68;margin:0;white-space:nowrap}\n.status{font-size:14px;color:#304F68;margin:2px 0 0}\n.cta{display:block;width:100%;background:#304F68;color:#FFFFFF;text-align:center;text-decoration:none;font-family:'Noto Sans SC',sans-serif;font-size:16px;padding:12px 16px;border-radius:12px;margin:10px 0 24px}\n.info{border-top:1px solid #ADBCC9;padding-top:16px}\n.info p{margin:0 0 8px}\n@media (min-width:700px){\n  main{padding:32px 40px 48px}\n  h1{font-size:38px}\n  .cards{display:grid;grid-template-columns:1fr 1fr;gap:12px}\n  .card{margin:0}\n  .cta{width:auto;display:inline-block;padding:12px 40px}\n}\n</style>\n</head>\n<body>\n<main>\n  <header>\n    <p class=\"logo\">汐岸点心</p>\n    <hr class=\"rule\">\n  </header>\n  <section>\n    <h1>把秋日装进礼盒</h1>\n    <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  </section>\n  <section class=\"cards\">\n    <article class=\"card\">\n      <div class=\"card-row\"><h2>山楂乳酪小饼 · 门店限定装</h2><p class=\"price\">188元 / 6块</p></div>\n      <p class=\"status\">可预订</p>\n    </article>\n    <article class=\"card\">\n      <div class=\"card-row\"><h2>乌龙白巧曲奇 · 门店限定装</h2><p class=\"price\">168元 / 8块</p></div>\n      <p class=\"status\">可预订</p>\n    </article>\n    <article class=\"card\">\n      <div class=\"card-row\"><h2>香草核桃布朗尼 · 轻礼组合</h2><p class=\"price\">178元 / 4块</p></div>\n      <p class=\"status\">可预订</p>\n    </article>\n  </section>\n  <a class=\"cta\" href=\"#order-info\">获取自提信息</a>\n  <section class=\"cards\">\n    <article class=\"card\">\n      <div class=\"card-row\"><h2>柠檬伯爵玛德琳 · 家庭分享装</h2><p class=\"price\">123元 / 4块</p></div>\n      <p class=\"status\">已售罄</p>\n    </article>\n  </section>\n  <section class=\"info\" id=\"order-info\">\n    <p>预订截止：11月22日18:00。</p>\n    <p>到店自提：花园巷9号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian038 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题、简介、四款产品名称/价格/状态（可预订×3、已售罄×1）、截止说明、自提说明、预订方式均原样可见，每款一次且名称价格同卡片，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": ".logo{font-family:'Noto Sans SC',sans-serif;font-size:20px;font-weight:700;color:#304F68;margin:0 0 4px;letter-spacing:2px}",
+      "problem": "店名“汐岸点心”放在<p class=\"logo\">中，不是h1-h6标题，属于“其他文字”，font-family第一项必须是“Noto Serif SC”，却写成了'Noto Sans SC'（测量样式s1确认heading:false、首项Noto Sans SC）。"
+     },
+     {
+      "quote": ".cta{display:block;width:100%;background:#304F68;color:#FFFFFF;text-align:center;text-decoration:none;font-family:'Noto Sans SC',sans-serif;font-size:16px;padding:12px 16px;border-radius:12px;margin:10px 0 24px}",
+      "problem": "主按钮文字“获取自提信息”在<a>中，不是h1-h6标题，属于“其他文字”，font-family第一项必须是“Noto Serif SC”，却写成了'Noto Sans SC'（测量样式s7确认heading:false、首项Noto Sans SC）。这是与.logo独立的另一条样式根因。"
+     }
+    ],
+    "reason": "实际用色均在五色内，装饰色#ADBCC9仅用于边框，对比度全部≥8.59，非标题字号均≥14px；但店名logo和主按钮两处非标题文字的字体首项误用Noto Sans SC，为两个独立样式根因。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），主按钮四角实测均为12px，无图片/canvas/视频/iframe/脚本/外部资源（externalRequests为空），未用伪元素生成文字。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口均无横向滚动、无裁切覆盖；手机首屏内三个可预订价格（219/326.5/434起）与主按钮（498.5–546.5）完整落在0–568内，已售罄价格在下方符合R3；店名bottom=50≤100、left=20在16–28内；桌面main宽880且两侧空白72/72居中；按钮高48≥44。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，无额外说明，符合方案一。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 1462,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、内容数据和旧稿。\n\n依据已读齐：本次规则（五色、字体、无外部资源、双端视口 320×568 / 1024×768、首屏价格+主按钮等）与内容.json 四款产品全部\"可预订\"。现在写自包含单文件 landing.html。\n\n文件已写入。现在用本地 Playwright/Chromium 做双端实际检查（320×568 与 1024×768），屏蔽外部网络并截图。\n\n数据全部达标（无横向滚动、店名≤100px、左距16px、CTA 48px 高且在首屏内、四款价格均可见、main 宽880居中差0px、圆角12px、字体正确、无控制台错误、无外部请求）。现在实际查看两端截图。\n\n截图已生成，但本端点无法在工具结果中回传图片供我查看。改用像素级审计作为补充证据：验证截图中实际渲染的颜色是否仅为允许的五色。\n\n非允许色均为允许色之间的抗锯齿混合（如墨色×底色、主色×白）。做一次严格验证：每个非允许像素是否落在两允许色的线段上，并核对 CTA 实底色。\n\n像素审计通过：两屏所有像素均为五色本身或其抗锯齿混合，无其他颜色；CTA 实底为主色 #304F68。对比度按计算：墨色/底色 13.1:1、墨色/白 14.5:1、主色/白 8.6:1、白/主色（按钮）8.6:1，全部 ≥4.5:1。双端实测数据与截图均无异常，交付最终文件。\n\n已完成：landing.html",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "已完成：landing.html\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width, initial-scale=1\">\n<title>汐岸点心 · 见面时，带上这一份</title>\n<style>\n  :root{\n    --primary:#304F68;\n    --paper:#F2F4F6;\n    --ink:#252A30;\n    --line:#ADBCC9;\n    --white:#FFFFFF;\n  }\n  *{box-sizing:border-box;margin:0;padding:0}\n  body{\n    background:var(--paper);\n    color:var(--ink);\n    font-family:\"Noto Serif SC\",serif;\n    font-size:14px;\n    line-height:1.5;\n  }\n  main{\n    max-width:880px;\n    margin:0 auto;\n    padding:0 16px;\n  }\n  .brand{\n    padding-top:18px;\n    color:var(--primary);\n    font-size:20px;\n    line-height:1.2;\n    letter-spacing:2px;\n  }\n  .hero{\n    margin-top:14px;\n  }\n  h1{\n    font-family:\"Noto Sans SC\",sans-serif;\n    color:var(--ink);\n    font-size:27px;\n    line-height:1.3;\n    font-weight:700;\n  }\n  .intro{\n    margin-top:10px;\n    color:var(--ink);\n    max-width:560px;\n  }\n  .products{\n    margin-top:18px;\n    display:flex;\n    flex-direction:column;\n    gap:8px;\n  }\n  .card{\n    background:var(--white);\n    border:1px solid var(--line);\n    border-radius:10px;\n    padding:8px 12px;\n  }\n  h2{\n    font-family:\"Noto Sans SC\",sans-serif;\n    color:var(--ink);\n    font-size:15px;\n    line-height:1.4;\n    font-weight:700;\n  }\n  .meta{\n    margin-top:3px;\n    display:flex;\n    justify-content:space-between;\n    align-items:baseline;\n    gap:8px;\n    flex-wrap:wrap;\n  }\n  .price{\n    color:var(--primary);\n    font-weight:700;\n  }\n  .status{\n    color:var(--primary);\n  }\n  .cta{\n    margin-top:16px;\n    display:flex;\n    align-items:center;\n    justify-content:center;\n    height:48px;\n    border-radius:12px;\n    background:var(--primary);\n    color:var(--white);\n    text-decoration:none;\n    font-size:16px;\n    width:100%;\n  }\n  .order{\n    margin-top:22px;\n    padding:14px 0 26px;\n    border-top:1px solid var(--line);\n  }\n  .order p{\n    margin-top:6px;\n  }\n  .order p:first-child{\n    margin-top:0;\n  }\n  @media (min-width:600px){\n    main{\n      padding:0 24px;\n    }\n    .brand{\n      padding-top:26px;\n      font-size:22px;\n    }\n    .hero{\n      margin-top:22px;\n    }\n    h1{\n      font-size:34px;\n    }\n    .intro{\n      margin-top:12px;\n      font-size:15px;\n      max-width:620px;\n    }\n    .products{\n      margin-top:26px;\n      display:grid;\n      grid-template-columns:1fr 1fr;\n      gap:12px;\n    }\n    .card{\n      padding:14px 16px;\n    }\n    h2{\n      font-size:16px;\n    }\n    .meta{\n      margin-top:6px;\n    }\n    .cta{\n      margin-top:24px;\n      width:320px;\n      margin-left:auto;\n      margin-right:auto;\n    }\n    .order{\n      margin-top:30px;\n      padding:18px 0 40px;\n    }\n  }\n</style>\n</head>\n<body>\n<main>\n  <header class=\"brand\">汐岸点心</header>\n  <section class=\"hero\">\n    <h1>见面时，带上这一份</h1>\n    <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n  </section>\n  <section class=\"products\">\n    <article class=\"card\">\n      <h2>香草核桃布朗尼 · 家庭分享装</h2>\n      <p class=\"meta\"><span class=\"price\">93元 / 4块</span><span class=\"status\">可预订</span></p>\n    </article>\n    <article class=\"card\">\n      <h2>乌龙白巧曲奇 · 家庭分享装</h2>\n      <p class=\"meta\"><span class=\"price\">168元 / 4块</span><span class=\"status\">可预订</span></p>\n    </article>\n    <article class=\"card\">\n      <h2>桂花酒酿小方 · 轻礼组合</h2>\n      <p class=\"meta\"><span class=\"price\">188元 / 6块</span><span class=\"status\">可预订</span></p>\n    </article>\n    <article class=\"card\">\n      <h2>柠檬伯爵玛德琳 · 家庭分享装</h2>\n      <p class=\"meta\"><span class=\"price\">193元 / 4块</span><span class=\"status\">可预订</span></p>\n    </article>\n  </section>\n  <a class=\"cta\" href=\"#order-info\">获取自提信息</a>\n  <section class=\"order\" id=\"order-info\">\n    <p>预订截止：11月23日18:00。</p>\n    <p>到店自提：滨河路32号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian039 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "所有必需字段（店名、主标题、简介、四款产品名称/价格/状态、截止说明、自提说明、预订方式）均按内容.json原样可见，每款产品显示一次且名称价格同卡，主按钮文字精确为“获取自提信息”。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "浏览器实测颜色均在五色范围内，装饰色#ADBCC9仅用于边框；所有文字对比度最低7.79≥4.5；标题字体首项Noto Sans SC、其他文字首项Noto Serif SC；非标题文字最小14px，均合规。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "无渐变、阴影、filter等效果（effects为空），无图片/脚本/外部资源（restrictedElements与externalRequests为空），主按钮四角实测均为12px。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两视口均无横向滚动、无裁切覆盖；手机首屏内四个可预订价格（底边最大428）与主按钮（底边501.09、高48≥44）完整可见；店名底边42≤100、左缘16在[16,28]内；桌面main宽880且两侧空白72/72居中。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付landing.html文件，正文仅为允许的“已完成：landing.html”，符合方案一，无多余说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 1996,
+  "error": null,
+  "full_reply": "我先读取工作目录里的三份材料：工作规则、内容数据和旧稿。\n\n读取完毕，依据已明确。现在按本次规则重写页面（旧稿配色、阴影、按钮文案均不合规，弃用其样式，仅参考其信息结构）。\n\n写好初版。现在检查两端首屏预算：手机 320×568 首屏必须容纳「可预订」产品的价格（桂花 183 元为首卡）和主按钮。用 Playwright 实测截图。\n\n截图已生成，但工具回执未内嵌图像内容。我补做一次精确几何测量来核验首屏硬指标（价格/按钮落位、店名位置、main 居中），并重截一次可查看的图。\n\n测量发现三处问题：① 手机首屏 568px 内只装下前两款价格，88元/173元（可预订）落在首屏外；② 状态徽章\n\n[raven] expert-landing-page stopped before finishing (stopReason=max_tokens); reply is partial.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "测量发现三处问题：① 手机首屏 568px 内只装下前两款价格，88元/173元（可预订）落在首屏外；② 状态徽章\n\n【交付文件 check.py】\nimport asyncio, pathlib\nfrom playwright.async_api import async_playwright\n\nHTML = pathlib.Path(\"/tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/y10-quota-20261011/landing.html\").resolve()\nOUT = HTML.parent\n\nasync def main():\n    async with async_playwright() as p:\n        browser = await p.chromium.launch(args=[\"--no-sandbox\"])\n        for name, w, h in [(\"mobile\", 320, 568), (\"desktop\", 1024, 768)]:\n            ctx = await browser.new_context(viewport={\"width\": w, \"height\": h})\n            page = await ctx.new_page()\n            errors = []\n            page.on(\"console\", lambda m: errors.append(m.text) if m.type == \"error\" else None)\n            page.on(\"pageerror\", lambda e: errors.append(str(e)))\n            await page.goto(HTML.as_uri(), wait_until=\"load\")\n            await page.screenshot(path=str(OUT / f\"shot_{name}.png\"))\n            # overflow check\n            over = await page.evaluate(\"document.documentElement.scrollWidth > document.documentElement.clientWidth\")\n            print(name, \"hscroll:\", over, \"errors:\", errors)\n            await ctx.close()\n        await browser.close()\n\nasyncio.run(main())\n\n\n【交付文件 check2.py】\nimport asyncio, json, pathlib\nfrom playwright.async_api import async_playwright\n\nHTML = pathlib.Path(\"/tmp/accept-landing-page-parallel-v1-v0-1-1glnaih7/y10-quota-20261011/landing.html\").resolve()\nOUT = HTML.parent\n\nJS = \"\"\"\n() => {\n  const r = el => { const b = el.getBoundingClientRect(); return {top: b.top, bottom: b.bottom, left: b.left, right: b.right, w: b.width, h: b.height}; };\n  const prices = [...document.querySelectorAll('.price')].map(p => ({text: p.textContent.trim(), box: r(p)}));\n  const cta = r(document.querySelector('.cta'));\n  const brand = r(document.querySelector('.brand'));\n  const m = r(document.querySelector('main'));\n  const vw = document.documentElement.clientWidth;\n  const fs = [...document.querySelectorAll('main p, main span, main a')].map(e => parseFloat(getComputedStyle(e).fontSize));\n  return {vw, prices, cta, brand, main: m, minFont: Math.min(...fs)};\n}\n\"\"\"\n\nasync def main():\n    async with async_playwright() as p:\n        browser = await p.chromium.launch(args=[\"--no-sandbox\"])\n        for name, w, h in [(\"mobile\", 320, 568), (\"desktop\", 1024, 768)]:\n            ctx = await browser.new_context(viewport={\"width\": w, \"height\": h})\n            page = await ctx.new_page()\n            await page.goto(HTML.as_uri(), wait_until=\"load\")\n            data = await page.evaluate(JS)\n            print(name, json.dumps(data, ensure_ascii=False, indent=1))\n            await page.screenshot(path=str(OUT / f\"shot_{name}2.png\"))\n            await ctx.close()\n        await browser.close()\n\nasyncio.run(main())\n\n\n【交付文件 landing.html】\n<!doctype html>\n<html lang=\"zh-CN\">\n<head>\n<meta charset=\"utf-8\">\n<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\">\n<title>汐岸点心 · 把当季的好味带回家</title>\n<style>\n:root{\n  --primary:#304F68;\n  --bg:#F2F4F6;\n  --ink:#252A30;\n  --deco:#ADBCC9;\n  --white:#FFFFFF;\n}\n*{box-sizing:border-box}\nbody{\n  margin:0;\n  background:var(--bg);\n  color:var(--ink);\n  font-family:\"Noto Serif SC\",serif;\n}\nmain{\n  max-width:880px;\n  margin:0 auto;\n  padding:0 16px 56px;\n}\nheader{\n  padding:20px 0 0;\n}\n.brand{\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-weight:700;\n  font-size:20px;\n  line-height:1.4;\n  color:var(--primary);\n  margin:0;\n}\n.hero h1{\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-weight:700;\n  font-size:30px;\n  line-height:1.35;\n  color:var(--primary);\n  margin:14px 0 10px;\n}\n.intro{\n  font-size:15px;\n  line-height:1.75;\n  margin:0 0 18px;\n}\n.cta{\n  display:flex;\n  align-items:center;\n  justify-content:center;\n  height:48px;\n  background:var(--primary);\n  color:var(--white);\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-size:16px;\n  line-height:1;\n  text-decoration:none;\n  border:0;\n  border-radius:12px;\n}\n.wave{\n  display:block;\n  margin:26px 0 18px;\n}\n.section-title{\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-weight:700;\n  font-size:19px;\n  color:var(--primary);\n  margin:0 0 12px;\n}\n.products{\n  display:flex;\n  flex-direction:column;\n  gap:10px;\n  margin:0;\n  padding:0;\n  list-style:none;\n}\n.card{\n  background:var(--white);\n  border:1px solid var(--deco);\n  border-radius:12px;\n  padding:12px 14px;\n}\n.row{\n  display:flex;\n  align-items:baseline;\n  justify-content:space-between;\n  gap:8px;\n  flex-wrap:wrap;\n}\n.pname{\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-weight:600;\n  font-size:15px;\n  line-height:1.5;\n  color:var(--ink);\n  margin:0;\n}\n.price{\n  font-family:\"Noto Serif SC\",serif;\n  font-weight:700;\n  font-size:15px;\n  color:var(--primary);\n  margin:0;\n  white-space:nowrap;\n}\n.meta{\n  display:flex;\n  align-items:center;\n  gap:8px;\n  margin-top:6px;\n}\n.status{\n  display:inline-block;\n  font-family:\"Noto Sans SC\",sans-serif;\n  font-size:13px;\n  line-height:1;\n  padding:5px 8px 4px;\n  border-radius:6px;\n  border:1px solid var(--deco);\n  background:var(--white);\n  color:var(--ink);\n}\n.status.open{color:var(--primary)}\n.info{\n  margin-top:30px;\n  border-top:1px solid var(--deco);\n  padding-top:18px;\n}\n.info p{\n  font-size:15px;\n  line-height:1.8;\n  margin:0 0 8px;\n}\n.info p:last-child{margin-bottom:0}\n@media (min-width:700px){\n  main{padding:0 24px 64px}\n  .brand{font-size:22px}\n  .hero h1{font-size:42px;margin-top:18px}\n  .intro{font-size:16px;max-width:640px}\n  .products{\n    display:grid;\n    grid-template-columns:1fr 1fr;\n    gap:14px;\n  }\n  .card{padding:16px 18px}\n}\n</style>\n</head>\n<body>\n<main>\n  <header>\n    <p class=\"brand\">汐岸点心</p>\n  </header>\n\n  <section class=\"hero\">\n    <h1>把当季的好味带回家</h1>\n    <p class=\"intro\">把熟悉的味道做得认真，也为忙碌的日子留一份可以分享的小心意。</p>\n    <a class=\"cta\" href=\"#ziti\">获取自提信息</a>\n  </section>\n\n  <svg class=\"wave\" width=\"120\" height=\"8\" viewBox=\"0 0 120 8\" fill=\"none\" xmlns=\"http://www.w3.org/2000/svg\" aria-hidden=\"true\">\n    <path d=\"M0 4 Q 15 0 30 4 T 60 4 T 90 4 T 120 4\" stroke=\"#ADBCC9\" stroke-width=\"2\" fill=\"none\"/>\n  </svg>\n\n  <section>\n    <h2 class=\"section-title\">当季点心</h2>\n    <ul class=\"products\">\n      <li class=\"card\">\n        <div class=\"row\">\n          <h3 class=\"pname\">莓果燕麦分享盒 · 轻礼组合</h3>\n          <p class=\"price\">73元 / 6块</p>\n        </div>\n        <div class=\"meta\"><span class=\"status\">已售罄</span></div>\n      </li>\n      <li class=\"card\">\n        <div class=\"row\">\n          <h3 class=\"pname\">桂花酒酿小方 · 轻礼组合</h3>\n          <p class=\"price\">183元 / 4块</p>\n        </div>\n        <div class=\"meta\"><span class=\"status open\">可预订</span></div>\n      </li>\n      <li class=\"card\">\n        <div class=\"row\">\n          <h3 class=\"pname\">海盐焦糖蝴蝶酥 · 门店限定装</h3>\n          <p class=\"price\">88元 / 8块</p>\n        </div>\n        <div class=\"meta\"><span class=\"status open\">可预订</span></div>\n      </li>\n      <li class=\"card\">\n        <div class=\"row\">\n          <h3 class=\"pname\">香草核桃布朗尼 · 家庭分享装</h3>\n          <p class=\"price\">173元 / 4块</p>\n        </div>\n        <div class=\"meta\"><span class=\"status open\">可预订</span></div>\n      </li>\n    </ul>\n  </section>\n\n  <section class=\"info\" id=\"ziti\">\n    <h2 class=\"section-title\">预订与自提</h2>\n    <p>预订截止：11月24日18:00。</p>\n    <p>到店自提：梧桐街18号，10:00—19:00。</p>\n    <p>添加店长企业微信 xian040 预订。</p>\n  </section>\n</main>\n</body>\n</html>\n",
+  "failed": [
+   "LP-brand",
+   "LP-layout",
+   "LP-format"
+  ],
+  "judged": [
+   "LP-content",
+   "LP-brand",
+   "LP-style",
+   "LP-layout",
+   "LP-format"
+  ],
+  "verdicts": [
+   {
+    "id": "LP-content",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "店名、主标题（h1内）、简介、四款产品名称+价格同卡各显示一次、状态（已售罄×1、可预订×3）逐款原样显示、截止/自提/预订说明均在页面可见且未改写，主按钮文字精确为“获取自提信息”，与参考答案一致。"
+   },
+   {
+    "id": "LP-brand",
+    "applicable": true,
+    "count": 4,
+    "errors": [
+     {
+      "quote": ".brand{\n  font-family:\"Noto Sans SC\",sans-serif;",
+      "problem": "规则要求h1-h6标题字体首项为Noto Sans SC，其他文字首项必须为Noto Serif SC。店名用的是p.brand（非标题元素，实测heading:false），却用Noto Sans SC作首项，应改为Noto Serif SC。"
+     },
+     {
+      "quote": "font-family:\"Noto Sans SC\",sans-serif;\n  font-size:16px;",
+      "problem": "主按钮a.cta是非标题文字（实测heading:false），font-family首项应为Noto Serif SC，却写了Noto Sans SC。"
+     },
+     {
+      "quote": ".status{\n  display:inline-block;\n  font-family:\"Noto Sans SC\",sans-serif;",
+      "problem": "状态徽章span.status是非标题文字（实测s8/s9 heading:false），font-family首项应为Noto Serif SC，却写了Noto Sans SC；s8/s9同属这一条CSS规则，计一个根因。"
+     },
+     {
+      "quote": "font-size:13px;\n  line-height:1;\n  padding:5px 8px 4px;",
+      "problem": "R3要求所有非标题文字至少14px，状态徽章（已售罄/可预订）实测fontSize为13px，应改为不小于14px。"
+     }
+    ],
+    "reason": "五色使用合规、装饰色仅用于边框和SVG描边、实测对比度均≥4.5；但四处字体违规：brand/cta/status三处非标题文字字体首项误用Noto Sans SC（各为独立样式根因），status的13px字号低于14px下限。"
+   },
+   {
+    "id": "LP-style",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "实测effects为空，无渐变/阴影/filter/mix-blend-mode；主按钮四角圆角均为12px；无图片、canvas、视频、iframe、外部请求和页面内脚本；内联SVG仅为非文字波浪图形，描边色#ADBCC9合规。"
+   },
+   {
+    "id": "LP-layout",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "<p class=\"price\">88元 / 8块</p>",
+      "problem": "海盐焦糖蝴蝶酥状态为可预订，其价格必须完整落在手机首屏0-568px内，实测该价格顶部571.5px、底部592.5px，整体在首屏之外。"
+     },
+     {
+      "quote": "<p class=\"price\">173元 / 4块</p>",
+      "problem": "香草核桃布朗尼状态为可预订，其价格必须完整落在手机首屏0-568px内，实测该价格顶部689px、底部710px，整体在首屏之外。"
+     }
+    ],
+    "reason": "两视口均无横向滚动、无裁切覆盖；主按钮48px高且完整在首屏；店名底边48px≤100、左缘16px在16-28范围内；桌面main宽880px且两侧空白均72px。但两款可预订产品（分属不同卡片）的价格落在手机首屏568px之下，各计一处。"
+   },
+   {
+    "id": "LP-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "测量发现三处问题：① 手机首屏 568px 内只装下前两款价格，88元/173元（可预订）落在首屏外；② 状态徽章",
+      "problem": "选方案一交付landing.html时，正文只可为空、“已完成：landing.html”或单行文件链接，且只交一个完整HTML文档；员工在交付前加了说明文字，还额外交付了check.py、check2.py两个非HTML文件。格式问题共计一处。"
+     }
+    ],
+    "reason": "landing.html本身完整可打开，但交付前有多余说明文字且附带了两个额外的Python文件，违反“只交一个完整HTML文档”和正文限制，按规则合计一处。"
+   }
+  ],
+  "loose": []
+ }
+]

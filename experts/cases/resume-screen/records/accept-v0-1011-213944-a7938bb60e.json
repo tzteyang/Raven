@@ -1,0 +1,1390 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 13,
+  "error": null,
+  "full_reply": "结论：不通过\n\n理由：相关年限：库房主管 2024.08–2026.09 共 25 个月，仓储专员 2022.06–2024.07 共 26 个月，合计 51 个月约 4.25 年，满足 3 年以上；带团队人数：简历未写带团队人数，按 0 人，不满足 10 人以上；系统：仅写 Excel 台账和 ERP，未写 WMS，不满足熟练使用 WMS。\n\n追问：1. 库房主管岗位实际管理多少人，是否含下级班组？2. 库位规划和盘点中是否用过 WMS，具体哪个系统？3. 2021.03 前的工作经历情况？",
+  "product": "结论：不通过\n\n理由：相关年限：库房主管 2024.08–2026.09 共 25 个月，仓储专员 2022.06–2024.07 共 26 个月，合计 51 个月约 4.25 年，满足 3 年以上；带团队人数：简历未写带团队人数，按 0 人，不满足 10 人以上；系统：仅写 Excel 台账和 ERP，未写 WMS，不满足熟练使用 WMS。\n\n追问：1. 库房主管岗位实际管理多少人，是否含下级班组？2. 库位规划和盘点中是否用过 WMS，具体哪个系统？3. 2021.03 前的工作经历情况？",
+  "failed": [
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不通过」，与参考答案结论一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件均写到：年限 4.25 年与参考答案 4.3333 年差 0.083 年，在 0.1 年容差内算对；带团队 0 人不满足、系统未写 WMS 不满足，均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付全文未出现年龄、性别、婚育、籍贯，测量值也未发现可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "内容上有 3 个追问，分别针对百达物流带团队人数缺失、WMS 使用情况缺失、2021.03 前经历空档，均针对简历模糊或缺失处，未问已写清的事；未按要求分行的问题记入 H-format。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "追问：1. 库房主管岗位实际管理多少人，是否含下级班组？2. 库位规划和盘点中是否用过 WMS，具体哪个系统？3. 2021.03 前的工作经历情况？",
+      "problem": "违反格式规则：第三段应以「追问：」开头、下面分三行写「1. ……」「2. ……」「3. ……」，员工把三条追问全部写在同一行。"
+     },
+     {
+      "quote": "结论：不通过\n\n理由：相关年限：库房主管 2024.08–2026.09 共 25 个月，仓储专员 2022.06–2024.07 共 26 个月，合计 51 个月约 4.25 年，满足 3 年以上；带团队人数：简历未写带团队人数，按 0 人，不满足 10 人以上；系统：仅写 Excel 台账和 ERP，未写 WMS，不满足熟练使用 WMS。\n\n追问：1. 库房主管岗位实际管理多少人，是否含下级班组？2. 库位规划和盘点中是否用过 WMS，具体哪个系统？3. 2021.03 前的工作经历情况？",
+      "problem": "违反规则 5：全文不超过 200 字；测量值显示全部产出 217 字（空格和换行不算），超出上限。"
+     }
+    ],
+    "reason": "三段顺序和开头写法正确，但追问未按规则分三行，且全文 217 字超过 200 字上限，共两处不符。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 6,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料。\n\n结论：不建议面试\n\n依据：相关年限：门店主管23个月+门店副店长22个月，共45个月≈3.8年，满足2年以上；带团队人数：最多一段直接下属4人，不足12人，不满足；系统：现职使用收银系统，满足。\n\n面试时追问：\n（1）好邻居便利任副店长期间是否带团队、直接下属多少人？\n（2）门店主管所带4人班组是否均为直接下属，是否另协助管理更大团队？",
+  "product": "结论：不建议面试\n\n依据：相关年限：门店主管23个月+门店副店长22个月，共45个月≈3.8年，满足2年以上；带团队人数：最多一段直接下属4人，不足12人，不满足；系统：现职使用收银系统，满足。\n\n面试时追问：\n（1）好邻居便利任副店长期间是否带团队、直接下属多少人？\n（2）门店主管所带4人班组是否均为直接下属，是否另协助管理更大团队？",
+  "failed": [
+   "H-followup",
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：不建议面试」，与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "依据段逐条写到相关年限（45个月≈3.8年，满足2年）、带团队人数（4人，不满足12人）、系统（用过收银系统，满足），算数和判断均与参考答案一致（3.8 与 3.75 差在 0.1 年内）。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "（2）门店主管所带4人班组是否均为直接下属，是否另协助管理更大团队？",
+      "problem": "违反规则4：追问要针对简历里模糊或缺失的地方，不问简历里已经写清楚的事。简历已明确写「带 4 人班组」，人数清楚，且简历中并无「协助管理」的表述；参考答案列出的模糊处是好邻居便利这段的带人人数和所用系统，此问针对的是已写清楚的内容。"
+     }
+    ],
+    "reason": "追问个数为 2 符合规则；第（1）条针对好邻居便利未写带人人数，合格；第（2）条问的是简历已写清楚的「带 4 人班组」，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "依据：相关年限：门店主管23个月+门店副店长22个月，共45个月≈3.8年，满足2年以上；带团队人数：最多一段直接下属4人，不足12人，不满足；系统：现职使用收银系统，满足。",
+      "problem": "违反规则5：全文不超过 160 字。测量值显示三段本身字数为 163 字（空格和换行不算），超出上限 3 字，应精简至 160 字以内。"
+     }
+    ],
+    "reason": "三段写法和顺序符合规则，前后无多余文字；但全文字数 163 超过 160 字上限，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 10,
+  "error": null,
+  "full_reply": "I'll read the three files first.\n\n结论：通过\n\n理由：相关年限——四段经历职位均含关键词，合计 114 个月，约 9.5 年，满足 3 年以上；带团队——本人负责团队最多为 15 人（顺捷冷链），满足 10 人以上；系统——华通快运期间使用自研 WMS，满足。\n\n追问：\n1. 顺捷冷链 15 人班组中，本人直接负责的具体职责和层级结构？\n2. 京畅供应链“协助主管管理 21 人团队”中，本人实际承担哪些管理工作？\n3. 华通快运使用的自研 WMS，具体操作哪些模块（出入库、库存、盘点等）？",
+  "product": "结论：通过\n\n理由：相关年限——四段经历职位均含关键词，合计 114 个月，约 9.5 年，满足 3 年以上；带团队——本人负责团队最多为 15 人（顺捷冷链），满足 10 人以上；系统——华通快运期间使用自研 WMS，满足。\n\n追问：\n1. 顺捷冷链 15 人班组中，本人直接负责的具体职责和层级结构？\n2. 京畅供应链“协助主管管理 21 人团队”中，本人实际承担哪些管理工作？\n3. 华通快运使用的自研 WMS，具体操作哪些模块（出入库、库存、盘点等）？",
+  "failed": [
+   "H-reason",
+   "H-followup",
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：通过」，与参考答案结论一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "合计 114 个月，约 9.5 年",
+      "problem": "相关年限算错：按规则四段经历为 30+30+22+20=102 个月，即 8.5 年（参考答案），员工写成 114 个月约 9.5 年，与参考答案差 1 年，超过 0.1 年容差。带团队 15 人和系统 WMS 两条与参考答案一致。"
+     }
+    ],
+    "reason": "三条硬性条件都写到了，但相关年限数值算错（114 个月/9.5 年，应为 102 个月/8.5 年），记一处。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "顺捷冷链 15 人班组中，本人直接负责的具体职责和层级结构？",
+      "problem": "违反规则 4：简历已写清楚顺捷冷链这段「带 15 人班组，负责月度盘点和损耗分析」，职责不是模糊或缺失处；该段真正缺失的是用什么系统（参考答案列出的模糊点），此追问问了简历已写明的事。"
+     }
+    ],
+    "reason": "追问个数 3 条符合；第 2、3 条分别针对「协助管理」实际职责和自研 WMS 模块，属参考答案列出的模糊点，且第 2 条引号内原文与简历一字不差；第 1 条问了简历已写清楚的职责，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "违反规则 5：全文字数（按字符算、标点算、空格换行不算）为 204 字（以测量值为准），超过 200 字上限。三段结构和顺序正确，前后无多余文字。"
+     }
+    ],
+    "reason": "三段格式和顺序正确、无额外文字，但全文字数 204 超过 200 字上限，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 9,
+  "error": null,
+  "full_reply": "结论：不建议面试\n依据：相关年限约5.1年（三段均含“门店”，61个月），满足≥2年；最大直接带团队20人（茶语时光），满足≥12人；简历仅写ERP和Excel台账，未见收银系统，不满足。\n面试时追问：\n（1）是否使用过收银系统，熟练程度如何？\n（2）茶语时光20人班组是否均为直接下属，实际管理职责？",
+  "product": "结论：不建议面试\n依据：相关年限约5.1年（三段均含“门店”，61个月），满足≥2年；最大直接带团队20人（茶语时光），满足≥12人；简历仅写ERP和Excel台账，未见收银系统，不满足。\n面试时追问：\n（1）是否使用过收银系统，熟练程度如何？\n（2）茶语时光20人班组是否均为直接下属，实际管理职责？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：不建议面试」，与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "依据段逐条写到相关年限（约5.1年/61个月，满足≥2年，与参考答案5.08年在0.1年误差内）、带团队人数（20人，满足≥12人）、系统（未见收银系统，不满足），三条齐全且判断与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问共2条，个数符合规则；（1）针对简历缺失的收银系统使用情况，（2）针对20人班组是否均为直接下属这一简历未写明、且与规则2计数口径相关的模糊点，均非简历已写清的事；本规则未要求引用原文。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按「结论／依据：／面试时追问：（1）（2）」的顺序和写法交付，全文147字未超160字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 10,
+  "error": null,
+  "full_reply": "结论：不通过\n\n理由：相关年限：仓储专员23个月+仓储组长20个月+仓储专员16个月（至今算至2026.10）共59个月≈4.9年，满足3年以上；系统：两段经历使用自研WMS，满足；带团队人数：仅“协助管理”15人、20人，按规则不计入，本人负责的仓储组长段未写团队人数，无法确认达到10人，不满足。\n\n追问：\n1. 仓储组长期间直接负责的团队有多少人？是否含下属班组成员？\n2. 两段“协助管理”中实际独立负责哪些职责？\n3. 2023.10至2023.11之间的经历衔接情况？",
+  "product": "结论：不通过\n\n理由：相关年限：仓储专员23个月+仓储组长20个月+仓储专员16个月（至今算至2026.10）共59个月≈4.9年，满足3年以上；系统：两段经历使用自研WMS，满足；带团队人数：仅“协助管理”15人、20人，按规则不计入，本人负责的仓储组长段未写团队人数，无法确认达到10人，不满足。\n\n追问：\n1. 仓储组长期间直接负责的团队有多少人？是否含下属班组成员？\n2. 两段“协助管理”中实际独立负责哪些职责？\n3. 2023.10至2023.11之间的经历衔接情况？",
+  "failed": [
+   "H-reason",
+   "H-followup",
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：不通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "带团队人数：仅“协助管理”15人、20人，按规则不计入，本人负责的仓储组长段未写团队人数，无法确认达到10人，不满足。",
+      "problem": "按规则带团队人数应算出确定数值：协助管理不算、仓储组长段未写人数，故为 0 人（参考答案：0 人，不满足）。员工未算出 0 人，只写「无法确认达到10人」，算出来的数与参考答案不一致。"
+     }
+    ],
+    "reason": "相关年限 59 个月≈4.9 年满足、系统满足均与参考答案一致；但带团队人数未按规则算出 0 人，而是写「无法确认」，数不一致记一处。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "3. 2023.10至2023.11之间的经历衔接情况？",
+      "problem": "百达物流 2023.10 结束、顺捷冷链 2023.11 开始，经历首尾相接、并无空档，简历已写清楚；规则要求追问针对简历里模糊或缺失的地方，不问已写清楚的事。此追问不成立。"
+     }
+    ],
+    "reason": "追问共 3 条，个数符合；第 1 条针对顺捷冷链未写带团队人数、第 2 条针对「协助管理」实际职责，均有效（规则未要求引用原文，引号不强制一字不差）；第 3 条追问的「空档」实际不存在，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "规则要求全文不超过 200 字（标点算、空格换行不算），测量值显示三段共 230 字，超出上限 200 字。"
+     }
+    ],
+    "reason": "三段结构和顺序符合规则，前后无多余文字；但全文字数 230 超过 200 字上限，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 433,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：建议面试\n\n依据：相关年限约4.4年（鲜丰水果门店店长26个月、鑫源食品门店主管27个月，≥2年，满足）；带团队直接下属最多14人（鑫源食品，≥12人，满足）；使用品牌收银系统（满足）。\n\n面试时追问：\n（1）鑫源食品所带14人是否均为直接下属，有无班组层级？\n（2）茶语时光兼职店长期间的实际职责范围和带教人数？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：建议面试\n\n依据：相关年限约4.4年（鲜丰水果门店店长26个月、鑫源食品门店主管27个月，≥2年，满足）；带团队直接下属最多14人（鑫源食品，≥12人，满足）；使用品牌收银系统（满足）。\n\n面试时追问：\n（1）鑫源食品所带14人是否均为直接下属，有无班组层级？\n（2）茶语时光兼职店长期间的实际职责范围和带教人数？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行“结论：建议面试”与参考答案一致，未写两种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "依据段逐条写到相关年限（约4.4年，与4.4167年差在0.1年内，月数拆分26+27=53个月正确，兼职与全职重叠不计也符合口径）、带团队14人、收银系统满足，均与参考答案一致，无漏条。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "（1）鑫源食品所带14人是否均为直接下属，有无班组层级？",
+      "problem": "违反规则4：简历已写清“带 14 人班组”，按规则直接算 14 人，参考答案也未将其列为模糊点，属于问简历已写清楚的事；追问应针对参考答案列出的模糊或缺失处（如兼职时间投入、鲜丰水果所用系统、品牌收银系统具体模块、家乐与鑫源重叠的2个月）。"
+     },
+     {
+      "quote": "（2）茶语时光兼职店长期间的实际职责范围和带教人数？",
+      "problem": "违反规则4：茶语时光的职责简历已写清“负责食品安全和卫生检查”，追问“实际职责范围”属于问已写清楚的事；该段真正模糊处是兼职每周投入多少时间、与同期全职如何兼顾。"
+     }
+    ],
+    "reason": "追问个数为2符合规则，但两条追问都未针对参考答案列出的模糊或缺失处，且分别问到了简历已写清的人数和职责，各记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段写法和顺序符合规则（结论行、依据段、面试时追问段含（1）（2）两行），全文154字未超160字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 357,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不通过\n理由：相关年限28个月约2.3年，不足3年，不满足；带团队最多17人，满足；使用过自研WMS，满足。\n追问：\n1. 2023年11月至2024年5月空档期在做什么？\n2. 安达仓储兼职主管期间实际负责什么，是否带人？\n3. 京畅自研WMS用过哪些模块，熟练程度如何？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n理由：相关年限28个月约2.3年，不足3年，不满足；带团队最多17人，满足；使用过自研WMS，满足。\n追问：\n1. 2023年11月至2024年5月空档期在做什么？\n2. 安达仓储兼职主管期间实际负责什么，是否带人？\n3. 京畅自研WMS用过哪些模块，熟练程度如何？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不通过」，与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（28个月约2.3年，不满足，与参考答案2.3333年差在0.1年内）、带团队17人满足、使用过自研WMS满足，三条齐全且与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值标记的「年龄：28」实为理由段「相关年限28个月」的误匹配，指的是经历月数而非候选人年龄；交付中未出现年龄、性别、婚育、籍贯信息。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问共3条，分别针对2023.11—2024.05空档、安达仓储兼职的实际职责、京畅自研WMS使用模块与熟练程度，均为参考答案列出的简历模糊或缺失处，未问已写清楚的事。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按结论行、理由段、追问段三段顺序交付，无多余文字；测量值全文字数132，未超200字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 216,
+  "error": null,
+  "full_reply": "我先读取本次初筛适用的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不建议面试\n依据：相关年限约3.3年（39.5个月），满足2年以上；直接带团队最多3人（班组长），不足12人，不满足；日常使用过收银系统（品牌收银系统），满足。\n面试时追问：\n（1）鑫源食品兼职店长除新员工带教外，是否独立负责门店运营？\n（2）鲜丰水果“协助管理20人团队”中本人具体负责哪些工作？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不建议面试\n依据：相关年限约3.3年（39.5个月），满足2年以上；直接带团队最多3人（班组长），不足12人，不满足；日常使用过收银系统（品牌收银系统），满足。\n面试时追问：\n（1）鑫源食品兼职店长除新员工带教外，是否独立负责门店运营？\n（2）鲜丰水果“协助管理20人团队”中本人具体负责哪些工作？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工结论「结论：不建议面试」与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件均写到：相关年限约3.3年（39.5个月）满足（与参考答案3.2917年差在0.1年内）、带团队最多3人不满足12人、用过收银系统满足，算法和判断均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问共2条，均针对简历模糊或缺失处：（1）针对鑫源食品兼职只写了带教、职责不清；（2）针对鲜丰水果「协助管理」的实际职责，均在参考答案列出的可追问范围内。工作规则并未要求引用简历原文，故引号内文字不逐字不构成违反。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按「结论／依据／面试时追问」顺序且格式正确，追问用（1）（2）两行；全文字数148字（以测量值为准）未超160字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 415,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：初筛工作规则、岗位硬性条件和简历。\n\n结论：通过\n\n理由：相关年限：4段相关职位经历（兼职不计、重叠月只算一次）共60个月，合5.0年，满足3年以上。带团队：最多一段4名班组长加19名组员共23人，满足10人以上。系统：写过日常使用WMS，满足。\n\n追问：\n1. 2026.08从中储物流离职后至今的空档在做什么？\n2. WMS只见2021.08—2022.05使用，其后系统使用情况与熟练模块？\n3. 华通快运带23人但职责只写巡检点检，实际管理职责？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：通过\n\n理由：相关年限：4段相关职位经历（兼职不计、重叠月只算一次）共60个月，合5.0年，满足3年以上。带团队：最多一段4名班组长加19名组员共23人，满足10人以上。系统：写过日常使用WMS，满足。\n\n追问：\n1. 2026.08从中储物流离职后至今的空档在做什么？\n2. WMS只见2021.08—2022.05使用，其后系统使用情况与熟练模块？\n3. 华通快运带23人但职责只写巡检点检，实际管理职责？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：通过」，与参考答案结论一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（60个月/5.0年，满足3年）、带团队人数（23人，满足10人）、系统（用过WMS，满足），数值和判断均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "共3条追问，分别针对2026.08离职后至今的经历空档、后期几段经历未写明的系统使用情况、华通快运职责描述含糊之处，均属于简历模糊或缺失的地方，未问已写清楚的事；本规则未要求引用原文。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按「结论/理由/追问」顺序和规定写法交付，无多余文字；测量值全文字数198，未超200字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 247,
+  "error": null,
+  "full_reply": "我先读取本次初筛适用的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不建议面试\n依据：相关年限4.75年（≥2年，满足）；最大直接带团队9人（＜12人，不满足）；日常使用收银系统（满足）。\n面试时追问：\n（1）好邻居便利任店长期间的团队人数与直接管理范围？\n（2）2026.06至今的空档在做什么？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不建议面试\n依据：相关年限4.75年（≥2年，满足）；最大直接带团队9人（＜12人，不满足）；日常使用收银系统（满足）。\n面试时追问：\n（1）好邻居便利任店长期间的团队人数与直接管理范围？\n（2）2026.06至今的空档在做什么？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不建议面试」，与参考答案结论一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "依据段逐条写到相关年限4.75年（满足）、带团队9人（不满足12人）、收银系统（满足），数值和判定均与参考答案一致，无漏项。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问共2条，（1）针对好邻居便利未写带团队人数这一缺失处，（2）针对2026.06至今的经历空档，均属简历模糊或缺失之处，未问已写清的事；本规则未要求引用原文。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按「结论／依据／面试时追问」顺序且格式正确，追问用（1）（2）两行；测量值显示全文114字≤160字，三段以外无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 243,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：初筛工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限：2025.05至今生产组长17个月＋2022.12—2025.04产线主管29个月，共46个月约3.8年，满足；带团队：两段团队均写“协助主管管理”，按规则不计，本人负责人数无数据，不满足；系统：仅Excel台账无MES，不满足。\n\n追问：\n1. “协助主管管理 26 人团队”：除协助外你直接带过多少人？\n2. “日常使用 Excel 台账”：记什么内容？用过MES吗？\n3. “负责排产和产能分析”：用什么工具排？管几条线？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限：2025.05至今生产组长17个月＋2022.12—2025.04产线主管29个月，共46个月约3.8年，满足；带团队：两段团队均写“协助主管管理”，按规则不计，本人负责人数无数据，不满足；系统：仅Excel台账无MES，不满足。\n\n追问：\n1. “协助主管管理 26 人团队”：除协助外你直接带过多少人？\n2. “日常使用 Excel 台账”：记什么内容？用过MES吗？\n3. “负责排产和产能分析”：用什么工具排？管几条线？",
+  "failed": [],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不通过」，与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件均写到：相关年限46个月约3.8年满足（与参考答案3.8333年一致）、带团队按规则不计协助管理故不满足、系统仅Excel无MES不满足，数值和判定均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问共3条，每条均先一字不差引用简历原文（测量值核对均为true），且针对模糊或缺失处：协助管理的实际职责、Excel台账内容及是否用过MES、排产工具与产线数量，均未问简历已写清的事。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按规则顺序（结论行、理由段、追问段），全文216字未超240字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 626,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限约5.1年（61个月），满足；带团队人数：简历未写本人负责的团队人数（23人为协助管理，不计），不满足；MES：未提及，不满足。\n\n追问：\n1. “2022.08 — 2024.04：东升塑胶，车间主任”：该岗位直接管理多少人？\n2. “协助主管管理 23 人团队”：本人直接负责哪些工作？\n3. “负责排产和产能分析”：用过哪些生产系统？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限约5.1年（61个月），满足；带团队人数：简历未写本人负责的团队人数（23人为协助管理，不计），不满足；MES：未提及，不满足。\n\n追问：\n1. “2022.08 — 2024.04：东升塑胶，车间主任”：该岗位直接管理多少人？\n2. “协助主管管理 23 人团队”：本人直接负责哪些工作？\n3. “负责排产和产能分析”：用过哪些生产系统？",
+  "failed": [
+   "H-reason"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：不通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "相关年限约5.1年（61个月）",
+      "problem": "相关年限月数算错：按规则窗口（2021.10—2026.09）三段相关经历合计 60 个月（5.0 年），员工写成 61 个月；参考答案为 60 个月（5.0000 年）。"
+     }
+    ],
+    "reason": "带团队人数（协助管理不计、不满足）和系统（未提及 MES、不满足）均与参考答案一致；但相关年限月数写成 61 个月，正确应为 60 个月，记一处。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "3 个追问均针对简历模糊或缺失处（东升塑胶带人数、协助管理实际职责、安泰包装所用系统），引号内原文经测量值核对均一字不差出自简历。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按规则顺序书写，无多余文字，全文 171 字未超 240 字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 582,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：初筛工作规则、岗位硬性条件和简历。\n\n结论：通过\n\n理由：相关年限 2021.12—2026.11 内共 60 个月（5 年），满足 3 年；本人负责团队最多为带 24 人班组，满足 20 人；东升塑胶期间使用 MES，满足该项；各段职位名称含生产／产线／车间，满足关键词。全部条件满足。\n\n追问：\n1. “协助主管管理 32 人团队”：你的实际职责是什么，是否直接管理和考核组员？\n2. “带 24 人班组”：作为生产计划员，该班组是否直接归你管辖，如何分工？\n3. “日常使用 MES”：你操作哪些模块，深度如何（排产、报工、追溯）？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：通过\n\n理由：相关年限 2021.12—2026.11 内共 60 个月（5 年），满足 3 年；本人负责团队最多为带 24 人班组，满足 20 人；东升塑胶期间使用 MES，满足该项；各段职位名称含生产／产线／车间，满足关键词。全部条件满足。\n\n追问：\n1. “协助主管管理 32 人团队”：你的实际职责是什么，是否直接管理和考核组员？\n2. “带 24 人班组”：作为生产计划员，该班组是否直接归你管辖，如何分工？\n3. “日常使用 MES”：你操作哪些模块，深度如何（排产、报工、追溯）？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（60 个月/5 年，满足 3 年）、带团队人数（24 人，满足 20 人）、系统（MES，满足），数值和判定均与参考答案一致，还额外说明了关键词，无算错、判错、漏写。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "“带 24 人班组”：作为生产计划员，该班组是否直接归你管辖，如何分工？",
+      "problem": "规则 4 要求追问针对简历里模糊或缺失的地方，不问简历里已经写清楚的事。简历已明确写「带 24 人班组」，即本人直接带 24 人班组，归属清楚，不属于参考答案列出的模糊点（协助管理职责、宏达电子/瑞丰汽配所用系统），此问属于问已写清楚的事。"
+     }
+    ],
+    "reason": "追问共 3 条，引文均一字不差出自简历（测量值已核对）；第 1 条针对「协助管理」的实际职责、第 3 条针对 MES 使用深度（简历未写模块），均针对模糊处；但第 2 条问的「带 24 人班组」在简历里已写清楚，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按「结论：/理由：/追问：」顺序书写，追问三行编号正确，全文 223 字（以测量值为准）未超 240 字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 388,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限40个月（约3.3年），满足；带团队人数最多18人（协助管理不计），不足20人，不满足；MES有使用记录，满足。\n\n追问：\n1. “协助主管管理 26 人团队，负责良品率和损耗控制。”其中你本人具体负责哪些事项、直接管多少人？\n2. “带 18 人班组，负责设备点检和保养计划。”作为生产计划员，你管理这 18 人的具体职责是什么？\n3. “日常使用 MES，负责良品率和损耗控制。”你使用 MES 的哪些模块，熟练程度如何？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限40个月（约3.3年），满足；带团队人数最多18人（协助管理不计），不足20人，不满足；MES有使用记录，满足。\n\n追问：\n1. “协助主管管理 26 人团队，负责良品率和损耗控制。”其中你本人具体负责哪些事项、直接管多少人？\n2. “带 18 人班组，负责设备点检和保养计划。”作为生产计划员，你管理这 18 人的具体职责是什么？\n3. “日常使用 MES，负责良品率和损耗控制。”你使用 MES 的哪些模块，熟练程度如何？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行“结论：不通过”与参考答案一致，且只写了一种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（40个月约3.3年，满足）、带团队人数（18人，不满足20人）、系统（MES满足），数值和判定均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "“带 18 人班组，负责设备点检和保养计划。”作为生产计划员，你管理这 18 人的具体职责是什么？",
+      "problem": "规则4要求追问针对简历里模糊或缺失的地方、不问已写清楚的事。简历已明确写“带 18 人班组”（人数清楚、非协助管理）且职责写为“负责设备点检和保养计划”，此处不属于参考答案列出的模糊点（如协助管理的实际职责、未写明的系统），是在追问简历已写清楚的内容；应改为如瑞丰汽配这段未写明使用什么系统等真正缺失之处。"
+     }
+    ],
+    "reason": "追问个数为3且引文均一字不差出自简历；第1、3条针对协助管理实际职责和系统使用细节等模糊缺失处，但第2条追问的是简历已写清楚的带18人班组及其职责，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按“结论/理由/追问”顺序且格式正确，全文209字未超240字上限，前后无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 228,
+  "error": null,
+  "full_reply": "我先读取本次初筛适用的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限：3 段计 60 个月，合 5 年，满足（≥3 年）；带团队人数：本人负责最多 16 人，25 人系协助管理不计，不满足（≥20 人）；系统：仅写用 ERP，未写 MES，不满足。\n\n追问：\n1. “协助主管管理 25 人团队”，实际承担哪些职责，是否直接负责排班与考核？\n2. “带 16 人班组”，是否含下级班组长及组员，实际负责人数多少？\n3. “日常使用 ERP”，是否用过 MES 类系统做报工、追溯？熟练程度如何？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限：3 段计 60 个月，合 5 年，满足（≥3 年）；带团队人数：本人负责最多 16 人，25 人系协助管理不计，不满足（≥20 人）；系统：仅写用 ERP，未写 MES，不满足。\n\n追问：\n1. “协助主管管理 25 人团队”，实际承担哪些职责，是否直接负责排班与考核？\n2. “带 16 人班组”，是否含下级班组长及组员，实际负责人数多少？\n3. “日常使用 ERP”，是否用过 MES 类系统做报工、追溯？熟练程度如何？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：不通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（60 个月合 5 年，满足）、带团队人数（16 人，协助管理 25 人不计，不满足）、系统（未写 MES，不满足），与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "“带 16 人班组”，是否含下级班组长及组员，实际负责人数多少？",
+      "problem": "规则要求追问针对简历里模糊或缺失的地方，不问简历里已经写清楚的事。简历明确写了「带 16 人班组」，人数 16 已写清楚（参考答案也按 16 人认定），却追问「实际负责人数多少」，属于问简历里已写清楚的事；应改问参考答案列出的模糊处，如东升塑胶或安泰包装期间用什么系统。"
+     }
+    ],
+    "reason": "追问 1、3 分别针对「协助管理」实际职责和未写 MES 的缺失，引用原文一字不差，符合规则；追问 2 问的是简历已写清楚的 16 人人数，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按顺序（结论行、理由段、追问段三行），无多余文字，测量值 199 字未超 240 字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 799,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：通过\n\n理由：相关年限4年10个月（58个月，≥3年）；带团队最多22人（2名班组长+20名组员，≥20人）；简历写明日常使用MES，满足。\n\n追问：\n1. “协助主管管理 30 人团队”——您具体承担哪些管理职责？\n2. “直接带 2 名班组长，下面 2 个班组另有 20 名组员”——您对这2个班组的日常管理具体管什么？\n3. “2026.09：宏达电子，生产计划员”——离职后至今的空档期在做什么？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：通过\n\n理由：相关年限4年10个月（58个月，≥3年）；带团队最多22人（2名班组长+20名组员，≥20人）；简历写明日常使用MES，满足。\n\n追问：\n1. “协助主管管理 30 人团队”——您具体承担哪些管理职责？\n2. “直接带 2 名班组长，下面 2 个班组另有 20 名组员”——您对这2个班组的日常管理具体管什么？\n3. “2026.09：宏达电子，生产计划员”——离职后至今的空档期在做什么？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行写「结论：通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件都写到：相关年限4年10个月（58个月，与参考答案58个月/4.8333年一致）、带团队22人、MES满足，数值和判定均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "“直接带 2 名班组长，下面 2 个班组另有 20 名组员”——您对这2个班组的日常管理具体管什么？",
+      "problem": "规则4要求每个追问针对简历里模糊或缺失的地方、不问简历里已写清楚的事。华锐五金这段简历已写明「负责安全生产和 5S 管理」，日常管理职责已写清楚，且该点不在参考答案列出的模糊缺失处之列；应改问如华锐五金用什么系统、瑞丰实际常态人数等真正模糊处。"
+     }
+    ],
+    "reason": "追问1针对「协助管理」实际职责、追问3针对离职后空档，均属模糊缺失处且引用原文一字不差；追问2问的是简历已写明的管理职责，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按顺序（结论行、理由段、追问段三行），无多余文字，测量值187字未超240字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 1105,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：初筛工作规则、岗位硬性条件和简历。\n\nturn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "turn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+  "failed": [
+   "H-verdict",
+   "H-reason",
+   "H-followup",
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "员工产出只有一条超时报错信息，没有写结论行；按规则第一行应写“结论：不通过”（与参考答案一致）。"
+     }
+    ],
+    "reason": "产出中没有任何结论内容，结论缺失。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "漏写相关年限一条；按规则应写明算出的数（4.5 年）和满不满足（满足 3 年要求）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "漏写带团队人数一条；按规则应写明算出的数（26 人）和满不满足（满足 20 人要求）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "漏写系统一条；按规则应写明简历没写用过 MES、不满足。"
+     }
+    ],
+    "reason": "产出中没有理由段，三条硬性条件的计算结果和满足情况全部缺失，每条记一处。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "产出仅为报错信息，未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 1 个面试追问；规则要求给 3 个追问，每个针对简历模糊或缺失处并先引用简历原文。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 2 个面试追问；规则要求给 3 个追问，每个针对简历模糊或缺失处并先引用简历原文。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 3 个面试追问；规则要求给 3 个追问，每个针对简历模糊或缺失处并先引用简历原文。"
+     }
+    ],
+    "reason": "测量值显示追问条数为 0，规则要求的 3 个追问全部缺失。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "未按规则的三段写法和顺序交付：没有“结论：”行、没有“理由：”段、没有“追问：”段及三条编号追问。"
+     },
+     {
+      "quote": "turn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+      "problem": "交付前后（此处为全部产出）加了三段以外的别的文字（一条超时报错信息），规则要求只交三段、前后不加别的文字；不管几处只记一处。"
+     }
+    ],
+    "reason": "三段格式完全缺失记一处；产出中混入了三段以外的报错文字记一处；字数本身未超上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 618,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料：本次初筛工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限：近5年只计车间主任经历（兼职及质检员不计），瑞丰汽配17个月＋东升塑胶12个月＝29个月，约2.4年，未达3年；带团队人数：本人所带最多为东升塑胶28人班组（瑞丰30人为协助管理，不计），满足20人以上；系统：宏达电子经历明确写用自研MES，满足。\n\n追问：\n1. “协助主管管理30人团队”——实际职责是什么，直接负责管理多少人？\n2. “生产组长（兼职）”——兼职如何安排，是否同时承担带班组职责？\n3. “日常使用自研MES”——使用哪些模块，熟练到什么程度？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限：近5年只计车间主任经历（兼职及质检员不计），瑞丰汽配17个月＋东升塑胶12个月＝29个月，约2.4年，未达3年；带团队人数：本人所带最多为东升塑胶28人班组（瑞丰30人为协助管理，不计），满足20人以上；系统：宏达电子经历明确写用自研MES，满足。\n\n追问：\n1. “协助主管管理30人团队”——实际职责是什么，直接负责管理多少人？\n2. “生产组长（兼职）”——兼职如何安排，是否同时承担带班组职责？\n3. “日常使用自研MES”——使用哪些模块，熟练到什么程度？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件均写到：相关年限 29 个月约 2.4 年不满足 3 年、带团队 28 人满足 20 人、用过自研 MES 满足，与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "“协助主管管理30人团队”",
+      "problem": "规则 4 要求引号内引用简历原文一字不改；简历原文为「协助主管管理 30 人团队」（含空格），员工引用缺了空格，不是一字不差。"
+     },
+     {
+      "quote": "“日常使用自研MES”",
+      "problem": "规则 4 要求引号内引用简历原文一字不改；简历原文为「日常使用自研 MES」（含空格），员工引用缺了空格，不是一字不差。"
+     }
+    ],
+    "reason": "追问 3 条、均针对简历模糊处（协助管理实际职责、兼职安排、自研 MES 使用程度），但第 1、3 条引号内文字与简历原文不一字不差（测量值核对为 false），各记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按顺序（结论行、理由段、追问段），无多余文字，全文字数 239 未超 240 上限（以测量值为准）。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 406,
+  "error": null,
+  "full_reply": "我先读取本次适用的三份材料：工作规则、岗位硬性条件和简历。\n\n三份材料已读取完整。现在按本次《工作规则》口径逐条核算：相关年限（出题日 2026-10 往前 60 个月窗口内、职位名含关键词、非兼职、按月计且重叠不重复）、带团队人数（取最大一段，班组长与组员都算、区间按下限）、MES 使用。核算完成后先校验交付字数是否不超过 240 字。\n\n246 字超出上限，压缩措辞后重新校验。\n\n结论：通过\n\n理由：相关年限：宏达电子生产计划员2022.11—2024.07计21个月，瑞丰汽配车间主任2024.09—至今计26个月，合计47个月≈3.9年，满足；带团队：精工机械带2名班组长及27名组员共29人，为最大，满足；系统：安泰包装、精工机械用过MES，满足。\n\n追问：\n1. “带 22 到 27 人的班组”：为何写区间？实际带多少人？\n2. “瑞丰汽配，车间主任，负责设备点检和保养计划”：未写团队人数，现在带多少人？\n3. “仓库保管，日常使用 MES”：用过哪些模块，熟练到什么程度？初筛结论已按本次《工作规则》交付（三段式，238 字，未含年龄、性别、婚育、籍贯信息）。",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：通过\n\n理由：相关年限：宏达电子生产计划员2022.11—2024.07计21个月，瑞丰汽配车间主任2024.09—至今计26个月，合计47个月≈3.9年，满足；带团队：精工机械带2名班组长及27名组员共29人，为最大，满足；系统：安泰包装、精工机械用过MES，满足。\n\n追问：\n1. “带 22 到 27 人的班组”：为何写区间？实际带多少人？\n2. “瑞丰汽配，车间主任，负责设备点检和保养计划”：未写团队人数，现在带多少人？\n3. “仓库保管，日常使用 MES”：用过哪些模块，熟练到什么程度？初筛结论已按本次《工作规则》交付（三段式，238 字，未含年龄、性别、婚育、籍贯信息）。",
+  "failed": [
+   "H-sensitive",
+   "H-format"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "结论行「结论：通过」与参考答案一致，未写两种结论。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "理由段逐条写到相关年限（47个月≈3.9年，与参考答案3.9167年差在0.1年内）、带团队29人、MES用过，三条的数和满不满足均与参考答案一致。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "未含年龄、性别、婚育、籍贯信息",
+      "problem": "违反规则3：年龄、性别、婚育、籍贯不得出现在交付里。交付中出现了「年龄、性别、婚育、籍贯」这些字眼，正确做法是全文完全不提这些信息。"
+     }
+    ],
+    "reason": "交付末尾的附加句里出现了年龄、性别、婚育、籍贯字样，虽是否定句仍属出现，记一处。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "追问3条，引号内原文经测量值核对均一字不差出自简历；三条分别针对区间人数、瑞丰汽配未写团队人数、MES使用模块与熟练度等模糊/缺失处，未问已写清的事。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "结论：通过\n\n理由：相关年限：宏达电子生产计划员2022.11—2024.07计21个月，瑞丰汽配车间主任2024.09—至今计26个月，合计47个月≈3.9年，满足；带团队：精工机械带2名班组长及27名组员共29人，为最大，满足；系统：安泰包装、精工机械用过MES，满足。\n\n追问：\n1. “带 22 到 27 人的班组”：为何写区间？实际带多少人？\n2. “瑞丰汽配，车间主任，负责设备点检和保养计划”：未写团队人数，现在带多少人？\n3. “仓库保管，日常使用 MES”：用过哪些模块，熟练到什么程度？初筛结论已按本次《工作规则》交付（三段式，238 字，未含年龄、性别、婚育、籍贯信息）。",
+      "problem": "违反规则5：全文不超过240字。测量值显示全部产出281字，超过上限。"
+     },
+     {
+      "quote": "初筛结论已按本次《工作规则》交付（三段式，238 字，未含年龄、性别、婚育、籍贯信息）。",
+      "problem": "违反格式规则「只交这三段，前后不加别的文字」：在第3条追问后附加了与三段内容无关的说明文字，应删去。"
+     }
+    ],
+    "reason": "三段顺序和写法正确，但全文281字超过240字上限记一处；追问后附加了额外说明文字记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 204,
+  "error": null,
+  "full_reply": "我先读取本次初筛适用的三份材料：工作规则、岗位硬性条件和简历。\n\n结论：不通过\n\n理由：相关年限34个月（约2.83年），不足3年，不满足；带团队人数最多27人（班组长4人+组员23人），满足20人以上；简历写明使用MES，满足。\n\n追问：\n1. “日常使用 MES”——具体用过哪些模块、操作到什么程度？\n2. “东升塑胶，产线主管”——当时带多少人？\n3. “2021.08 — 2023.11”——到2024.01入职东升前的空档在做什么？",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "结论：不通过\n\n理由：相关年限34个月（约2.83年），不足3年，不满足；带团队人数最多27人（班组长4人+组员23人），满足20人以上；简历写明使用MES，满足。\n\n追问：\n1. “日常使用 MES”——具体用过哪些模块、操作到什么程度？\n2. “东升塑胶，产线主管”——当时带多少人？\n3. “2021.08 — 2023.11”——到2024.01入职东升前的空档在做什么？",
+  "failed": [
+   "H-followup"
+  ],
+  "judged": [
+   "H-verdict",
+   "H-reason",
+   "H-sensitive",
+   "H-followup",
+   "H-format"
+  ],
+  "verdicts": [
+   {
+    "id": "H-verdict",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工写「结论：不通过」，与参考答案一致。"
+   },
+   {
+    "id": "H-reason",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三条硬性条件均写到：相关年限34个月（约2.83年）不满足，与参考答案2.8333年一致；带团队27人满足；MES满足，数值和判断均正确。"
+   },
+   {
+    "id": "H-sensitive",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付中未出现年龄、性别、婚育、籍贯等敏感信息，测量值也未检出可疑字眼。"
+   },
+   {
+    "id": "H-followup",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "“日常使用 MES”——具体用过哪些模块、操作到什么程度？",
+      "problem": "规则4要求每个追问针对简历里模糊或缺失的地方、不问简历里已写清楚的事。简历已明确写明东升塑胶「日常使用 MES」，系统使用情况清楚，追问用过哪些模块、操作到什么程度不属于针对模糊或缺失之处（参考答案列出的模糊点是兼职投入、宏达电子用什么系统、东升塑胶带多少人）。应改为针对宏达电子未写系统或兼职经历等模糊处的追问。"
+     }
+    ],
+    "reason": "追问个数为3，引号内原文均一字不差（测量值核对通过）；第2条（东升带人数）和第3条（经历空档）针对模糊/缺失处合格，但第1条问的是简历已写清楚的 MES 使用情况，记一处。"
+   },
+   {
+    "id": "H-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三段按顺序（结论行、理由段、追问段），无多余文字，全文177字未超240字上限（以测量值为准）。"
+   }
+  ],
+  "loose": []
+ }
+]

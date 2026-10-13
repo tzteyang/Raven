@@ -1,0 +1,1346 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 687,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料。\n\n三个文件都在，我逐一读取。\n\n佩戴 12 条（34%）：「耳塞有点胀耳。」（#13）→ 结构团队\nApp 11 条（31%）：「App 一打开就闪退。」（#28）→ App 团队\n连接 10 条（29%）：「左右耳经常断连，希望改进。」（#19）→ 固件团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "佩戴 12 条（34%）：「耳塞有点胀耳。」（#13）→ 结构团队\nApp 11 条（31%）：「App 一打开就闪退。」（#28）→ App 团队\n连接 10 条（29%）：「左右耳经常断连，希望改进。」（#19）→ 固件团队",
+  "failed": [
+   "R-rank"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "佩戴 12 条（34%）",
+      "problem": "违反规则2：佩戴类条数和占比错误。参考答案为佩戴 13 条、占比 37%（13÷35=37.14%四舍五入），员工写成 12 条（34%）。"
+     }
+    ],
+    "reason": "报的类别和顺序正确（佩戴、App、连接），但佩戴类条数 12 和占比 34% 与参考答案的 13 条、37% 不符，记一处。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三处原话经测量值核对均与所引编号评价的全部内容一字不差，且 #13（2星）、#28（2星）、#19（1星）都在各类允许的 1-2 星评价名单内，编号正确。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "佩戴→结构团队、App→App 团队、连接→固件团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按规则一行一类输出，无标题、开场白和总结；测量值全文字数 101，未超 150 字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 446,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料是否齐全，再读取尚未读到的内容。\n\n三类材料齐全，本次上下文中尚未读取过任何内容，现在读取全部三份文件。\n\n第 1 名 表带：10 条，占 27.0%，转结构团队；原话“表带扣断裂了。”〔#27〕\n第 2 名 屏幕：8 条，占 21.6%，转显示团队；原话“运动时黑屏。”〔#2〕",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "第 1 名 表带：10 条，占 27.0%，转结构团队；原话“表带扣断裂了。”〔#27〕\n第 2 名 屏幕：8 条，占 21.6%，转显示团队；原话“运动时黑屏。”〔#2〕",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报第 1 名表带 10 条占 27.0%、第 2 名屏幕 8 条占 21.6%，类别、顺序、条数、占比与参考答案完全一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两句原话均与所引评价（#27、#2）的全部内容一字不差，编号正确，两条均为 2 星，符合 1–3 星选法（测量值已核对）。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "表带转结构团队、屏幕转显示团队，与问题分类表一致，无错漏。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按规则一行一类格式输出，无标题、开场白、总结；测量值全文字数 75，未超 120 字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 373,
+  "error": null,
+  "full_reply": "我先读取工作目录中的三份材料（工作规则、本周评价、问题分类表），确认内容与适用范围后再撰写周报。\n\n物流售后 16 条（43%）：「发货拖了五天，有点失望。」（#5）→ 电商运营\n续航 11 条（30%）：「掉电太快。」（#10）→ 硬件团队\n佩戴 7 条（19%）：「戴久了耳朵疼。」（#3）→ 结构团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "物流售后 16 条（43%）：「发货拖了五天，有点失望。」（#5）→ 电商运营\n续航 11 条（30%）：「掉电太快。」（#10）→ 硬件团队\n佩戴 7 条（19%）：「戴久了耳朵疼。」（#3）→ 结构团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报了物流售后16条（43%）、续航11条（30%）、佩戴7条（19%），类别个数、顺序、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话分别出自#5（1星）、#10（2星）、#3（1星），均为该类别允许的1-2星评价，且与评价原文一字不差，编号正确（测量值已核对）。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "物流售后→电商运营、续航→硬件团队、佩戴→结构团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按一行一类格式输出，无标题、开场白和总结；全文92字，未超150字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 293,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料（工作规则、本周评价、问题分类表），再按规则处理。\n\n工作规则已读取。继续读取本周评价和问题分类表。\n\n三类材料已确认齐全（工作规则 16 行、本周评价 #1–#46、分类表 6 类，均无截断）。46 条评价用户 ID 均不重复，无需合并；按分类表逐条归类统计：续航 14 条、屏幕 12 条、物流售后 7 条、App 6 条、心率 5 条、表带 0 条，总数 46。以下为本周评价周报：\n\n第1名 续航：14 条，占 30.4%，转电源团队；原话“一天就掉电到两成。”〔#6〕\n第2名 屏幕：12 条，占 26.1%，转显示团队；原话“运动时黑屏，充电器经常充不进，退了算了。”〔#7〕",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "三类材料已确认齐全（工作规则 16 行、本周评价 #1–#46、分类表 6 类，均无截断）。46 条评价用户 ID 均不重复，无需合并；按分类表逐条归类统计：续航 14 条、屏幕 12 条、物流售后 7 条、App 6 条、心率 5 条、表带 0 条，总数 46。以下为本周评价周报：\n\n第1名 续航：14 条，占 30.4%，转电源团队；原话“一天就掉电到两成。”〔#6〕\n第2名 屏幕：12 条，占 26.1%，转显示团队；原话“运动时黑屏，充电器经常充不进，退了算了。”〔#7〕",
+  "failed": [
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报了前两名类别续航（14 条，30.4%）和屏幕（12 条，26.1%），类别个数、顺序、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两条原话均经测量值核对与所引评价（#6、#7）的全部内容一字不差，编号正确，两条评价均为 1–3 星且自身提到对应类别，符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "续航转电源团队、屏幕转显示团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "三类材料已确认齐全（工作规则 16 行、本周评价 #1–#46、分类表 6 类，均无截断）。46 条评价用户 ID 均不重复，无需合并；按分类表逐条归类统计：续航 14 条、屏幕 12 条、物流售后 7 条、App 6 条、心率 5 条、表带 0 条，总数 46。以下为本周评价周报：",
+      "problem": "违反格式规则「前面不加标题和开场白」：规则要求直接以“第 N 名…”开头，员工在周报前加了一整段说明性开场白。"
+     },
+     {
+      "quote": "三类材料已确认齐全（工作规则 16 行、本周评价 #1–#46、分类表 6 类，均无截断）。46 条评价用户 ID 均不重复，无需合并；按分类表逐条归类统计：续航 14 条、屏幕 12 条、物流售后 7 条、App 6 条、心率 5 条、表带 0 条，总数 46。以下为本周评价周报：\n\n第1名 续航：14 条，占 30.4%，转电源团队；原话“一天就掉电到两成。”〔#6〕\n第2名 屏幕：12 条，占 26.1%，转显示团队；原话“运动时黑屏，充电器经常充不进，退了算了。”〔#7〕",
+      "problem": "违反规则 5「全文不超过 120 字」：测量值显示全文字数为 212 字，超过 120 字上限。"
+     }
+    ],
+    "reason": "员工在正文前加了开场白，且全文字数 212 超过 120 字上限（以测量值为准），共两处格式不符；未写原因推测或改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 381,
+  "error": null,
+  "full_reply": "我来先确认工作目录中的三类材料并读取内容。\n\n三个文件都在。现在读取全部内容。\n\n物流售后 12 条（39%）：「客服电话打不通。」（#9）→ 电商运营\n续航 9 条（29%）：「掉电太快。」（#21）→ 硬件团队\n连接 7 条（23%）：「左右耳经常断连。」（#5）→ 固件团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "物流售后 12 条（39%）：「客服电话打不通。」（#9）→ 电商运营\n续航 9 条（29%）：「掉电太快。」（#21）→ 硬件团队\n连接 7 条（23%）：「左右耳经常断连。」（#5）→ 固件团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别（物流售后、续航、连接）、顺序、条数（12/9/7）和占比（39%/29%/23%）与参考答案完全一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话均与所引评价（#9、#21、#5）的全部内容一字不差，编号正确，且均为该类的 1-2 星评价，符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "物流售后→电商运营、续航→硬件团队、连接→固件团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按「类别 X 条（Y%）：「原话」（#编号）→ 团队」一行一类输出，无标题、开场白和总结；全文 88 字，未超 150 字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 334,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取内容。\n\n三类材料齐全，现在读取全部内容。\n\n三类材料已齐（工作规则 16 行、本周评价 46 条、分类表 6 类），内容完整无截断，直接按本次口径处理。\n\n处理要点：46 条评价中 7 位用户各有首评与追评，按规则合并后共 39 条（含 12 条只夸的）；各类按合并后的条数计——物流售后 11 条、屏幕 7 条、App 7 条、续航 5 条、表带 4 条、心率 3 条。屏幕与 App 并列 7 条，二者 1–3 星评价同为 7 条，按分类表顺序屏幕在前，故取前两名：\n\n第 1 名 物流售后：11 条，占 28.2%，转电商运营；原话“找客服要排队。”〔#1〕\n第 2 名 屏幕：7 条，占 17.9%，转显示团队；原话“屏幕一闪一闪，客服一直不回，有点失望。”〔#9〕",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "三类材料已齐（工作规则 16 行、本周评价 46 条、分类表 6 类），内容完整无截断，直接按本次口径处理。\n\n处理要点：46 条评价中 7 位用户各有首评与追评，按规则合并后共 39 条（含 12 条只夸的）；各类按合并后的条数计——物流售后 11 条、屏幕 7 条、App 7 条、续航 5 条、表带 4 条、心率 3 条。屏幕与 App 并列 7 条，二者 1–3 星评价同为 7 条，按分类表顺序屏幕在前，故取前两名：\n\n第 1 名 物流售后：11 条，占 28.2%，转电商运营；原话“找客服要排队。”〔#1〕\n第 2 名 屏幕：7 条，占 17.9%，转显示团队；原话“屏幕一闪一闪，客服一直不回，有点失望。”〔#9〕",
+  "failed": [
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别为物流售后 11 条占 28.2%、屏幕 7 条占 17.9%，名次、条数、占比均与参考答案一致（含屏幕与 App 并列时按分类表顺序的处理）。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "物流售后引 #1「找客服要排队。」（3 星）、屏幕引 #9「屏幕一闪一闪，客服一直不回，有点失望。」（1 星），测量值确认两句均与对应评价一字不差、编号正确、星级在 1–3 星且评价本身说到该类，符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "物流售后转电商运营、屏幕转显示团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "三类材料已齐（工作规则 16 行、本周评价 46 条、分类表 6 类），内容完整无截断，直接按本次口径处理。",
+      "problem": "规则要求「前面不加标题和开场白」，此段为开场白，应删去，直接以「第 1 名…」开头。"
+     },
+     {
+      "quote": "处理要点：46 条评价中 7 位用户各有首评与追评，按规则合并后共 39 条（含 12 条只夸的）；各类按合并后的条数计——物流售后 11 条、屏幕 7 条、App 7 条、续航 5 条、表带 4 条、心率 3 条。屏幕与 App 并列 7 条，二者 1–3 星评价同为 7 条，按分类表顺序屏幕在前，故取前两名：",
+      "problem": "规则要求只按一行写法输出、不加开场白和总结，此段为额外的处理说明，应删去。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "规则要求全文不超过 120 字，测量值显示全文字数为 267 字，超出上限；应只保留两行周报内容。"
+     }
+    ],
+    "reason": "产出在两行周报前加了开场白和处理说明两段多余文字，且全文字数 267 远超 120 字上限（以测量值为准），共三处不符。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 812,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料并读取内容。\n\n佩戴 11 条（31%）：「跑步时容易掉落，退了算了。」（#2）→ 结构团队\n连接 11 条（31%）：「连不上手机，有点失望。」（#12）→ 固件团队\nApp 9 条（25%）：「App 一打开就闪退。」（#56）→ App 团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "佩戴 11 条（31%）：「跑步时容易掉落，退了算了。」（#2）→ 结构团队\n连接 11 条（31%）：「连不上手机，有点失望。」（#12）→ 固件团队\nApp 9 条（25%）：「App 一打开就闪退。」（#56）→ App 团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别个数、顺序（佩戴并列时低星 10 多于连接 8 排前）、条数（11/11/9）和占比（31%/31%/25%）均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话均与所引评价全部内容一字不差（测量值确认），#2、#12、#56 均为该类 1–2 星且在允许引用名单内，编号正确。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "佩戴→结构团队、连接→固件团队、App→App 团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按一行一类格式输出，无标题、开场白和总结；全文 103 字未超 150 字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 598,
+  "error": null,
+  "full_reply": "我来处理这周的律动 Fit 2 评价周报。先确认工作目录下的三类材料。\n\n三个文件都在，逐一读取。\n\n第1名 App：9条，占26.5%，转App团队；原话“App 打不开，数据传不上去，有点失望。”〔#18〕\n第2名 表带：7条，占20.6%，转结构团队；原话“表带扣断裂了，有点失望。”〔#5〕",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "第1名 App：9条，占26.5%，转App团队；原话“App 打不开，数据传不上去，有点失望。”〔#18〕\n第2名 表带：7条，占20.6%，转结构团队；原话“表带扣断裂了，有点失望。”〔#5〕",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报第1名 App 9条占26.5%、第2名 表带 7条占20.6%，类别、顺序、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "两条原话分别出自 #18（1星）和 #5（1星），均在允许引用列表内，测量值确认与评价原文一字不差、编号正确。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "App 转 App 团队、表带转结构团队，与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按一行一类格式输出，无标题、开场白和总结；测量值全文字数94，未超120字上限；无原因推测或改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 328,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取内容。\n\n三个文件都在，现在读取全部内容。\n\n三类材料已读齐且完整。已按当次规则合并同用户评价（U79704、U28011、U14273、U33113 各合成一条）、按分类表归类并统计：提及问题的评价合并后共 33 条；续航 11 条、佩戴 8 条、连接 8 条（并列时佩戴 1–2 星 7 条多于连接 5 条，故在前）。\n\n续航 11 条（33%）：「听一小时就掉电一半。」（#31）→ 硬件团队\n佩戴 8 条（24%）：「耳塞有点胀耳，退了算了。」（#14）→ 结构团队\n连接 8 条（24%）：「听着听着就断了。」（#43）→ 固件团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "三类材料已读齐且完整。已按当次规则合并同用户评价（U79704、U28011、U14273、U33113 各合成一条）、按分类表归类并统计：提及问题的评价合并后共 33 条；续航 11 条、佩戴 8 条、连接 8 条（并列时佩戴 1–2 星 7 条多于连接 5 条，故在前）。\n\n续航 11 条（33%）：「听一小时就掉电一半。」（#31）→ 硬件团队\n佩戴 8 条（24%）：「耳塞有点胀耳，退了算了。」（#14）→ 结构团队\n连接 8 条（24%）：「听着听着就断了。」（#43）→ 固件团队",
+  "failed": [
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别为续航 11 条（33%）、佩戴 8 条（24%）、连接 8 条（24%），顺序（并列时佩戴低星 7 条多于连接 5 条排前）、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话经测量值核对均与所引评价（#31、#14、#43）的全部内容一字不差，编号正确，三条均为 1–2 星且评价本身提到对应类别，符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "续航→硬件团队、佩戴→结构团队、连接→固件团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "三类材料已读齐且完整。已按当次规则合并同用户评价（U79704、U28011、U14273、U33113 各合成一条）、按分类表归类并统计：提及问题的评价合并后共 33 条；续航 11 条、佩戴 8 条、连接 8 条（并列时佩戴 1–2 星 7 条多于连接 5 条，故在前）。",
+      "problem": "违反格式规则「前面不加标题和开场白」：在三条类别行之前加了一段说明性开场白，应直接以「续航 11 条（33%）：…」开头。"
+     },
+     {
+      "quote": "三类材料已读齐且完整。已按当次规则合并同用户评价（U79704、U28011、U14273、U33113 各合成一条）、按分类表归类并统计：提及问题的评价合并后共 33 条；续航 11 条、佩戴 8 条、连接 8 条（并列时佩戴 1–2 星 7 条多于连接 5 条，故在前）。",
+      "problem": "违反规则 5「全文不超过 150 字」：测量值显示全文字数 220 字，超过 150 字上限（多出的开场白导致超限）。"
+     }
+    ],
+    "reason": "员工在正文前加了一段开场白，违反「前面不加标题和开场白」；且测量值全文字数 220 超过 150 字上限，共两处不符。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 1069,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料是否齐全，再读取尚未读到的内容。\n\n三类材料齐全。本次上下文中尚未读过任何内容，现在读取这三个文件。\n\nturn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "turn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+  "failed": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "员工产出只有一条报错信息，完全没有按规则输出周报。缺少第 1 名类别行：应为「第 1 名 屏幕：12 条，占 27.9%」（屏幕 12 条，低星 12 条排前，占比 12÷43=27.9%）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 2 名类别行：应为「第 2 名 续航：12 条，占 27.9%」（续航 12 条，低星 10 条排屏幕之后，占比 27.9%）。"
+     }
+    ],
+    "reason": "员工未产出任何周报内容，前两名的类别、条数、占比全部缺失，参考答案要求报屏幕和续航两行。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "第 1 名屏幕类缺少原话引用：应从该类 1-3 星评价（如 #5、#11、#20 等）原样照抄一整条评价内容并带编号，如「看不清字。」〔#11〕。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "第 2 名续航类缺少原话引用：应从该类 1-3 星评价（如 #4、#13、#43 等）原样照抄一整条评价内容并带编号，如「插上也充不进。」〔#43〕。"
+     }
+    ],
+    "reason": "员工产出中没有为任何类别配原话，测量值也确认引文在评价中找不到对应内容。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "第 1 名屏幕类漏写转给团队：按分类表应写「转显示团队」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "第 2 名续航类漏写转给团队：按分类表应写「转电源团队」。"
+     }
+    ],
+    "reason": "员工产出中没有写任何类别的转交团队。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "turn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+      "problem": "未按规则的一行写法输出（“第 N 名 类别：X 条，占 Y%，转团队；原话“原话”〔#编号〕”），产出是一条系统报错信息，不是周报内容。"
+     },
+     {
+      "quote": "turn_failed Timeout: litellm.Timeout: Timeout Error: OpenrouterException - {\"type\":\"error\",\"error\":{\"type\":\"timeout_error\",\"message\":\"平台 120 秒内没有响应，已停止等待；请稍后重试，或切换到「自有」。 (mirasim: The platform sent nothing bac... (code -32099)",
+      "problem": "全文字数超限：测量值为 209 字，超过规则上限 120 字。"
+     }
+    ],
+    "reason": "产出既不符合规定格式，也超出 120 字上限（测量值 209 字）。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 614,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三份材料并读取内容。\n\n三份材料都在，逐一读取。\n\n三份材料完整无截断：工作规则 6 条加补充口径、本周评价 48 条、分类表 6 类。已按当次规则处理：48 条评价中 9 条为纯夸奖不计，提到问题的评价 39 条；各类条数——物流售后 20、App 12、唤醒 10、音质 8、外观 7、连接 2，取前三；占比按 39 为分母；每类原话按规则从该类 1 星评价中取日期最新一条。现写入周报文件。\n\n周报已完成并交付（文件《本周评价周报.md》，全文 61 字，符合 170 字上限）。\n\n处理口径说明：\n- 48 条评价中 9 条为纯夸奖不计，提到问题的 39 条为分母。\n- 前三类：物流售后 20 条（51%）、App 12 条（31%）、唤醒 10 条（26%），各占四舍五入整数百分比，团队按分类表转给。\n- 每类原话取该类 1 星评价中日期最新的一条照抄并带编号：物流售后取 #48（09-27）、App 取 #37（09-24，同日编号更小的候选 #6 未提 App 类）、唤醒取 #6（09-26）。\n\n未交付内容：音质 8 条、外观 7 条、连接 2 条未入前三，按规则不报。",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "周报已完成并交付（文件《本周评价周报.md》，全文 61 字，符合 170 字上限）。\n\n处理口径说明：\n- 48 条评价中 9 条为纯夸奖不计，提到问题的 39 条为分母。\n- 前三类：物流售后 20 条（51%）、App 12 条（31%）、唤醒 10 条（26%），各占四舍五入整数百分比，团队按分类表转给。\n- 每类原话取该类 1 星评价中日期最新的一条照抄并带编号：物流售后取 #48（09-27）、App 取 #37（09-24，同日编号更小的候选 #6 未提 App 类）、唤醒取 #6（09-26）。\n\n未交付内容：音质 8 条、外观 7 条、连接 2 条未入前三，按规则不报。\n\n【交付文件 本周评价周报.md】\n物流售后 20 条（51%）：「下单三天才发货，有点失望。」（#48）→ 电商运营\nApp 12 条（31%）：「换手机后绑定不上，客服不理人。」（#37）→ App 团队\n唤醒 10 条（26%）：「叫了好几声唤不醒，客服不理人，希望改进。」（#6）→ 语音团队\n",
+  "failed": [
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别、顺序、条数、占比（物流售后 20 条 51%、App 12 条 31%、唤醒 10 条 26%）与参考答案完全一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三处原话分别一字不差照抄 #48、#37、#6 的整条评价内容，编号正确，且均为该类 1 星评价中日期最新的一条，符合规则（测量值核对一致）。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "物流售后→电商运营、App→App 团队、唤醒→语音团队，均与分类表一致，无错漏。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "周报已完成并交付（文件《本周评价周报.md》，全文 61 字，符合 170 字上限）。",
+      "problem": "规则要求前面不加标题和开场白，员工在正文前加了交付说明式开场白。"
+     },
+     {
+      "quote": "处理口径说明：",
+      "problem": "规则要求后面不加总结、只报事实，员工在周报后附加了口径说明和「未交付内容」等总结性内容。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "规则要求全文不超过 170 字，测量值显示全文字数为 391，超出上限；员工自称 61 字与测量值不符。"
+     }
+    ],
+    "reason": "交付文件本身格式正确，但员工整体产出加了开场白和结尾说明，且按测量值全文字数 391 超过 170 字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 452,
+  "error": null,
+  "full_reply": "我来先确认工作目录中的三类材料，然后读取内容。\n\n三个材料文件都在。现在读取这三个文件的内容。\n\n本周评价周报如下：\n\n唤醒 12 条（36%）：「半夜误唤醒。」（#8）→ 语音团队\n音质 11 条（33%）：「关着音乐也有底噪。」（#31）→ 声学团队\n连接 8 条（24%）：「经常断连，有点失望。」（#24）→ 固件团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "本周评价周报如下：\n\n唤醒 12 条（36%）：「半夜误唤醒。」（#8）→ 语音团队\n音质 11 条（33%）：「关着音乐也有底噪。」（#31）→ 声学团队\n连接 8 条（24%）：「经常断连，有点失望。」（#24）→ 固件团队",
+  "failed": [
+   "R-quote",
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别、顺序、条数、占比（唤醒 12 条 36%、音质 11 条 33%、连接 8 条 24%）与参考答案完全一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "「经常断连，有点失望。」（#24）",
+      "problem": "规则 3 要求从该类 1 星评价里选日期最新的一条照抄；连接类 1 星评价中日期最新的是 #7（2026-09-27），参考答案只允许引 #7，员工引了 #24（2026-09-26），选条错误。"
+     }
+    ],
+    "reason": "唤醒、音质两行的原话和编号符合规则；连接行引的 #24 不是该类 1 星中日期最新的评价（应为 #7），记一处。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "语音团队、声学团队、固件团队均与分类表一致，无错漏。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "本周评价周报如下：",
+      "problem": "格式规则要求「前面不加标题和开场白」，员工在正文前加了开场白，应删去，直接以各类行开头。"
+     }
+    ],
+    "reason": "全文 101 字未超 170 字上限，也无原因推测和改进建议；但开头加了「本周评价周报如下：」开场白，违反格式要求，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 238,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取尚未读到的内容。\n\n三个文件都在。我逐一读取内容：\n\n连接 11 条（37%）：「配网失败好几次，有点失望。」（#24）→ 固件团队\nApp 10 条（33%）：「绑定设备总失败，下单三天才发货，希望改进。」（#5）→ App 团队\n音质 9 条（30%）：「安静时有底噪。」（#7）→ 声学团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "连接 11 条（37%）：「配网失败好几次，有点失望。」（#24）→ 固件团队\nApp 10 条（33%）：「绑定设备总失败，下单三天才发货，希望改进。」（#5）→ App 团队\n音质 9 条（30%）：「安静时有底噪。」（#7）→ 声学团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报了连接 11 条（37%）、App 10 条（33%）、音质 9 条（30%），类别、顺序、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话分别照抄 #24、#5、#7 的整条评价内容，均为该类 1 星评价中日期最新者，编号正确，测量值核对一字不差。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "连接→固件团队、App→App 团队、音质→声学团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按“类别 X 条（Y%）：「原话」（#编号）→ 团队”一行一类输出，无标题、开场白、总结，无原因推测和改进建议；全文 109 字，未超 170 字上限。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 405,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取内容。\n\n三类材料齐全。现在读取三个文件的内容。\n\nApp 16 条（43%）：「看电视时总误唤醒，App 闪退。」（#5）→ App 团队\n唤醒 10 条（27%）：「看电视时总误唤醒，App 闪退。」（#5）→ 语音团队\n外观 7 条（19%）：「边角掉漆。」（#16）→ 结构团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "App 16 条（43%）：「看电视时总误唤醒，App 闪退。」（#5）→ App 团队\n唤醒 10 条（27%）：「看电视时总误唤醒，App 闪退。」（#5）→ 语音团队\n外观 7 条（19%）：「边角掉漆。」（#16）→ 结构团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别（App、唤醒、外观）、顺序、条数（16/10/7）和占比（43%/27%/19%）与参考答案完全一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三处原话均与所引评价一字不差（测量值确认），编号正确；#5 为 App、唤醒类日期最新的 1 星评价，#16 为外观类 1 星评价，选法符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "App→App 团队、唤醒→语音团队、外观→结构团队，均与分类表一致。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "每类一行、格式正确，无标题开场白和总结；字数 103 未超 170 上限（以测量值为准）；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 454,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，并读取尚未读到的内容。\n\n三个文件都在，逐个读取。\n\n连接 10 条（33%）：「播着歌突然断连，下单三天才发货。」（#36）→ 固件团队\n唤醒 9 条（30%）：「离两米就唤不醒。」（#2）→ 语音团队\n物流售后 8 条（27%）：「播着歌突然断连，下单三天才发货。」（#36）→ 电商运营",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "连接 10 条（33%）：「播着歌突然断连，下单三天才发货。」（#36）→ 固件团队\n唤醒 9 条（30%）：「离两米就唤不醒。」（#2）→ 语音团队\n物流售后 8 条（27%）：「播着歌突然断连，下单三天才发货。」（#36）→ 电商运营",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报了连接10条（33%）、唤醒9条（30%）、物流售后8条（27%），类别个数、顺序、条数、占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三行引的原话均与所标编号评价的全部内容一字不差（测量值已核对），#36、#2 均为对应类别允许的 1 星最新评价，编号正确。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "连接→固件团队、唤醒→语音团队、物流售后→电商运营，均与分类表一致，无漏写。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按规则一行一类输出，无标题、开场白和总结；全文 108 字未超 170 字上限（以测量值为准）；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 731,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料（工作规则、本周评价、问题分类表），再按规则处理。\n\n三类材料齐全，逐个读取。\n\nturn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)\n\n[raven] expert-review-digest stopped before finishing (stopReason=max_tokens); reply is partial.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "turn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)",
+  "failed": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "员工未产出任何周报内容，缺少第 1 名类别行：应为「App 10 条（29%）」（条数 10、占比 29%，与连接并列时因低星评价 5>2 排前）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 2 名类别行：应为「连接 10 条（29%）」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少第 3 名类别行：应为「唤醒 9 条（26%）」。"
+     }
+    ],
+    "reason": "员工产出仅为失败提示，未报告任何类别、条数和占比，参考答案要求的三行全部缺失。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "App 类缺少原话引用：应从该类 1 星评价中选日期最新的一条照抄，即「App 打不开。」（#35）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "连接类缺少原话引用：应照抄 1 星评价「喊半天没反应，连不上 Wi-Fi。」（#42）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "唤醒类缺少原话引用：应照抄 1 星评价「自己突然说话，退了算了。」（#31）。"
+     }
+    ],
+    "reason": "员工未产出任何内容，三类要求的原话引用（含编号）全部缺失。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "App 类漏写转给团队：应为「App 团队」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "连接类漏写转给团队：应为「固件团队」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "唤醒类漏写转给团队：应为「语音团队」。"
+     }
+    ],
+    "reason": "员工未产出任何内容，三类的转给团队全部缺失。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "turn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)",
+      "problem": "未按规则的一行写法输出任何周报内容（每类一行「类别 X 条（Y%）：「原话」（#编号）→ 团队」），产出只是一条失败提示，不符合规定格式。"
+     }
+    ],
+    "reason": "员工产出不是按格式写的周报，规定的三行格式完全缺失，记一处格式不符。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 1460,
+  "error": null,
+  "full_reply": "我先确认工作目录下的三类材料，然后读取内容。\n\n三个文件都在，现在读取全部内容。\n\nWake-up 11 items (31%): 「Called half the day with no response, App won't open, a bit disappointed.」(#22) → speech team\nApp 10 items (28%): 「Can't bind after switching phones.」(#15) → App team\nSound quality 10 items (28%): 「Sound sounds muffled, returned it already.」(#19) → acoustics team",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "Wake-up 11 items (31%): 「Called half the day with no response, App won't open, a bit disappointed.」(#22) → speech team\nApp 10 items (28%): 「Can't bind after switching phones.」(#15) → App team\nSound quality 10 items (28%): 「Sound sounds muffled, returned it already.」(#19) → acoustics team",
+  "failed": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "Wake-up 11 items (31%):",
+      "problem": "类别名应按问题分类表写「唤醒」，员工写成英文「Wake-up」，与分类表类别名不一致（条数 11、占比 31% 本身正确）。"
+     },
+     {
+      "quote": "Sound quality 10 items (28%):",
+      "problem": "类别名应按问题分类表写「音质」，员工写成英文「Sound quality」，与分类表类别名不一致（条数 10、占比 28% 本身正确）。"
+     }
+    ],
+    "reason": "报的类别个数、顺序（唤醒→App→音质）、各类条数（11/10/10）和占比（31%/28%/28%）均与参考答案一致；但「唤醒」「音质」两类类别名被译成英文，未按分类表名称写，记 2 处。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "Called half the day with no response, App won't open, a bit disappointed.",
+      "problem": "规则 3 要求原样照抄 #22 评价栏全部内容「喊半天没反应，App 打不开，有点失望。」，员工把原话翻译成英文，未一字不差照抄（测量值也确认与 #22 原文不一致）。"
+     },
+     {
+      "quote": "Can't bind after switching phones.",
+      "problem": "规则 3 要求原样照抄 #15 评价栏全部内容「换手机后绑定不上。」，员工把原话翻译成英文，未一字不差照抄。"
+     },
+     {
+      "quote": "Sound sounds muffled, returned it already.",
+      "problem": "规则 3 要求原样照抄 #19 评价栏全部内容「声音发闷，退了算了。」，员工把原话翻译成英文，未一字不差照抄。"
+     }
+    ],
+    "reason": "三条引文所选的编号（#22/#15/#19）和星级选法符合规则，但原话全部被译成英文，没有一句与对应评价原文一字不差，每处记一处，共 3 处。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "speech team",
+      "problem": "规则 4 要求转给团队以分类表为准，唤醒类应写「语音团队」，员工写成英文「speech team」。"
+     },
+     {
+      "quote": "acoustics team",
+      "problem": "规则 4 要求转给团队以分类表为准，音质类应写「声学团队」，员工写成英文「acoustics team」。"
+     }
+    ],
+    "reason": "三类转交方向与分类表对应关系正确，但「语音团队」「声学团队」被译成英文，未按分类表原文写，记 2 处（App team 与分类表「App 团队」一致，不计）。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 4,
+    "errors": [
+     {
+      "quote": "Wake-up 11 items (31%):",
+      "problem": "格式应为「类别 X 条（Y%）：」，员工用英文「items」、半角括号和半角冒号，不符合规定的一行写法。"
+     },
+     {
+      "quote": "App 10 items (28%):",
+      "problem": "格式应为「类别 X 条（Y%）：」，员工用英文「items」、半角括号和半角冒号，不符合规定的一行写法。"
+     },
+     {
+      "quote": "Sound quality 10 items (28%):",
+      "problem": "格式应为「类别 X 条（Y%）：」，员工用英文「items」、半角括号和半角冒号，不符合规定的一行写法。"
+     },
+     {
+      "quote": "Wake-up 11 items (31%): 「Called half the day with no response, App won't open, a bit disappointed.」(#22) → speech team\nApp 10 items (28%): 「Can't bind after switching phones.」(#15) → App team\nSound quality 10 items (28%): 「Sound sounds muffled, returned it already.」(#19) → acoustics team",
+      "problem": "规则 5 要求全文不超过 170 字，测量值显示全文 243 字（空格换行不计），超出上限。"
+     }
+    ],
+    "reason": "无标题、开场白和总结，也无原因推测和改进建议；但三行均未按「类别 X 条（Y%）：」的规定格式书写，且全文 243 字超过 170 字上限，共 4 处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 545,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取内容。\n\n三个文件都在，现在读取全部内容。\n\n外观 16 条（55%）：「客服不理人，到手就有划痕。」（#41）→ 结构团队\n音质 7 条（24%）：「声音发闷。」（#37）→ 声学团队\nApp 7 条（24%）：「设备列表找不到，顶盖有划痕，有点失望。」（#2）→ App 团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "外观 16 条（55%）：「客服不理人，到手就有划痕。」（#41）→ 结构团队\n音质 7 条（24%）：「声音发闷。」（#37）→ 声学团队\nApp 7 条（24%）：「设备列表找不到，顶盖有划痕，有点失望。」（#2）→ App 团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "报的类别、顺序、条数、占比与参考答案完全一致：外观16条（55%）、音质7条（24%）、App7条（24%），并列时按低星数排序正确。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三句原话均一字不差出自对应评价（#41、#37、#2），编号正确，均为该类1星评价中日期最新者，符合规则；测量值核对也确认无误。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "外观→结构团队、音质→声学团队、App→App团队，均与分类表一致，无错漏。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按一行一类格式输出，无标题、开场白、总结；全文105字未超170字上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 1175,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，然后读取内容。\n\n三类材料齐全，现在读取全部内容。\n\nturn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)\n\n[raven] expert-review-digest stopped before finishing (stopReason=max_tokens); reply is partial.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "turn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)",
+  "failed": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "员工未产出任何周报内容，缺少第 1 名类别行：应为「外观 20 条（49%）」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "员工未产出任何周报内容，缺少第 2 名类别行：应为「唤醒 10 条（24%）」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "员工未产出任何周报内容，缺少第 3 名类别行：应为「物流售后 8 条（20%）」。"
+     }
+    ],
+    "reason": "员工产出为失败提示，没有任何类别、条数和占比，前三名类别行全部缺失。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "缺少外观类的原话引用：应从该类 1 星评价中选日期最新的一条照抄一整条内容并带编号，如「颜色和图片不一样。」（#15）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少唤醒类的原话引用：应从该类 1 星评价中选日期最新的一条照抄，如「看电视时总误唤醒，到手就有划痕，有点失望。」（#27）。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少物流售后类的原话引用：应从该类 1 星评价中选日期最新的一条照抄，如「App 打不开，客服回复很慢，希望改进。」（#36）。"
+     }
+    ],
+    "reason": "员工没有任何产出，三类原话引用全部缺失。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 3,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "缺少外观类转给团队：按分类表应为「结构团队」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少唤醒类转给团队：按分类表应为「语音团队」。"
+     },
+     {
+      "quote": "（缺失）",
+      "problem": "缺少物流售后类转给团队：按分类表应为「电商运营」。"
+     }
+    ],
+    "reason": "员工没有任何产出，三类团队标注全部缺失。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "turn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)",
+      "problem": "未按规则的一行写法输出任何周报内容（每类一行「类别 X 条（Y%）：「原话」（#编号）→ 团队」），产出仅为失败提示，不符合格式要求。"
+     }
+    ],
+    "reason": "员工未产出符合规定格式的周报，整体格式要求未满足，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 1022,
+  "error": null,
+  "full_reply": "我先确认工作目录中的三类材料，再读取内容。\n\n三类材料齐全，逐一读取。\n\n音质 10 条（36%）：「看电视时总误唤醒，大音量就炸。」（#26）→ 声学团队\n外观 10 条（36%）：「颜色和图片不一样。」（#25）→ 结构团队\n连接 5 条（18%）：「经常断连。」（#36）→ 固件团队",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "音质 10 条（36%）：「看电视时总误唤醒，大音量就炸。」（#26）→ 声学团队\n外观 10 条（36%）：「颜色和图片不一样。」（#25）→ 结构团队\n连接 5 条（18%）：「经常断连。」（#36）→ 固件团队",
+  "failed": [],
+  "judged": [
+   "R-rank",
+   "R-quote",
+   "R-team",
+   "R-form"
+  ],
+  "verdicts": [
+   {
+    "id": "R-rank",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工报了音质 10 条（36%）、外观 10 条（36%）、连接 5 条（18%），类别个数、顺序（并列时按分类表顺序音质在外观前）、条数和占比均与参考答案一致。"
+   },
+   {
+    "id": "R-quote",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "三处原话分别照抄 #26、#25、#36 的整条评价内容，编号正确，均为该类 1 星评价中日期最新的一条，测量值核对一字不差，符合规则。"
+   },
+   {
+    "id": "R-team",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "音质→声学团队、外观→结构团队、连接→固件团队，均与问题分类表一致，无错漏。"
+   },
+   {
+    "id": "R-form",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "按“类别 X 条（Y%）：「原话」（#编号）→ 团队”一行一类输出，无标题、开场白和总结；测量值全文字数 97，未超 170 上限；无原因推测和改进建议。"
+   }
+  ],
+  "loose": []
+ }
+]

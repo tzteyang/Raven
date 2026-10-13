@@ -1,0 +1,47 @@
+
+=== t12 (right) expect fail: []
+  AL-title: pass 0 | 标题 79 字符（≤120），以 TailHaven 原样开头，TailHaven、TH-212、Automatic Pet Feeder 各按规定写法恰好出现一次，无违规。
+  AL-facts: pass 0 | 五条要点合起来覆盖容量 5000 mL、粒径 4-14 mm、最多 5 餐（up to 5 meals，未写成固定餐数）、8 秒录音、black、USB powered、机身三边 224 x 172 x 363 mm 及净重 2180 g，均与参数表一致；未写包装/毛重，未出现六个闭合功能词中列为无的功能。
+  AL-units: pass 0 | 容量 21.13 cups、三边 8.82 x 6.77 x 14.29 inches、净重 4.81 lb 均按换算表四舍五入保留 2 位小数且正确；数值与单位间空一格，三边按长 x 宽 x 高用 x 连接并共用单位；粒径只用 mm 未转 inches。
+  AL-safe: pass 0 | 仅提及 TH-212 已取得的 ETL，且按准许成句「ETL Listed」原样出现一次；FCC/UL/RoHS/CE 均未提及；无闭合禁用词命中；无英式拼写（black color 为美式）。
+  AL-format: pass 0 | 只交两段，段名 Listing Title / Key Features 及顺序正确；标题一行无前缀；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「 — 」开头，各条字符数（55/74/73/114/32）均不超 210；无交付外说明。
+
+=== t12 (wrong) expect fail: ['AL-title', 'AL-units', 'AL-safe']
+  AL-title: FAIL 1 | 标题 72 字符未超上限、以 TailHaven 开头且品牌和 Automatic Pet Feeder 各出现一次，但漏写了 TH-212，记一处。
+      「TailHaven Automatic Pet Feeder, 5000 mL, Black Color, Dry Fo」 标题缺少目标 SKU：规则要求品牌、目标 SKU、Automatic Pet Feeder 各按规定写法出现一次，测量值显示 TH-212 出现 0 次，应包含「TH-212」一次。
+  AL-facts: pass 0 | 要点覆盖了容量 5000 mL、粒径 4-14 mm、每日最多 5 餐、8 秒录音、black、USB powered、机身三边 224 x 172 x 363 mm 和净重 2180 g，公制数值均与参数表相符，未写包装/毛重，未编造闭合功能词；颜色的英式拼写归 AL-safe，cups 换算错归 AL-units。
+  AL-units: FAIL 1 | 三边尺寸 8.82 x 6.77 x 14.29 inches 和净重 4.81 lb 均正确，仅容量 cups 换算错，按每参数最多一处记 1 处。
+      「20.0 cups」 容量美制换算错误：5000 mL ÷ 236.588 = 21.13 cups（四舍五入保留 2 位小数），员工写成 20.0 cups，数值不对且小数位格式也不符。
+  AL-safe: FAIL 4 | ETL Listed 已按准许成句原样写一次；另有 FCC、UL 两个不准提及的认证项目各记一处，禁用词 guaranteed 一处，英式拼写 colour 一处，共 4 处。
+      「FCC Part 15 compliant」 FCC 对 TH-212 状态为「申请中」，规则规定申请中/未取得的项目完全不提，此处不得出现。
+      「U.L. Listed」 UL（U.L. Listed）对 TH-212 状态为「未取得」，不得提及；且其他 SKU 的已取得记录也不能用。
+      「Guaranteed」 命中闭合禁用词表中的 guaranteed（不分大小写完整词匹配），标题和要点中不得出现。
+      「colour」 英式拼写 colour 应按美英拼写表改为美式 color。
+  AL-format: pass 0 | 只交两段且段名/顺序正确，标题一行，恰好五条要点各占一行以「- 」开头，均为 2-4 个全大写单词接「 — 」，各条字符数（54/74/74/114/92）均未超 210，无多余说明或代码围栏。
+
+=== y06 (right) expect fail: []
+  AL-title: pass 0 | 标题 75 字符未超上限，以 WhiskerWay 原样开头，WhiskerWay、WW-406、Automatic Pet Feeder 各按规定写法恰好出现一次。
+  AL-facts: pass 0 | 容量 3 L、粒径 2-12 mm、最多 6 餐、录音 10 秒、gray、DC adapter powered、三边 19.2 x 18.1 x 31.8 cm、净重 1.88 kg 全部覆盖且与参数表一致；未写包装/毛重，未提闭合功能词；使用限制原样写入第一条要点。
+  AL-units: pass 0 | 12.68 cups、7.56 x 7.13 x 12.52 inches、4.14 lb 换算均正确且保留 2 位小数，数值与单位间空一格，三边按长 x 宽 x 高共用单位；粒径只用 mm 未转 inches。
+  AL-safe: pass 0 | 仅写符合条件的 RoHS，且按准许成句 RoHS compliant 原样出现一次；FCC/UL/ETL/CE 均未提及；无禁用词、无英式拼写。
+  AL-format: pass 0 | 两段段名与顺序正确，标题一行，恰好五条要点各以「- 」开头、2-4 个全大写单词加「: 」，各条均不超 230 字符，无多余说明或代码围栏。
+
+=== y06 (wrong) expect fail: ['AL-facts', 'AL-safe', 'AL-format']
+  AL-title: pass 0 | 标题 75 字符未超 135，以 WhiskerWay 开头，WhiskerWay、WW-406、Automatic Pet Feeder 各原样出现一次，无违规。
+  AL-facts: FAIL 1 | 容量、粒径、最多 6 餐、10 秒录音、gray、DC adapter powered、机身三边与净重均正确覆盖，无包装/毛重替代，无编造功能；唯第一条要点漏写使用限制原文，记一处。
+      「（缺失）」 违反规则 6/验收项 AL-facts：参数表『使用限制』必须原样写在第一条要点里，正确应为第一条要点包含原文「Not for wet food; place the feeder on a level indoor surface.」，员工第一条要点只有「Holds 3 L (
+  AL-units: pass 0 | 12.68 cups、7.56 x 7.13 x 12.52 inches、4.14 lb 均换算正确且保留 2 位小数，数值与单位间有空格，三边长 x 宽 x 高共用单位，粒径只用 mm 未转 inches，无违规。
+  AL-safe: FAIL 2 | 必写的 RoHS compliant 已原样出现一次；但多写了失效的 FCC 和日期缺失的 CE 两个项目，每个项目各记一处。无禁用词、无英式拼写。
+      「FCC Part 15 compliant」 违反规则 4：WW-406 的 FCC 虽为『已取得』但有效至 2026-10-10，早于上架日期 2026-10-11，已失效，不准写；要点中不得出现任何 FCC 提及。
+      「CE marked」 违反规则 4：WW-406 的 CE Mark 记录有效至日期缺失，按规则日期缺失不准写；要点中不得出现任何 CE 提及。
+  AL-format: FAIL 1 | 两段段名与顺序正确、标题一行、恰好五条要点且均以「- 」开头、各条未超 230 字符、无多余说明；仅第一条要点开头短语未全大写，记一处。
+      「- Food Storage: Holds 3 L (12.68 cups).」 违反规则 6：每条要点须以 2 到 4 个全大写英文单词构成的短语开头再跟「: 」，第一条开头「Food Storage」不是全大写，应改为如「FOOD STORAGE」。
+
+=== t12 (right+wrapper) expect fail: ['AL-format']
+  AL-title: pass 0 | 标题 79 字符不超 120，以 TailHaven 原样开头，TailHaven、TH-212、Automatic Pet Feeder 各按规定写法恰好出现一次，无违规。
+  AL-facts: pass 0 | 五条要点合起来覆盖容量 5000 mL、粒径 4-14 mm、每日最多 5 餐（up to 5 meals 保留最多含义）、8 秒录音、black、USB powered，并写全三边尺寸与净重；未写包装/毛重，未写任何未提供的闭合功能词；标题中的参数也真实。
+  AL-units: pass 0 | 21.13 cups、8.82 x 6.77 x 14.29 inches、4.81 lb 均按换算表四舍五入保留 2 位小数且数值正确；数值与单位间空一格，三边按长 x 宽 x 高共用单位；粒径只用 mm 未转 inches。
+  AL-safe: pass 0 | 交付内仅 ETL Listed 按准许成句原样出现一次，未提 FCC/UL/RoHS/CE；无闭合禁用词、无英式拼写。交付外说明里的 Guaranteed、UL、colour、no.1、FCC 按规则不在内容项计数。
+  AL-format: FAIL 1 | 段名与顺序正确、标题一行、五条要点均以「- 」开头且为 2-4 个全大写单词加「 — 」、各条均不超 210 字符；但交付前后多出说明文字，合计记一处。
+      「以下为已核查版本，已去除 Guaranteed、UL、colour 这些不合规文字。」 规则 7 要求只交两段、不加开场白或结尾说明；交付前多出说明（交付后还有「补充说明：没用 no.1、FCC，也没有误写成 99 cups。」），前后说明合计只记一处。
+PROBE_EXIT 0

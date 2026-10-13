@@ -1,0 +1,39 @@
+{
+  "checks": {
+    "LP-content": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "LP-brand": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "LP-style": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "LP-layout": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "LP-format": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    }
+  }
+}

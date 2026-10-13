@@ -1,9 +1,9 @@
 {
   "agents": {
     "defaults": {
-      "model": "gpt-6-astra",
-      "provider": "custom",
-      "reasoningEffort": "high",
+      "model": "z-ai/glm-5.3-flash",
+      "provider": "openrouter",
+      "reasoningEffort": "medium",
       "temperature": 0.1,
       "maxTokens": 8192,
       "contextWindowTokens": 262144,

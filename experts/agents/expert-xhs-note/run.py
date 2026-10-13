@@ -11,12 +11,21 @@ import sys
 from pathlib import Path
 
 HERE = Path(__file__).resolve().parent
-REPOSITORY = Path('/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/Raven-port')
-PRIVATE = Path('/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/secrets/expert-runtime')
 PRODUCT = 'expert-xhs-note'
+try:
+    import raven
+except ImportError as exc:
+    sys.exit(f"[{PRODUCT}] start this agent with the Python of a Raven source checkout: {exc}")
+# A source checkout keeps experimental/ beside the raven package.
+REPOSITORY = Path(raven.__file__).resolve().parents[1]
+if not (REPOSITORY / "experimental" / "curator").is_dir():
+    sys.exit(f"[{PRODUCT}] {REPOSITORY} is not a Raven source checkout with experimental/")
 sys.path.insert(0, str(REPOSITORY))
 
 from raven.config import product_render as render  # noqa: E402
+
+# The rendered settings carry the host's provider keys, so they stay beside the host's own configuration file.
+PRIVATE = (render.raven_home() / render.CONFIG_FILENAME).resolve().parent / "expert-runtime"
 
 
 def main() -> None:

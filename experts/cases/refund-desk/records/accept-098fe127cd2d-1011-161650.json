@@ -1,0 +1,1085 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 13,
+  "error": null,
+  "product": "同学您好，经核实，您的四六级突破营订单在购课后第 4 天、已听 2 节，符合全额退款条件，应退金额 899.00 元，退款将在 3 到 5 个工作日内原路退回。您反映的助教态度问题我们已记录，将转人工处理，工单号会以短信发送给您。",
+  "full_reply": "我先读取三份材料。\n\n同学您好，经核实，您的四六级突破营订单在购课后第 4 天、已听 2 节，符合全额退款条件，应退金额 899.00 元，退款将在 3 到 5 个工作日内原路退回。您反映的助教态度问题我们已记录，将转人工处理，工单号会以短信发送给您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明全额退款、应退金额 899.00 元，并给出依据（购课后第 4 天、已听 2 节），均与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“3 到 5 个工作日内原路退回”，且全文未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“投诉”，回复写明转人工处理，并告知工单号会以短信发送，两项要求均满足。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以“同学”称呼学员，未使用“亲”等不允许的称呼。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 105 字，未超 150 字上限；投诉场景下回复未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 10,
+  "error": null,
+  "product": "学员您好，您的课程已超过全额退款期限且已听节数超出范围，按未上节数比例退款：未上10节，应退750元，扣除6%手续费45元，实际应退705元。退款将在1到3个工作日内到账。",
+  "full_reply": "我先读取三份材料。\n\n学员您好，您的课程已超过全额退款期限且已听节数超出范围，按未上节数比例退款：未上10节，应退750元，扣除6%手续费45元，实际应退705元。退款将在1到3个工作日内到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "退法判断为按比例退正确，回复写明未上10节、按比例退金额750元、手续费45元、应退705元，均与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“1到3个工作日内到账”，符合规定说法，且全文未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“举报”“曝光”关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "以“学员您好”开头，称呼符合规则，未使用“亲”“宝”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值86字，未超120字上限；回复中未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 15,
+  "error": null,
+  "product": "同学您好，经核实您的课程已超过全额退款期限且已听节数超出范围，按未上节数比例退款：应退金额为2816.00元，将在3到5个工作日内到账。您反映的课程无法打开问题已记录，因您提到投诉，本单转人工处理，工单号会以短信发送给您。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n同学您好，经核实您的课程已超过全额退款期限且已听节数超出范围，按未上节数比例退款：应退金额为2816.00元，将在3到5个工作日内到账。您反映的课程无法打开问题已记录，因您提到投诉，本单转人工处理，工单号会以短信发送给您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "退法判断为按比例退，应退金额 2816.00 元与参考答案一致，所写退款依据（超期、已听节数超范围）与参考答案不冲突。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "到账时间写为「3到5个工作日内到账」，符合规定说法；全文未出现「马上」「今天」「尽快」。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含「12315」，员工写明转人工处理并告知工单号会以短信发送，两项要求均满足。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼使用「同学」，未使用「亲」等违规称呼。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 111 字，未超 150 字上限；投诉场景未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 5,
+  "error": null,
+  "product": "学员您好，您的国画入门课程购课在规定期限内，已听节数也符合条件，可全额退款 960 元，退款将在 1 到 3 个工作日内原路到账。如有其他问题欢迎随时联系。",
+  "full_reply": "我先读取三份材料。\n\n学员您好，您的国画入门课程购课在规定期限内，已听节数也符合条件，可全额退款 960 元，退款将在 1 到 3 个工作日内原路到账。如有其他问题欢迎随时联系。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明全额退款 960 元，与参考答案（全额退、960.00 元）一致；退款依据表述（规定期限内、已听节数符合条件）与参考答案不冲突。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“1 到 3 个工作日内原路到账”，符合规定说法，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“举报”“曝光”关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以“学员您好”开头，称呼符合规则，未使用“亲”“宝”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 72 字，未超 120 字上限；回复中也没有推荐课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 8,
+  "error": null,
+  "product": "同学您好！经核实，您的订单已超过10天全额退款期限，且已听5节超过3节，按未上节数比例退款：未上20节，应退1840元（已扣8%手续费）。您提到联系媒体，已为您转人工处理，工单号将短信发送。退款3到5个工作日到账。",
+  "full_reply": "我先读取三份材料。\n\n同学您好！经核实，您的订单已超过10天全额退款期限，且已听5节超过3节，按未上节数比例退款：未上20节，应退1840元（已扣8%手续费）。您提到联系媒体，已为您转人工处理，工单号将短信发送。退款3到5个工作日到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "退法判断为按比例退正确，应退金额1840元与参考答案一致；写到的退款依据（超10天全额退期限、已听5节、未上20节、8%手续费）均与参考答案相符。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款3到5个工作日到账”，是规则规定的唯一说法，且全文未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含关键词“媒体”，员工写明“已为您转人工处理”并告知“工单号将短信发送”，两项要求均满足。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼使用“同学”，未使用“亲”等规则不允许的称呼。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值107字，未超150字上限；投诉场景下未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 7,
+  "error": null,
+  "product": "学员您好，按规定计日，购课后第5天，仍在全额退期限内，且已听2节未超，可全额退款2160元，1到3个工作日到账。您提到投诉，已转人工处理，工单号会通过邮件发给您。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n学员您好，按规定计日，购课后第5天，仍在全额退期限内，且已听2节未超，可全额退款2160元，1到3个工作日到账。您提到投诉，已转人工处理，工单号会通过邮件发给您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明全额退、应退2160元，与参考答案一致；依据（购课后第5天、已听2节未超）也与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“1到3个工作日到账”，符合规定说法，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“投诉”，回复写明已转人工处理，并告知工单号会通过邮件发给学员，两项齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "以“学员您好”称呼，符合规则，未用“亲”“宝”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值81字，未超120字上限；回复未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 5,
+  "error": null,
+  "product": "同学您好，您的前端开发实战课程已超过全额退款期限且已听节数超标，按未上节数比例退款：已付3期共2700元，未上27节，按比例可退2025元，扣除12%手续费243元，应退1782元；剩余3期无需再付，直接取消。退款将在3到5个工作日到账。",
+  "full_reply": "我先读取三份材料。\n\n同学您好，您的前端开发实战课程已超过全额退款期限且已听节数超标，按未上节数比例退款：已付3期共2700元，未上27节，按比例可退2025元，扣除12%手续费243元，应退1782元；剩余3期无需再付，直接取消。退款将在3到5个工作日到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复判断为按比例退，写明已付2700元、未上27节、按比例退2025元、扣12%手续费243元、应退1782元，并说明剩余3期取消无需再付，与参考答案完全一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款将在3到5个工作日到账”，符合规定说法，且全文无“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“媒体”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以“同学您好”开头，称呼符合规则，未使用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值119字，未超150字上限；本题非投诉场景，回复也未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 20,
+  "error": null,
+  "product": "学员您好，您购课已超过10天全额退期限，按未上节数比例退款：应退810元（未上9节，扣10%手续费），1到3个工作日到账。已为您转人工处理，工单号将通过邮件发给您。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n学员您好，您购课已超过10天全额退期限，按未上节数比例退款：应退810元（未上9节，扣10%手续费），1到3个工作日到账。已为您转人工处理，工单号将通过邮件发给您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明按比例退、应退810元，并给出未上9节、扣10%手续费的依据，与参考答案（900×10%=90，应退810.00）一致；「超过10天全额退期限」与第11天的判断相符。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明「1到3个工作日到账」，与规则规定说法一致，且全文未出现「马上」「今天」「尽快」。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含「举报」，回复写明「已为您转人工处理」并告知「工单号将通过邮件发给您」，两项要求均满足。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以「学员您好」开头，符合规则称呼要求，未使用「亲」「宝」。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示回复82字，未超120字上限；回复中未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 7,
+  "error": null,
+  "product": "同学，您好。您购课后第7天申请，且已听2节未超过全额退节数，符合全额退款条件。按实付金额全额退款1600元，款项将在3到5个工作日内到账。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n同学，您好。您购课后第7天申请，且已听2节未超过全额退节数，符合全额退款条件。按实付金额全额退款1600元，款项将在3到5个工作日内到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复判断为全额退款，写明应退1600元，与参考答案一致；退款依据（购课后第7天、已听2节、按实付金额）均与参考答案相符。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“3到5个工作日内到账”，符合规则规定说法，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“媒体”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以“同学”称呼学员，未使用“亲”，符合规则。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示回复69字，未超过150字上限；本题非投诉场景，无推荐课程问题。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 11,
+  "error": null,
+  "product": "学员您好，您的订单符合全额退款条件：在14天全额退期内，已听4节未超上限，可全额退款。您已付2期共600元将全额退回，剩余10期无需再付。退款将在1到3个工作日到账。因您提到曝光，已为您转人工处理，工单号将通过邮件发给您。",
+  "full_reply": "我先读取三份材料。\n\n学员您好，您的订单符合全额退款条件：在14天全额退期内，已听4节未超上限，可全额退款。您已付2期共600元将全额退回，剩余10期无需再付。退款将在1到3个工作日到账。因您提到曝光，已为您转人工处理，工单号将通过邮件发给您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复判断为全额退，写明应退600元，与参考答案一致；依据（14天全额退期内、已听4节、已付2期共600元、剩余10期无需再付）均与参考答案相符。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款将在1到3个工作日到账”，符合规定说法，且全文无“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“曝光”，回复写明“已为您转人工处理，工单号将通过邮件发给您”，两项要求均满足。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复以“学员您好”开头，称呼符合规则，未使用“亲”“宝”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值111字，未超120字上限；回复未推荐任何课程。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 6,
+  "error": null,
+  "product": "张敏同学您好：经核算，您的雅思冲刺课于购课后第8天、已听3节，符合全额退款条件，可全额退款1999.00元，退款将在5到7个工作日内到账。因您提到已咨询律师，本单已转人工处理，工单号会短信发送给您，24小时内会有专人联系您。",
+  "full_reply": "我先读取三份材料。\n\n张敏同学您好：经核算，您的雅思冲刺课于购课后第8天、已听3节，符合全额退款条件，可全额退款1999.00元，退款将在5到7个工作日内到账。因您提到已咨询律师，本单已转人工处理，工单号会短信发送给您，24小时内会有专人联系您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明全额退款1999.00元，并给出购课后第8天、已听3节的依据，均与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5到7个工作日内到账”，与规定说法一致，且全文无“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“律师”，回复写明已转人工处理、工单号会短信发送、24小时内专人联系，要素齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“张敏同学”，符合姓名加“同学”的要求，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值112字，未超180字上限；投诉场景下未推荐课程、未发券或补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 6,
+  "error": null,
+  "product": "李浩同学，您好！经核算，您的订单已超过全额退款期限，且已听节数超出限额，按未上节数比例退款：未上 14 节，应退 1030.40 元（已扣除 8% 手续费）。退款将在 5 到 7 个工作日内到账。如有其他问题，欢迎随时联系我们。",
+  "full_reply": "我先读取三份材料。\n\n李浩同学，您好！经核算，您的订单已超过全额退款期限，且已听节数超出限额，按未上节数比例退款：未上 14 节，应退 1030.40 元（已扣除 8% 手续费）。退款将在 5 到 7 个工作日内到账。如有其他问题，欢迎随时联系我们。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明按比例退，应退金额 1030.40 元与参考答案一致；写到的依据（未上 14 节、8% 手续费）也与参考答案一致，未写出的依据不计错。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5 到 7 个工作日内到账”，与规则规定说法一致，且全文无“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“律师”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“李浩同学”，符合姓名加“同学”的规则，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 104 字，未超 180 字上限；本题非投诉场景，回复也未推荐课程或发券补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 11,
+  "error": null,
+  "product": "王芳同学，您好。经核算，您已听3节，超过中小学同步课程全额退的2节上限，按未上节数比例退款，应退金额1102.00元，退款将在5到7个工作日内到账。您提到12315，已为您转人工处理，工单号将短信发送，24小时内会有专人联系您。",
+  "full_reply": "我先读取三份材料。\n\n王芳同学，您好。经核算，您已听3节，超过中小学同步课程全额退的2节上限，按未上节数比例退款，应退金额1102.00元，退款将在5到7个工作日内到账。您提到12315，已为您转人工处理，工单号将短信发送，24小时内会有专人联系您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工判断为按比例退（已听3节超过全额退2节上限），应退金额1102.00元，与参考答案一致；写到的依据（已听3节、2节上限）也与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5到7个工作日内到账”，符合规定说法，且全文无“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“12315”，员工回复写明已转人工处理、工单号将短信发送、24小时内会有专人联系，三样齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“王芳同学”，符合姓名加“同学”的规则，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值114字，未超180字上限；投诉场景下未推荐课程、未发券或补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 10,
+  "error": null,
+  "product": "刘洋同学：您好！您的吉他弹唱课程9月22日购课，按规定计日仍在7天全额退期限内，已听1节也未超过2节上限，符合全额退款条件，应退金额1200.00元，将全额原路退回。退款会在5到7个工作日内到账，请留意查收。如还有其他问题，欢迎随时联系我们。",
+  "full_reply": "我先读取三份材料。\n\n刘洋同学：您好！您的吉他弹唱课程9月22日购课，按规定计日仍在7天全额退期限内，已听1节也未超过2节上限，符合全额退款条件，应退金额1200.00元，将全额原路退回。退款会在5到7个工作日内到账，请留意查收。如还有其他问题，欢迎随时联系我们。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复判断为全额退，写明应退金额1200.00元，与参考答案一致；依据（7天全额退期限内、已听1节未超2节）也与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款会在5到7个工作日内到账”，与规定说法一致；整条回复未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“律师”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“刘洋同学”，符合姓名加“同学”的规则，未使用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值121字，未超过180字上限；本题非投诉场景，回复也未推荐课程或发券补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 11,
+  "error": null,
+  "product": "陈静同学：您好。经核算，您的订单已超过全额退款期限，且已听节数超出标准，按未上节数比例退款：未上 18 节，应退 3240.00 元（已扣除手续费），退款将在 5 到 7 个工作日内到账。您提到投诉，已为您转人工处理，工单号会短信发送，24 小时内会有专人联系您。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n陈静同学：您好。经核算，您的订单已超过全额退款期限，且已听节数超出标准，按未上节数比例退款：未上 18 节，应退 3240.00 元（已扣除手续费），退款将在 5 到 7 个工作日内到账。您提到投诉，已为您转人工处理，工单号会短信发送，24 小时内会有专人联系您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复判断为按比例退，写明未上 18 节、应退 3240.00 元，与参考答案一致；提到的退款依据（未上节数）也与参考答案一致，无错误。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5 到 7 个工作日内到账”，符合规定说法，且整条回复未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“投诉”，回复写明已转人工处理、工单号会短信发送、24 小时内会有专人联系，三项齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“陈静同学”，符合姓名加“同学”的规则，未使用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 123 字，未超 180 字上限；投诉场景下未推荐课程，也未发优惠券或其他补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 6,
+  "error": null,
+  "product": "杨帆同学，您好。国画入门课程按未上节数比例退款：您共 12 节已听 6 节，未上 6 节，按实付 240 元计算可退 120 元，扣除该档 10% 手续费 12 元后，应退您 108.00 元。退款将在 5 到 7 个工作日内原路到账，请留意查收。",
+  "full_reply": "我先读取三份材料。\n\n杨帆同学，您好。国画入门课程按未上节数比例退款：您共 12 节已听 6 节，未上 6 节，按实付 240 元计算可退 120 元，扣除该档 10% 手续费 12 元后，应退您 108.00 元。退款将在 5 到 7 个工作日内原路到账，请留意查收。",
+  "failed": [
+   "A-amount"
+  ],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 2,
+    "errors": [
+     {
+      "quote": "扣除该档 10% 手续费 12 元后",
+      "problem": "手续费与参考答案不一致：按比例算的手续费 12.00 元不足 20.00 元，按规则应按 20.00 元收，员工写成 12 元。"
+     },
+     {
+      "quote": "应退您 108.00 元",
+      "problem": "应退金额写错：应为 120.00 − 20.00 = 100.00 元，员工写成 108.00 元。"
+     }
+    ],
+    "reason": "退法判断（按比例退）正确，但手续费未按最低 20.00 元收取，导致手续费和应退金额两处与参考答案不一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5 到 7 个工作日”，与规则规定说法一致，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“律师”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“杨帆同学”，符合姓名加“同学”的规则，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 104 字，未超 180 字上限；本题非投诉场景，无推荐限制问题。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 27,
+  "error": null,
+  "product": "黄磊同学：您的托福强化班订单按规定计日，购课后第10天，在10天全额退期内，已听4节未超过4节，可全额退款。退款按券后实付2100元计算，原价2400元不作为退款基数，应退2100元。已为您转人工处理，工单号会短信发送，24小时内会有专人联系您，退款将在5到7个工作日到账。",
+  "full_reply": "我先读取三份材料。\n\n黄磊同学：您的托福强化班订单按规定计日，购课后第10天，在10天全额退期内，已听4节未超过4节，可全额退款。退款按券后实付2100元计算，原价2400元不作为退款基数，应退2100元。已为您转人工处理，工单号会短信发送，24小时内会有专人联系您，退款将在5到7个工作日到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明全额退、应退2100元，与参考答案一致；退款依据（购课后第10天、已听4节、券后实付2100元为基数）均与参考答案相符。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款将在5到7个工作日到账”，符合规定说法，且全文未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“律师”，回复写明已转人工处理、工单号会短信发送、24小时内会有专人联系，三样齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“黄磊同学”，符合姓名加“同学”的规则，未使用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值137字，未超180字上限；投诉场景下未推荐课程、未发券或补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 7,
+  "error": null,
+  "product": "周婷同学：您好。您的订单按比例退款：已付 6 期共 1200 元，未上 15 节占总节数一半，按比例退 600 元，扣除 6% 手续费 36 元，应退 564.00 元。剩余 6 期未付款直接取消，无需再付。退款将在 5 到 7 个工作日内到账。",
+  "full_reply": "我先读取三份材料。\n\n周婷同学：您好。您的订单按比例退款：已付 6 期共 1200 元，未上 15 节占总节数一半，按比例退 600 元，扣除 6% 手续费 36 元，应退 564.00 元。剩余 6 期未付款直接取消，无需再付。退款将在 5 到 7 个工作日内到账。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明按比例退，应退 564.00 元，退款基数 1200 元、按比例退 600 元、手续费 36 元均与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5 到 7 个工作日内到账”，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": false,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息中没有“投诉”“12315”“律师”等关键词，本项不适用。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“周婷同学”，符合姓名加“同学”的规则，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值 103 字，未超 180 字上限；本题非投诉场景，回复也未推荐课程或发券补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 54,
+  "error": null,
+  "product": "吴昊同学：您好。经核算，您的订单已超过7天全额退款期限（购课当天计为第1天，现处于第8天），按未上课程比例退款：应退910.80元（按比例退990.00元，扣除8%手续费79.20元）。退款将在5到7个工作日内到账。您提出投诉，已为您转人工处理，工单号将短信发送，24小时内会有专人联系您。",
+  "full_reply": "我先读取工作目录中的三份材料。\n\n吴昊同学：您好。经核算，您的订单已超过7天全额退款期限（购课当天计为第1天，现处于第8天），按未上课程比例退款：应退910.80元（按比例退990.00元，扣除8%手续费79.20元）。退款将在5到7个工作日内到账。您提出投诉，已为您转人工处理，工单号将短信发送，24小时内会有专人联系您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复正确判断为按比例退（第8天超出7天全额退期限），写明应退910.80元、按比例退990.00元、手续费79.20元，均与参考答案一致。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“5到7个工作日内到账”，与规定说法一致，且未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“投诉”，回复写明已转人工处理、工单号将短信发送、24小时内专人联系，要素齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“吴昊同学”，符合姓名加“同学”的规则，未用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值145字，未超180字上限；投诉场景下未推荐课程、未发券或补偿。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 7,
+  "error": null,
+  "product": "徐丽同学，您好。经核算，您购课后在14天全额退期限内、已听4节未超上限，符合全额退款条件。您是分期付款，退款按实际已付金额计算，应退金额为800.00元，即已付的1期；未付的5期直接取消，无需再付，并非退4800元。退款将在5到7个工作日内到账。您提到12315，已为您转人工处理，工单号会短信发送，24小时内会有专人联系您。",
+  "full_reply": "我先读取三份材料。\n\n徐丽同学，您好。经核算，您购课后在14天全额退期限内、已听4节未超上限，符合全额退款条件。您是分期付款，退款按实际已付金额计算，应退金额为800.00元，即已付的1期；未付的5期直接取消，无需再付，并非退4800元。退款将在5到7个工作日内到账。您提到12315，已为您转人工处理，工单号会短信发送，24小时内会有专人联系您。",
+  "failed": [],
+  "judged": [
+   "A-amount",
+   "A-arrival",
+   "A-escalate",
+   "A-address",
+   "A-length"
+  ],
+  "verdicts": [
+   {
+    "id": "A-amount",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复正确判断为全额退（14天期限内、已听4节未超上限），应退金额800.00元与参考答案一致，退款依据（14天、4节、已付1期800元、未付5期取消）均与参考答案相符，且明确说明并非退4800元。"
+   },
+   {
+    "id": "A-arrival",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "回复写明“退款将在5到7个工作日内到账”，与规则规定说法一致；整条回复未出现“马上”“今天”“尽快”。"
+   },
+   {
+    "id": "A-escalate",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "学员消息含“12315”，回复写明“已为您转人工处理，工单号会短信发送，24小时内会有专人联系您”，转人工及两项告知均齐全。"
+   },
+   {
+    "id": "A-address",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "称呼为“徐丽同学”，符合姓名加“同学”的规则，未使用“亲”。"
+   },
+   {
+    "id": "A-length",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值163字，未超180字上限；投诉场景下未推荐任何课程，也未发优惠券或其他补偿。"
+   }
+  ],
+  "loose": []
+ }
+]

@@ -1,0 +1,950 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 22,
+  "error": null,
+  "full_reply": "我先读取当次的工作规则、DDL 和数据说明。\n\nlogin_at 已是北京时间，直接算自然日。先检查数据。\n\n数据无合并记录、无异常订阅。现在执行最终 SQL。\n\n## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7) = '2026-08'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND start_date <= '2026-08-31'\n    AND end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n28\n\n## 口径说明\n\nlogin_at 已是北京时间，直接取自然日；2026 年 8 月有至少 3 个不同自然日登录、且 2026-08-31 有生效中正式订阅（is_trial=0）的企业，按企业去重后计数为 28 家。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7) = '2026-08'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND start_date <= '2026-08-31'\n    AND end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n28\n\n## 口径说明\n\nlogin_at 已是北京时间，直接取自然日；2026 年 8 月有至少 3 个不同自然日登录、且 2026-08-31 有生效中正式订阅（is_trial=0）的企业，按企业去重后计数为 28 家。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工结果写 28，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 在 SQLite 上跑通且返回 28（测量值确认），逻辑按规则从表中计算（活跃≥3 个不同自然日、is_trial=0 且 2026-08-31 在订阅期内、按企业去重），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅，员工在「## 数据问题」段写「无」，无漏报错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段齐全且段名、顺序正确（## SQL / ## 结果 / ## 口径说明 / ## 数据问题），口径说明一句话且与规则一致（北京时间自然日、≥3 个不同自然日、正式订阅、企业去重），无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 17,
+  "error": null,
+  "full_reply": "我先读取当次工作规则、DDL、数据说明并检查数据。\n\n规则明确：北京时间直接算、按登录条数≥5判活跃、正式订阅当月生效、合并归新 ID、企业去重。现在检查数据。\n\n数据干净：登录全在 2026-10、无异常订阅、无合并记录。现在写并执行最终 SQL（含合并归并逻辑，虽本次 merges 为空仍按规则表达）。\n\n## 查询\n\n```sql\nWITH map AS (\n  SELECT old_company_id AS cid, new_company_id AS mid FROM merges\n  UNION SELECT company_id, company_id FROM users\n  UNION SELECT company_id, company_id FROM subscriptions\n),\nactive AS (\n  SELECT mid AS company_id\n  FROM map m JOIN users u ON u.company_id = m.cid\n  WHERE substr(u.login_at,1,7) = '2026-10'\n  GROUP BY mid\n  HAVING COUNT(*) >= 5\n),\npaid AS (\n  SELECT DISTINCT mid AS company_id\n  FROM map m JOIN subscriptions s ON s.company_id = m.cid\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-10-31'\n    AND s.end_date >= '2026-10-01'\n)\nSELECT COUNT(*) FROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 答案\n\n20\n\n## 说明\n\nlogin_at 为北京时间，直接按 `substr(login_at,1,7)='2026-10'` 筛选当月并按登录条数≥5 判活跃；付费取当月有生效中正式订阅（非试用）的企业，经合并归并后按企业去重求交集。\n\n## 异常数据\n\n无",
+  "product": "## 查询\n\n```sql\nWITH map AS (\n  SELECT old_company_id AS cid, new_company_id AS mid FROM merges\n  UNION SELECT company_id, company_id FROM users\n  UNION SELECT company_id, company_id FROM subscriptions\n),\nactive AS (\n  SELECT mid AS company_id\n  FROM map m JOIN users u ON u.company_id = m.cid\n  WHERE substr(u.login_at,1,7) = '2026-10'\n  GROUP BY mid\n  HAVING COUNT(*) >= 5\n),\npaid AS (\n  SELECT DISTINCT mid AS company_id\n  FROM map m JOIN subscriptions s ON s.company_id = m.cid\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-10-31'\n    AND s.end_date >= '2026-10-01'\n)\nSELECT COUNT(*) FROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 答案\n\n20\n\n## 说明\n\nlogin_at 为北京时间，直接按 `substr(login_at,1,7)='2026-10'` 筛选当月并按登录条数≥5 判活跃；付费取当月有生效中正式订阅（非试用）的企业，经合并归并后按企业去重求交集。\n\n## 异常数据\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工答案写 20，与参考答案结果 20 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 在 SQLite 上跑通且返回 20（测量值前 5 行为 [[20]]），逻辑按规则从表中计算（活跃≥5 条登录、正式订阅当月生效、合并归并、企业去重），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅，员工在「## 异常数据」写「无」，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段段名与顺序（查询/答案/说明/异常数据）与规则一致，说明仅一句且口径（活跃≥5 登录、非试用正式订阅、合并归并、企业去重）与规则相符，无额外文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 30,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\nlogin_at 已是北京时间，直接算。先检查数据情况。\n\nmerges 无记录、无异常订阅。现在写并执行最终 SQL。\n\n结果为 0，需要核查两侧分别的数量。\n\n付费侧结果异常（明显有覆盖 6-30 的专业版订阅却返回空），逐条件排查。\n\n原因找到：CSV 原样导入后 is_trial 是 TEXT，`is_trial = 0`（整数比较）匹配不到。最终 SQL 用 `CAST(is_trial AS INTEGER) = 0` 重跑。\n\n## SQL\n\n```sql\nWITH map AS (\n  SELECT company_id AS cid, company_id AS base FROM users\n  UNION SELECT old_company_id, new_company_id FROM merges\n  UNION SELECT new_company_id, new_company_id FROM merges\n),\nactive AS (\n  SELECT u.company_id AS cid\n  FROM users u\n  WHERE substr(u.login_at,1,10) >= '2026-06-01'\n    AND substr(u.login_at,1,10) < '2026-07-01'\n  GROUP BY u.company_id\n  HAVING COUNT(DISTINCT substr(u.login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT s.company_id AS cid\n  FROM subscriptions s\n  WHERE s.plan = '专业版' AND CAST(s.is_trial AS INTEGER) = 0\n    AND s.start_date <= '2026-06-30' AND s.end_date >= '2026-06-30'\n)\nSELECT COUNT(*) FROM (\n  SELECT m.base AS company FROM active a\n  JOIN map m ON m.cid = a.cid\n  INTERSECT\n  SELECT m.base AS company FROM paid p\n  JOIN map m ON m.cid = p.cid\n);\n```\n\n## 结果\n\n17\n\n## 口径说明\n\nlogin_at 已是北京时间故直接取自然日，2026 年 6 月内登录达 3 个不同自然日、且 6 月 30 日有生效中的专业版正式订阅（试用除外）的企业，经合并归并后按企业去重取交集，共 17 家。\n\n## 数据问题\n\n无（merges 表无合并记录；未发现结束日早于开始日的订阅；CSV 原样导入使 is_trial 为文本，SQL 中已用 CAST 处理，属导入格式而非数据错误）。",
+  "product": "## SQL\n\n```sql\nWITH map AS (\n  SELECT company_id AS cid, company_id AS base FROM users\n  UNION SELECT old_company_id, new_company_id FROM merges\n  UNION SELECT new_company_id, new_company_id FROM merges\n),\nactive AS (\n  SELECT u.company_id AS cid\n  FROM users u\n  WHERE substr(u.login_at,1,10) >= '2026-06-01'\n    AND substr(u.login_at,1,10) < '2026-07-01'\n  GROUP BY u.company_id\n  HAVING COUNT(DISTINCT substr(u.login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT s.company_id AS cid\n  FROM subscriptions s\n  WHERE s.plan = '专业版' AND CAST(s.is_trial AS INTEGER) = 0\n    AND s.start_date <= '2026-06-30' AND s.end_date >= '2026-06-30'\n)\nSELECT COUNT(*) FROM (\n  SELECT m.base AS company FROM active a\n  JOIN map m ON m.cid = a.cid\n  INTERSECT\n  SELECT m.base AS company FROM paid p\n  JOIN map m ON m.cid = p.cid\n);\n```\n\n## 结果\n\n17\n\n## 口径说明\n\nlogin_at 已是北京时间故直接取自然日，2026 年 6 月内登录达 3 个不同自然日、且 6 月 30 日有生效中的专业版正式订阅（试用除外）的企业，经合并归并后按企业去重取交集，共 17 家。\n\n## 数据问题\n\n无（merges 表无合并记录；未发现结束日早于开始日的订阅；CSV 原样导入使 is_trial 为文本，SQL 中已用 CAST 处理，属导入格式而非数据错误）。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了一个数字 17，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 17，与参考答案一致；SQL 通过 CTE 从 users/subscriptions/merges 实际计算（活跃按不同自然日≥3、付费限定专业版且 is_trial=0、含合并映射），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案注明本题无数据问题，员工在「## 数据问题」段写「无」并附说明，未漏报也未把正常数据错报为问题。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名与顺序为 ## SQL、## 结果、## 口径说明、## 数据问题，与规则一致；口径说明一句话，正确描述了活跃（3 个不同自然日）、付费（6 月 30 日生效的专业版正式订阅、试用除外）、合并归并与按企业去重，无超长或错误。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 13,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\nlogin_at 是北京时间，直接算。先检查数据情况。\n\n数据无合并记录、无异常订阅。现在写并执行最终 SQL。\n\n## 查询\n\n```sql\nWITH map AS (\n  SELECT old_company_id AS company_id, new_company_id AS cid FROM merges\n  UNION SELECT new_company_id, new_company_id FROM merges\n  UNION SELECT company_id, company_id FROM users WHERE company_id NOT IN (SELECT old_company_id FROM merges)\n),\nactive AS (\n  SELECT m.cid AS company_id\n  FROM users u JOIN map m ON m.company_id=u.company_id\n  WHERE substr(u.login_at,1,7)='2026-03'\n  GROUP BY m.cid HAVING COUNT(*)>=5\n),\npaid AS (\n  SELECT DISTINCT m.cid AS company_id\n  FROM subscriptions s JOIN map m ON m.company_id=s.company_id\n  WHERE s.plan='专业版' AND s.is_trial=0\n    AND s.start_date<='2026-03-31' AND s.end_date>='2026-03-01'\n)\nSELECT COUNT(*) FROM active a JOIN paid p ON p.company_id=a.company_id;\n```\n\n## 答案\n\n22\n\n## 说明\n\nlogin_at 为北京时间，直接取 `substr(login_at,1,7)='2026-03'` 筛选当月，按登录条数 ≥5 判活跃；付费取当月有生效中的正式专业版订阅，经合并映射后按企业去重取交集，每家只计一次。\n\n## 异常数据\n\n无",
+  "product": "## 查询\n\n```sql\nWITH map AS (\n  SELECT old_company_id AS company_id, new_company_id AS cid FROM merges\n  UNION SELECT new_company_id, new_company_id FROM merges\n  UNION SELECT company_id, company_id FROM users WHERE company_id NOT IN (SELECT old_company_id FROM merges)\n),\nactive AS (\n  SELECT m.cid AS company_id\n  FROM users u JOIN map m ON m.company_id=u.company_id\n  WHERE substr(u.login_at,1,7)='2026-03'\n  GROUP BY m.cid HAVING COUNT(*)>=5\n),\npaid AS (\n  SELECT DISTINCT m.cid AS company_id\n  FROM subscriptions s JOIN map m ON m.company_id=s.company_id\n  WHERE s.plan='专业版' AND s.is_trial=0\n    AND s.start_date<='2026-03-31' AND s.end_date>='2026-03-01'\n)\nSELECT COUNT(*) FROM active a JOIN paid p ON p.company_id=a.company_id;\n```\n\n## 答案\n\n22\n\n## 说明\n\nlogin_at 为北京时间，直接取 `substr(login_at,1,7)='2026-03'` 筛选当月，按登录条数 ≥5 判活跃；付费取当月有生效中的正式专业版订阅，经合并映射后按企业去重取交集，每家只计一次。\n\n## 异常数据\n\n无\n\n【交付文件 final.sql】\n\nWITH map AS (\n  SELECT old_company_id AS company_id, new_company_id AS cid FROM merges\n  UNION SELECT new_company_id, new_company_id FROM merges\n  UNION SELECT company_id, company_id FROM users WHERE company_id NOT IN (SELECT old_company_id FROM merges)\n),\nactive AS (\n  SELECT m.cid AS company_id\n  FROM users u JOIN map m ON m.company_id=u.company_id\n  WHERE substr(u.login_at,1,7)='2026-03'\n  GROUP BY m.cid HAVING COUNT(*)>=5\n),\npaid AS (\n  SELECT DISTINCT m.cid AS company_id\n  FROM subscriptions s JOIN map m ON m.company_id=s.company_id\n  WHERE s.plan='专业版' AND s.is_trial=0\n    AND s.start_date<='2026-03-31' AND s.end_date>='2026-03-01'\n)\nSELECT COUNT(*) FROM active a JOIN paid p ON p.company_id=a.company_id;\n",
+  "failed": [
+   "Q-format"
+  ],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工答案为 22，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 22，与参考答案一致；SQL 按规则从表中计算（活跃≥5 条登录、专业版正式订阅当月生效、合并映射、企业去重），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅，员工在「## 异常数据」段写「无」，无漏报错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 final.sql】",
+      "problem": "违反规则 4「只交这四段，四段前后不加别的文字」：在「## 异常数据」段之后额外附加了「【交付文件 final.sql】」及整段 SQL 文字，应只交付查询、答案、说明、异常数据四段。"
+     }
+    ],
+    "reason": "四段段名、顺序正确，说明一句且口径与规则一致；但四段之后多出了交付文件说明和重复的 SQL，违反「只交这四段，四段前后不加别的文字」。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 61,
+  "error": null,
+  "full_reply": "我先读取当次工作规则、DDL 和数据说明，并检查数据。\n\n数据说明确认 login_at 已是北京时间，直接算。现在检查数据（范围、合并、异常订阅）。\n\nmerges.csv 只有表头（无合并记录）。用脚本方式导入再算。\n\n旧版 sqlite3 不支持 `csv:` 前缀，改用 `.mode csv` + `.import 文件名`。\n\n表头被当成数据导入了，需跳过表头重新检查。\n\n无合并记录、无异常订阅。现在执行最终 SQL（活跃∩付费，按企业去重）。\n\n## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7)='2026-04'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10))>=3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial=0\n    AND start_date<='2026-04-30'\n    AND end_date>='2026-04-30'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n20\n\n## 口径说明\n\nlogin_at 已是北京时间，直接取日期；2026 年 4 月有至少 3 个不同自然日登录的企业，与 4 月 30 日有生效中正式订阅（is_trial=0）的企业按企业 ID 去重求交集，共 20 家。\n\n## 数据问题\n\n无。",
+  "product": "## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7)='2026-04'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10))>=3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial=0\n    AND start_date<='2026-04-30'\n    AND end_date>='2026-04-30'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n20\n\n## 口径说明\n\nlogin_at 已是北京时间，直接取日期；2026 年 4 月有至少 3 个不同自然日登录的企业，与 4 月 30 日有生效中正式订阅（is_trial=0）的企业按企业 ID 去重求交集，共 20 家。\n\n## 数据问题\n\n无。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了 20，与参考答案的 20 一致，无矛盾数字。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 按规则从 users 和 subscriptions 表计算（4 月至少 3 个不同自然日登录 ∩ 4 月 30 日有生效正式订阅），未写死结果；测量值显示能跑通且返回 20，与参考答案一致。login_at 为北京时间无需加时，无合并记录，处理正确。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案中本题无结束日早于开始日的订阅，员工在“## 数据问题”段写“无”，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为“## SQL”“## 结果”“## 口径说明”“## 数据问题”，前后无多余文字；口径说明一句话，准确描述了活跃（≥3 个不同自然日）、付费（4 月 30 日生效中正式订阅、is_trial=0）和按企业去重口径，与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 54,
+  "error": null,
+  "full_reply": "我先读取工作目录中的规则、DDL 和数据说明，并检查数据。\n\n规则和数据说明已确认：login_at 是 UTC，需加 8 小时按北京时间算月份；活跃=当月登录≥5 条；付费=当月有生效正式订阅；合并后归到新 ID；结束早于开始的订阅要报告。下面检查数据。\n\n数据检查发现：login_at 为 UTC（需 +8h）；有两条订阅结束日早于开始日（C56444、C33043）；两条合并记录（C24550→C33351、C45152→C63953）。现在用 SQLite 实际执行查询。\n\n结果为 25。做一次分解核对，确认活跃集合、付费集合与交集，以及边界登录的归属。\n\n交集手工核对为 25 家，与 SQL 一致。再核对一下合并归并后的登录计数（C33351、C63953）。\n\n## 查询\n\n```sql\nWITH login_norm AS (\n  SELECT CASE\n           WHEN u.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = u.company_id)\n           ELSE u.company_id\n         END AS company_id\n  FROM users u\n  WHERE date(u.login_at, '+8 hours') >= '2026-07-01'\n    AND date(u.login_at, '+8 hours') <  '2026-08-01'\n),\nactive AS (\n  SELECT company_id\n  FROM login_norm\n  GROUP BY company_id\n  HAVING COUNT(*) >= 5\n),\nsub_norm AS (\n  SELECT CASE\n           WHEN s.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = s.company_id)\n           ELSE s.company_id\n         END AS company_id\n  FROM subscriptions s\n  WHERE s.is_trial = 0\n    AND s.end_date >= s.start_date\n    AND s.start_date <= '2026-07-31'\n    AND s.end_date   >= '2026-07-01'\n),\npaid AS (\n  SELECT DISTINCT company_id FROM sub_norm\n)\nSELECT COUNT(*) AS active_paid_companies\nFROM active a\nJOIN paid p ON p.company_id = a.company_id;\n```\n\n## 答案\n\n25\n\n## 说明\n\nlogin_at 为 UTC，按规则加 8 小时换算成北京时间后筛选 2026 年 7 月（含 6 月 30 日 UTC 晚间、不含 7 月 31 日 UTC 晚间跨月的登录），当月登录满 5 条判活跃；付费取 7 月内有生效的正式订阅（is_trial=0），合并记录 C24550→C33351、C45152→C63953 的登录与订阅均归到新 ID，最终按企业去重取交集。\n\n## 异常数据\n\n- C56444：订阅开始日 2026-07-13 晚于结束日 2026-07-05，该订阅不计入付费。\n- C33043：订阅开始日 2026-07-13 晚于结束日 2026-07-05，该订阅不计入付费。",
+  "product": "## 查询\n\n```sql\nWITH login_norm AS (\n  SELECT CASE\n           WHEN u.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = u.company_id)\n           ELSE u.company_id\n         END AS company_id\n  FROM users u\n  WHERE date(u.login_at, '+8 hours') >= '2026-07-01'\n    AND date(u.login_at, '+8 hours') <  '2026-08-01'\n),\nactive AS (\n  SELECT company_id\n  FROM login_norm\n  GROUP BY company_id\n  HAVING COUNT(*) >= 5\n),\nsub_norm AS (\n  SELECT CASE\n           WHEN s.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = s.company_id)\n           ELSE s.company_id\n         END AS company_id\n  FROM subscriptions s\n  WHERE s.is_trial = 0\n    AND s.end_date >= s.start_date\n    AND s.start_date <= '2026-07-31'\n    AND s.end_date   >= '2026-07-01'\n),\npaid AS (\n  SELECT DISTINCT company_id FROM sub_norm\n)\nSELECT COUNT(*) AS active_paid_companies\nFROM active a\nJOIN paid p ON p.company_id = a.company_id;\n```\n\n## 答案\n\n25\n\n## 说明\n\nlogin_at 为 UTC，按规则加 8 小时换算成北京时间后筛选 2026 年 7 月（含 6 月 30 日 UTC 晚间、不含 7 月 31 日 UTC 晚间跨月的登录），当月登录满 5 条判活跃；付费取 7 月内有生效的正式订阅（is_trial=0），合并记录 C24550→C33351、C45152→C63953 的登录与订阅均归到新 ID，最终按企业去重取交集。\n\n## 异常数据\n\n- C56444：订阅开始日 2026-07-13 晚于结束日 2026-07-05，该订阅不计入付费。\n- C33043：订阅开始日 2026-07-13 晚于结束日 2026-07-05，该订阅不计入付费。\n\n【交付文件 load.sql】\nCREATE TABLE users (company_id TEXT, account_id TEXT, login_at TEXT);\nCREATE TABLE subscriptions (company_id TEXT, plan TEXT, start_date TEXT, end_date TEXT, is_trial INTEGER);\nCREATE TABLE merges (old_company_id TEXT, new_company_id TEXT, merged_on TEXT);\n.import --csv users.csv users\n.import --csv subscriptions.csv subscriptions\n.import --csv merges.csv merges\n\n\n【交付文件 query.sql】\nWITH login_norm AS (\n  SELECT CASE\n           WHEN u.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = u.company_id)\n           ELSE u.company_id\n         END AS company_id\n  FROM users u\n  WHERE date(u.login_at, '+8 hours') >= '2026-07-01'\n    AND date(u.login_at, '+8 hours') <  '2026-08-01'\n),\nactive AS (\n  SELECT company_id\n  FROM login_norm\n  GROUP BY company_id\n  HAVING COUNT(*) >= 5\n),\nsub_norm AS (\n  SELECT CASE\n           WHEN s.company_id IN (SELECT old_company_id FROM merges)\n           THEN (SELECT new_company_id FROM merges m WHERE m.old_company_id = s.company_id)\n           ELSE s.company_id\n         END AS company_id\n  FROM subscriptions s\n  WHERE s.is_trial = 0\n    AND s.end_date >= s.start_date\n    AND s.start_date <= '2026-07-31'\n    AND s.end_date   >= '2026-07-01'\n),\npaid AS (\n  SELECT DISTINCT company_id FROM sub_norm\n)\nSELECT COUNT(*) AS active_paid_companies\nFROM active a\nJOIN paid p ON p.company_id = a.company_id;\n",
+  "failed": [
+   "Q-format"
+  ],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "「## 答案」只写了 25，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 25，与参考答案一致；SQL 按规则做了 UTC+8、合并归并、剔除试用和倒置订阅、按企业去重，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "「## 异常数据」正确报告了 C56444 和 C33043 两条结束日早于开始日的订阅（含企业 ID 和起止日），无漏报、无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 load.sql】\nCREATE TABLE users (company_id TEXT, account_id TEXT, login_at TEXT);",
+      "problem": "违反规则 4「只交这四段，四段前后不加别的文字」：在「## 异常数据」之后又附加了 load.sql、query.sql 两个交付文件的文字内容，四段之后不应再有任何文字。"
+     }
+    ],
+    "reason": "四段段名、顺序正确，说明一句未超两句且口径与规则一致；但四段之后附加了额外文件内容，违反「只交这四段，四段前后不加别的文字」。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 29,
+  "error": null,
+  "full_reply": "我先读取工作目录中的规则、DDL 和数据说明，并检查数据。\n\n规则和说明已确认：login_at 是 UTC，需加 8 小时算北京时间自然日；活跃=当月≥3 个不同自然日登录；付费=当月最后一天有生效中的正式订阅；合并后归到新 ID；交付四段。现在检查数据。\n\nmerges 表为空（只有表头）。检查登录时间范围和订阅数据问题。\n\n数据检查结果：登录时间跨 2026-07-31 17:25 至 2026-08-31 22:52（UTC）——按北京时间转换后两端都跨月边界，月份条件必须显式写；merges 表为空；发现 2 条结束日早于开始日的订阅（C68846、C41645，均为 2026-08-13 至 2026-08-05），按规则排除并报告。现在建库并执行最终 SQL。\n\n## SQL\n\n```sql\nWITH RECURSIVE merge_map(old_id, new_id) AS (\n  SELECT old_company_id, new_company_id FROM merges\n  UNION\n  SELECT m.old_company_id, mm.new_id\n  FROM merges m\n  JOIN merge_map mm ON m.new_company_id = mm.old_id\n),\nlogin AS (\n  SELECT\n    COALESCE(mm.new_id, u.company_id) AS company_id,\n    date(u.login_at, '+8 hours') AS login_day\n  FROM users u\n  LEFT JOIN merge_map mm ON mm.old_id = u.company_id\n  WHERE substr(date(u.login_at, '+8 hours'), 1, 7) = '2026-08'\n),\nactive AS (\n  SELECT company_id\n  FROM login\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT login_day) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(mm.new_id, s.company_id) AS company_id\n  FROM subscriptions s\n  LEFT JOIN merge_map mm ON mm.old_id = s.company_id\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-08-31'\n    AND s.end_date >= '2026-08-31'\n)\nSELECT COUNT(*) AS active_paid_companies\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n31\n\n## 口径说明\n\nlogin_at 为 UTC，先加 8 小时按北京时间取自然日并筛选 2026 年 8 月，当月有至少 3 个不同自然日登录的企业，与 2026-08-31 当天有生效中正式订阅（is_trial=0）的企业按合并后企业 ID 去重取交集，每家只计一次。\n\n## 数据问题\n\n- C68846：专业版订阅结束日（2026-08-05）早于开始日（2026-08-13），该订阅不满足生效条件，未计入。\n- C41645：基础版订阅结束日（2026-08-05）早于开始日（2026-08-13），该订阅不满足生效条件，未计入。",
+  "product": "## SQL\n\n```sql\nWITH RECURSIVE merge_map(old_id, new_id) AS (\n  SELECT old_company_id, new_company_id FROM merges\n  UNION\n  SELECT m.old_company_id, mm.new_id\n  FROM merges m\n  JOIN merge_map mm ON m.new_company_id = mm.old_id\n),\nlogin AS (\n  SELECT\n    COALESCE(mm.new_id, u.company_id) AS company_id,\n    date(u.login_at, '+8 hours') AS login_day\n  FROM users u\n  LEFT JOIN merge_map mm ON mm.old_id = u.company_id\n  WHERE substr(date(u.login_at, '+8 hours'), 1, 7) = '2026-08'\n),\nactive AS (\n  SELECT company_id\n  FROM login\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT login_day) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(mm.new_id, s.company_id) AS company_id\n  FROM subscriptions s\n  LEFT JOIN merge_map mm ON mm.old_id = s.company_id\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-08-31'\n    AND s.end_date >= '2026-08-31'\n)\nSELECT COUNT(*) AS active_paid_companies\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n31\n\n## 口径说明\n\nlogin_at 为 UTC，先加 8 小时按北京时间取自然日并筛选 2026 年 8 月，当月有至少 3 个不同自然日登录的企业，与 2026-08-31 当天有生效中正式订阅（is_trial=0）的企业按合并后企业 ID 去重取交集，每家只计一次。\n\n## 数据问题\n\n- C68846：专业版订阅结束日（2026-08-05）早于开始日（2026-08-13），该订阅不满足生效条件，未计入。\n- C41645：基础版订阅结束日（2026-08-05）早于开始日（2026-08-13），该订阅不满足生效条件，未计入。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了一个数字 31，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 31，与参考答案一致；SQL 按规则从表中计算（UTC+8、不同自然日≥3、is_trial=0、月末生效、合并归并），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案列出的两条数据问题（C68846、C41645 结束日早于开始日）都在「## 数据问题」段报告并写出企业 ID 和起止日，无漏报、无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段段名和顺序与规则一致（SQL/结果/口径说明/数据问题），结果段只有一个数字，口径说明一句话且活跃、付费、去重口径与规则一致，无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 30,
+  "error": null,
+  "full_reply": "我先读取当次的工作规则、DDL 和数据说明，并检查数据。\n\n数据已核对：login_at 为北京时间直接算；专业版、正式订阅、10 月生效；两条合并记录（C33746→C80047、C26248→C83349）；订阅无结束日早于开始日的情况。现在写 SQL 并实际执行。\n\n## 查询\n\n```sql\nWITH m AS (\n  SELECT old_company_id AS company_id, new_company_id AS cid FROM merges\n  UNION ALL\n  SELECT company_id, company_id FROM (SELECT DISTINCT company_id FROM users UNION SELECT DISTINCT company_id FROM subscriptions)\n),\nu AS (\n  SELECT m.cid AS company_id\n  FROM users JOIN m ON users.company_id = m.company_id\n  WHERE substr(login_at,1,7) = '2026-10'\n  GROUP BY m.cid\n  HAVING COUNT(*) >= 5\n),\np AS (\n  SELECT DISTINCT m.cid AS company_id\n  FROM subscriptions JOIN m ON subscriptions.company_id = m.company_id\n  WHERE plan = '专业版' AND is_trial = 0\n    AND start_date <= '2026-10-31' AND end_date >= '2026-10-01'\n)\nSELECT COUNT(*)\nFROM (SELECT company_id FROM u INTERSECT SELECT company_id FROM p);\n```\n\n## 答案\n\n21\n\n## 说明\n\n登录时间为北京时间，直接取 `substr(login_at,1,7)='2026-10'` 筛选当月并按登录条数≥5 判活跃；付费取 10 月有生效中的专业版正式订阅（is_trial=0），合并记录把旧 ID 的登录和订阅归到新 ID 后，按企业去重取交集，共 21 家。\n\n## 异常数据\n\n无",
+  "product": "## 查询\n\n```sql\nWITH m AS (\n  SELECT old_company_id AS company_id, new_company_id AS cid FROM merges\n  UNION ALL\n  SELECT company_id, company_id FROM (SELECT DISTINCT company_id FROM users UNION SELECT DISTINCT company_id FROM subscriptions)\n),\nu AS (\n  SELECT m.cid AS company_id\n  FROM users JOIN m ON users.company_id = m.company_id\n  WHERE substr(login_at,1,7) = '2026-10'\n  GROUP BY m.cid\n  HAVING COUNT(*) >= 5\n),\np AS (\n  SELECT DISTINCT m.cid AS company_id\n  FROM subscriptions JOIN m ON subscriptions.company_id = m.company_id\n  WHERE plan = '专业版' AND is_trial = 0\n    AND start_date <= '2026-10-31' AND end_date >= '2026-10-01'\n)\nSELECT COUNT(*)\nFROM (SELECT company_id FROM u INTERSECT SELECT company_id FROM p);\n```\n\n## 答案\n\n21\n\n## 说明\n\n登录时间为北京时间，直接取 `substr(login_at,1,7)='2026-10'` 筛选当月并按登录条数≥5 判活跃；付费取 10 月有生效中的专业版正式订阅（is_trial=0），合并记录把旧 ID 的登录和订阅归到新 ID 后，按企业去重取交集，共 21 家。\n\n## 异常数据\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 答案」段只写了一个数字 21，与参考答案结果 21 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 21，与参考答案一致；SQL 通过 merges 映射、登录条数≥5、专业版正式订阅时间重叠等条件从表中真实计算，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案注明本题无结束日早于开始日的订阅，员工在「## 异常数据」段写「无」，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名按顺序为「## 查询」「## 答案」「## 说明」「## 异常数据」，前后无多余文字；说明段一句话，口径（北京时间直接算、登录≥5 条、专业版 is_trial=0、合并归新 ID、按企业去重）与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 65,
+  "error": null,
+  "full_reply": "我先读取工作目录中的规则、DDL 和数据说明，并检查数据。\n\n规则和数据已确认：login_at 已是北京时间（直接取日期，不加 8 小时）；活跃=当月≥3 个不同自然日登录；付费=6 月 30 日有生效中的正式订阅（is_trial=0）；合并后旧 ID 登录和订阅都归到新 ID；结束日早于开始日的订阅不算并报告。现在建库导入数据并实际执行最终 SQL。\n\n导入语句占位符写错了（subscriptions 有 5 列），修正后重跑。\n\n计算完成，结果为 32 家（活跃 45 家与付费 39 家的交集，已按合并归并、企业去重；C41339、C46522、C57410、C59043、C59221、C61219、C83727 等 7 家付费但活跃天数不足 3 天被排除，核对一致）。\n\n## SQL\n\n```sql\nWITH login_map AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS company_id,\n         substr(u.login_at, 1, 10) AS d\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n  WHERE substr(u.login_at, 1, 10) >= '2026-06-01'\n    AND substr(u.login_at, 1, 10) < '2026-07-01'\n),\nactive AS (\n  SELECT company_id\n  FROM login_map\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT d) >= 3\n),\nsub_map AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS company_id\n  FROM subscriptions s\n  LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-06-30'\n    AND s.end_date >= '2026-06-30'\n    AND s.end_date >= s.start_date\n),\npaid AS (\n  SELECT DISTINCT company_id FROM sub_map\n)\nSELECT COUNT(*) AS maap\nFROM active a\nJOIN paid p ON p.company_id = a.company_id;\n```\n\n## 结果\n\n32\n\n## 口径说明\n\nlogin_at 已是北京时间直接取自然日，2026 年 6 月内按不同自然日登录≥3 天判活跃，6 月 30 日有生效中正式订阅（is_trial=0，结束日不早于开始日）判付费，合并后旧 ID 的登录和订阅归入新 ID，活跃与付费企业集合按企业去重后取交集计数。\n\n## 数据问题\n\nC61449 和 C33148 各有一条订阅结束日早于开始日（均为 2026-06-13 至 2026-06-05），按规则不计为付费，这两家企业因此不满足付费条件。",
+  "product": "计算完成，结果为 32 家（活跃 45 家与付费 39 家的交集，已按合并归并、企业去重；C41339、C46522、C57410、C59043、C59221、C61219、C83727 等 7 家付费但活跃天数不足 3 天被排除，核对一致）。\n\n## SQL\n\n```sql\nWITH login_map AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS company_id,\n         substr(u.login_at, 1, 10) AS d\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n  WHERE substr(u.login_at, 1, 10) >= '2026-06-01'\n    AND substr(u.login_at, 1, 10) < '2026-07-01'\n),\nactive AS (\n  SELECT company_id\n  FROM login_map\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT d) >= 3\n),\nsub_map AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS company_id\n  FROM subscriptions s\n  LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.is_trial = 0\n    AND s.start_date <= '2026-06-30'\n    AND s.end_date >= '2026-06-30'\n    AND s.end_date >= s.start_date\n),\npaid AS (\n  SELECT DISTINCT company_id FROM sub_map\n)\nSELECT COUNT(*) AS maap\nFROM active a\nJOIN paid p ON p.company_id = a.company_id;\n```\n\n## 结果\n\n32\n\n## 口径说明\n\nlogin_at 已是北京时间直接取自然日，2026 年 6 月内按不同自然日登录≥3 天判活跃，6 月 30 日有生效中正式订阅（is_trial=0，结束日不早于开始日）判付费，合并后旧 ID 的登录和订阅归入新 ID，活跃与付费企业集合按企业去重后取交集计数。\n\n## 数据问题\n\nC61449 和 C33148 各有一条订阅结束日早于开始日（均为 2026-06-13 至 2026-06-05），按规则不计为付费，这两家企业因此不满足付费条件。",
+  "failed": [
+   "Q-format"
+  ],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了 32，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 32，与参考答案一致；SQL 用 CTE 按合并归并、活跃≥3 个自然日、付费（is_trial=0、起止日覆盖 6 月 30 日、剔除结束日早于开始日）真实计算，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "「## 数据问题」段报告了 C61449 和 C33148 两条结束日早于开始日的订阅并写出企业 ID 和起止日，与参考答案一致，无漏报错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "计算完成，结果为 32 家（活跃 45 家与付费 39 家的交集，已按合并归并、企业去重；C41339、C46522、C57410、C59043、C59221、C61219、C83727 等 7 家付费但活跃天数不足 3 天被排除，核对一致）。",
+      "problem": "违反规则 4「只交这四段，四段前后不加别的文字」：在「## SQL」段之前加了一段额外说明文字，应直接以「## SQL」开头。"
+     }
+    ],
+    "reason": "四段段名和顺序正确，口径说明为一句话且口径与规则一致；但四段之前多了一段额外文字，违反「只交这四段，四段前后不加别的文字」。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 12,
+  "error": null,
+  "full_reply": "我先读取当次的工作规则、DDL 和数据说明。\n\n规则明确：login_at 是 UTC，需加 8 小时；活跃=当月登录≥5条；付费=当月有生效正式订阅；合并归到新 ID；交付四段。先检查数据并执行计算。\n\nmerges.csv 只有表头（无合并记录）。发现一条订阅结束日早于开始日（C74641）。现在建库并执行最终 SQL。\n\n## 查询\n\n```sql\nWITH merged AS (\n  SELECT u.company_id AS orig_id,\n         COALESCE(m.new_company_id, u.company_id) AS company_id,\n         u.login_at\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT company_id\n  FROM merged\n  WHERE date(login_at, '+8 hours') >= '2026-03-01'\n    AND date(login_at, '+8 hours') < '2026-04-01'\n  GROUP BY company_id\n  HAVING COUNT(*) >= 5\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND start_date <= '2026-03-31'\n    AND end_date >= '2026-03-01'\n    AND end_date >= start_date\n)\nSELECT COUNT(*)\nFROM (\n  SELECT a.company_id FROM active a\n  INTERSECT\n  SELECT p.company_id FROM paid p\n);\n```\n\n## 答案\n\n30\n\n## 说明\n\nlogin_at 为 UTC，先加 8 小时换算北京时间再筛 2026 年 3 月，按企业合并后 ID 统计登录条数≥5 判活跃；付费取当月有生效正式订阅的企业并去重，两集合求交每家只计一次。merges 表无合并记录，不影响结果。\n\n## 异常数据\n\n- C74641：订阅 start_date=2026-03-13，end_date=2026-03-05，结束日早于开始日，该订阅不计入付费。\n- C97042：订阅 start_date=2026-03-13，end_date=2026-03-05，结束日早于开始日，该订阅不计入付费。",
+  "product": "## 查询\n\n```sql\nWITH merged AS (\n  SELECT u.company_id AS orig_id,\n         COALESCE(m.new_company_id, u.company_id) AS company_id,\n         u.login_at\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT company_id\n  FROM merged\n  WHERE date(login_at, '+8 hours') >= '2026-03-01'\n    AND date(login_at, '+8 hours') < '2026-04-01'\n  GROUP BY company_id\n  HAVING COUNT(*) >= 5\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND start_date <= '2026-03-31'\n    AND end_date >= '2026-03-01'\n    AND end_date >= start_date\n)\nSELECT COUNT(*)\nFROM (\n  SELECT a.company_id FROM active a\n  INTERSECT\n  SELECT p.company_id FROM paid p\n);\n```\n\n## 答案\n\n30\n\n## 说明\n\nlogin_at 为 UTC，先加 8 小时换算北京时间再筛 2026 年 3 月，按企业合并后 ID 统计登录条数≥5 判活跃；付费取当月有生效正式订阅的企业并去重，两集合求交每家只计一次。merges 表无合并记录，不影响结果。\n\n## 异常数据\n\n- C74641：订阅 start_date=2026-03-13，end_date=2026-03-05，结束日早于开始日，该订阅不计入付费。\n- C97042：订阅 start_date=2026-03-13，end_date=2026-03-05，结束日早于开始日，该订阅不计入付费。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工答案写 30，与参考答案结果 30 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 30，与参考答案一致；SQL 按规则从表中计算（UTC+8、登录≥5、正式订阅、剔除结束日早于开始日、去重求交），未写死结果。merges 表为空，订阅侧未做合并映射不影响结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案列出的两条问题订阅（C74641、C97042，2026-03-13 到 2026-03-05）均在「## 异常数据」段报告，写出了企业 ID 和起止日，无漏报、无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰为四段，段名依次为「## 查询」「## 答案」「## 说明」「## 异常数据」，与测量值一致；说明段两句以内，活跃（登录≥5）、付费（正式订阅当月生效）、去重口径与规则一致，无额外文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 36,
+  "error": null,
+  "full_reply": "我先读取当次的工作规则、DDL 和数据说明，并检查数据。\n\n数据已核对：login_at 为北京时间（直接取自然日，不加 8 小时）；merges 为空；9 月最后一天是 2026-09-30。现在写 SQL 并在 SQLite 上实际执行。\n\nCTE 作用域问题，修正后重跑。\n\n付费集合为空不符合预期（如 C68301 专业版 2026-05-06~2027-07-08 应合格），需要排查导入是否正确。\n\nmerges.csv 只有表头导致报错；修正后重跑完整查询。\n\n结果仍异常，逐条件排查。\n\n原因找到：我的临时表没按 schema.sql 声明列类型，is_trial 存成了文本。按 schema.sql 类型重建后重跑。\n\n## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7) = '2026-09'\n    AND CAST(strftime('%w', substr(login_at,1,10)) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE start_date <= '2026-09-30' AND end_date >= '2026-09-30'\n    AND is_trial = 0 AND plan <> '基础版'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n15\n\n## 口径说明\n\n登录时间为北京时间直接取自然日，2026 年 9 月（周一至周五）有 ≥3 个不同工作日登录的企业，与 2026-09-30 有生效中正式订阅（is_trial=0 且套餐非基础版）的企业按企业 ID 去重后取交集计数。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at,1,7) = '2026-09'\n    AND CAST(strftime('%w', substr(login_at,1,10)) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE start_date <= '2026-09-30' AND end_date >= '2026-09-30'\n    AND is_trial = 0 AND plan <> '基础版'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n15\n\n## 口径说明\n\n登录时间为北京时间直接取自然日，2026 年 9 月（周一至周五）有 ≥3 个不同工作日登录的企业，与 2026-09-30 有生效中正式订阅（is_trial=0 且套餐非基础版）的企业按企业 ID 去重后取交集计数。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了一个数字 15，与参考答案 15 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 15，与参考答案一致；SQL 按规则从 users/subscriptions 表计算（工作日过滤、≥3 个不同工作日、is_trial=0、plan<>'基础版'、交集去重），未写死结果。merges 表为空，无需处理合并。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案注明本题无结束日早于开始日的订阅，员工在“## 数据问题”段写“无”，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名按顺序为 ## SQL、## 结果、## 口径说明、## 数据问题，前后无多余文字；口径说明一句话，准确描述了北京时间自然日、≥3 个工作日登录、月末生效正式订阅非基础版、按企业去重取交集，与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 13,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\nlogin_at 是北京时间，直接算。先检查数据。\n\nmerges 为空、无结束日早于开始日的订阅。现在写并执行最终 SQL。\n\n## SQL\n\n```sql\nWITH m AS (\n  SELECT old_company_id AS cid, new_company_id AS cid2 FROM merges\n  UNION\n  SELECT new_company_id, new_company_id FROM merges\n  UNION\n  SELECT company_id, company_id FROM users WHERE company_id NOT IN (SELECT old_company_id FROM merges)\n),\nlogin AS (\n  SELECT m.cid2 AS company_id, substr(u.login_at, 1, 10) AS d\n  FROM users u\n  JOIN m ON m.cid = u.company_id\n  WHERE substr(u.login_at, 1, 7) = '2026-07'\n    AND CAST(strftime('%w', substr(u.login_at, 1, 10)) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY 1, 2\n),\nactive AS (\n  SELECT company_id FROM login GROUP BY company_id HAVING COUNT(*) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id FROM subscriptions\n  WHERE plan = '专业版' AND is_trial = 0\n    AND start_date <= '2026-07-31' AND end_date >= '2026-07-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n18\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 7 月内周一至周五有 ≥3 个不同登录日的企业，与 7 月 31 日当天生效中的正式专业版订阅企业（含合并归并、按企业去重）取交集计数。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH m AS (\n  SELECT old_company_id AS cid, new_company_id AS cid2 FROM merges\n  UNION\n  SELECT new_company_id, new_company_id FROM merges\n  UNION\n  SELECT company_id, company_id FROM users WHERE company_id NOT IN (SELECT old_company_id FROM merges)\n),\nlogin AS (\n  SELECT m.cid2 AS company_id, substr(u.login_at, 1, 10) AS d\n  FROM users u\n  JOIN m ON m.cid = u.company_id\n  WHERE substr(u.login_at, 1, 7) = '2026-07'\n    AND CAST(strftime('%w', substr(u.login_at, 1, 10)) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY 1, 2\n),\nactive AS (\n  SELECT company_id FROM login GROUP BY company_id HAVING COUNT(*) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id FROM subscriptions\n  WHERE plan = '专业版' AND is_trial = 0\n    AND start_date <= '2026-07-31' AND end_date >= '2026-07-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n18\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 7 月内周一至周五有 ≥3 个不同登录日的企业，与 7 月 31 日当天生效中的正式专业版订阅企业（含合并归并、按企业去重）取交集计数。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了 18，与参考答案的 18 一致，无矛盾数字。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 跑通并返回 18，与参考答案一致；SQL 按规则从 users/subscriptions/merges 三表真实计算（工作日过滤、≥3 个不同登录日、专业版正式订阅、7 月 31 日生效、交集去重），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅（参考答案为「无」），员工在「## 数据问题」段写「无」，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段段名与顺序（## SQL、## 结果、## 口径说明、## 数据问题）符合规则，前后无多余文字；口径说明为一句话，活跃、付费、去重口径与本次规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 116,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\nlogin_at 是北京时间，直接算。现在检查数据。\n\nmerges 为空、无结束日早于开始日的订阅。检查登录月份范围和订阅明细，然后建库执行。\n\n数据全部在 2026-05，merges 为空。建库并执行最终 SQL。\n\n## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at, 1, 7) = '2026-05'\n    AND strftime('%w', substr(login_at, 1, 10)) BETWEEN '1' AND '5'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at, 1, 10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND plan <> '基础版'\n    AND start_date <= '2026-05-31'\n    AND end_date >= '2026-05-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n9\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 5 月内周一至周五有至少 3 个不同登录日、且 5 月 31 日有生效中的非试用非基础版订阅的企业，按企业去重后共 9 家。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM users\n  WHERE substr(login_at, 1, 7) = '2026-05'\n    AND strftime('%w', substr(login_at, 1, 10)) BETWEEN '1' AND '5'\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT substr(login_at, 1, 10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND plan <> '基础版'\n    AND start_date <= '2026-05-31'\n    AND end_date >= '2026-05-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n9\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 5 月内周一至周五有至少 3 个不同登录日、且 5 月 31 日有生效中的非试用非基础版订阅的企业，按企业去重后共 9 家。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了 9，与参考答案的 9 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 按规则从 users/subscriptions 表计算（工作日用 strftime('%w') 取周一至周五、≥3 个不同登录日、is_trial=0、plan<>'基础版'、覆盖 2026-05-31），未写死结果；测量值显示能跑通且返回 9，与参考答案一致。login_at 为北京时间无需加时，处理正确。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅，员工在“## 数据问题”段写“无”，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为“## SQL”“## 结果”“## 口径说明”“## 数据问题”，前后无多余文字；口径说明一句话，准确描述了北京时间自然日、工作日≥3 天登录、5 月 31 日生效的非试用非基础版订阅、按企业去重，与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 86,
+  "error": null,
+  "full_reply": "我先读取当次的工作规则、DDL 和数据说明，并检查数据。\n\nmerges.csv 只有表头（无合并记录）。再检查订阅数据是否有结束日早于开始日的问题，然后执行查询。\n\n数据无异常，登录全部在 2026-08（仍显式加月份条件）。执行最终 SQL：\n\n修正列名后重跑：\n\n结果为 0，需要核查两侧各自的数量是否合理：\n\n付费侧为 0 很可疑，检查 subscriptions 原始值：\n\n日期条件本身能匹配 41 条。重跑完整管道并核查付费侧：\n\n找到原因：CSV 是 CRLF 行尾，表头最后一个字段带了 `\\r`，导致列类型声明失效、is_trial 存成了文本。修正导入后重跑最终 SQL：\n\n仍为 0，逐条件排查：\n\n原因明确：我按表头建表没带类型声明，而实际环境按 schema.sql 建表（is_trial 是 INTEGER）。按 schema.sql 重建并执行最终 SQL：\n\n## SQL\n\n```sql\nWITH mapped AS (\n  SELECT u.company_id AS cid, u.login_at AS login_at\n  FROM users u\n  UNION ALL\n  SELECT m.new_company_id, u.login_at\n  FROM users u JOIN merges m ON u.company_id = m.old_company_id\n),\nactive AS (\n  SELECT cid\n  FROM mapped\n  WHERE substr(login_at,1,10) >= '2026-08-01'\n    AND substr(login_at,1,10) < '2026-09-01'\n    AND strftime('%w', substr(login_at,1,10)) BETWEEN '1' AND '5'\n  GROUP BY cid\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE plan = '旗舰版' AND is_trial = 0\n    AND start_date <= '2026-08-31' AND end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (\n  SELECT cid FROM active INTERSECT SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n22\n\n## 口径说明\n\nlogin_at 已是北京时间故直接取自然日，2026 年 8 月内周一至周五的不同登录日 ≥3 天的企业，与 2026-08-31 当天生效中的旗舰版正式订阅（is_trial=0）企业按归并后 ID 去重求交，共 22 家。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH mapped AS (\n  SELECT u.company_id AS cid, u.login_at AS login_at\n  FROM users u\n  UNION ALL\n  SELECT m.new_company_id, u.login_at\n  FROM users u JOIN merges m ON u.company_id = m.old_company_id\n),\nactive AS (\n  SELECT cid\n  FROM mapped\n  WHERE substr(login_at,1,10) >= '2026-08-01'\n    AND substr(login_at,1,10) < '2026-09-01'\n    AND strftime('%w', substr(login_at,1,10)) BETWEEN '1' AND '5'\n  GROUP BY cid\n  HAVING COUNT(DISTINCT substr(login_at,1,10)) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE plan = '旗舰版' AND is_trial = 0\n    AND start_date <= '2026-08-31' AND end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (\n  SELECT cid FROM active INTERSECT SELECT company_id FROM paid\n);\n```\n\n## 结果\n\n22\n\n## 口径说明\n\nlogin_at 已是北京时间故直接取自然日，2026 年 8 月内周一至周五的不同登录日 ≥3 天的企业，与 2026-08-31 当天生效中的旗舰版正式订阅（is_trial=0）企业按归并后 ID 去重求交，共 22 家。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了 22，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 22，与参考答案一致；SQL 按规则从表中计算（工作日过滤、旗舰版、is_trial=0、月末生效、合并映射），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案中数据问题为“无”，员工在“## 数据问题”段写“无”，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段段名和顺序与规则一致（SQL、结果、口径说明、数据问题），结果段只有一个数字，口径说明一句话且活跃/付费/去重口径与规则相符。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 36,
+  "error": null,
+  "full_reply": "我先读取当次工作规则、DDL 和数据说明。\n\nlogin_at 已是北京时间，直接算。先检查数据。\n\n数据无异常（无合并记录、无结束日早于开始日的订阅、登录全在 2026-04）。写 SQL 并在 SQLite 上执行。\n\n## SQL\n\n```sql\nWITH cid AS (\n  SELECT u.company_id AS cid0, COALESCE(m.new_company_id, u.company_id) AS cid\n  FROM users u LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid FROM (\n    SELECT cid, substr(login_at,1,10) AS d\n    FROM cid JOIN users u ON u.company_id = cid0\n    WHERE substr(u.login_at,1,7)='2026-04'\n      AND CAST(strftime('%w', u.login_at) AS INTEGER) BETWEEN 1 AND 5\n    GROUP BY cid, d\n  ) GROUP BY cid HAVING COUNT(*) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.start_date <= '2026-04-30' AND s.end_date >= '2026-04-30'\n    AND s.is_trial = 0 AND s.plan != '基础版'\n)\nSELECT COUNT(*) FROM (\n  SELECT cid FROM active INTERSECT SELECT cid FROM paid\n);\n```\n\n## 结果\n\n15\n\n## 口径说明\n\n2026 年 4 月内（北京时间，login_at 已是北京时间不转换）有至少 3 个不同工作日（周一至周五）登录、且 2026-04-30 有生效中的非试用、非基础版正式订阅的企业（含合并归并后身份）去重后共 15 家。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH cid AS (\n  SELECT u.company_id AS cid0, COALESCE(m.new_company_id, u.company_id) AS cid\n  FROM users u LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid FROM (\n    SELECT cid, substr(login_at,1,10) AS d\n    FROM cid JOIN users u ON u.company_id = cid0\n    WHERE substr(u.login_at,1,7)='2026-04'\n      AND CAST(strftime('%w', u.login_at) AS INTEGER) BETWEEN 1 AND 5\n    GROUP BY cid, d\n  ) GROUP BY cid HAVING COUNT(*) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.start_date <= '2026-04-30' AND s.end_date >= '2026-04-30'\n    AND s.is_trial = 0 AND s.plan != '基础版'\n)\nSELECT COUNT(*) FROM (\n  SELECT cid FROM active INTERSECT SELECT cid FROM paid\n);\n```\n\n## 结果\n\n15\n\n## 口径说明\n\n2026 年 4 月内（北京时间，login_at 已是北京时间不转换）有至少 3 个不同工作日（周一至周五）登录、且 2026-04-30 有生效中的非试用、非基础版正式订阅的企业（含合并归并后身份）去重后共 15 家。\n\n## 数据问题\n\n无\n\n【交付文件 final.sql】\n\nWITH cid AS (\n  SELECT u.company_id AS cid0, COALESCE(m.new_company_id, u.company_id) AS cid\n  FROM users u LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid FROM (\n    SELECT cid, substr(login_at,1,10) AS d\n    FROM cid JOIN users u ON u.company_id = cid0\n    WHERE substr(u.login_at,1,7)='2026-04'\n      AND CAST(strftime('%w', u.login_at) AS INTEGER) BETWEEN 1 AND 5\n    GROUP BY cid, d\n  ) GROUP BY cid HAVING COUNT(*) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.start_date <= '2026-04-30' AND s.end_date >= '2026-04-30'\n    AND s.is_trial = 0 AND s.plan != '基础版'\n)\nSELECT COUNT(*) FROM (\n  SELECT cid FROM active INTERSECT SELECT cid FROM paid\n);",
+  "failed": [
+   "Q-format"
+  ],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了 15，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 15，与参考答案一致；SQL 按规则从三张表计算（含合并归并、工作日过滤、试用和基础版剔除），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "本题无结束日早于开始日的订阅，员工在“## 数据问题”段写“无”，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "【交付文件 final.sql】",
+      "problem": "违反规则第 4 条“只交这四段，四段前后不加别的文字”：在“## 数据问题”段之后又附加了“【交付文件 final.sql】”及整段重复 SQL，四段之外不应出现任何其他文字。"
+     }
+    ],
+    "reason": "段名和段数本身正确、口径说明一句话且口径与规则一致，但四段之后多出了交付文件标记和重复 SQL，违反“只交这四段”的要求。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 28,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\nmerges.csv 只有表头（无合并记录）。现在建库并执行查询，同时检查数据问题（如结束日早于开始日）。\n\nmerges.csv 无数据行导致初始化报错，修正后重跑。\n\n## SQL\n\n```sql\nWITH m AS (SELECT old_company_id, new_company_id FROM merges),\nlogins AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS cid,\n         date(u.login_at, '+8 hours') AS d\n  FROM users u LEFT JOIN m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid FROM logins\n  WHERE d >= '2026-09-01' AND d < '2026-10-01'\n    AND strftime('%w', d) BETWEEN '1' AND '5'\n  GROUP BY cid HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s LEFT JOIN m ON m.old_company_id = s.company_id\n  WHERE s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30'\n    AND s.is_trial = 0 AND s.plan <> '基础版'\n)\nSELECT COUNT(*) FROM (SELECT cid FROM active INTERSECT SELECT cid FROM paid);\n```\n\n## 结果\n\n19\n\n## 口径说明\n\n登录时间（UTC）加 8 小时后取北京时间自然日，2026 年 9 月内周一至周五有至少 3 个不同登录日，且 2026-09-30 有生效中的非试用、非“基础版”订阅，按合并后企业去重计数。\n\n## 数据问题\n\n- C57244：订阅结束日（2026-09-05）早于开始日（2026-09-13），该订阅不算。\n- C65143：订阅结束日（2026-09-05）早于开始日（2026-09-13），该订阅不算。",
+  "product": "## SQL\n\n```sql\nWITH m AS (SELECT old_company_id, new_company_id FROM merges),\nlogins AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS cid,\n         date(u.login_at, '+8 hours') AS d\n  FROM users u LEFT JOIN m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid FROM logins\n  WHERE d >= '2026-09-01' AND d < '2026-10-01'\n    AND strftime('%w', d) BETWEEN '1' AND '5'\n  GROUP BY cid HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s LEFT JOIN m ON m.old_company_id = s.company_id\n  WHERE s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30'\n    AND s.is_trial = 0 AND s.plan <> '基础版'\n)\nSELECT COUNT(*) FROM (SELECT cid FROM active INTERSECT SELECT cid FROM paid);\n```\n\n## 结果\n\n19\n\n## 口径说明\n\n登录时间（UTC）加 8 小时后取北京时间自然日，2026 年 9 月内周一至周五有至少 3 个不同登录日，且 2026-09-30 有生效中的非试用、非“基础版”订阅，按合并后企业去重计数。\n\n## 数据问题\n\n- C57244：订阅结束日（2026-09-05）早于开始日（2026-09-13），该订阅不算。\n- C65143：订阅结束日（2026-09-05）早于开始日（2026-09-13），该订阅不算。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了一个数字 19，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通并返回 19，与参考答案一致；SQL 按规则从表中计算（UTC+8、工作日、去重、付费条件、合并归并），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案列出的两条数据问题（C57244、C65143 结束日早于开始日）均在「## 数据问题」段报告，写明了企业 ID 和起止日，无漏报、无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为「## SQL」「## 结果」「## 口径说明」「## 数据问题」，前后无多余文字；口径说明一句话，活跃、付费、去重口径与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 65,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\n规则和数据已确认：login_at 为 UTC 需加 8 小时；活跃=6 月内 ≥3 个不同工作日（周一至五）登录；付费=6 月 30 日有生效中的非试用、非基础版订阅；合并旧 ID 归到新 ID；按企业去重。现在建库并执行 SQL。\n\n主查询已执行成功（活跃 40、付费 31、交集 23），明细查询因 CTE 作用域失败，单独重跑明细核对。\n\n发现映射 CTE 有缺陷：旧 ID（C67854、C71556）同时被自映射，导致付费集合多出 C67854（不影响交集，因其不活跃，但 SQL 应修正）。修正后重跑确认。\n\n## SQL\n\n```sql\nWITH old_ids AS (SELECT old_company_id FROM merges),\nm AS (\n  SELECT old_company_id AS cid, new_company_id AS mapped FROM merges\n  UNION ALL\n  SELECT company_id, company_id FROM (\n    SELECT company_id FROM users UNION SELECT company_id FROM subscriptions\n  ) WHERE company_id NOT IN (SELECT old_company_id FROM old_ids)\n),\nlogins AS (\n  SELECT m.mapped AS company_id, date(u.login_at,'+8 hours') AS bj_date\n  FROM users u JOIN m ON u.company_id = m.cid\n  WHERE strftime('%Y-%m', date(u.login_at,'+8 hours')) = '2026-06'\n    AND strftime('%w', date(u.login_at,'+8 hours')) BETWEEN '1' AND '5'\n  GROUP BY m.mapped, bj_date\n),\nactive AS (SELECT company_id FROM logins GROUP BY company_id HAVING COUNT(*) >= 3),\npaid AS (\n  SELECT m.mapped AS company_id FROM subscriptions s JOIN m ON s.company_id = m.cid\n  WHERE s.start_date <= '2026-06-30' AND s.end_date >= '2026-06-30'\n    AND s.is_trial = 0 AND s.plan <> '基础版' GROUP BY m.mapped\n)\nSELECT COUNT(*) FROM (SELECT company_id FROM active INTERSECT SELECT company_id FROM paid);\n```\n\n## 结果\n\n23\n\n## 口径说明\n\n登录时间为 UTC，先加 8 小时转为北京时间，统计 2026 年 6 月内 ≥3 个不同工作日（周一至周五）有登录的企业，与 2026-06-30 有生效中非试用、非基础版订阅的企业（合并旧 ID 归入新 ID，按企业去重）取交集。\n\n## 数据问题\n\n无",
+  "product": "## SQL\n\n```sql\nWITH old_ids AS (SELECT old_company_id FROM merges),\nm AS (\n  SELECT old_company_id AS cid, new_company_id AS mapped FROM merges\n  UNION ALL\n  SELECT company_id, company_id FROM (\n    SELECT company_id FROM users UNION SELECT company_id FROM subscriptions\n  ) WHERE company_id NOT IN (SELECT old_company_id FROM old_ids)\n),\nlogins AS (\n  SELECT m.mapped AS company_id, date(u.login_at,'+8 hours') AS bj_date\n  FROM users u JOIN m ON u.company_id = m.cid\n  WHERE strftime('%Y-%m', date(u.login_at,'+8 hours')) = '2026-06'\n    AND strftime('%w', date(u.login_at,'+8 hours')) BETWEEN '1' AND '5'\n  GROUP BY m.mapped, bj_date\n),\nactive AS (SELECT company_id FROM logins GROUP BY company_id HAVING COUNT(*) >= 3),\npaid AS (\n  SELECT m.mapped AS company_id FROM subscriptions s JOIN m ON s.company_id = m.cid\n  WHERE s.start_date <= '2026-06-30' AND s.end_date >= '2026-06-30'\n    AND s.is_trial = 0 AND s.plan <> '基础版' GROUP BY m.mapped\n)\nSELECT COUNT(*) FROM (SELECT company_id FROM active INTERSECT SELECT company_id FROM paid);\n```\n\n## 结果\n\n23\n\n## 口径说明\n\n登录时间为 UTC，先加 8 小时转为北京时间，统计 2026 年 6 月内 ≥3 个不同工作日（周一至周五）有登录的企业，与 2026-06-30 有生效中非试用、非基础版订阅的企业（合并旧 ID 归入新 ID，按企业去重）取交集。\n\n## 数据问题\n\n无",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了 23，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "测量值显示 SQL 在 SQLite 上跑通且返回 23，与参考答案一致；SQL 按规则从三张表计算（UTC+8、工作日过滤、≥3 天、付费条件、合并归并、去重），未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "参考答案注明本题无结束日早于开始日的订阅，员工在「## 数据问题」段写「无」，无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为「## SQL」「## 结果」「## 口径说明」「## 数据问题」，前后无多余文字；口径说明一句话，准确描述了活跃（UTC+8、≥3 个工作日）、付费（6-30 生效、非试用、非基础版）、合并归并与企业去重口径，与规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 28,
+  "error": null,
+  "full_reply": "我先读取当次工作规则、DDL 和数据说明，并检查数据。\n\n数据已核对：login_at 是北京时间（直接算，不加 8 小时）；活跃=当月≥3 个不同工作日（周一至五）登录；付费=10-31 当天有生效中的正式专业版订阅；合并 C17249→C71750、C73651→C34452。发现两条订阅结束日早于开始日（C77448、C12247），稍后在数据问题段报告。现在建库并执行 SQL。\n\n## SQL\n\n```sql\nWITH mapped AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS cid,\n         date(u.login_at) AS d,\n         CAST(strftime('%w', u.login_at) AS INTEGER) AS wd\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid\n  FROM mapped\n  WHERE substr(d, 1, 7) = '2026-10'\n    AND wd BETWEEN 1 AND 5\n  GROUP BY cid\n  HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s\n  LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.plan = '专业版'\n    AND s.is_trial = 0\n    AND s.start_date <= '2026-10-31'\n    AND s.end_date >= '2026-10-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT cid FROM active\n  INTERSECT\n  SELECT cid FROM paid\n);\n```\n\n## 结果\n\n24\n\n## 口径说明\n\n登录时间为北京时间直接取自然日，2026 年 10 月内按周一至周五去重、不同工作日≥3 天判活跃；付费取 2026-10-31 当天生效中的正式专业版订阅；合并企业（C17249→C71750、C73651→C34452）的登录与订阅归到新 ID，活跃与付费企业集合求交后每家计一次。\n\n## 数据问题\n\nC77448：订阅 start_date=2026-10-13、end_date=2026-10-05，结束日早于开始日；C12247：订阅 start_date=2026-10-13、end_date=2026-10-05，结束日早于开始日。这两条订阅按规则不计入付费（两家企业仍因活跃但无合格订阅而未计入结果）。",
+  "product": "## SQL\n\n```sql\nWITH mapped AS (\n  SELECT COALESCE(m.new_company_id, u.company_id) AS cid,\n         date(u.login_at) AS d,\n         CAST(strftime('%w', u.login_at) AS INTEGER) AS wd\n  FROM users u\n  LEFT JOIN merges m ON m.old_company_id = u.company_id\n),\nactive AS (\n  SELECT cid\n  FROM mapped\n  WHERE substr(d, 1, 7) = '2026-10'\n    AND wd BETWEEN 1 AND 5\n  GROUP BY cid\n  HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT COALESCE(m.new_company_id, s.company_id) AS cid\n  FROM subscriptions s\n  LEFT JOIN merges m ON m.old_company_id = s.company_id\n  WHERE s.plan = '专业版'\n    AND s.is_trial = 0\n    AND s.start_date <= '2026-10-31'\n    AND s.end_date >= '2026-10-31'\n)\nSELECT COUNT(*)\nFROM (\n  SELECT cid FROM active\n  INTERSECT\n  SELECT cid FROM paid\n);\n```\n\n## 结果\n\n24\n\n## 口径说明\n\n登录时间为北京时间直接取自然日，2026 年 10 月内按周一至周五去重、不同工作日≥3 天判活跃；付费取 2026-10-31 当天生效中的正式专业版订阅；合并企业（C17249→C71750、C73651→C34452）的登录与订阅归到新 ID，活跃与付费企业集合求交后每家计一次。\n\n## 数据问题\n\nC77448：订阅 start_date=2026-10-13、end_date=2026-10-05，结束日早于开始日；C12247：订阅 start_date=2026-10-13、end_date=2026-10-05，结束日早于开始日。这两条订阅按规则不计入付费（两家企业仍因活跃但无合格订阅而未计入结果）。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在“## 结果”段只写了一个数字 24，与参考答案 24 一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 用 CTE 按合并记录归并新旧 ID、按北京时间自然日取周一至周五、不同工作日≥3 判活跃，付费限定专业版、is_trial=0 且 2026-10-31 在起止日内（自动排除起止颠倒的订阅），交集去重计数；测量值显示能跑通且返回 24，与参考答案一致，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "“## 数据问题”段完整报告了 C77448 和 C12247 两条结束日早于开始日的订阅（含企业 ID 和起止日），无漏报也无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为 ## SQL、## 结果、## 口径说明、## 数据问题，前后无多余文字；结果段只有一个数字；口径说明为一句话，活跃（≥3 个不同工作日）、付费（月末生效的正式专业版）、合并归并与去重口径均与本次规则一致。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 14,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\n现在检查数据并建库执行。\n\n数据检查完毕：无合并记录；发现 2 条结束日早于开始日的订阅（C58643、C61144）。login_at 为 UTC，需加 8 小时取北京时间。现在执行最终 SQL。\n\n## SQL\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM (\n    SELECT company_id, substr(date(login_at,'+8 hours'),1,10) AS d\n    FROM users\n    WHERE date(login_at,'+8 hours') >= '2026-03-01'\n      AND date(login_at,'+8 hours') <  '2026-04-01'\n  )\n  WHERE CAST(strftime('%w', d) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND plan <> '基础版'\n    AND start_date <= '2026-03-31'\n    AND end_date   >= '2026-03-31'\n    AND end_date >= start_date\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n19\n\n## 口径说明\n登录时间（UTC）加 8 小时取北京时间后，统计 2026 年 3 月内不同工作日（周一至周五）登录数≥3 的企业，与 2026-03-31 有生效中正式订阅且套餐非“基础版”的企业（结束日早于开始日的订阅除外）按企业去重取交集。\n\n## 数据问题\n- C58643：订阅结束日（2026-03-05）早于开始日（2026-03-13），该订阅不计入。\n- C61144：订阅结束日（2026-03-05）早于开始日（2026-03-13），该订阅不计入。",
+  "product": "## SQL\n```sql\nWITH active AS (\n  SELECT company_id\n  FROM (\n    SELECT company_id, substr(date(login_at,'+8 hours'),1,10) AS d\n    FROM users\n    WHERE date(login_at,'+8 hours') >= '2026-03-01'\n      AND date(login_at,'+8 hours') <  '2026-04-01'\n  )\n  WHERE CAST(strftime('%w', d) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY company_id\n  HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT company_id\n  FROM subscriptions\n  WHERE is_trial = 0\n    AND plan <> '基础版'\n    AND start_date <= '2026-03-31'\n    AND end_date   >= '2026-03-31'\n    AND end_date >= start_date\n)\nSELECT COUNT(*)\nFROM (\n  SELECT company_id FROM active\n  INTERSECT\n  SELECT company_id FROM paid\n);\n```\n\n## 结果\n19\n\n## 口径说明\n登录时间（UTC）加 8 小时取北京时间后，统计 2026 年 3 月内不同工作日（周一至周五）登录数≥3 的企业，与 2026-03-31 有生效中正式订阅且套餐非“基础版”的企业（结束日早于开始日的订阅除外）按企业去重取交集。\n\n## 数据问题\n- C58643：订阅结束日（2026-03-05）早于开始日（2026-03-13），该订阅不计入。\n- C61144：订阅结束日（2026-03-05）早于开始日（2026-03-13），该订阅不计入。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了 19，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 在 SQLite 上跑通且返回 19（测量值确认），逻辑按规则实现：UTC+8 转北京时间、工作日 1-5、去重天数≥3、付费条件含 is_trial=0、plan≠基础版、月末生效、剔除 end<start 的订阅，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "「## 数据问题」段完整报告了 C58643 和 C61144 两条结束日早于开始日的订阅（含企业 ID 和起止日），无漏报、无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "四段段名、顺序、数量均符合规则（## SQL / ## 结果 / ## 口径说明 / ## 数据问题），结果段只有数字，口径说明一句话且活跃、付费、去重口径与规则一致，无多余文字。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 25,
+  "error": null,
+  "full_reply": "我先读取工作规则、DDL 和数据说明，并检查数据。\n\n数据都在 2026-08，两条订阅结束日早于开始日（C83447、C44646），两笔合并的旧 ID 在登录和订阅数据中都出现。现在建库并执行最终 SQL。\n\n## SQL\n\n```sql\nWITH login AS (\n  SELECT CASE WHEN m.new_company_id IS NOT NULL THEN m.new_company_id ELSE u.company_id END AS cid,\n         substr(u.login_at,1,10) AS d\n  FROM users u LEFT JOIN merges m ON u.company_id = m.old_company_id\n  WHERE substr(u.login_at,1,7) = '2026-08'\n),\nactive AS (\n  SELECT cid FROM login\n  WHERE CAST(strftime('%w', d) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY cid HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT CASE WHEN m.new_company_id IS NOT NULL THEN m.new_company_id ELSE s.company_id END AS cid\n  FROM subscriptions s LEFT JOIN merges m ON s.company_id = m.old_company_id\n  WHERE s.is_trial = 0 AND s.plan <> '基础版'\n    AND s.start_date <= '2026-08-31' AND s.end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (SELECT cid FROM active INTERSECT SELECT cid FROM paid);\n```\n\n## 结果\n\n17\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 8 月内工作日（周一至周五）登录不少于 3 个不同自然日、且 2026-08-31 有生效中的非试用非“基础版”订阅的企业，按合并后 ID 去重计数。\n\n## 数据问题\n\nC83447 有一条专业版订阅结束日（2026-08-05）早于开始日（2026-08-13）；C44646 有一条旗舰版订阅结束日（2026-08-05）早于开始日（2026-08-13）。两条均不满足 8 月 31 日生效条件，未计入付费。",
+  "product": "## SQL\n\n```sql\nWITH login AS (\n  SELECT CASE WHEN m.new_company_id IS NOT NULL THEN m.new_company_id ELSE u.company_id END AS cid,\n         substr(u.login_at,1,10) AS d\n  FROM users u LEFT JOIN merges m ON u.company_id = m.old_company_id\n  WHERE substr(u.login_at,1,7) = '2026-08'\n),\nactive AS (\n  SELECT cid FROM login\n  WHERE CAST(strftime('%w', d) AS INTEGER) BETWEEN 1 AND 5\n  GROUP BY cid HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT CASE WHEN m.new_company_id IS NOT NULL THEN m.new_company_id ELSE s.company_id END AS cid\n  FROM subscriptions s LEFT JOIN merges m ON s.company_id = m.old_company_id\n  WHERE s.is_trial = 0 AND s.plan <> '基础版'\n    AND s.start_date <= '2026-08-31' AND s.end_date >= '2026-08-31'\n)\nSELECT COUNT(*) FROM (SELECT cid FROM active INTERSECT SELECT cid FROM paid);\n```\n\n## 结果\n\n17\n\n## 口径说明\n\nlogin_at 为北京时间直接取自然日，2026 年 8 月内工作日（周一至周五）登录不少于 3 个不同自然日、且 2026-08-31 有生效中的非试用非“基础版”订阅的企业，按合并后 ID 去重计数。\n\n## 数据问题\n\nC83447 有一条专业版订阅结束日（2026-08-05）早于开始日（2026-08-13）；C44646 有一条旗舰版订阅结束日（2026-08-05）早于开始日（2026-08-13）。两条均不满足 8 月 31 日生效条件，未计入付费。",
+  "failed": [],
+  "judged": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "verdicts": [
+   {
+    "id": "Q-number",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "员工在「## 结果」段只写了 17，与参考答案一致。"
+   },
+   {
+    "id": "Q-sql",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "SQL 按 schema 从三张表真实计算（合并归并、工作日≥3 天、非试用非基础版且 8 月 31 日生效），测量值显示能跑通且返回 17，与参考答案一致，未写死结果。"
+   },
+   {
+    "id": "Q-issues",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "「## 数据问题」段报告了 C83447（2026-08-13 到 2026-08-05）和 C44646（2026-08-13 到 2026-08-05）两条结束日早于开始日的订阅，写出了企业 ID 和起止日，无漏报无错报。"
+   },
+   {
+    "id": "Q-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付恰好四段，段名依次为「## SQL」「## 结果」「## 口径说明」「## 数据问题」，前后无多余文字；口径说明一句话，活跃（北京时间自然日、工作日≥3 天）、付费（8 月 31 日生效、非试用非基础版）、合并后去重的表述与规则一致。"
+   }
+  ],
+  "loose": []
+ }
+]

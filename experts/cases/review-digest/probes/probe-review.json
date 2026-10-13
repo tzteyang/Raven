@@ -1,0 +1,12 @@
+[
+ {"name": "t11", "label": "right, another allowed quote", "expect": "none",
+  "answer": "连接 10 条（34%）：「连不上手机。」（#33）→ 固件团队\n佩戴 9 条（31%）：「戴久了耳朵疼。」（#26）→ 结构团队\n音质 9 条（31%）：「开到最大声音小，有点失望。」（#9）→ 声学团队"},
+ {"name": "t11", "label": "wrong: title, count/share, tie order, 3-star quote, truncated quote, team, suggestion",
+  "expect": "R-rank (连接 11/38%, 音质 before 佩戴), R-quote (#21 is 3 stars; #26 truncated), R-team (音质 to 硬件团队), R-form (title, suggestion)",
+  "answer": "本周评价周报\n连接 11 条（38%）：「连不上手机。」（#33）→ 固件团队\n音质 9 条（31%）：「开到最大声音小，有点失望。」（#21）→ 硬件团队\n佩戴 9 条（31%）：「戴久了耳朵疼」（#26）→ 结构团队\n建议固件团队优先排查断连。"},
+ {"name": "y07", "label": "right", "expect": "none",
+  "answer": "唤醒 11 条（31%）：「喊半天没反应，App 打不开，有点失望。」（#22）→ 语音团队\nApp 10 条（28%）：「换手机后绑定不上。」（#15）→ App 团队\n音质 10 条（28%）：「声音发闷，退了算了。」（#19）→ 声学团队"},
+ {"name": "y07", "label": "wrong: tie order, not-latest quote, wrong count/share, team, summary",
+  "expect": "R-rank (音质 before App; 唤醒 12/29%), R-quote (#20 not the latest 1-star), R-team (App to 固件团队), R-form (summary)",
+  "answer": "唤醒 12 条（29%）：「半夜误唤醒，希望改进。」（#20）→ 语音团队\n音质 10 条（28%）：「声音发闷，退了算了。」（#19）→ 声学团队\nApp 10 条（28%）：「换手机后绑定不上。」（#15）→ 固件团队\n总结：唤醒问题最突出。"}
+]

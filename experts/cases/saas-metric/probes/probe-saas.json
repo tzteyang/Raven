@@ -1,0 +1,35 @@
+[
+ {
+  "name": "t11",
+  "label": "right",
+  "expect": [],
+  "answer": "## SQL\n```sql\nWITH owner AS (SELECT old_company_id AS id, new_company_id AS to_id FROM merges),\nseen AS (\n  SELECT COALESCE(o.to_id, u.company_id) AS company, date(datetime(u.login_at, '+8 hours')) AS d\n  FROM users u LEFT JOIN owner o ON o.id = u.company_id\n),\nactive AS (\n  SELECT company FROM seen WHERE d BETWEEN '2026-09-01' AND '2026-09-30'\n  GROUP BY company HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(o.to_id, s.company_id) AS company\n  FROM subscriptions s LEFT JOIN owner o ON o.id = s.company_id\n  WHERE s.end_date >= s.start_date AND s.is_trial = 0\n    AND s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30'\n)\nSELECT COUNT(*) FROM active WHERE company IN (SELECT company FROM paid);\n```\n\n## 结果\n31\n\n## 口径说明\n活跃指 9 月（北京时间，login_at 由 UTC 加 8 小时）至少 3 个不同自然日有登录，付费指 9 月 30 日有生效中的正式订阅（不含试用，剔除结束日早于开始日的订阅），按企业去重并按合并记录归到新 ID。\n\n## 数据问题\n- C77750 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。\n- C46349 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。"
+ },
+ {
+  "name": "t11",
+  "label": "wrong",
+  "expect": [
+   "Q-number",
+   "Q-sql",
+   "Q-issues",
+   "Q-format"
+  ],
+  "answer": "## 查询\n```sql\nWITH owner AS (SELECT old_company_id AS id, new_company_id AS to_id FROM merges),\nseen AS (\n  SELECT COALESCE(o.to_id, u.company_id) AS company, date(datetime(u.login_at, '+0 hours')) AS d\n  FROM users u LEFT JOIN owner o ON o.id = u.company_id\n),\nactive AS (\n  SELECT company FROM seen WHERE d BETWEEN '2026-09-01' AND '2026-09-30'\n  GROUP BY company HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(o.to_id, s.company_id) AS company\n  FROM subscriptions s LEFT JOIN owner o ON o.id = s.company_id\n  WHERE s.end_date >= s.start_date AND s.is_trial = 0\n    AND s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30'\n)\nSELECT COUNT(*) FROM active WHERE company IN (SELECT company FROM paid);\n```\n\n## 答案\n30\n\n## 说明\n活跃指 9 月至少 3 个不同自然日有登录，付费指 9 月 30 日有生效中的正式订阅，按企业去重。\n\n## 异常数据\n无"
+ },
+ {
+  "name": "y06",
+  "label": "right",
+  "expect": [],
+  "answer": "## SQL\n```sql\nWITH owner AS (SELECT old_company_id AS id, new_company_id AS to_id FROM merges),\nseen AS (\n  SELECT COALESCE(o.to_id, u.company_id) AS company, date(datetime(u.login_at, '+8 hours')) AS d\n  FROM users u LEFT JOIN owner o ON o.id = u.company_id\n),\nactive AS (\n  SELECT company FROM seen WHERE d BETWEEN '2026-09-01' AND '2026-09-30' AND strftime('%w', d) NOT IN ('0', '6')\n  GROUP BY company HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(o.to_id, s.company_id) AS company\n  FROM subscriptions s LEFT JOIN owner o ON o.id = s.company_id\n  WHERE s.end_date >= s.start_date AND s.is_trial = 0\n    AND s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30' AND s.plan <> '基础版'\n)\nSELECT COUNT(*) FROM active WHERE company IN (SELECT company FROM paid);\n```\n\n## 结果\n19\n\n## 口径说明\n活跃指 9 月至少 3 个不同工作日（周一到周五，北京时间，login_at 由 UTC 加 8 小时）有登录，付费指 9 月 30 日有生效中的正式订阅且套餐不是基础版（不含试用，剔除结束日早于开始日的订阅），按企业去重并按合并记录归到新 ID。\n\n## 数据问题\n- C57244 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。\n- C65143 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。"
+ },
+ {
+  "name": "y06",
+  "label": "wrong",
+  "expect": [
+   "Q-number",
+   "Q-sql",
+   "Q-format"
+  ],
+  "answer": "## SQL\n```sql\nWITH owner AS (SELECT old_company_id AS id, new_company_id AS to_id FROM merges),\nseen AS (\n  SELECT COALESCE(o.to_id, u.company_id) AS company, date(datetime(u.login_at, '+8 hours')) AS d\n  FROM users u LEFT JOIN owner o ON o.id = u.company_id\n),\nactive AS (\n  SELECT company FROM seen WHERE d BETWEEN '2026-09-01' AND '2026-09-30'\n  GROUP BY company HAVING COUNT(DISTINCT d) >= 3\n),\npaid AS (\n  SELECT DISTINCT COALESCE(o.to_id, s.company_id) AS company\n  FROM subscriptions s LEFT JOIN owner o ON o.id = s.company_id\n  WHERE s.end_date >= s.start_date AND s.is_trial = 0\n    AND s.start_date <= '2026-09-30' AND s.end_date >= '2026-09-30'\n)\nSELECT COUNT(*) FROM active WHERE company IN (SELECT company FROM paid);\n```\n\n## 结果\n31\n\n## 口径说明\n活跃指 9 月至少 3 个不同自然日有登录，付费指 9 月 30 日有生效中的正式订阅（不含试用），按企业去重。\n\n## 数据问题\n- C57244 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。\n- C65143 的订阅 2026-09-13 到 2026-09-05，结束日早于开始日，未计入。"
+ }
+]

@@ -1,0 +1,407 @@
+{
+  "checked_at": "2026-10-12T01:06:04.956117+00:00",
+  "all_recovery_questions_scored": 109,
+  "errors": 0,
+  "runs": [
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-a6acd033c4b6-2",
+      "recovered_questions": [
+        "x07",
+        "x08",
+        "x09",
+        "x10",
+        "y01"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 6,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-a6acd033c4b6-2/partial.json"
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-plain-2",
+      "recovered_questions": [
+        "y03",
+        "y04",
+        "y05",
+        "y06",
+        "y07"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 12,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-plain-2/partial.json"
+    },
+    {
+      "case": "amazon-listing",
+      "run_id": "parallel-v1-v0-2",
+      "recovered_questions": [
+        "y02",
+        "y03",
+        "y04",
+        "y05",
+        "y06",
+        "y07"
+      ],
+      "scored": 6,
+      "unchanged_existing_items": 11,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/amazon-listing/accept-runs/parallel-v1-v0-2/partial.json"
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-8f4bd586e294-1",
+      "recovered_questions": [
+        "x10",
+        "y01",
+        "y02",
+        "y03"
+      ],
+      "scored": 4,
+      "unchanged_existing_items": 9,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-8f4bd586e294-1/partial.json"
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-1",
+      "recovered_questions": [
+        "y08",
+        "y09",
+        "y10"
+      ],
+      "scored": 3,
+      "unchanged_existing_items": 17,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-plain-1/partial.json"
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-plain-2",
+      "recovered_questions": [
+        "x01",
+        "x02",
+        "x03"
+      ],
+      "scored": 3,
+      "unchanged_existing_items": 0,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-plain-2/partial.json"
+    },
+    {
+      "case": "booking-page",
+      "run_id": "parallel-v1-v0-1",
+      "recovered_questions": [
+        "x09",
+        "x10",
+        "y01",
+        "y02",
+        "y03"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 8,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/booking-page/accept-runs/parallel-v1-v0-1/partial.json"
+    },
+    {
+      "case": "cafe-copy",
+      "run_id": "parallel-v1-v0-1",
+      "recovered_questions": [
+        "y10"
+      ],
+      "scored": 1,
+      "unchanged_existing_items": 19,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/cafe-copy/accept-runs/parallel-v1-v0-1/partial.json"
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-plain-2",
+      "recovered_questions": [
+        "y05",
+        "y06",
+        "y07"
+      ],
+      "scored": 3,
+      "unchanged_existing_items": 14,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-review/accept-runs/parallel-v1-plain-2/partial.json"
+    },
+    {
+      "case": "contract-review",
+      "run_id": "parallel-v1-v0-2",
+      "recovered_questions": [
+        "x10",
+        "y01",
+        "y02",
+        "y03",
+        "y04"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 9,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-review/accept-runs/parallel-v1-v0-2/partial.json"
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-0f2eaf8f25a4-2",
+      "recovered_questions": [
+        "y07",
+        "y08",
+        "y09",
+        "y10"
+      ],
+      "scored": 4,
+      "unchanged_existing_items": 16,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-0f2eaf8f25a4-2/partial.json"
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-plain-3",
+      "recovered_questions": [
+        "x02",
+        "x03",
+        "x04",
+        "x05",
+        "x06"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 1,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-plain-3/partial.json"
+    },
+    {
+      "case": "contract-sheet",
+      "run_id": "parallel-v1-v0-2",
+      "recovered_questions": [
+        "y09",
+        "y10"
+      ],
+      "scored": 2,
+      "unchanged_existing_items": 18,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/contract-sheet/accept-runs/parallel-v1-v0-2/partial.json"
+    },
+    {
+      "case": "discovery-coach",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "x04",
+        "x05",
+        "x06",
+        "x07"
+      ],
+      "scored": 4,
+      "unchanged_existing_items": 3,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/discovery-coach/accept-runs/parallel-v1-v0-3/partial.json"
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-d1d627d32b26-3",
+      "recovered_questions": [
+        "x04",
+        "x05",
+        "x06",
+        "x07",
+        "x08",
+        "x09",
+        "x10"
+      ],
+      "scored": 7,
+      "unchanged_existing_items": 3,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-d1d627d32b26-3/partial.json"
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-plain-2",
+      "recovered_questions": [
+        "x07",
+        "x08",
+        "x09",
+        "x10"
+      ],
+      "scored": 4,
+      "unchanged_existing_items": 6,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-plain-2/partial.json"
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-v0-1",
+      "recovered_questions": [
+        "y09",
+        "y10"
+      ],
+      "scored": 2,
+      "unchanged_existing_items": 18,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-v0-1/partial.json"
+    },
+    {
+      "case": "landing-page",
+      "run_id": "parallel-v1-v0-2",
+      "recovered_questions": [
+        "x01"
+      ],
+      "scored": 1,
+      "unchanged_existing_items": 0,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/landing-page/accept-runs/parallel-v1-v0-2/partial.json"
+    },
+    {
+      "case": "resume-rewrite",
+      "run_id": "parallel-v1-v0-1",
+      "recovered_questions": [
+        "x02",
+        "x03"
+      ],
+      "scored": 2,
+      "unchanged_existing_items": 1,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-rewrite/accept-runs/parallel-v1-v0-1/partial.json"
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-44acc1a36688-3",
+      "recovered_questions": [
+        "x09",
+        "x10",
+        "y01",
+        "y02",
+        "y03",
+        "y04"
+      ],
+      "scored": 6,
+      "unchanged_existing_items": 8,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-44acc1a36688-3/partial.json"
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-plain-2",
+      "recovered_questions": [
+        "y01",
+        "y02",
+        "y03",
+        "y04",
+        "y05"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 10,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-plain-2/partial.json"
+    },
+    {
+      "case": "resume-screen",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "x06",
+        "x07",
+        "x08",
+        "x09",
+        "x10",
+        "y01"
+      ],
+      "scored": 6,
+      "unchanged_existing_items": 5,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/resume-screen/accept-runs/parallel-v1-v0-3/partial.json"
+    },
+    {
+      "case": "review-digest",
+      "run_id": "parallel-v1-v0-2",
+      "recovered_questions": [
+        "y10"
+      ],
+      "scored": 1,
+      "unchanged_existing_items": 19,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/review-digest/accept-runs/parallel-v1-v0-2/partial.json"
+    },
+    {
+      "case": "review-digest",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "x01"
+      ],
+      "scored": 1,
+      "unchanged_existing_items": 0,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/review-digest/accept-runs/parallel-v1-v0-3/partial.json"
+    },
+    {
+      "case": "saas-metric",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "y09",
+        "y10"
+      ],
+      "scored": 2,
+      "unchanged_existing_items": 18,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/saas-metric/accept-runs/parallel-v1-v0-3/partial.json"
+    },
+    {
+      "case": "weekly-report",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "y08",
+        "y09",
+        "y10"
+      ],
+      "scored": 3,
+      "unchanged_existing_items": 17,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/weekly-report/accept-runs/parallel-v1-v0-3/partial.json"
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-f2d14854e9a6-2",
+      "recovered_questions": [
+        "x06",
+        "x07",
+        "x08",
+        "x09",
+        "x10"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 5,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-f2d14854e9a6-2/partial.json"
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-plain-3",
+      "recovered_questions": [
+        "x07",
+        "x08",
+        "x09",
+        "x10",
+        "y01"
+      ],
+      "scored": 5,
+      "unchanged_existing_items": 6,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-plain-3/partial.json"
+    },
+    {
+      "case": "xhs-note",
+      "run_id": "parallel-v1-v0-3",
+      "recovered_questions": [
+        "x02",
+        "x03",
+        "x04",
+        "x05"
+      ],
+      "scored": 4,
+      "unchanged_existing_items": 1,
+      "input_binding_unchanged": true,
+      "checkpoint": "/Evermind/sh_evermind/share/huchuanrui/gxz_workspace/Project/gtm_rsi/experts/cases/xhs-note/accept-runs/parallel-v1-v0-3/partial.json"
+    }
+  ],
+  "note": "Remaining planned acceptance repetitions continue; this closes only the quota incident recovery."
+}

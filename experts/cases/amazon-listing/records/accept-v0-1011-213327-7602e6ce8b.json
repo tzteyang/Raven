@@ -1,0 +1,1229 @@
+[
+ {
+  "name": "x01",
+  "group": "same",
+  "seconds": 53,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n已核对全部材料：PN-301 参数齐全（无尺寸/净重，故不写）；认证仅 FCC 与 RoHS 已取得，按准许成句写入；草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera 等均无依据或属禁用，已删除。\n\n## Title\nPawNest PN-301 Automatic Pet Feeder, 2.5 L (10.6 Cups), 6 Meals Daily, USB Powered, White\n\n## Bullet Points\n- LARGE CAPACITY: 2.5 L (10.6 cups) food tank holds plenty of dry kibble for your cat or dog.\n- FLEXIBLE MEALS: Schedule up to 6 meals per day, each with a 6 second voice recording played at mealtime.\n- PERFECT KIBBLE: Works with dry food pieces from 2-10 mm, suitable for pets of many sizes.\n- SIMPLE POWER: USB powered design in clean white plugs into a standard outlet for everyday feeding.\n- QUALITY ASSURED: FCC Part 15 compliant and RoHS compliant for safe, reliable daily use.",
+  "product": "已核对全部材料：PN-301 参数齐全（无尺寸/净重，故不写）；认证仅 FCC 与 RoHS 已取得，按准许成句写入；草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera 等均无依据或属禁用，已删除。\n\n## Title\nPawNest PN-301 Automatic Pet Feeder, 2.5 L (10.6 Cups), 6 Meals Daily, USB Powered, White\n\n## Bullet Points\n- LARGE CAPACITY: 2.5 L (10.6 cups) food tank holds plenty of dry kibble for your cat or dog.\n- FLEXIBLE MEALS: Schedule up to 6 meals per day, each with a 6 second voice recording played at mealtime.\n- PERFECT KIBBLE: Works with dry food pieces from 2-10 mm, suitable for pets of many sizes.\n- SIMPLE POWER: USB powered design in clean white plugs into a standard outlet for everyday feeding.\n- QUALITY ASSURED: FCC Part 15 compliant and RoHS compliant for safe, reliable daily use.",
+  "failed": [
+   "AL-facts",
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 89 字符不超上限，以 PawNest 原样开头，PawNest、PN-301、Automatic Pet Feeder 各按规定写法出现一次，无独立不符。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "6 Meals Daily",
+      "problem": "违反规则 2『参数值必须和表相符，不把「最多」写成固定餐数』：参数表为每日最多 6 餐，标题把上限写成了固定餐数，应体现 up to 6 之类的最多含义。"
+     }
+    ],
+    "reason": "五条要点合起来覆盖了容量、粒径、最多餐数（up to 6）、录音秒数、颜色、供电，无尺寸净重可写且未编造，未写闭合功能词；仅标题将最多 6 餐写成固定 6 餐，记一处。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点容量 2.5 L (10.6 cups) 换算正确、保留 1 位小数、数值与单位间空一格；无尺寸/净重故对应子项不适用；粒径只用 mm 未转 inches；标题不强制双单位。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "FCC Part 15 compliant 与 RoHS compliant 各按准许成句原样出现一次，未提 UL/ETL/CE，无闭合禁用词、无英式拼写；交付前说明中的 BEST/UL Listed 等属交付外说明，不在本项计。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "已核对全部材料：PN-301 参数齐全（无尺寸/净重，故不写）；认证仅 FCC 与 RoHS 已取得，按准许成句写入；草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera 等均无依据或属禁用，已删除。",
+      "problem": "违反规则 7『只交两段，不加开场白、分析或结尾说明』：交付前多了一段核对说明，应删除；说明中的内容不在其他项重复计数。"
+     }
+    ],
+    "reason": "段名与顺序正确、标题一行、恰好五条要点均以「- 」开头、各以 2-4 个全大写单词加「: 」开头且均未超 250 字符；仅交付前多出一段说明，按规则合计记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x02",
+  "group": "same",
+  "seconds": 40,
+  "error": null,
+  "full_reply": "我先读取本次工作目录里的规则和材料。\n\n已读全本次规则与材料。核对要点：TH-302 仅 ETL 为“已取得”（按准许成句写 ETL Listed）；参数表无机身尺寸和净重，故不写尺寸重量；草稿中的 ultimate、Guaranteed、UL Listed、Wi-Fi、camera、customised programme 均无依据或属禁用，删去；grey→gray。换算：2500 mL = 10.57 cups（四舍五入 2 位）。\n\n## Listing Title\nTailHaven TH-302 Automatic Pet Feeder, 2500 mL, Up to 6 Meals Daily, 6-Second Voice Recording, Gray, USB Powered\n\n## Key Features\n- LARGE CAPACITY FEEDER — Holds 2500 mL (10.57 cups) of dry food, cutting down on refills during busy days.\n- FLEXIBLE MEAL SCHEDULE — Program up to 6 meals per day and record a 6-second voice message for each mealtime call.\n- PRECISE KIBBLE SUPPORT — Feeds dry food from 3 mm to 12 mm, covering both small and medium kibble sizes.\n- CERTIFIED QUALITY — ETL Listed, so you can set it up at home with added peace of mind.\n- SIMPLE USB POWER — Gray finish fits your home decor and runs from a convenient USB power source.",
+  "product": "已读全本次规则与材料。核对要点：TH-302 仅 ETL 为“已取得”（按准许成句写 ETL Listed）；参数表无机身尺寸和净重，故不写尺寸重量；草稿中的 ultimate、Guaranteed、UL Listed、Wi-Fi、camera、customised programme 均无依据或属禁用，删去；grey→gray。换算：2500 mL = 10.57 cups（四舍五入 2 位）。\n\n## Listing Title\nTailHaven TH-302 Automatic Pet Feeder, 2500 mL, Up to 6 Meals Daily, 6-Second Voice Recording, Gray, USB Powered\n\n## Key Features\n- LARGE CAPACITY FEEDER — Holds 2500 mL (10.57 cups) of dry food, cutting down on refills during busy days.\n- FLEXIBLE MEAL SCHEDULE — Program up to 6 meals per day and record a 6-second voice message for each mealtime call.\n- PRECISE KIBBLE SUPPORT — Feeds dry food from 3 mm to 12 mm, covering both small and medium kibble sizes.\n- CERTIFIED QUALITY — ETL Listed, so you can set it up at home with added peace of mind.\n- SIMPLE USB POWER — Gray finish fits your home decor and runs from a convenient USB power source.",
+  "failed": [
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 112 字符不超 120，以 TailHaven 原样开头，TailHaven、TH-302、Automatic Pet Feeder 各按规定写法恰好出现一次，无引号/加粗/前缀。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 2500 mL、粒径 3-12 mm（from 3 mm to 12 mm）、每日最多 6 餐（up to 6 meals，未写成固定餐数）、6 秒录音、gray、USB powered；参数表无尺寸净重故未写，未编造，六个闭合功能词均未提及，标题参数真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 2500 mL (10.57 cups)，2500/236.588≈10.5668 四舍五入为 10.57，保留 2 位小数，数值与单位间有空格；粒径只用 mm 未转 inches；无尺寸/净重子项不适用。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点 4 按准许成句原样写 ETL Listed 一次；FCC/UL/RoHS/CE 均未提及；无闭合禁用词；grey 已改为 gray，无英式拼写残留。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "已读全本次规则与材料。核对要点：TH-302 仅 ETL 为“已取得”（按准许成句写 ETL Listed）；参数表无机身尺寸和净重，故不写尺寸重量；草稿中的 ultimate、Guaranteed、UL Listed、Wi-Fi、camera、customised programme 均无依据或属禁用，删去；grey→gray。换算：2500 mL = 10.57 cups（四舍五入 2 位）。",
+      "problem": "规则 7 要求只交 ## Listing Title 和 ## Key Features 两段，不加开场白、分析或结尾说明；交付前多出的说明合计记一处（说明内容不在其他项重复扣）。"
+     }
+    ],
+    "reason": "段名与顺序正确、标题一行、五条要点均以“- ”开头、2-4 个全大写单词接“ — ”、各条均不超 210 字符；唯交付前多了一段核对说明，按规则合计记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x03",
+  "group": "same",
+  "seconds": 24,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n材料已读全。参数表无机身尺寸和净重，故不写尺寸重量；认证仅 UL 和 CE 可写；草稿中的 best/guaranteed、Wi-Fi、camera、英式拼写需删改。容量换算：3 L = 3000 mL ÷ 236.588 = 12.681… → 12.7 cups。我用脚本核验标题与要点长度。\n\n## Title\nPawNest PN-303 Automatic Pet Feeder, 3 L (12.7 Cups) Dry Food Dispenser, Up to 5 Meals Daily with 10-Second Voice Recording, USB Powered, Blue\n\n## Bullet Points\n- LARGE CAPACITY: This 3 L (12.7 cups) automatic pet feeder holds enough dry food for several days of scheduled meals.\n- FLEXIBLE SCHEDULE: Program up to 5 meals per day, each with a 10-second voice recording so your pet hears a familiar call at feeding time.\n- KIBBLE VERSATILE: Dispenses dry food from 3 to 12 mm, fitting a wide range of kibble shapes and sizes for cats and dogs.\n- SIMPLE POWER: USB powered design connects to a standard USB outlet for dependable daily operation without complicated setup.\n- TRUSTED QUALITY: UL Listed and CE marked, finished in a classic blue color that fits any home.",
+  "product": "## Title\nPawNest PN-303 Automatic Pet Feeder, 3 L (12.7 Cups) Dry Food Dispenser, Up to 5 Meals Daily with 10-Second Voice Recording, USB Powered, Blue\n\n## Bullet Points\n- LARGE CAPACITY: This 3 L (12.7 cups) automatic pet feeder holds enough dry food for several days of scheduled meals.\n- FLEXIBLE SCHEDULE: Program up to 5 meals per day, each with a 10-second voice recording so your pet hears a familiar call at feeding time.\n- KIBBLE VERSATILE: Dispenses dry food from 3 to 12 mm, fitting a wide range of kibble shapes and sizes for cats and dogs.\n- SIMPLE POWER: USB powered design connects to a standard USB outlet for dependable daily operation without complicated setup.\n- TRUSTED QUALITY: UL Listed and CE marked, finished in a classic blue color that fits any home.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 142 字符未超 150，以 PawNest 原样开头，PawNest、PN-303、Automatic Pet Feeder 各按规定写法恰好出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 3 L、粒径范围（from 3 to 12 mm 为 3-12 mm 的同义正确写法）、每日最多 5 餐（up to 5，未写成固定餐数）、10 秒录音、blue 颜色、USB powered 供电；参数表无尺寸净重，要点也未写；六个闭合功能词均未提及，无编造。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 3 L (12.7 cups)，3000/236.588≈12.68 四舍五入为 12.7，保留 1 位小数，数值与单位间有空格；无尺寸净重子项不适用；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点 5 按准许成句原样各写一次 UL Listed 和 CE marked；FCC、ETL、RoHS 完全未提；无闭合禁用词；颜色用美式 color，无英式拼写命中。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交 ## Title 与 ## Bullet Points 两段，段名顺序正确；标题一行无前缀；恰好五条要点各占一行以「- 」开头，均以 2 个全大写单词加「: 」开头，各条均不超 250 字符；无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x04",
+  "group": "same",
+  "seconds": 17,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n## Listing Title\nTailHaven TH-304 Automatic Pet Feeder, 2500 mL (10.57 Cups) Dry Food Dispenser with 10-Second Voice Recording, Black\n\n## Key Features\n- LARGE CAPACITY — Holds 2500 mL (10.57 cups) of dry food, so fewer refills between busy days.\n- FLEXIBLE MEALS — Schedule up to 5 meals per day, each with a 10-second personalized meal-call recording for your pet.\n- KIBBLE RANGE — Works with dry food from 2 to 10 mm, covering everything from small bites to larger kibble.\n- SIMPLE POWER — DC adapter powered design for steady, dependable everyday feeding.\n- CERTIFIED QUALITY — FCC Part 15 compliant and RoHS compliant, finished in classic black to suit any home.",
+  "product": "## Listing Title\nTailHaven TH-304 Automatic Pet Feeder, 2500 mL (10.57 Cups) Dry Food Dispenser with 10-Second Voice Recording, Black\n\n## Key Features\n- LARGE CAPACITY — Holds 2500 mL (10.57 cups) of dry food, so fewer refills between busy days.\n- FLEXIBLE MEALS — Schedule up to 5 meals per day, each with a 10-second personalized meal-call recording for your pet.\n- KIBBLE RANGE — Works with dry food from 2 to 10 mm, covering everything from small bites to larger kibble.\n- SIMPLE POWER — DC adapter powered design for steady, dependable everyday feeding.\n- CERTIFIED QUALITY — FCC Part 15 compliant and RoHS compliant, finished in classic black to suit any home.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 116 字符不超 120 上限，以 TailHaven 原样开头，TailHaven、TH-304、Automatic Pet Feeder 各按规定写法恰好出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点合起来覆盖容量 2500 mL、粒径 2 to 10 mm（与 2-10 mm 同义且数值正确）、每日最多 5 餐（up to 5，未写成固定餐数）、10 秒录音、颜色 black、DC adapter powered 供电；参数表无尺寸净重，员工也未写；六个闭合功能词均未提及；标题中参数（2500 mL、10.57 cups、10-Second、Black）均真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量双单位 2500 mL (10.57 cups) 换算正确（2500/236.588≈10.5668→10.57）、保留 2 位小数、数值与单位间空一格；粒径只用 mm 未转 inches；无尺寸/净重，对应子项不适用。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点 5 按准许成句原样各写一次 FCC Part 15 compliant 与 RoHS compliant；UL、ETL、CE 完全未提；无闭合禁用词；无英式拼写（颜色用 black，无 colour）。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段，段名 Listing Title / Key Features 及顺序正确；标题一行无前缀；恰好五条要点各占一行以「- 」开头，均以 2 个全大写单词加「 — 」开头，各条字符数（92/117/106/81/105）均不超 210；无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x05",
+  "group": "same",
+  "seconds": 13,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n材料已读全。参数表无机身尺寸和净重，故不写尺寸重量；认证仅 ETL 已取得，按准许成句写 \"ETL Listed\"；草稿中的 best/guaranteed/UL/colour/customised/Wi-Fi/camera 均需删除。先核算换算和字符数。\n\n## Title\nPawNest PN-305 Automatic Pet Feeder, 6 L Capacity Dry Food Dispenser for Cats and Dogs, Up to 4 Meals per Day, 6 Second Voice Recording, Black\n\n## Bullet Points\n- GENEROUS CAPACITY: 6 L (25.4 cups) food storage holds plenty of dry kibble for cats and dogs, reducing refill trips\n- KIBBLE RANGE: works with dry food from 4 mm to 14 mm, suitable for a wide variety of kibble shapes and sizes\n- FLEXIBLE FEEDING: schedule up to 4 meals per day, with a 6 second meal call recording so your pet hears your voice at every meal\n- CLASSIC BLACK FINISH: sleek black body fits any home, powered by DC adapter for steady everyday operation\n- ETL Listed: this Automatic Pet Feeder is ETL Listed, a dependable choice for daily feeding",
+  "product": "## Title\nPawNest PN-305 Automatic Pet Feeder, 6 L Capacity Dry Food Dispenser for Cats and Dogs, Up to 4 Meals per Day, 6 Second Voice Recording, Black\n\n## Bullet Points\n- GENEROUS CAPACITY: 6 L (25.4 cups) food storage holds plenty of dry kibble for cats and dogs, reducing refill trips\n- KIBBLE RANGE: works with dry food from 4 mm to 14 mm, suitable for a wide variety of kibble shapes and sizes\n- FLEXIBLE FEEDING: schedule up to 4 meals per day, with a 6 second meal call recording so your pet hears your voice at every meal\n- CLASSIC BLACK FINISH: sleek black body fits any home, powered by DC adapter for steady everyday operation\n- ETL Listed: this Automatic Pet Feeder is ETL Listed, a dependable choice for daily feeding",
+  "failed": [
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 142 字符未超 150 上限，以 PawNest 原样开头，PawNest、PN-305、Automatic Pet Feeder 均按规定写法各出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖了容量 6 L、粒径 4-14 mm、每日最多 4 餐（up to 保留最多含义）、6 秒录音、black 颜色、DC adapter 供电，参数值均与表相符；参数表无尺寸/净重故未写，未提任何未提供的闭合功能词，标题中参数也真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量双单位 6 L (25.4 cups) 换算正确且保留 1 位小数、数值与单位间空一格；粒径只用 mm 未转 inches；本题无机身尺寸和净重，对应子项不适用。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "仅提及已取得的 ETL，准许成句 ETL Listed 原样出现在要点中；同项目重复提及按口径不另数；FCC/UL/RoHS/CE 完全未提；无闭合禁用词、无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "- ETL Listed: this Automatic Pet Feeder is ETL Listed, a dependable choice for daily feeding",
+      "problem": "违反规则第 6 条：每条要点须以 2 到 4 个全大写英文单词构成的短语开头。第 5 条开头短语「ETL Listed」中 Listed 含小写字母，不是全大写；应改为全大写短语（如 CERTIFIED SAFETY）后再接「: 」。"
+     }
+    ],
+    "reason": "段名与顺序正确、标题一行、恰好五条要点且均以「- 」开头、各条未超 250 字符；仅第 5 条的开头短语「ETL Listed」不满足全大写要求，按每条前缀/开头/分隔符视作同一处格式错误记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x06",
+  "group": "same",
+  "seconds": 13,
+  "error": null,
+  "full_reply": "我先读取本次工作规则和全部材料。\n\n## Listing Title\nTailHaven TH-306 Automatic Pet Feeder, 5.5 L Dry Food Dispenser with 6 Sec Voice Recorder, USB Powered, White\n\n## Key Features\n- LARGE CAPACITY FEEDER — 5500 mL (23.25 cups) food tank dispenses dry kibble in 3-12 mm sizes, so both small and medium pets get fresh portions at every meal.\n- FLEXIBLE MEAL SCHEDULE — Program up to 4 meals per day, each with a 6 second voice recording so your pet hears a familiar call at every feeding time.\n- SIMPLE USB POWER — White finish with USB powered operation that plugs in for dependable everyday feeding, no complicated setup required.\n- COMPACT FOOTPRINT — Measures 207 x 196 x 317 mm (8.15 x 7.72 x 12.48 inches) and weighs 1340 g (2.95 lb), fitting neatly on counters or floors.\n- CERTIFIED SAFETY — CE marked and UL Listed for trusted quality you can count on in your home.",
+  "product": "## Listing Title\nTailHaven TH-306 Automatic Pet Feeder, 5.5 L Dry Food Dispenser with 6 Sec Voice Recorder, USB Powered, White\n\n## Key Features\n- LARGE CAPACITY FEEDER — 5500 mL (23.25 cups) food tank dispenses dry kibble in 3-12 mm sizes, so both small and medium pets get fresh portions at every meal.\n- FLEXIBLE MEAL SCHEDULE — Program up to 4 meals per day, each with a 6 second voice recording so your pet hears a familiar call at every feeding time.\n- SIMPLE USB POWER — White finish with USB powered operation that plugs in for dependable everyday feeding, no complicated setup required.\n- COMPACT FOOTPRINT — Measures 207 x 196 x 317 mm (8.15 x 7.72 x 12.48 inches) and weighs 1340 g (2.95 lb), fitting neatly on counters or floors.\n- CERTIFIED SAFETY — CE marked and UL Listed for trusted quality you can count on in your home.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 109 字符不超 120 上限，以 TailHaven 原样开头，TailHaven、TH-306、Automatic Pet Feeder 各原样出现一次，无引号/前缀问题。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点覆盖容量 5500 mL、粒径 3-12 mm、每日最多 4 餐（up to 4 保留最多含义）、6 秒录音、white、USB powered、机身三边 207 x 196 x 317 mm 及净重 1340 g，均与参数表一致；未写包装/毛重，未写任何未提供的闭合功能词；标题中的 5.5 L、6 Sec、USB Powered、White 也真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量 23.25 cups、三边 8.15 x 7.72 x 12.48 inches、净重 2.95 lb 均按换算表四舍五入保留 2 位小数且正确；数值与单位间空一格，三边按长 x 宽 x 高用 x 连接并共用单位；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点 5 按准许成句原样各写一次 CE marked 和 UL Listed（TH-306 已取得），未提及 FCC/ETL/RoHS；无闭合禁用词；无英式拼写残留。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交 ## Listing Title 与 ## Key Features 两段且顺序正确；标题一行；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「 — 」开头；各条 93-157 字符均不超 210；无多余说明、文件或代码围栏。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x07",
+  "group": "same",
+  "seconds": 32,
+  "error": null,
+  "full_reply": "我先读取本次工作目录里的规则和材料。\n\n材料已读齐。本次口径：标题≤150字符且含品牌、SKU、Automatic Pet Feeder；要点须写全容量/粒径/餐数/录音/颜色/供电/机身三边/净重；双单位换算（cups/inches/lb 保留1位小数）；PN-307 仅 RoHS 与 FCC 已取得，按准许成句写；grey→gray；禁用词规避。先核算换算与字符数。\n\n标题超了 2 个字符，删去 \"Dry\" 后再核一次。\n\n## Title\nPawNest PN-307 Automatic Pet Feeder for Cats and Dogs, 4 L (16.9 Cups) Programmable Food Dispenser with 12 Second Voice Recording, Gray, USB Powered\n\n## Bullet Points\n- LARGE 4 L CAPACITY: Holds 4 L (16.9 cups) of dry food, so cats and dogs stay fed on schedule even on busy days\n- PROGRAMMABLE MEALS: Schedules up to 4 meals per day, each with a 12 second voice recording so your pet hears a familiar call at mealtime\n- COMPACT DESIGN: Measures 25 x 23.1 x 30.3 cm (9.8 x 9.1 x 11.9 inches) and weighs 2.16 kg (4.8 lb) net, with a gray finish that fits any room\n- USB POWERED: Runs from standard USB power for simple, reliable daily feeding without extra wiring\n- CERTIFIED QUALITY: RoHS compliant and FCC Part 15 compliant, with a 3-15 mm kibble size range that suits most dry food",
+  "product": "## Title\nPawNest PN-307 Automatic Pet Feeder for Cats and Dogs, 4 L (16.9 Cups) Programmable Food Dispenser with 12 Second Voice Recording, Gray, USB Powered\n\n## Bullet Points\n- LARGE 4 L CAPACITY: Holds 4 L (16.9 cups) of dry food, so cats and dogs stay fed on schedule even on busy days\n- PROGRAMMABLE MEALS: Schedules up to 4 meals per day, each with a 12 second voice recording so your pet hears a familiar call at mealtime\n- COMPACT DESIGN: Measures 25 x 23.1 x 30.3 cm (9.8 x 9.1 x 11.9 inches) and weighs 2.16 kg (4.8 lb) net, with a gray finish that fits any room\n- USB POWERED: Runs from standard USB power for simple, reliable daily feeding without extra wiring\n- CERTIFIED QUALITY: RoHS compliant and FCC Part 15 compliant, with a 3-15 mm kibble size range that suits most dry food",
+  "failed": [
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 148 字符（≤150），以 PawNest 原样开头，PawNest、PN-307、Automatic Pet Feeder 各原样出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来写全容量 4 L、粒径 3-15 mm、每日最多 4 餐（up to 保留最多含义）、12 秒录音、gray、USB powered、三边尺寸和净重；未写包装/毛重，未编造或提及闭合词表中列为无的功能。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量 4 L (16.9 cups)、三边 25 x 23.1 x 30.3 cm (9.8 x 9.1 x 11.9 inches)、净重 2.16 kg (4.8 lb) 换算与 1 位小数均正确，数值与单位间空一格，三边用 x 连接共用单位，粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "FCC Part 15 compliant 与 RoHS compliant 各按准许成句原样出现一次，未提 UL/ETL/CE；无闭合禁用词；颜色用美式 gray，无英式拼写命中。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "- LARGE 4 L CAPACITY: Holds 4 L (16.9 cups) of dry food, so cats and dogs stay fed on schedule even on busy days",
+      "problem": "违反规则 6：每条要点须以 2 到 4 个全大写英文单词构成的短语开头。开头短语「LARGE 4 L CAPACITY」中含有数字「4」，不是全大写英文单词，应改为纯全大写英文单词短语（如 LARGE CAPACITY）。"
+     }
+    ],
+    "reason": "段名/顺序、标题一行、五条要点行首「- 」、各条字符数均合规；仅第 1 条开头短语混入数字 4，不符合全大写英文单词开头要求，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x08",
+  "group": "same",
+  "seconds": 21,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n## Listing Title\nTailHaven TH-308 Automatic Pet Feeder, 3.5 L Dry Food Dispenser with Timed Meals, 6-Sec Voice Recording, Blue\n\n## Key Features\n- LARGE 3.5 L CAPACITY — Holds 3500 mL (14.79 cups) of dry food, so your pet stays fed on a steady schedule with fewer refills during busy weeks.\n- FLEXIBLE MEAL PLANNING — Schedule up to 8 meals per day for portioned feeding, with a 6-second voice recording so mealtime sounds familiar even when you are away.\n- FITS COMMON KIBBLE — Works with dry food pieces from 2 to 10 mm, covering sizes suitable for small pets and larger breeds alike.\n- SIMPLE DC POWER — This blue feeder uses DC adapter powered operation for steady everyday feeding; ETL Listed for added peace of mind.\n- COMPACT FOOTPRINT — Measures 227 x 159 x 322 mm (8.94 x 6.26 x 12.68 inches) and weighs 2250 g (4.96 lb) net, fitting neatly in kitchens or corners.",
+  "product": "## Listing Title\nTailHaven TH-308 Automatic Pet Feeder, 3.5 L Dry Food Dispenser with Timed Meals, 6-Sec Voice Recording, Blue\n\n## Key Features\n- LARGE 3.5 L CAPACITY — Holds 3500 mL (14.79 cups) of dry food, so your pet stays fed on a steady schedule with fewer refills during busy weeks.\n- FLEXIBLE MEAL PLANNING — Schedule up to 8 meals per day for portioned feeding, with a 6-second voice recording so mealtime sounds familiar even when you are away.\n- FITS COMMON KIBBLE — Works with dry food pieces from 2 to 10 mm, covering sizes suitable for small pets and larger breeds alike.\n- SIMPLE DC POWER — This blue feeder uses DC adapter powered operation for steady everyday feeding; ETL Listed for added peace of mind.\n- COMPACT FOOTPRINT — Measures 227 x 159 x 322 mm (8.94 x 6.26 x 12.68 inches) and weighs 2250 g (4.96 lb) net, fitting neatly in kitchens or corners.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 109 字符不超上限，以 TailHaven 原样开头，TailHaven、TH-308、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 3500 mL、粒径 2-10 mm（from 2 to 10 mm 同义正确）、up to 8 meals、6 秒录音、blue、DC adapter powered、三边尺寸与净重，均与参数表一致；未写包装/毛重，未写任何未提供的闭合功能词。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "14.79 cups、8.94 x 6.26 x 12.68 inches、4.96 lb 换算正确且保留 2 位小数，数值与单位间空一格，三边长按长宽高用 x 连接并共用单位；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "仅 ETL Listed 按准许成句原样出现一次，未提及 FCC/UL/RoHS/CE；无闭合禁用词，无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段且段名/顺序正确，标题一行，恰好五条要点各以「- 」开头、2-4 个全大写单词开头后接「 — 」，各条均不超 210 字符，无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x09",
+  "group": "same",
+  "seconds": 17,
+  "error": null,
+  "full_reply": "我先读取本次工作规则和全部材料。\n\n材料已读齐。核对口径：PN-309 已取得认证为 UL 和 CE（写法 UL Listed / CE marked）；FCC、RoHS 未取得，ETL 申请中，均不写；grey→gray；容量 4500 mL = 4.5 L = 19.0 cups；尺寸 28.4 x 17.5 x 35.9 cm = 11.2 x 6.9 x 14.1 inches；净重 1.24 kg = 2.7 lb。先核算数值与标题长度：\n\n## Title\nPawNest PN-309 Automatic Pet Feeder, 4.5 L (19.0 Cups) Dry Food Dispenser with Timer, Up to 5 Meals a Day, 12-Second Voice Recorder, Gray, USB Powered\n\n## Bullet Points\n- LARGE 4.5 L CAPACITY: Holds 4.5 L (19.0 cups) of dry food and fits kibble from 2 to 10 mm, so one fill covers many scheduled feedings for cats and small to medium dogs.\n- FLEXIBLE MEAL SCHEDULING: Program up to 5 meals per day with a 12-second voice recording played at each feeding, keeping your pet on a steady routine even when you are away from home.\n- COMPACT SPACE-SAVING DESIGN: Measures 28.4 x 17.5 x 35.9 cm (11.2 x 6.9 x 14.1 inches) and weighs 1.24 kg (2.7 lb), fitting neatly in kitchens, hallways, or travel bags in a clean gray finish.\n- SIMPLE USB POWERED OPERATION: Runs on USB power with an easy-to-set control panel, no app or wireless setup required, so feeding schedules are ready in minutes right out of the box.\n- CERTIFIED SAFE AND RELIABLE: Built as a UL Listed and CE marked automatic pet feeder, giving added confidence for everyday use in your home.",
+  "product": "## Title\nPawNest PN-309 Automatic Pet Feeder, 4.5 L (19.0 Cups) Dry Food Dispenser with Timer, Up to 5 Meals a Day, 12-Second Voice Recorder, Gray, USB Powered\n\n## Bullet Points\n- LARGE 4.5 L CAPACITY: Holds 4.5 L (19.0 cups) of dry food and fits kibble from 2 to 10 mm, so one fill covers many scheduled feedings for cats and small to medium dogs.\n- FLEXIBLE MEAL SCHEDULING: Program up to 5 meals per day with a 12-second voice recording played at each feeding, keeping your pet on a steady routine even when you are away from home.\n- COMPACT SPACE-SAVING DESIGN: Measures 28.4 x 17.5 x 35.9 cm (11.2 x 6.9 x 14.1 inches) and weighs 1.24 kg (2.7 lb), fitting neatly in kitchens, hallways, or travel bags in a clean gray finish.\n- SIMPLE USB POWERED OPERATION: Runs on USB power with an easy-to-set control panel, no app or wireless setup required, so feeding schedules are ready in minutes right out of the box.\n- CERTIFIED SAFE AND RELIABLE: Built as a UL Listed and CE marked automatic pet feeder, giving added confidence for everyday use in your home.",
+  "failed": [
+   "AL-facts",
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 150 字符未超上限，以 PawNest 原样开头，PawNest、PN-309、Automatic Pet Feeder 各按规定写法出现一次，无不符。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "no app or wireless setup required",
+      "problem": "参数表中 app control 列为无，工作规则第 2 条规定表里列为无的功能在要点里不出现、否定句里也不提；要点 4 以否定句提及 app（app control）功能，应整句删除。"
+     }
+    ],
+    "reason": "容量、粒径、最多 5 餐、12 秒录音、gray、USB 供电、机身三边、净重均覆盖且与参数表一致，未写包装/毛重；唯要点 4 否定句提及列为无的 app 功能，记一处。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量 4.5 L (19.0 cups)、三边 28.4 x 17.5 x 35.9 cm (11.2 x 6.9 x 14.1 inches)、净重 1.24 kg (2.7 lb) 换算正确、1 位小数、数值与单位间空一格、三边 x 连接共用单位；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "UL Listed、CE marked 各按准许成句原样出现一次，未提 FCC/ETL/RoHS；无闭合禁用词；颜色用 gray，无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "LARGE 4.5 L CAPACITY:",
+      "problem": "工作规则第 6 条要求每条要点以 2 到 4 个全大写英文单词构成的短语开头；该开头短语中夹有数字 4.5（及单位 L），不是纯由全大写英文单词构成的短语，应改为如 LARGE CAPACITY 这类纯单词短语。"
+     }
+    ],
+    "reason": "段名与顺序正确、标题一行、恰好五条要点且各行以“- ”开头、各条均不超 250 字符、无多余说明；仅要点 1 开头短语混入数字，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "x10",
+  "group": "same",
+  "seconds": 28,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n材料已读全。换算核对：3.5 L = 3500 mL = 14.80 cups；212/167/304 mm = 8.35/6.57/11.97 in；1.75 kg = 1750 g = 3.86 lb。TH-310 可写认证为 FCC 与 RoHS。我用脚本核一下最终字符数。\n\n## Listing Title\nTailHaven TH-310 Automatic Pet Feeder, 3.5 L Programmable Dry Food Dispenser with Voice Recording for Cats and Dogs\n\n## Key Features\n- LARGE CAPACITY FEEDER — 3.5 L (3500 mL / 14.80 cups) food tank dispenses dry kibble from 2 to 12 mm, so fewer refills and steady portions for cats and dogs.\n- FLEXIBLE MEAL SCHEDULE — Program up to 8 meals per day, each with a 12 second voice recording that plays at mealtime to call your pet to the bowl.\n- COMPACT FOOTPRINT — Measures 212 x 167 x 304 mm (8.35 x 6.57 x 11.97 inches) and has a net weight of 1750 g (3.86 lb), fitting neatly beside crates or in kitchens.\n- PLUG-IN POWERED DESIGN — DC adapter powered operation in a clean blue finish supports consistent everyday feeding without interruption.\n- CERTIFIED SAFE QUALITY — FCC Part 15 compliant and RoHS compliant, built for dependable daily use with your cat or dog.",
+  "product": "## Listing Title\nTailHaven TH-310 Automatic Pet Feeder, 3.5 L Programmable Dry Food Dispenser with Voice Recording for Cats and Dogs\n\n## Key Features\n- LARGE CAPACITY FEEDER — 3.5 L (3500 mL / 14.80 cups) food tank dispenses dry kibble from 2 to 12 mm, so fewer refills and steady portions for cats and dogs.\n- FLEXIBLE MEAL SCHEDULE — Program up to 8 meals per day, each with a 12 second voice recording that plays at mealtime to call your pet to the bowl.\n- COMPACT FOOTPRINT — Measures 212 x 167 x 304 mm (8.35 x 6.57 x 11.97 inches) and has a net weight of 1750 g (3.86 lb), fitting neatly beside crates or in kitchens.\n- PLUG-IN POWERED DESIGN — DC adapter powered operation in a clean blue finish supports consistent everyday feeding without interruption.\n- CERTIFIED SAFE QUALITY — FCC Part 15 compliant and RoHS compliant, built for dependable daily use with your cat or dog.",
+  "failed": [
+   "AL-units"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 115 字符不超上限，以 TailHaven 原样开头，TailHaven、TH-310、Automatic Pet Feeder 各按规定写法出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量、粒径（from 2 to 12 mm 与 2-12 mm 同义正确）、up to 8 meals 保留最多含义、12 秒录音、blue、DC adapter powered、三边尺寸与净重均覆盖且与参数表一致；未写包装/毛重，未写任何未提供的闭合功能词。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "14.80 cups",
+      "problem": "违反第 3 条双单位换算：3500 mL ÷ 236.588 = 14.7936，四舍五入保留 2 位小数应为 14.79 cups，员工写成 14.80 cups。"
+     }
+    ],
+    "reason": "容量美制换算错误（应 14.79 写成 14.80）记一处；三边 inches 与净重 lb 换算、小数位、空格、x 连接共用单位均正确，粒径未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "FCC Part 15 compliant 与 RoHS compliant 各按准许成句原样出现一次，未提及 UL/ETL/CE；无闭合禁用词，无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段且段名顺序正确；标题一行无前缀；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「 — 」开头，各条均不超 210 字符，无多余说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y01",
+  "group": "new",
+  "seconds": 24,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料。\n\n已核对全部材料：参数表无机身尺寸和净重（不写尺寸重量）；六项功能均为“无”（不提及）；认证中仅 FCC（有效至 2026-10-11，不早于上架日期）和 RoHS（同）可写，ETL 与 CE 有效日期缺失、UL 未取得，均不写；4.5 L = 4500 mL ÷ 236.588 = 19.02 cups（四舍五入保留 2 位）。草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera、colour、customised programme 均已删除或改正。\n\n## Product Title\nWhiskerWay WW-401 Automatic Pet Feeder, 4.5 L / 19.02 Cups, 3-12 mm Kibble, Up to 8 Meals Daily, Black, DC Adapter Powered\n\n## Highlights\n- DRY FOOD USE ONLY: For dry food only; keep the power connector dry. The WhiskerWay WW-401 Automatic Pet Feeder holds 4.5 L (19.02 cups) of dry food.\n- UP TO 8 MEALS: Program up to 8 meals per day, each with an 8-second recording so your pet hears a familiar meal call.\n- KIBBLE SIZE RANGE: Works with dry food kibble from 3-12 mm.\n- SLEEK BLACK FINISH: Finished in black to fit neatly into your home.\n- POWER AND CERTIFICATIONS: DC adapter powered design; FCC Part 15 compliant and RoHS compliant.",
+  "product": "已核对全部材料：参数表无机身尺寸和净重（不写尺寸重量）；六项功能均为“无”（不提及）；认证中仅 FCC（有效至 2026-10-11，不早于上架日期）和 RoHS（同）可写，ETL 与 CE 有效日期缺失、UL 未取得，均不写；4.5 L = 4500 mL ÷ 236.588 = 19.02 cups（四舍五入保留 2 位）。草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera、colour、customised programme 均已删除或改正。\n\n## Product Title\nWhiskerWay WW-401 Automatic Pet Feeder, 4.5 L / 19.02 Cups, 3-12 mm Kibble, Up to 8 Meals Daily, Black, DC Adapter Powered\n\n## Highlights\n- DRY FOOD USE ONLY: For dry food only; keep the power connector dry. The WhiskerWay WW-401 Automatic Pet Feeder holds 4.5 L (19.02 cups) of dry food.\n- UP TO 8 MEALS: Program up to 8 meals per day, each with an 8-second recording so your pet hears a familiar meal call.\n- KIBBLE SIZE RANGE: Works with dry food kibble from 3-12 mm.\n- SLEEK BLACK FINISH: Finished in black to fit neatly into your home.\n- POWER AND CERTIFICATIONS: DC adapter powered design; FCC Part 15 compliant and RoHS compliant.",
+  "failed": [
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 122 字符未超 135 上限，以 WhiskerWay 原样开头，WhiskerWay、WW-401、Automatic Pet Feeder 各按规定写法恰好出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 4.5 L、粒径 3-12 mm、每日最多 8 餐（保留 up to 含义）、8 秒录音、black、DC adapter powered；参数表无尺寸净重故未写；第一条要点原样包含使用限制；未写任何列为无的功能词；标题中参数均真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点中容量写 4.5 L (19.02 cups)，换算正确（4500÷236.588≈19.02）、保留 2 位小数、数值与单位间有空格；无尺寸净重子项不适用；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "交付内仅出现 FCC Part 15 compliant 与 RoHS compliant 各一次（均为允许项目且按准许成句原样写），未提 UL/ETL/CE；无闭合禁用词；无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "已核对全部材料：参数表无机身尺寸和净重（不写尺寸重量）；六项功能均为“无”（不提及）；认证中仅 FCC（有效至 2026-10-11，不早于上架日期）和 RoHS（同）可写，ETL 与 CE 有效日期缺失、UL 未取得，均不写；4.5 L = 4500 mL ÷ 236.588 = 19.02 cups（四舍五入保留 2 位）。草稿中的 BEST、Guaranteed、UL Listed、Wi-Fi/camera、colour、customised programme 均已删除或改正。",
+      "problem": "违反规则 7：只交 ## Product Title 与 ## Highlights 两段，不加开场白、分析或结尾说明；交付前多出的整段核对说明合计记一处（说明中的禁用词、认证、拼写不在内容项重复计数）。"
+     }
+    ],
+    "reason": "段名与顺序正确、标题一行、五条要点均以「- 」开头且为 2-4 个全大写单词加「: 」、各条均未超 230 字符；唯交付前多了一段核对说明，按规则合计记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y02",
+  "group": "new",
+  "seconds": 740,
+  "error": null,
+  "full_reply": "我先读取工作目录里的全部材料，确定本次的规则口径和数据。\n\n## Product Title\nWhiskerWay WW-402 Automatic Pet Feeder, 4 L Capacity, Up to 8 Meals Daily, 6 Second Voice Recording, Blue, DC Adapter Powered\n\n## Highlights\n- FOR DRY KIBBLE ONLY: For dry kibble only; keep the feeder indoors. The 4 L (16.91 cups) capacity reduces frequent refills.\n- FLEXIBLE MEAL SCHEDULE: Program up to 8 meals per day to match your pet's routine.\n- VOICE RECORDING FEATURE: Record a 6-second meal call so your pet hears a familiar voice at every meal.\n- KIBBLE SIZE RANGE: Feeds dry food pieces from 2-10 mm to suit different pets.\n- BLUE ADAPTER DESIGN: Styled in blue with DC adapter powered operation; RoHS compliant.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-402 Automatic Pet Feeder, 4 L Capacity, Up to 8 Meals Daily, 6 Second Voice Recording, Blue, DC Adapter Powered\n\n## Highlights\n- FOR DRY KIBBLE ONLY: For dry kibble only; keep the feeder indoors. The 4 L (16.91 cups) capacity reduces frequent refills.\n- FLEXIBLE MEAL SCHEDULE: Program up to 8 meals per day to match your pet's routine.\n- VOICE RECORDING FEATURE: Record a 6-second meal call so your pet hears a familiar voice at every meal.\n- KIBBLE SIZE RANGE: Feeds dry food pieces from 2-10 mm to suit different pets.\n- BLUE ADAPTER DESIGN: Styled in blue with DC adapter powered operation; RoHS compliant.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 125 字符未超 135 上限，以 WhiskerWay 原样开头，WhiskerWay、WW-402、Automatic Pet Feeder 各按规定写法恰好出现一次，无引号/加粗/前缀。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 4 L、粒径 2-10 mm、每日最多 8 餐（up to 8 meals 保留最多含义）、6 秒录音、颜色 blue、DC adapter powered；参数表无尺寸净重故未写；第一条要点原样包含使用限制；未写任何未提供的闭合功能词；标题中的参数均真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 4 L (16.91 cups)，4000/236.588≈16.907 四舍五入为 16.91，保留 2 位小数，数值与单位间空一格；粒径只用 mm 未转 inches；无尺寸/净重子项不适用。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "仅 RoHS（已取得且有效至 2026-10-11 不早于上架日期）按准许成句 RoHS compliant 原样出现一次；FCC（过期）、UL/CE（日期缺失）、ETL（申请中）均未提及；无闭合禁用词；无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交 Product Title 与 Highlights 两段，段名顺序正确；标题一行；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「: 」开头，各条字符数（122/82/102/77/86）均未超 230；无多余说明、文件或代码围栏。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y03",
+  "group": "new",
+  "seconds": 798,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n## Product Title\nWhiskerWay WW-403 Automatic Pet Feeder, 6 L Capacity, 5 Meals Daily, 10 s Voice Recording, White, USB Powered\n\n## Highlights\n- NOT FOR WET FOOD: Not for wet food; place the feeder on a level indoor surface.\n- 6 L CAPACITY: Stores 6 L (25.36 cups) of dry food and suits kibble from 3-15 mm for flexible portion planning.\n- 5 MEALS DAILY: Program up to 5 meals per day, each with a 10 second voice recording so your pet hears a familiar call.\n- SIMPLE USB POWER: Runs on USB power in a clean white finish that fits any room.\n- COMPLIANT DESIGN: FCC Part 15 compliant and RoHS compliant.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-403 Automatic Pet Feeder, 6 L Capacity, 5 Meals Daily, 10 s Voice Recording, White, USB Powered\n\n## Highlights\n- NOT FOR WET FOOD: Not for wet food; place the feeder on a level indoor surface.\n- 6 L CAPACITY: Stores 6 L (25.36 cups) of dry food and suits kibble from 3-15 mm for flexible portion planning.\n- 5 MEALS DAILY: Program up to 5 meals per day, each with a 10 second voice recording so your pet hears a familiar call.\n- SIMPLE USB POWER: Runs on USB power in a clean white finish that fits any room.\n- COMPLIANT DESIGN: FCC Part 15 compliant and RoHS compliant.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 109 字符不超上限，以 WhiskerWay 原样开头，WhiskerWay、WW-403、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来写全容量 6 L、粒径 3-15 mm、每日最多 5 餐（up to 保留最多含义）、10 秒录音、white、USB 供电；参数表无尺寸净重故未写；未提任何未提供的闭合功能词；第一条要点原样包含使用限制；标题中参数均真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 6 L (25.36 cups)，换算正确、保留 2 位小数、数值与单位间空一格；粒径只用 mm 未转 inches；无尺寸和净重，对应子项不适用。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "FCC Part 15 compliant 与 RoHS compliant 各按准许成句原样出现一次；UL、ETL、CE 完全未提及；无闭合禁用词；无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段且段名、顺序正确；标题一行；恰好五条要点各占一行以「- 」开头；每条以 2-4 个全大写英文单词开头后接「: 」；各条均不超 230 字符；无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y04",
+  "group": "new",
+  "seconds": 752,
+  "error": null,
+  "full_reply": "我先读取工作目录里的所有材料，确定本次适用规则和数据范围。\n\n## Product Title\nWhiskerWay WW-404 Automatic Pet Feeder, 6 L White Dry Food Feeder with Up to 8 Meals Daily and ETL Listed\n\n## Highlights\n- FOR DRY FOOD ONLY: For dry food only; keep the power connector dry. This 6 L (25.36 cups) white feeder is USB powered for simple everyday use.\n- KIBBLE SIZE RANGE: Feeds dry food with a 2-10 mm diameter range, so most kibble shapes pass smoothly.\n- FLEXIBLE MEAL SCHEDULE: Program up to 8 meals per day, each with an 8-second voice recording to call your pet to eat.\n- CERTIFIED SAFETY: ETL Listed and RoHS compliant for added peace of mind.\n- EASY DAILY FEEDING: A clean white design with simple USB power that fits right into any home feeding routine.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-404 Automatic Pet Feeder, 6 L White Dry Food Feeder with Up to 8 Meals Daily and ETL Listed\n\n## Highlights\n- FOR DRY FOOD ONLY: For dry food only; keep the power connector dry. This 6 L (25.36 cups) white feeder is USB powered for simple everyday use.\n- KIBBLE SIZE RANGE: Feeds dry food with a 2-10 mm diameter range, so most kibble shapes pass smoothly.\n- FLEXIBLE MEAL SCHEDULE: Program up to 8 meals per day, each with an 8-second voice recording to call your pet to eat.\n- CERTIFIED SAFETY: ETL Listed and RoHS compliant for added peace of mind.\n- EASY DAILY FEEDING: A clean white design with simple USB power that fits right into any home feeding routine.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 105 字符不超上限，以 WhiskerWay 原样开头，WhiskerWay、WW-404、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来写全容量 6 L、粒径 2-10 mm、每日最多 8 餐（up to 8 meals 保留最多含义）、8 秒录音、white、USB powered；无尺寸净重可写也未编造；第一条要点原样包含使用限制；未提供的闭合功能词均未出现。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 6 L (25.36 cups)，换算正确（6000/236.588≈25.36）且保留 2 位小数、数值与单位间空一格；参数表无尺寸/净重，对应子项不适用；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "允许项目 ETL、RoHS 在要点 4 按准许成句 ETL Listed、RoHS compliant 各原样出现一次；标题中的 ETL Listed 是同一允许项目的重复提及，按口径不另计；FCC/UL/CE 均未提及；无禁用词、无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段且段名、顺序正确；标题一行无前后缀；恰好五条要点各占一行以「- 」开头，开头大写短语均为 2-4 个词并接「: 」；各条字符数 142/101/117/72/109 均不超 230；无多余说明或代码围栏。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y05",
+  "group": "new",
+  "seconds": 591,
+  "error": null,
+  "full_reply": "我先读取工作目录里的全部材料，确定本次适用的规则口径。\n\n## Product Title\nWhiskerWay WW-405 Automatic Pet Feeder, 2.5 L / 10.57 cups, 4-14 mm Kibble, 8 Meals Per Day, 10s Voice Record, USB Powered, Black\n\n## Highlights\n- SAFE DAILY USE: For dry kibble only; keep the feeder indoors.\n- LARGE CAPACITY: 2.5 L (10.57 cups) food tank handles 4-14 mm kibble for smooth daily feeding.\n- FLEXIBLE FEEDING: Program up to 8 meals per day and record a 10 second voice message for mealtime.\n- CERTIFIED QUALITY: FCC Part 15 compliant, UL Listed and RoHS compliant.\n- MODERN FINISH: USB powered feeder in black that blends easily into your home.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-405 Automatic Pet Feeder, 2.5 L / 10.57 cups, 4-14 mm Kibble, 8 Meals Per Day, 10s Voice Record, USB Powered, Black\n\n## Highlights\n- SAFE DAILY USE: For dry kibble only; keep the feeder indoors.\n- LARGE CAPACITY: 2.5 L (10.57 cups) food tank handles 4-14 mm kibble for smooth daily feeding.\n- FLEXIBLE FEEDING: Program up to 8 meals per day and record a 10 second voice message for mealtime.\n- CERTIFIED QUALITY: FCC Part 15 compliant, UL Listed and RoHS compliant.\n- MODERN FINISH: USB powered feeder in black that blends easily into your home.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 129 字符未超 135，以 WhiskerWay 原样开头，WhiskerWay、WW-405、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点合起来覆盖容量 2.5 L、粒径 4-14 mm、up to 8 meals（保留最多含义）、10 秒录音、black、USB powered；参数表无尺寸净重故未写；未写闭合功能词中列为无的功能；第一条要点原样包含使用限制。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量写 2.5 L (10.57 cups)，2500/236.588≈10.5669 四舍五入为 10.57，两位小数、数值与单位间空格均正确；无尺寸净重子项不适用；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "FCC Part 15 compliant、UL Listed、RoHS compliant 各按准许成句原样出现一次；未提 ETL、CE；无闭合禁用词；无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交两段且段名顺序正确；标题一行；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「: 」开头，各条均不超 230 字符；无多余说明、围栏或文件。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y06",
+  "group": "new",
+  "seconds": 1473,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n## Product Title\nWhiskerWay WW-406 Automatic Pet Feeder for Cats and Dogs, 3 L (12.68 cups), Up to 6 Meals Daily, 10-Second Voice Recording, Gray\n\n## Highlights\n- SAFETY AND USE: RoHS compliant. Not for wet food; place the feeder on a level indoor surface.\n- LARGE CAPACITY: 3 L (12.68 cups) dry food tank suits 2-12 mm kibble for cats and dogs.\n- FLEXIBLE FEEDING: Schedule up to 6 meals per day, each with a 10 second voice recording call.\n- COMPACT BUILD: Measures 19.2 x 18.1 x 31.8 cm (7.56 x 7.13 x 12.52 inches) and weighs 1.88 kg (4.14 lb) net in gray.\n- SIMPLE POWER: DC adapter powered design for steady everyday feeding at home.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-406 Automatic Pet Feeder for Cats and Dogs, 3 L (12.68 cups), Up to 6 Meals Daily, 10-Second Voice Recording, Gray\n\n## Highlights\n- SAFETY AND USE: RoHS compliant. Not for wet food; place the feeder on a level indoor surface.\n- LARGE CAPACITY: 3 L (12.68 cups) dry food tank suits 2-12 mm kibble for cats and dogs.\n- FLEXIBLE FEEDING: Schedule up to 6 meals per day, each with a 10 second voice recording call.\n- COMPACT BUILD: Measures 19.2 x 18.1 x 31.8 cm (7.56 x 7.13 x 12.52 inches) and weighs 1.88 kg (4.14 lb) net in gray.\n- SIMPLE POWER: DC adapter powered design for steady everyday feeding at home.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 128 字符不超 135 上限，以 WhiskerWay 原样开头，WhiskerWay、WW-406、Automatic Pet Feeder 各原样出现一次，无违规。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点覆盖容量 3 L、粒径 2-12 mm、每日最多 6 餐（up to 6 meals 保留最多含义）、10 秒录音、gray、DC adapter powered、三边尺寸 19.2 x 18.1 x 31.8 cm 和净重 1.88 kg，均与参数表一致；未写包装/毛重，未写六个无的功能词；第一条要点原样包含使用限制。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量 12.68 cups、三边 7.56 x 7.13 x 12.52 inches、净重 4.14 lb 均按换算表四舍五入保留 2 位小数且正确；数值与单位间空一格，三边按长 x 宽 x 高用 x 连接并共用单位；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "唯一允许项目 RoHS 按准许成句「RoHS compliant」在要点 1 原样出现一次；FCC/UL/ETL/CE 均未提及；无闭合禁用词；颜色用美式拼写 gray，无英式拼写命中。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交 Product Title 与 Highlights 两段，段名和顺序正确；标题一行无前缀；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「: 」开头，各条字符数（93/86/93/116/76）均不超 230；无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y07",
+  "group": "new",
+  "seconds": 767,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n继续任务：材料已读齐，先用脚本核验换算数值、字符数与禁用词/拼写。\n\n## Product Title\nWhiskerWay WW-407 Automatic Pet Feeder, 5000 mL (5 L / 21.13 Cups) Dry Food Dispenser with 12s Voice Recording, USB Powered, Black\n\n## Highlights\n- DRY FOOD DISPENSER: For dry food only; keep the power connector dry. Holds 5000 mL (5 L / 21.13 cups) of kibble and feeds pieces from 4 to 14 mm.\n- FLEXIBLE MEAL SCHEDULING: Schedule up to 8 meals per day and greet your pet with a 12 second voice recording at every meal.\n- COMPACT USB POWERED BUILD: USB powered, finished in black; measures 22.6 x 19.7 x 33.9 cm (8.90 x 7.76 x 13.35 inches) and weighs 1.48 kg (3.26 lb) net.\n- CERTIFIED ELECTRONICS: This feeder is ETL Listed, FCC Part 15 compliant and RoHS compliant.\n- SIMPLE DAILY FEEDING: This black automatic pet feeder from WhiskerWay keeps your pet fed on time with USB powered operation, even on your busiest days.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-407 Automatic Pet Feeder, 5000 mL (5 L / 21.13 Cups) Dry Food Dispenser with 12s Voice Recording, USB Powered, Black\n\n## Highlights\n- DRY FOOD DISPENSER: For dry food only; keep the power connector dry. Holds 5000 mL (5 L / 21.13 cups) of kibble and feeds pieces from 4 to 14 mm.\n- FLEXIBLE MEAL SCHEDULING: Schedule up to 8 meals per day and greet your pet with a 12 second voice recording at every meal.\n- COMPACT USB POWERED BUILD: USB powered, finished in black; measures 22.6 x 19.7 x 33.9 cm (8.90 x 7.76 x 13.35 inches) and weighs 1.48 kg (3.26 lb) net.\n- CERTIFIED ELECTRONICS: This feeder is ETL Listed, FCC Part 15 compliant and RoHS compliant.\n- SIMPLE DAILY FEEDING: This black automatic pet feeder from WhiskerWay keeps your pet fed on time with USB powered operation, even on your busiest days.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 130 字符不超上限，以 WhiskerWay 原样开头，WhiskerWay、WW-407、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量、粒径（4 to 14 mm，与 4-14 mm 同值且只用 mm）、每日最多 8 餐（up to 保留最多含义）、12 秒录音、black、USB powered、三边尺寸与净重全部覆盖且与参数表一致；未写包装/毛重，未编造功能；使用限制原样写入第一条要点。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "21.13 cups、8.90 x 7.76 x 13.35 inches、3.26 lb 均按换算表算对并保留 2 位小数，数值与单位间空一格，三边长按长 x 宽 x 高共用单位；粒径未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "ETL Listed、FCC Part 15 compliant、RoHS compliant 三句准许成句各原样出现一次，UL 与 CE 完全未提；无禁用词（busiest 非完整词 best），无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "仅交两段且段名/顺序正确；标题一行；恰好五条要点各占一行、以「- 」开头、2–4 个全大写单词后接「: 」；各条 91–152 字符均不超 230；无多余说明或代码围栏。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y08",
+  "group": "new",
+  "seconds": 1229,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n## Product Title\nWhiskerWay WW-408 Automatic Pet Feeder, 4.5 L Dry Kibble Dispenser with 6s Voice Recorder, 8 Meals Daily, USB Powered, Blue\n\n## Highlights\n- FOR DRY KIBBLE ONLY: For dry kibble only; keep the feeder indoors. This 4.5 L (19.02 cups) automatic pet feeder dispenses dry food from 2 to 12 mm for cats and small dogs.\n- 8 MEALS DAILY: Schedule up to 8 meals per day, each with a 6 second voice recording that calls your pet to eat on your routine.\n- COMPACT DESIGN: Measures 18.8 x 21.3 x 37.4 cm (7.40 x 8.39 x 14.72 inches) and weighs 1.57 kg (3.46 lb), finished in blue to fit small spaces.\n- USB POWERED: Runs through a standard USB power supply, an easy corded setup for daily feeding at home.\n- CERTIFIED QUALITY: UL Listed and RoHS compliant, built with tested materials for dependable everyday use.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-408 Automatic Pet Feeder, 4.5 L Dry Kibble Dispenser with 6s Voice Recorder, 8 Meals Daily, USB Powered, Blue\n\n## Highlights\n- FOR DRY KIBBLE ONLY: For dry kibble only; keep the feeder indoors. This 4.5 L (19.02 cups) automatic pet feeder dispenses dry food from 2 to 12 mm for cats and small dogs.\n- 8 MEALS DAILY: Schedule up to 8 meals per day, each with a 6 second voice recording that calls your pet to eat on your routine.\n- COMPACT DESIGN: Measures 18.8 x 21.3 x 37.4 cm (7.40 x 8.39 x 14.72 inches) and weighs 1.57 kg (3.46 lb), finished in blue to fit small spaces.\n- USB POWERED: Runs through a standard USB power supply, an easy corded setup for daily feeding at home.\n- CERTIFIED QUALITY: UL Listed and RoHS compliant, built with tested materials for dependable everyday use.",
+  "failed": [
+   "AL-format"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 123 字符不超上限，以 WhiskerWay 原样开头，WhiskerWay、WW-408、Automatic Pet Feeder 各按规定写法出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量、粒径（2 to 12 mm 与 2-12 mm 同值）、每日最多 8 餐（保留最多含义）、6 秒录音、blue、USB powered、三边尺寸与净重全部覆盖且与参数表一致；未写包装/毛重，未写闭合功能词，使用限制在第一条原样引用。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "19.02 cups、7.40 x 8.39 x 14.72 inches、3.46 lb 换算正确且保留 2 位小数，数值与单位间空一格，三边长 x 宽 x 高共用单位，粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "UL Listed 与 RoHS compliant 各按准许成句原样出现一次，未提及 FCC/ETL/CE；无闭合禁用词；无英式拼写。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "8 MEALS DAILY",
+      "problem": "规则第 6 条要求每条要点以 2 到 4 个全大写英文单词构成的短语开头；「8」是数字不是英文单词，该开头短语不是由全大写英文单词构成，应改为如 EIGHT MEALS DAILY 或 MEAL SCHEDULING 这类纯全大写英文单词短语。"
+     }
+    ],
+    "reason": "段名/顺序、标题一行、五条要点、行首「- 」、字符上限均符合；仅第 2 条开头短语含数字「8」，不符合 2-4 个全大写英文单词的开头要求，记一处。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y09",
+  "group": "new",
+  "seconds": 542,
+  "error": null,
+  "full_reply": "我先读取工作目录里的规则和材料文件。\n\n规则和材料都已读齐。现在核算换算数值、字符数和各项核对口径，再定稿。\n\n标题超出 135 字符（139），需要收窄。我微调后做最终全项复核。\n\n## Product Title\nWhiskerWay WW-409 Automatic Pet Feeder, 6 L Programmable Dry Food Dispenser with Voice Recording, Up to 6 Meals a Day, 4-14 mm Kibble\n\n## Highlights\n- INDOOR USE ONLY: Not for wet food; place the feeder on a level indoor surface.\n- LARGE CAPACITY: Holds 6 L (25.36 cups) of dry food; suitable for kibble sized 4-14 mm.\n- FLEXIBLE MEALS: Program up to 6 meals per day, each with a 6 second voice recording.\n- COMPACT DESIGN: Measures 26.8 x 14.6 x 31.4 cm (10.55 x 5.75 x 12.36 inches), net weight 1.28 kg (2.82 lb).\n- POWER AND SAFETY: Gray DC adapter powered feeder is FCC Part 15 compliant and RoHS compliant.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "## Product Title\nWhiskerWay WW-409 Automatic Pet Feeder, 6 L Programmable Dry Food Dispenser with Voice Recording, Up to 6 Meals a Day, 4-14 mm Kibble\n\n## Highlights\n- INDOOR USE ONLY: Not for wet food; place the feeder on a level indoor surface.\n- LARGE CAPACITY: Holds 6 L (25.36 cups) of dry food; suitable for kibble sized 4-14 mm.\n- FLEXIBLE MEALS: Program up to 6 meals per day, each with a 6 second voice recording.\n- COMPACT DESIGN: Measures 26.8 x 14.6 x 31.4 cm (10.55 x 5.75 x 12.36 inches), net weight 1.28 kg (2.82 lb).\n- POWER AND SAFETY: Gray DC adapter powered feeder is FCC Part 15 compliant and RoHS compliant.",
+  "failed": [],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "标题 133 字符未超 135 上限，以 WhiskerWay 原样开头，WhiskerWay、WW-409、Automatic Pet Feeder 各按规定写法恰好出现一次。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "五条要点合起来覆盖容量 6 L、粒径 4-14 mm、每日最多 6 餐（up to 6 meals 保留最多含义）、6 秒录音、Gray 颜色、DC adapter powered 供电、三边尺寸与净重；未写包装/毛重，未写闭合功能词中列为无的功能；第一条要点原样包含使用限制；标题中的参数（6 L、4-14 mm、up to 6 meals）均真实。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "容量 25.36 cups、三边 10.55 x 5.75 x 12.36 inches、净重 2.82 lb 均按换算表四舍五入保留 2 位小数且数值正确；数值与单位间空一格，三边按长 x 宽 x 高用 x 连接并共用单位；粒径只用 mm 未转 inches。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "要点 5 按准许成句原样各写一次 FCC Part 15 compliant 与 RoHS compliant，未提及 UL/ETL/CE；无闭合禁用词命中；颜色用美式拼写 Gray，无英式拼写残留。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "只交 Product Title 与 Highlights 两段，段名与顺序正确；标题一行无前缀/引号；恰好五条要点各占一行以「- 」开头，均以 2-4 个全大写单词加「: 」开头，各条字符数（78/86/84/107/93）均未超 230；无交付外说明。"
+   }
+  ],
+  "loose": []
+ },
+ {
+  "name": "y10",
+  "group": "new",
+  "seconds": 691,
+  "error": null,
+  "full_reply": "我先读取工作目录里的全部材料，确定本次规则和口径。\n\nturn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)\n\n[raven] expert-amazon-listing stopped before finishing (stopReason=max_tokens); reply is partial.",
+  "transport": {
+   "provider": "custom gateway",
+   "model": "glm-5.3-flash",
+   "client_alias": "z-ai/glm-5.3-flash",
+   "since": 1791755988.533549,
+   "reason": "OpenRouter shared key total quota exceeded",
+   "caveat": "same advertised model name; provider equivalence not independently verified"
+  },
+  "product": "turn_failed The model returned no content on 4 attempt(s) (prefill 0, post-tool nudge 1, plain retry 2). (code -32099)",
+  "failed": [
+   "AL-title"
+  ],
+  "judged": [
+   "AL-title",
+   "AL-facts",
+   "AL-units",
+   "AL-safe",
+   "AL-format"
+  ],
+  "verdicts": [
+   {
+    "id": "AL-title",
+    "applicable": true,
+    "count": 1,
+    "errors": [
+     {
+      "quote": "（缺失）",
+      "problem": "员工没有任何产出（turn_failed），标题完全缺失；按验收项约定，整份交付缺失只在本项记一处。正确做法是交付一行以 WhiskerWay 开头、含 WW-410 和 Automatic Pet Feeder 各一次、不超过 135 字符的标题。"
+     }
+    ],
+    "reason": "员工产出仅为失败提示，无任何标题内容；整份交付缺失按约定只在本项记一处。"
+   },
+   {
+    "id": "AL-facts",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "整份交付缺失时只在 AL-title 记一处，本项不连带累计，故记 0 处。"
+   },
+   {
+    "id": "AL-units",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "整份交付缺失时只在 AL-title 记一处，本项不连带累计，故记 0 处。"
+   },
+   {
+    "id": "AL-safe",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "整份交付缺失时只在 AL-title 记一处，本项不连带累计，故记 0 处。"
+   },
+   {
+    "id": "AL-format",
+    "applicable": true,
+    "count": 0,
+    "errors": [],
+    "reason": "验收项明确整体无产出同理只在 AL-title 记一处，格式项不重复计数，故记 0 处。"
+   }
+  ],
+  "loose": []
+ }
+]

@@ -1,0 +1,39 @@
+{
+  "checks": {
+    "AL-title": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "AL-facts": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "AL-units": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "AL-safe": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    },
+    "AL-format": {
+      "visibility": [
+        "counterpart",
+        "analyst",
+        "curator"
+      ]
+    }
+  }
+}
