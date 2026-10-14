@@ -269,8 +269,8 @@ def back_office(exchanges) -> list[dict]:
     ]
 
 
-def actions(records) -> list[dict]:
-    """The calls in one execution's records besides looking around, in order, each with its target and whether it
+def actions(records, *, include_looks=False) -> list[dict]:
+    """The calls in one execution's records, excluding reads unless requested, with their target and whether each
     succeeded (`ok`, with the tool's error when it failed, null when no outcome was recorded). A call an Action
     strategy refused did not run, so it failed, with the refusal as its error."""
     started, finished = [], {}
@@ -278,7 +278,7 @@ def actions(records) -> list[dict]:
         event = row.get("event") or {}
         if row.get("kind") != "runner.event" or row.get("event_type", "ToolEvent") != "ToolEvent":
             continue
-        if event.get("phase") == "start" and event.get("name") and event["name"] not in LOOKS:
+        if event.get("phase") == "start" and event.get("name") and (include_looks or event["name"] not in LOOKS):
             started.append(event)
         elif event.get("phase") == "complete" and event.get("tool_call_id"):
             finished[event["tool_call_id"]] = event

@@ -6,7 +6,8 @@ import json
 import pytest
 
 from experimental.assessor.rubric import AssessmentPlan, Basis, Definition, LLMCheck, ProgramCheck, Reference, digest
-from experimental.assessor.standard import Assessor, Criterion, Standard, conversations, satisfied
+from experimental.assessor.standard import Assessor, Criterion, Standard, children, conversations, executions, satisfied
+from experimental.counterpart.owner import actions
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.compartment import Boundaries
 from experimental.iteration.conversation import Conversation
@@ -18,6 +19,44 @@ from experimental.scenario.sealed import Sealed
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
 from tests.test_iteration_run import CURATE, REQUIREMENT, FakeWorker, Scripted
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
+
+
+def test_execution_evidence_keeps_read_actions_and_counterpart_summary_stays_filtered():
+    records = []
+    for number, (name, path, ok) in enumerate(
+        (
+            ("list_dir", "/workdir", True),
+            ("read_file", "/workdir/SOP.md", False),
+            ("write_file", "/workdir/result.md", None),
+        )
+    ):
+        records.append(
+            {
+                "kind": "runner.event",
+                "event": {"phase": "start", "name": name, "tool_call_id": str(number), "arguments": {"path": path}},
+            }
+        )
+        if ok is not None:
+            records.append(
+                {
+                    "kind": "runner.event",
+                    "event": {
+                        "phase": "complete",
+                        "tool_call_id": str(number),
+                        "ok": ok,
+                        "result_preview": "Unavailable" if not ok else "SOP.md",
+                    },
+                }
+            )
+    turn = Execution("turn", [], records, {}, "artifact")
+    made = executions({"session": [Exchange("Read the SOP before writing.", turn)]})["session"][0]["actions"]
+    assert made == [
+        {"action": "list_dir", "target": "/workdir", "ok": True},
+        {"action": "read_file", "target": "/workdir/SOP.md", "ok": False, "error": "Unavailable"},
+        {"action": "write_file", "target": "/workdir/result.md", "ok": None},
+    ]
+    assert actions(records) == made[2:]
+    assert children([{"kind": "child.execution", "harness": "child", "records": records}])[0]["actions"] == made
 
 
 @pytest.mark.asyncio

@@ -30,7 +30,7 @@ from pydantic import BaseModel, ConfigDict, Field
 
 from ..allowance import excerpt, reading_budget
 from ..audience import EVALUATION, audience
-from ..counterpart.owner import actions, back_office, reports
+from ..counterpart.owner import actions, reports
 from ..curator.generation.context.render import tool
 from ..curator.harness.declaration import schema_for
 from ..curator.raven_adapter.materialize import _write
@@ -273,9 +273,7 @@ def executions(sessions: Sessions) -> dict[str, list[dict]]:
         name: [
             {
                 "turn_id": row.execution.turn_id,
-                "actions": [
-                    {key: value for key, value in action.items() if key != "turn"} for action in back_office([row])
-                ],
+                "actions": actions(row.execution.records, include_looks=True),
                 "reports": reports([row]),
                 **({"children": ran} if (ran := children(row.execution.records)) else {}),
                 "delivered": [Path(path).name for path in row.execution.deliverables],
@@ -294,7 +292,7 @@ def children(records) -> list[dict]:
     for row in records:
         if row.get("kind") != "child.execution":
             continue
-        made = actions(row.get("records") or ())
+        made = actions(row.get("records") or (), include_looks=True)
         child = {"harness": str(row.get("harness") or ""), "actions": made[:CHILD_ACTIONS]}
         if len(made) > CHILD_ACTIONS:
             child["omitted"] = len(made) - CHILD_ACTIONS
