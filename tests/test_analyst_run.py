@@ -536,6 +536,27 @@ def test_session_labels_reject_collisions(monkeypatch):
         SessionLabels(["first", "second"])
 
 
+@pytest.mark.parametrize("names", [[], ["launch-owner"]])
+def test_session_labels_preserve_unrelated_json_text_and_tuple_values(names):
+    labels = SessionLabels(names)
+    text = ' {"value":1,"quoted":"{\\"value\\":1}","escaped":"\\u0061"} '
+    value = {"source": text, "messages": (text,)}
+    assert labels.encode(value) == value
+    assert labels.decode(value) == value
+    assert isinstance(labels.encode(value)["messages"], tuple)
+    if not names:
+        provider = Provider()
+        assert labels.provider(provider) is provider
+
+
+def test_session_labels_still_project_unicode_escaped_identities_in_json():
+    labels = SessionLabels(["launch-owner"])
+    value = '{"session":"\\u006caunch-owner","source":"{\\"value\\":1}"}'
+    projected = json.loads(labels.encode(value))
+    assert projected["session"] == labels.labels["launch-owner"]
+    assert projected["source"] == '{"value":1}'
+
+
 def test_session_labels_match_the_guards_case_width_and_hyphen_normalization():
     guarded = Guard("analyst", Sealed.of([], tokens=["launch-owner"])).provider(Provider())
     labels = SessionLabels.protected(guarded, ["Launch-Owner"])

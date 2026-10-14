@@ -35,6 +35,8 @@ class SessionLabels:
 
     @staticmethod
     def _project(value, mapping):
+        if not mapping:
+            return value
         mapping = {fold(key): value for key, value in mapping.items()}
 
         def variant(char):
@@ -58,12 +60,13 @@ class SessionLabels:
                         pass
                     else:
                         if isinstance(decoded, (dict, list)):
-                            return json.dumps(walk(decoded), ensure_ascii=False)
-                return pattern.sub(lambda match: mapping[fold(match.group())], item) if pattern else item
+                            projected = walk(decoded)
+                            return json.dumps(projected, ensure_ascii=False) if projected != decoded else item
+                return pattern.sub(lambda match: mapping[fold(match.group())], item)
             if isinstance(item, dict):
                 return {walk(key): walk(content) for key, content in item.items()}
             if isinstance(item, (list, tuple)):
-                return [walk(content) for content in item]
+                return type(item)(walk(content) for content in item)
             return item
 
         return walk(value)
@@ -75,7 +78,7 @@ class SessionLabels:
         return self._project(value, self.names)
 
     def provider(self, provider):
-        return LabelledProvider(provider, self)
+        return LabelledProvider(provider, self) if self.labels else provider
 
 
 class LabelledProvider:

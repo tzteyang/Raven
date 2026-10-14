@@ -960,8 +960,18 @@ class Session:
         self.save()
 
     def finish(self, reason: str | None = None) -> None:
-        """End the run; without a reason, the loop's own reason from the last outcome stands."""
-        self._require(self.review is None, "finish after the round's curation or skip")
+        """End the run; a reason explicitly cancels a blocked gap without allowing another trial."""
+        cancelling = self.status == "blocked" or (self.status == "running" and "gap_retry" in self.record)
+        if cancelling:
+            if reason is None or not reason.strip():
+                raise StepError("retry the curation or supply an explicit cancellation reason")
+            if self.review is not None:
+                self.rounds[-1] = replace(self.rounds[-1], curated=False)
+                self._close(plan=None)
+            self.record.pop("gap_retry", None)
+            self.outcome = Outcome("stop", reason)
+        else:
+            self._require(self.review is None, "finish after the round's curation or skip")
         self.record["status"] = "finished"
         stop = reason if reason is not None else (self.outcome.reason if self.outcome else "")
         if stop:

@@ -840,6 +840,46 @@ async def test_a_resolved_gap_retries_the_same_round_and_keeps_the_answer_on_res
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("onboarding", [False, True])
+@pytest.mark.parametrize("resolved", [False, True])
+async def test_an_explicit_reason_cancels_a_gap_without_resuming_execution(tmp_path, analyses, onboarding, resolved):
+    analyses.scripted.append(CURATE)
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        if onboarding or feedback is not None:
+            raise GapReportedError("design", "Required authorization is unavailable.")
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curator)
+    if onboarding:
+        assert not await session.onboard()
+    else:
+        await session.onboard()
+        await session.trial(student("Review the request."))
+        session.signal(Signal("human", "A required authorization is missing."))
+        await session.analyse()
+        assert not await session.curate()
+    assert session.status == "blocked"
+    if resolved:
+        session.resolve_gap("Authorization is available but the operator no longer wants this run.")
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    with pytest.raises(StepError):
+        session.finish()
+    with pytest.raises(StepError):
+        session.finish(" ")
+    session.finish("Cancelled by operator; no further trials authorized.")
+    assert session.status == "finished" and session.review is None
+    assert "gap_retry" not in session.record and session.record["questions"]
+    assert session.outcome.next == "stop"
+    if not onboarding:
+        assert len(session.history) == 1 and not session.rounds[-1].curated
+        assert session.history[0].revision is None
+    resumed = Session.resume(worker, object(), session.path, curator=curator)
+    with pytest.raises(StepError, match="finished"):
+        await resumed.trial(student("Try again."))
+
+
+@pytest.mark.asyncio
 async def test_an_onboarding_gap_blocks_execution_until_answered(tmp_path):
     received = []
 

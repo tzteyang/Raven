@@ -607,6 +607,12 @@ def assemble(
         recorder.add("runtime.bound", package=str(package), targets=list(artifact.values))
         from ...iteration.disclosure import Disclosures
 
+        guard = getattr(provider, "guard", None)
+        disclosures = (
+            Disclosures((planning_state.parent if planning_state else root) / "disclosures.json")
+            if guard is not None and guard.role == "partner"
+            else None
+        )
         return Bound(
             runtime,
             effective,
@@ -623,7 +629,7 @@ def assemble(
             infer,
             prepared,
             installation,
-            Disclosures((planning_state.parent if planning_state else root) / "disclosures.json"),
+            disclosures,
         )
     except BaseException:
         installation.rollback()

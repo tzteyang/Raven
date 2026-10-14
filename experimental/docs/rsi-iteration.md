@@ -24,6 +24,8 @@ flowchart TD
 
 Design, implementation and repair share one gap-driven replan within the original budget. A second unresolved gap blocks the session before another trial; `Session.resolve_gap(answer)` records new information before retrying the same round.
 
+`Session.finish(reason)` explicitly cancels a blocked or awaiting-retry session with a nonempty reason. It preserves the unresolved question and leaves a pending round uncurated; it does not authorize another trial.
+
 Self review runs before an assessor can hand over next-round materials in the same assessment batch. Separate assessment calls retain caller order. Historical diagnoses retain their evidence, placement and uncertainty for the Curator only.
 
 ## 2. 角色与信息边界
