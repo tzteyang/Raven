@@ -19,6 +19,7 @@ from raven.agent.loop._shared import (
     vision_verdict,
 )
 from raven.memory_engine import DrainOutcome
+from raven.observability import execution
 
 
 class OrganGlueMixin:
@@ -227,21 +228,22 @@ class OrganGlueMixin:
         self._last_injected_skill_sources = {}
         self._last_degraded_segments: list[str] = []
         session_messages = self._context_messages_for_session(session)
-        assembled = await self.harness.memory.assemble(
-            session_key,
-            session_messages,
-            self._make_token_budget(selected_skills),
-            turn=TurnContext(
-                current_message=current_message,
-                media=media,
-                can_see_images=self._supports_vision(model),
-                describe_tool=self._describe_tool_name(),
-                channel=channel,
-                chat_id=chat_id,
-                surface=surface,
-                selected_skills=selected_skills,
-            ),
-        )
+        with execution.scope("harness.memory.assemble"):
+            assembled = await self.harness.memory.assemble(
+                session_key,
+                session_messages,
+                self._make_token_budget(selected_skills),
+                turn=TurnContext(
+                    current_message=current_message,
+                    media=media,
+                    can_see_images=self._supports_vision(model),
+                    describe_tool=self._describe_tool_name(),
+                    channel=channel,
+                    chat_id=chat_id,
+                    surface=surface,
+                    selected_skills=selected_skills,
+                ),
+            )
         # Stash the engine's injected_skill_ids so the after-turn
         # feedback dispatcher can read the source-qualified ids the
         # unified engine populates via SkillForgeRouter. If the key is absent

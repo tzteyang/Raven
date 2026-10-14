@@ -11,6 +11,8 @@ from urllib.parse import urljoin
 import httpx
 import json_repair
 
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -182,24 +184,37 @@ class AzureOpenAIProvider(LLMProvider):
         )
 
         try:
-            async with httpx.AsyncClient(timeout=self.generation.timeout, verify=True) as client:
-                response = await asyncio.wait_for(
-                    client.post(url, headers=headers, json=payload), self.generation.timeout
-                )
-                if response.status_code != 200:
-                    exc = ProviderHTTPError(
-                        response.status_code, f"Azure OpenAI API Error {response.status_code}: {response.text}"
+            with execution.attempt("azure_openai", deployment_name) as accounting:
+                async with httpx.AsyncClient(timeout=self.generation.timeout, verify=True) as client:
+                    response = await asyncio.wait_for(
+                        client.post(url, headers=headers, json=payload), self.generation.timeout
                     )
-                    classification = self.classify_error(exc)
-                    return LLMResponse(
-                        content=format_llm_error(exc, classification, provider="azure_openai"),
-                        finish_reason="error",
-                        error_classification=classification,
+                    accounting.status(response.status_code)
+                    if response.status_code != 200:
+                        provider_usage.capture_error(accounting, response, provider_usage.chat)
+                        exc = ProviderHTTPError(
+                            response.status_code, f"Azure OpenAI API Error {response.status_code}: {response.text}"
+                        )
+                        classification = self.classify_error(exc)
+                        return LLMResponse(
+                            content=format_llm_error(exc, classification, provider="azure_openai"),
+                            finish_reason="error",
+                            error_classification=classification,
+                        )
+
+                    response_data = response.json()
+                    accounting.usage(
+                        provider_usage.chat(response_data.get("usage")),
+                        raw=response_data.get("usage"),
+                        response_id=response_data.get("id"),
+                        served_model=response_data.get("model"),
+                        complete=True,
                     )
-
-                response_data = response.json()
-                return self._parse_response(response_data)
-
+                    result = self._parse_response(response_data)
+                    accounting.status(result.finish_reason)
+                    return result
+        except LedgerError:
+            raise
         except Exception as e:
             classification = self.classify_error(e)
             return LLMResponse(

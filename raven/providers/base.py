@@ -29,7 +29,8 @@ from raven.contracts.llm_provider import (  # noqa: F401
     TruncationInfo,
 )
 from raven.contracts.llm_provider import LLMProvider as _LLMProviderPaper
-from raven.observability import semconv
+from raven.observability import execution, semconv
+from raven.observability.ledger import LedgerError
 from raven.providers import call_record, usage_record
 from raven.providers.first_byte import FirstByteTimeoutError, StreamIdleTimeoutError
 from raven.tracing import trace
@@ -761,7 +762,7 @@ class LLMProvider(_LLMProviderPaper):
                     reasoning_effort=reasoning_effort,
                     tool_choice=tool_choice,
                 )
-            except asyncio.CancelledError:
+            except (asyncio.CancelledError, LedgerError):
                 raise
             except Exception as e:
                 exc = e
@@ -897,6 +898,7 @@ class LLMProvider(_LLMProviderPaper):
                     fence = found
         return fence
 
+    @execution.stage("llm.call", failed=lambda response: response.finish_reason == "error")
     @trace.instrument("llm.call", extract=semconv.llm_call)
     async def chat_with_retry(
         self,
