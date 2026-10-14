@@ -59,6 +59,8 @@ class Introspection:
     them. The signal does not judge the round (`satisfied` is None): it is the worker's view, for the Analyst to weigh.
     """
 
+    before_handover = True
+
     def __init__(self, employee, spawn, *, records: Path | None = None, concurrency: int = 2):
         if concurrency < 1:
             raise ValueError("reviews run at least one at a time")
@@ -70,8 +72,8 @@ class Introspection:
         label = opaque(name)
         async with gate:
             replica = self.spawn(self.employee, f"{self.rounds}-self-{label}")
-            await replica.start()
             try:
+                await replica.start()
                 execution = await replica.run(request(exchanges), session_key=f"curator:{label}:self:{uuid4().hex}")
             finally:
                 await replica.close()

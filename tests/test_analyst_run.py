@@ -10,8 +10,11 @@ from experimental.analyst.materials import RECORDS, read_records
 from experimental.analyst.run import NAME, Limits, analyse, triage, vet
 from experimental.curator.harness import Plan, Task
 from experimental.curator.raven_adapter.worker import Execution
+from experimental.iteration.compartment import BoundaryError, Guard
 from experimental.iteration.exchange import ExchangeError
+from experimental.iteration.hearing import opaque
 from experimental.iteration.history import Diagnosed, Entry, Raised, Revised
+from experimental.iteration.labels import SessionLabels
 from experimental.iteration.protocols import Exchange, Item, Signal
 from experimental.scenario.sealed import Sealed
 from raven.contracts.llm_provider import LLMResponse, ToolCallRequest
@@ -22,7 +25,8 @@ class Provider:
         self.responses = list(responses)
         self.requests = []
 
-    async def chat_with_retry(self, **kwargs):
+    async def chat_with_retry(self, messages, tools=None, model=None, **kwargs):
+        kwargs.update(messages=messages, tools=tools, model=model)
         self.requests.append(kwargs)
         return self.responses.pop(0)
 
@@ -465,3 +469,135 @@ def test_an_already_satisfied_external_condition_is_retained_without_inventing_a
 def test_gate_satisfaction_does_not_hide_an_actionable_quality_failure():
     signal = Signal("assessor", items=(Item("quality", "fail", actual="Repeated headings."),), satisfied=True)
     assert triage([signal]) is None
+
+
+@pytest.mark.asyncio
+async def test_session_labels_cover_packets_queries_and_restore_evidence_references():
+    labels = SessionLabels(["launch-owner"])
+    label = opaque("launch-owner")
+    raw = {"sessions": {"launch-owner": []}, "text": "Review launch-owner.", "turn_id": "turn-1"}
+    provider = Provider(response("submit", {"session": label, "quote": f"Review {label}."}))
+    guarded = Guard("analyst", Sealed.of([], tokens=["launch-owner"])).provider(provider)
+    reply = await labels.provider(guarded).chat_with_retry(
+        messages=[{"role": "user", "content": json.dumps(raw)}, {"role": "tool", "content": "launch-owner"}],
+        tools=[{"enum": ["launch-owner"]}],
+    )
+    sent = provider.requests[0]
+    assert "launch-owner" not in json.dumps(sent) and label in json.dumps(sent)
+    assert reply.tool_calls[0].arguments == {"session": "launch-owner", "quote": "Review launch-owner."}
+    assert raw["text"] == "Review launch-owner." and labels.decode(labels.encode(raw)) == raw
+    assert labels.encode("launch-owner-extra") == "launch-owner-extra"
+
+
+@pytest.mark.asyncio
+async def test_session_labels_do_not_unseal_hidden_persona_text():
+    hidden = "The private drill card requires asking for a refund after the second declined booking attempt."
+    provider = Provider()
+    guarded = Guard("analyst", Sealed.of([hidden], tokens=["launch-owner"])).provider(provider)
+    with pytest.raises(BoundaryError):
+        await (
+            SessionLabels(["launch-owner"])
+            .provider(guarded)
+            .chat_with_retry(messages=[{"role": "user", "content": f"launch-owner: {hidden}"}])
+        )
+    assert not provider.requests
+
+
+@pytest.mark.asyncio
+async def test_analyst_accepts_labelled_external_quotes_without_weakening_validation(tmp_path):
+    label = opaque("launch-owner")
+    quote = "For launch-owner, every quote must include tax."
+    provider = Provider(
+        response(
+            NAME,
+            {
+                "decision": "continue",
+                "reason": "Already satisfied.",
+                "external_requirements": [
+                    {"source": "customer", "quote": quote.replace("launch-owner", label), "kind": "gate"}
+                ],
+            },
+        )
+    )
+    guarded = Guard("analyst", Sealed.of([], tokens=["launch-owner"])).provider(provider)
+    feedback = await analyse(
+        FakeWorker(tmp_path),
+        guarded,
+        (Signal("customer", quote, authority="external"),),
+        {"launch-owner": [Exchange("Quote please.", execution("turn-1", "Tax included."))]},
+    )
+    assert feedback.external_requirements[0].quote == quote
+    assert label in provider.requests[0]["messages"][1]["content"]
+
+
+def test_session_labels_reject_collisions(monkeypatch):
+    monkeypatch.setattr("experimental.iteration.labels.opaque", lambda name: "session-same")
+    with pytest.raises(ValueError, match="collide"):
+        SessionLabels(["first", "second"])
+
+
+@pytest.mark.parametrize("names", [[], ["launch-owner"]])
+def test_session_labels_preserve_unrelated_json_text_and_tuple_values(names):
+    labels = SessionLabels(names)
+    text = ' {"value":1,"quoted":"{\\"value\\":1}","escaped":"\\u0061"} '
+    value = {"source": text, "messages": (text,)}
+    assert labels.encode(value) == value
+    assert labels.decode(value) == value
+    assert isinstance(labels.encode(value)["messages"], tuple)
+    if not names:
+        provider = Provider()
+        assert labels.provider(provider) is provider
+
+
+def test_session_labels_still_project_unicode_escaped_identities_in_json():
+    labels = SessionLabels(["launch-owner"])
+    value = '{"session":"\\u006caunch-owner","source":"{\\"value\\":1}"}'
+    projected = json.loads(labels.encode(value))
+    assert projected["session"] == labels.labels["launch-owner"]
+    assert projected["source"] == '{"value":1}'
+
+
+def test_session_labels_match_the_guards_case_width_and_hyphen_normalization():
+    guarded = Guard("analyst", Sealed.of([], tokens=["launch-owner"])).provider(Provider())
+    labels = SessionLabels.protected(guarded, ["Launch-Owner"])
+    for name in (
+        "Launch-Owner",
+        "LAUNCH-OWNER",
+        "launch\u2011owner",
+        "\uff4c\uff41\uff55\uff4e\uff43\uff48\uff0d\uff4f\uff57\uff4e\uff45\uff52",
+    ):
+        assert labels.encode(name) == opaque("Launch-Owner")
+        assert json.loads(labels.encode(json.dumps({"session": name})))["session"] == opaque("Launch-Owner")
+    assert labels.decode(labels.encode("Launch-Owner")) == "Launch-Owner"
+
+
+@pytest.mark.asyncio
+async def test_assessor_projects_hidden_sessions_and_restores_verdict_references():
+    from experimental.assessor.standard import Assessor, Standard
+    from experimental.iteration.compartment import Boundaries
+
+    provider = Provider(
+        response(
+            "submit_verdicts",
+            {
+                "verdicts": [
+                    {
+                        "id": "tax",
+                        "result": "pass",
+                        "session": opaque("launch-owner"),
+                        "actual": "Tax included.",
+                        "note": "",
+                    }
+                ]
+            },
+        )
+    )
+    assessor = Assessor(
+        provider,
+        Standard.declared([("tax", "Include tax.")]),
+        sources=("declared",),
+        boundaries=Boundaries({"analyst": Sealed.of([], tokens=["launch-owner"])}),
+    )
+    signal = await assessor.evaluate({"launch-owner": [Exchange("Quote please.", execution("t1", "Tax included."))]})
+    assert signal.items[0].session == "launch-owner" and signal.items[0].result == "pass"
+    assert "launch-owner" not in json.dumps(provider.requests)

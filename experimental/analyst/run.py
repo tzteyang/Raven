@@ -14,6 +14,7 @@ from ..curator.raven_adapter.materialize import _write
 from ..curator.raven_adapter.observe import plain
 from ..curator.raven_adapter.targets import catalogue
 from ..iteration.exchange import exchange, messages
+from ..iteration.labels import SessionLabels
 from ..scenario.sealed import WINDOW, Sealed, weight
 from .feedback import Feedback
 from .materials import RECORDS, materials, read_records, record_tool
@@ -210,7 +211,12 @@ async def analyse(
     at submission (see `vet`), so the model corrects a leak instead of the curation aborting on it; `spoken` are the
     words the Curator's compartment spares, which the check spares the same way."""
     trace = []
+    labels = SessionLabels.protected(
+        provider, [*sessions, *(item.session for signal in previous_signals for item in signal.items)]
+    )
+    provider = labels.provider(provider)
     record = {"signals": plain(signals), "trace": trace}
+    record["session_labels"] = labels.labels
     try:
         feedback = triage(signals)
         if feedback is None:

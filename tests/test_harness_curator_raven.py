@@ -70,6 +70,33 @@ def test_configuration_patches_preserve_defaults_and_share_the_native_base(basel
     assert baseline.config.agents.defaults.temperature != 0
 
 
+@pytest.mark.parametrize("guarded", [False, True])
+def test_disclosure_persistence_is_enabled_only_for_guarded_partner_runtime(tmp_path, baseline, declaration, guarded):
+    from experimental.iteration.compartment import Guard
+    from experimental.scenario.sealed import Sealed
+    from tests.test_iteration_compartment import make_provider, user_turn
+
+    guard = Guard("partner", Sealed.of(["Original authorized request."])) if guarded else None
+
+    def provider_factory(config):
+        provider = make_provider()
+        return guard.provider(provider) if guard else provider
+
+    root = tmp_path / "assembly"
+    bound = assemble(
+        baseline, Artifact(values={}, files={}), declaration, root, Recorder(root / "events.jsonl"), provider_factory
+    )
+    try:
+        if guarded:
+            bound.disclosures.receive(user_turn("Original authorized request."))
+            assert bound.disclosures.path.exists()
+        else:
+            assert bound.disclosures is None and not (root / "disclosures.json").exists()
+    finally:
+        bound.runtime.loop.context.skills.stop_file_watcher()
+        bound.content_installation.rollback()
+
+
 def test_an_authored_disabled_tools_list_adds_to_the_hosts_and_never_enables_a_tool_it_disabled(baseline, declaration):
     """e2e0925h onboarding: the Curator disabled the browser tools and its list replaced the host's, so the employee
     got exec, web_search, web_fetch and ask_user back."""

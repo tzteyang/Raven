@@ -6,6 +6,7 @@ from uuid import uuid4
 from raven.spine.events import Text
 from raven.spine.scheduler import conversation_id
 
+from ...iteration.compartment import Compartment
 from .strategy import SESSION
 
 
@@ -18,6 +19,7 @@ async def run_turn(bound, request, emit, drain, *, stream=False, usage_sink=None
     bound.recorder.turn_id = request.turn_id
     emitted = []
     completed = False
+    scope = None
 
     async def observed(event):
         bound.recorder.add("runner.event", event_type=type(event).__name__, event=event)
@@ -26,12 +28,30 @@ async def run_turn(bound, request, emit, drain, *, stream=False, usage_sink=None
             emitted.append(event.content)
 
     try:
+        ledger = getattr(bound, "disclosures", None)
+        spoken = ledger.receive(request) if ledger is not None else ()
+        scope = Compartment("partner", spoken=[spoken])
+        scope.__enter__()
+
+        def disclosed_drain():
+            incoming = drain()
+            for injected in incoming:
+                if conversation_id(injected) != conversation_id(request):
+                    raise ValueError("an injected disclosure belongs to another conversation")
+                scope.spoken = (ledger.receive(injected),)
+            return incoming
+
         if bound.planning is not None:
             await bound.planning.prepare()
         if bound.inference is not None:
             bound.inference.observe_window(bound.runtime.loop.context_window_tokens)
         outcome = await bound.runtime.loop.run_turn(
-            request, observed, drain, stream=stream, usage_sink=usage_sink, text_sink=text_sink
+            request,
+            observed,
+            disclosed_drain if ledger is not None and drain is not None else drain,
+            stream=stream,
+            usage_sink=usage_sink,
+            text_sink=text_sink,
         )
         completed = True
         return outcome
@@ -44,6 +64,8 @@ async def run_turn(bound, request, emit, drain, *, stream=False, usage_sink=None
             if bound.inference is not None:
                 bound.inference.release(request.turn_id)
         finally:
+            if scope is not None:
+                scope.__exit__(None, None, None)
             bound.recorder.turn_id = previous
             SESSION.reset(token)
 

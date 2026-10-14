@@ -1,10 +1,12 @@
 """Scope, provenance, read-only boundaries and partial failure across live strategy owners."""
 
 import asyncio
+import json
 from types import SimpleNamespace
 from unittest.mock import AsyncMock
 
 import pytest
+from pydantic import BaseModel, ValidationError
 
 from experimental.curator.harness import Artifact, Task
 from experimental.curator.harness.context import ContextRequest, ContextSource
@@ -14,6 +16,7 @@ from experimental.curator.raven_adapter.action.contracts import ActionBinding
 from experimental.curator.raven_adapter.action.runtime import BoundAction
 from experimental.curator.raven_adapter.calls import OperationGroup, owner_operation
 from experimental.curator.raven_adapter.context_sources import ContextFrame, SourceContext
+from experimental.curator.raven_adapter.interaction_tools import interaction_tool
 from experimental.curator.raven_adapter.materialize import write_package
 from experimental.curator.raven_adapter.memory.context import ProjectionOverflowError
 from experimental.curator.raven_adapter.memory.contracts import MemoryBinding
@@ -25,6 +28,45 @@ from experimental.curator.raven_adapter.peers import RuntimePeers
 from experimental.curator.raven_adapter.strategy import SESSION
 from raven.contracts.assembled import TokenBudget
 from raven.contracts.harness import ShrinkResult, WindowPressure, WindowState
+
+
+class SourceReport(BaseModel):
+    source_refs: tuple[str, ...]
+    count: int
+
+
+class ReportCommand(BaseModel):
+    report: SourceReport
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("modes", [False, True])
+@pytest.mark.parametrize("encoded", [False, True])
+async def test_strategy_tool_validates_arrays_as_strict_json_and_preserves_the_trusted_envelope(modes, encoded):
+    invoke = AsyncMock(return_value={"accepted": True})
+    tool = interaction_tool(
+        InteractionTool(name="report_sources", description="Record cited sources."), ReportCommand, invoke, modes=modes
+    )
+    options = {"mode": "query"} if modes else {}
+    request = {"report": {"source_refs": ["source-a"], "count": 1}}
+    assert json.loads(await tool.execute(request=json.dumps(request) if encoded else request, **options)) == {
+        "accepted": True
+    }
+    command = invoke.call_args.args[0]
+    assert command.report.source_refs == ("source-a",)
+    assert invoke.call_args.kwargs == options
+    invoke.reset_mock()
+    for invalid in (
+        {"request": {"report": {"source_refs": ["source-a"], "count": "1"}}},
+        {"request": {"report": {"source_refs": [1], "count": 1}}},
+        {"request": {"report": {"source_refs": ["source-a"], "count": 1, "origin": "observation"}}},
+        {"request": {"report": {"source_refs": ["source-a"], "count": 1}}, "origin": "observation"},
+    ):
+        if encoded:
+            invalid = {**invalid, "request": json.dumps(invalid["request"])}
+        with pytest.raises(ValidationError):
+            await tool.execute(**invalid)
+    invoke.assert_not_awaited()
 
 
 @pytest.mark.asyncio

@@ -36,6 +36,7 @@ from ..curator.harness.declaration import schema_for
 from ..curator.raven_adapter.materialize import _write
 from ..experience.governance import fingerprint
 from ..iteration.exchange import exchange, messages
+from ..iteration.labels import SessionLabels
 from ..iteration.protocols import Item, Sessions, Signal
 from ..requirements import ExternalRequirement
 from .checks import VERIFIERS, Finding, combine, program
@@ -558,6 +559,7 @@ class Assessor:
             return None
         with self._scope(sessions) as scope:
             provider = self.provider if scope is None else scope.provider(self.provider)
+            provider = SessionLabels.protected(provider, sessions).provider(provider)
             if self.builder is not None and (norms or self.task):
                 if self.guidance_store is not None:
                     guidance_inputs = fingerprint({"task": self.task, "norms": norms})

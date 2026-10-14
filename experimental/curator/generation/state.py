@@ -30,6 +30,8 @@ class GenerationState(BaseModel):
     stage_queries: int = Field(default=0, ge=0)
     checks: int = Field(default=0, ge=0)
     repairs: int = Field(default=0, ge=0)
+    design_replans: int = Field(default=0, ge=0, le=1)
+    design_gap: str | None = None
 
     @staticmethod
     def identity(context: Context) -> str:

@@ -302,3 +302,54 @@ async def test_parent_playbook_executes_the_same_child_its_inspection_observes(b
         assert any(row["kind"] == "dag.progress" for row in executed.records)
     rows = [json.loads(line) for line in (state / "observations.jsonl").read_text().splitlines()]
     assert len([row for row in rows if row["kind"] == "hosting.ready"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_hosted_process_enforces_the_serialized_partner_guard(baseline, tmp_path):
+    from pydantic import TypeAdapter
+
+    from experimental.iteration.compartment import Guard
+    from experimental.scenario.sealed import Sealed
+    from raven.acp_client.protocol import AcpRemoteError, AcpTimeoutError
+
+    baseline.extensions.session_title.enabled = False
+    command, env, state = hosted(baseline, tmp_path)
+    path = tmp_path / "deployment.json"
+    deployment = json.loads(path.read_text())
+    deployment["artifact"] = {"values": {}}
+    log = tmp_path / "boundaries.jsonl"
+    deployment["guard"] = TypeAdapter(Guard).dump_python(
+        Guard("partner", Sealed.of([], tokens=["case-a"]), log=log), mode="json"
+    )
+    path.write_text(json.dumps(deployment))
+    client = await AcpClient.launch(name="Guarded", command=command, cwd=str(baseline.workdir), env=env)
+    try:
+        await client.request("initialize", {"protocolVersion": 1, "clientCapabilities": {}}, timeout=40)
+        session = await client.request("session/new", {"cwd": str(baseline.workdir), "mcpServers": []}, timeout=20)
+        ordinary = await client.request(
+            "session/prompt",
+            {
+                "sessionId": session["sessionId"],
+                "prompt": [{"type": "text", "text": "Read the supplied brief."}],
+            },
+            timeout=45,
+        )
+        assert ordinary["stopReason"] == "end_turn"
+        try:
+            await client.request(
+                "session/prompt",
+                {
+                    "sessionId": session["sessionId"],
+                    "prompt": [{"type": "text", "text": "Read case-a."}],
+                },
+                timeout=45,
+            )
+        except AcpRemoteError:
+            pass
+        except AcpTimeoutError as exc:
+            raise AssertionError(client.stderr_tail(6000)) from exc
+        rows = [json.loads(line) for line in log.read_text().splitlines()]
+        assert any(row["role"] == "partner" and "case-a" in row["hits"] for row in rows)
+        assert (state / "disclosures.json").exists()
+    finally:
+        await client.close()

@@ -2,11 +2,11 @@
 
 import json
 
-from pydantic import ConfigDict, create_model
+from pydantic import ConfigDict, TypeAdapter, create_model
 
 from raven.contracts.tool import Tool
 
-from ..harness.declaration import parse_as, schema_for
+from ..harness.declaration import schema_for
 from ..harness.interaction import InteractionMode
 from .observe import plain
 
@@ -35,7 +35,9 @@ def interaction_tool(binding, command_type, invoke, *, modes=False):
                     decoded = None
                 if isinstance(decoded, dict):
                     kwargs = {**kwargs, "request": decoded}
-            request = parse_as(request_type, kwargs, strict=True)
+            request = TypeAdapter(request_type).validate_json(
+                json.dumps(kwargs, allow_nan=False), strict=True, extra="forbid", by_alias=False, by_name=True
+            )
             options = {"mode": request.mode} if modes else {}
             return json.dumps(plain(await invoke(request.request, **options)), ensure_ascii=False)
 

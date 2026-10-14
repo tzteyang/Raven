@@ -46,13 +46,17 @@ class Diagnosed(BaseModel):
 
     model_config = ConfigDict(extra="forbid", frozen=True)
     AUDIENCES: ClassVar[dict[str, frozenset[str]]] = {
-        name: CURATOR for name in ("about", "state", "mechanism", "earlier", "scope")
+        name: CURATOR
+        for name in ("about", "state", "mechanism", "evidence", "earlier", "placement", "uncertain", "scope")
     }
 
     about: str
     state: str
     mechanism: str = ""
+    evidence: tuple[str, ...] = ()
     earlier: str = ""
+    placement: str = ""
+    uncertain: str = ""
     scope: str = "root"
 
 
@@ -128,7 +132,10 @@ def _diagnosed(scope, attribution) -> tuple[Diagnosed, ...]:
             about=diagnosis.about,
             state=diagnosis.state,
             mechanism=diagnosis.mechanism,
+            evidence=diagnosis.evidence,
             earlier=diagnosis.earlier,
+            placement=diagnosis.placement,
+            uncertain=diagnosis.uncertain,
             scope=scope,
         )
         for diagnosis in attribution.attribution.diagnoses

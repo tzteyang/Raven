@@ -63,7 +63,7 @@ def child_directory(root, name):
     return Path(root) / "children" / fingerprint(name)[:16]
 
 
-def bind_children(baseline, children, root):
+def bind_children(baseline, children, root, *, guard=None):
     """Bind existing roster names to their checked full-Harness launch definition."""
     if not children:
         return baseline
@@ -78,6 +78,14 @@ def bind_children(baseline, children, root):
             "state_dir": str(directory),
             "grants": child.grants,
         }
+        if guard is not None:
+            from pydantic import TypeAdapter
+
+            from ...iteration.compartment import Guard
+
+            if not isinstance(guard, Guard) or guard.role != "partner":
+                raise ValueError("a child inherits only its partner compartment")
+            content["guard"] = TypeAdapter(Guard).dump_python(guard, mode="json")
         definition = directory / "versions" / fingerprint(content) / "deployment.json"
         encoded = json.dumps(content, ensure_ascii=False, indent=2).encode()
         if definition.exists() and definition.read_bytes() != encoded:

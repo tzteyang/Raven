@@ -10,6 +10,8 @@ class AssessorProtocol(Protocol):
 
     The standard (criteria, materials, references, held-out cases) is the assessor's own state; the loop sees only the
     `Signal`, whose `attachments` name whatever material the assessor hands over with it. None means nothing to say.
+    An assessor that reviews the existing worker before new material is released declares `before_handover = True`;
+    the loop runs those reviews first within each assessment batch.
     """
 
     async def evaluate(self, sessions: Sessions) -> Signal | None: ...

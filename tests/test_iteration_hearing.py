@@ -106,7 +106,18 @@ def test_the_curator_hears_words_and_satisfaction_never_items_or_metrics():
                 "addresses": ["R1"],
             }
         ],
-        "diagnoses": [{"about": "R1", "state": "absent", "mechanism": "", "earlier": "", "scope": "root"}],
+        "diagnoses": [
+            {
+                "about": "R1",
+                "state": "absent",
+                "mechanism": "",
+                "evidence": [],
+                "earlier": "",
+                "placement": "",
+                "uncertain": "",
+                "scope": "root",
+            }
+        ],
     }
 
 

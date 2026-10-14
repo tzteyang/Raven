@@ -195,6 +195,7 @@ class Bound:
     inference: Inference | None = None
     prepared: PreparedHarness = field(default_factory=PreparedHarness)
     content_installation: ContentInstallation | None = None
+    disclosures: object | None = None
 
     async def prepare(self):
         if self.planning:
@@ -604,6 +605,14 @@ def assemble(
         _verify_bindings(runtime, prepared, objects, effective.extensions.memory.backend)
         _verify_playbooks(runtime, prepared)
         recorder.add("runtime.bound", package=str(package), targets=list(artifact.values))
+        from ...iteration.disclosure import Disclosures
+
+        guard = getattr(provider, "guard", None)
+        disclosures = (
+            Disclosures((planning_state.parent if planning_state else root) / "disclosures.json")
+            if guard is not None and guard.role == "partner"
+            else None
+        )
         return Bound(
             runtime,
             effective,
@@ -620,6 +629,7 @@ def assemble(
             infer,
             prepared,
             installation,
+            disclosures,
         )
     except BaseException:
         installation.rollback()

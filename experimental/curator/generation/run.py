@@ -602,6 +602,19 @@ async def generate(
     # diagnoses those inputs, so only the stages that choose and design see it.
     open_inputs = coverage(context.commitments, [diagnosis.about for diagnosis in attribution.attribution.diagnoses])
 
+    def reconsider(exc):
+        if state.design_replans:
+            raise exc
+        state.design_replans += 1
+        state.design_gap = exc.reason
+        trace.append({"stage": exc.stage, "event": "design.reconsider", "reason": exc.reason})
+        state.staged = {}
+        state.edited = []
+        if stage_candidate:
+            stage_candidate(None)
+        state.plan = state.candidate = state.validation = None
+        state.advance("design")
+
     while True:
         if state.stage == "select":
             _, state.selection = await run_stage(
@@ -621,16 +634,24 @@ async def generate(
                 return result
             continue
         if state.stage == "design":
-            name, proposal = await run_stage(
-                "design",
-                ("design",),
-                {**design.materials(context, selection), "commitment_coverage": open_inputs},
-                {design.NAME: design.schema(context.declaration, selection)},
-                {
-                    design.NAME: lambda value: design.parse(context, selection, attribution.attribution, value),
-                    select.REVISE: parse_selection,
-                },
-            )
+            try:
+                name, proposal = await run_stage(
+                    "design",
+                    ("design",),
+                    {
+                        **design.materials(context, selection),
+                        "commitment_coverage": open_inputs,
+                        **({"reported_design_gap": state.design_gap} if state.design_gap else {}),
+                    },
+                    {design.NAME: design.schema(context.declaration, selection)},
+                    {
+                        design.NAME: lambda value: design.parse(context, selection, attribution.attribution, value),
+                        select.REVISE: parse_selection,
+                    },
+                )
+            except GapReportedError as exc:
+                reconsider(exc)
+                continue
             if name == select.REVISE:
                 state.selection = proposal
                 state.advance("design")
@@ -659,19 +680,23 @@ async def generate(
                 edited=state.edited,
             )
 
-        name, proposal = await run_stage(
-            state.stage,
-            ("implement",) if state.stage == "implement" else ("implement", "repair"),
-            materials,
-            {implement.NAME: artifact_schema, CHECK: artifact_schema},
-            {
-                implement.NAME: parse_artifact,
-                repair.NAME: repair.Revision.model_validate,
-                select.REVISE: parse_selection,
-            },
-            check_parser=parse_artifact,
-            stage_files=True,
-        )
+        try:
+            name, proposal = await run_stage(
+                state.stage,
+                ("implement",) if state.stage == "implement" else ("implement", "repair"),
+                materials,
+                {implement.NAME: artifact_schema, CHECK: artifact_schema},
+                {
+                    implement.NAME: parse_artifact,
+                    repair.NAME: repair.Revision.model_validate,
+                    select.REVISE: parse_selection,
+                },
+                check_parser=parse_artifact,
+                stage_files=True,
+            )
+        except GapReportedError as exc:
+            reconsider(exc)
+            continue
         if name in (repair.NAME, select.REVISE):
             state.staged = {}
             state.edited = []

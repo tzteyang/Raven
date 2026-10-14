@@ -688,6 +688,60 @@ async def test_assessors_judge_at_once_and_the_round_holds_their_signals_in_thei
 
 
 @pytest.mark.asyncio
+@pytest.mark.parametrize("recorded", [False, True])
+async def test_self_review_finishes_before_concurrent_handover_assessments(tmp_path, recorded):
+    events = []
+    meeting = Meeting(2)
+
+    class SelfReview:
+        before_handover = True
+
+        async def evaluate(self, sessions):
+            events.append("self started")
+            await asyncio.sleep(0)
+            assert meeting.started == []
+            events.append("self finished")
+            return Signal("self", "unchanged worker")
+
+    class Owner:
+        async def evaluate(self, sessions):
+            assert events == ["self started", "self finished"]
+            return await meeting.assessor("owner").evaluate(sessions)
+
+    judges = (Owner(), SelfReview(), meeting.assessor("independent", 0.01))
+    session = Session.open(FakeWorker(tmp_path), object())
+    signals = await session.assess(*judges) if recorded else await stepping.assess(judges, {})
+    assert [signal.source for signal in signals] == ["self", "owner", "independent"]
+    assert meeting.started == ["owner", "independent"]
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("recorded", [False, True])
+async def test_failed_self_review_prevents_next_round_handover(tmp_path, recorded):
+    handovers = []
+
+    class SelfReview:
+        before_handover = True
+
+        async def evaluate(self, sessions):
+            raise RuntimeError("self review failed")
+
+    class Owner:
+        async def evaluate(self, sessions):
+            handovers.append("next-round materials")
+            return Signal("owner", "new materials")
+
+    judges = (Owner(), SelfReview())
+    session = Session.open(FakeWorker(tmp_path), object())
+    with pytest.raises(RuntimeError, match="self review failed"):
+        if recorded:
+            await session.assess(*judges)
+        else:
+            await stepping.assess(judges, {})
+    assert handovers == []
+
+
+@pytest.mark.asyncio
 async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_analyst_nor_the_curator(
     tmp_path, curations, analyses
 ):
@@ -720,7 +774,7 @@ async def test_held_out_trials_are_measured_and_recorded_but_reach_neither_the_a
 
 
 @pytest.mark.asyncio
-async def test_a_reported_gap_keeps_the_question_and_the_run_goes_on_unrevised(tmp_path, analyses):
+async def test_a_reported_gap_blocks_the_next_trial_and_preserves_the_pending_round(tmp_path, analyses):
     analyses.scripted.extend([CURATE, CONTINUE])
     asked = []
 
@@ -734,15 +788,149 @@ async def test_a_reported_gap_keeps_the_question_and_the_run_goes_on_unrevised(t
     await session.trial(student("Hi"))
     session.signal(Signal("human", "Refunds are wrong."))
     assert await session.analyse() == Outcome("curate")
-    assert await session.curate() and session.status == "running"
-    assert asked and not session.rounds[-1].curated and session.history[-1].revision is None
+    assert not await session.curate() and session.status == "blocked"
+    assert asked and not session.rounds[-1].curated and session.review is not None
+    assert len(session.history) == 0
     assert session.record["questions"] == [
         {"round": 1, "stage": "select", "question": "Who approves a refund above the listed amount?"}
     ]
-    await session.trial(student("Hi again"))
-    session.signal(Signal("human", "Fine."))
-    assert await session.analyse() == Outcome("continue")
+    with pytest.raises(StepError, match="blocked"):
+        await session.trial(student("Hi again"))
+    with pytest.raises(StepError, match="blocked"):
+        await session.curate()
+    with pytest.raises(ValueError, match="new information"):
+        session.resolve_gap(" ")
     assert json.loads(session.path.read_text())["questions"][0]["round"] == 1
+
+
+@pytest.mark.asyncio
+async def test_a_resolved_gap_retries_the_same_round_and_keeps_the_answer_on_resume(tmp_path, analyses):
+    analyses.scripted.extend([CURATE, CURATE])
+    received = []
+    question = "The granted Action dependencies do not provide authoritative file reads."
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        if feedback is not None:
+            received.append(feedback)
+            if len(received) == 1:
+                raise GapReportedError("design", question)
+            feedback["previous_gaps"][0]["question"] = "Mutated local input"
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curator)
+    await session.onboard()
+    await session.trial(student("Review this delivery"))
+    session.signal(Signal("human", "The delivery omitted a required section."))
+    await session.analyse()
+    assert not await session.curate()
+    assert "previous_gaps" not in received[0]
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    assert session.status == "blocked" and len(session.rounds) == 1
+    with pytest.raises(StepError, match="blocked"):
+        await session.curate()
+    session.resolve_gap("The owner requires guided verification; an unconditional audit gate is not required.")
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    expected = [{"round": 1, "stage": "design", "question": question}]
+    assert session._heard({})["previous_gaps"] == expected
+    assert await session.curate()
+    assert len(session.rounds) == 1 and session.status == "running"
+    assert received[-1]["gap_resolutions"][0]["answer"].startswith("The owner requires guided verification")
+    assert session.record["questions"] == expected
+    assert json.loads(session.path.read_text())["questions"] == expected
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("onboarding", [False, True])
+@pytest.mark.parametrize("resolved", [False, True])
+async def test_an_explicit_reason_cancels_a_gap_without_resuming_execution(tmp_path, analyses, onboarding, resolved):
+    analyses.scripted.append(CURATE)
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        if onboarding or feedback is not None:
+            raise GapReportedError("design", "Required authorization is unavailable.")
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curator)
+    if onboarding:
+        assert not await session.onboard()
+    else:
+        await session.onboard()
+        await session.trial(student("Review the request."))
+        session.signal(Signal("human", "A required authorization is missing."))
+        await session.analyse()
+        assert not await session.curate()
+    assert session.status == "blocked"
+    if resolved:
+        session.resolve_gap("Authorization is available but the operator no longer wants this run.")
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    with pytest.raises(StepError):
+        session.finish()
+    with pytest.raises(StepError):
+        session.finish(" ")
+    session.finish("Cancelled by operator; no further trials authorized.")
+    assert session.status == "finished" and session.review is None
+    assert "gap_retry" not in session.record and session.record["questions"]
+    assert session.outcome.next == "stop"
+    if not onboarding:
+        assert len(session.history) == 1 and not session.rounds[-1].curated
+        assert session.history[0].revision is None
+    resumed = Session.resume(worker, object(), session.path, curator=curator)
+    with pytest.raises(StepError, match="finished"):
+        await resumed.trial(student("Try again."))
+
+
+@pytest.mark.asyncio
+async def test_an_onboarding_gap_blocks_execution_until_answered(tmp_path):
+    received = []
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        received.append(feedback)
+        if len(received) == 1:
+            raise GapReportedError("select", "Which policy governs publication?")
+
+    session = Session.open(FakeWorker(tmp_path), object(), curator=curator)
+    assert not await session.onboard() and session.status == "blocked"
+    with pytest.raises(StepError, match="blocked"):
+        await session.trial(student("Publish it"))
+    session.resolve_gap("Use the supplied publication policy.")
+    assert await session.onboard() and session.status == "running"
+    assert received[-1]["gap_resolutions"][0]["answer"] == "Use the supplied publication policy."
+
+
+@pytest.mark.asyncio
+async def test_resolving_an_onboarding_gap_does_not_allow_execution_before_recuration(tmp_path):
+    async def curator(worker, provider, **options):
+        raise GapReportedError("design", "Which policy governs publication?")
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curator)
+    assert not await session.onboard()
+    session.resolve_gap("Use the supplied publication policy.")
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    with pytest.raises(StepError, match="retry"):
+        await session.trial(student("Publish it"))
+    with pytest.raises(StepError, match="retry"):
+        session.finish()
+    assert not worker.runs
+
+
+@pytest.mark.asyncio
+async def test_onboarding_gap_retry_restores_the_original_opening_after_restart(tmp_path):
+    received = []
+
+    async def curator(worker, provider, *, feedback=None, **options):
+        received.append(feedback)
+        if len(received) == 1:
+            raise GapReportedError("design", "Who approves publication?")
+
+    worker = FakeWorker(tmp_path)
+    session = Session.open(worker, object(), curator=curator)
+    opening = (Signal("owner", "Read the supplied procurement policy before publication."),)
+    assert not await session.onboard(opening)
+    session.resolve_gap("The requester approves publication.")
+    session = Session.resume(worker, object(), session.path, curator=curator)
+    assert await session.onboard()
+    assert received[1]["signals"] == received[0]["signals"]
 
 
 @pytest.mark.asyncio

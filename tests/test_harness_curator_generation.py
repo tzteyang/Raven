@@ -339,6 +339,69 @@ async def test_missing_native_capability_is_reported_without_a_fake_success(cont
 
 
 @pytest.mark.asyncio
+async def test_an_infeasible_design_can_reselect_and_validate_a_supported_capability(context):
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "Action cannot read authoritative delivery files."}),
+        response("revise_selection", selection("capability.strategy")),
+        response("submit_plan", plan("capability.strategy")),
+        response("submit_artifact", {"values": {"capability.strategy": {"factory": "rules:create"}}}),
+    )
+    validator = AsyncMock(return_value=Validation([], [{"kind": "runtime.bound"}]))
+    result = await generate(context, provider, validate=validator)
+    assert result.candidate.selection.targets == ("capability.strategy",)
+    assert result.candidate.artifact.values == {"capability.strategy": {"factory": "rules:create"}}
+    validator.assert_awaited_once_with(result.candidate)
+    recovery = packet(provider.requests[2])
+    assert recovery["reported_design_gap"] == "Action cannot read authoritative delivery files."
+    assert "do not invent a binding or weaken a requirement" in instructions(provider.requests[2])
+    assert len([event for event in result.trace if event["event"] == "report_gap"]) == 1
+    assert [event["call"] for event in result.trace if event["event"] == "model.call"] == [1, 2, 3, 4, 5]
+
+
+@pytest.mark.asyncio
+async def test_a_second_design_gap_stops_without_validation_or_a_candidate(context):
+    from experimental.curator.generation.run import GapReportedError
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "Action cannot read authoritative files."}),
+        response("report_gap", {"reason": "The required guaranteed audit has no supported binding."}),
+    )
+    validator = AsyncMock()
+    with pytest.raises(GapReportedError, match="guaranteed audit") as caught:
+        await generate(context, provider, validate=validator)
+    validator.assert_not_awaited()
+    assert len(provider.requests) == 3
+    assert len([event for event in caught.value.trace if event["event"] == "design.reconsider"]) == 1
+    assert len([event for event in caught.value.trace if event["event"] == "report_gap"]) == 2
+
+
+@pytest.mark.asyncio
+async def test_design_reconsideration_keeps_its_budget_and_survives_serialized_resume(context):
+    from experimental.curator.generation.run import GapReportedError, GenerationPausedError
+    from experimental.curator.generation.state import GenerationState
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "No authorized file reader."}),
+    )
+    with pytest.raises(GenerationPausedError) as paused:
+        await generate(context, provider, validate=None, limits=Limits(max_calls=2))
+    state = GenerationState.model_validate_json(paused.value.state.model_dump_json())
+    assert state.calls == 2 and state.design_replans == 1 and state.design_gap == "No authorized file reader."
+    unused = Provider()
+    with pytest.raises(GenerationPausedError):
+        await generate(context, unused, validate=None, limits=Limits(max_calls=2), resume=state)
+    assert not unused.requests
+    resumed = Provider(response("report_gap", {"reason": "New permission is still required."}))
+    with pytest.raises(GapReportedError) as caught:
+        await generate(context, resumed, validate=None, limits=Limits(max_calls=3), resume=state)
+    assert [event["call"] for event in caught.value.trace if event["event"] == "model.call"] == [1, 2, 3]
+    assert len([event for event in caught.value.trace if event["event"] == "design.reconsider"]) == 1
+
+
+@pytest.mark.asyncio
 async def test_stage_requests_keep_shared_consumers_readings_and_actual_actions(context):
     import re
     from dataclasses import replace
@@ -1567,3 +1630,66 @@ async def test_a_target_whose_commitments_are_retired_must_leave_with_them(conte
     refused = next(event for event in result.trace if event["event"] == "output.rejected")
     assert "code but no current commitment: ['action.strategy']" in refused["error"]
     assert result.candidate.artifact.remove == ("action.strategy",)
+
+
+@pytest.mark.asyncio
+async def test_implementation_gap_reopens_design_once_within_the_existing_budget(context):
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("report_gap", {"reason": "The receipt controller is not implemented yet."}),
+        response("revise_selection", selection("capability.strategy")),
+        response("submit_plan", plan("capability.strategy")),
+        response("submit_artifact", {"values": {"capability.strategy": {"factory": "rules:create"}}}),
+    )
+    validator = AsyncMock(return_value=Validation([], [{"kind": "runtime.bound"}]))
+    result = await generate(context, provider, validate=validator)
+    validator.assert_awaited_once_with(result.candidate)
+    assert result.candidate.selection.targets == ("capability.strategy",)
+    assert packet(provider.requests[3])["reported_design_gap"] == "The receipt controller is not implemented yet."
+    reconsidered = [row for row in result.trace if row["event"] == "design.reconsider"]
+    assert len(reconsidered) == 1 and reconsidered[0]["stage"] == "implement"
+    assert [row["call"] for row in result.trace if row["event"] == "model.call"] == list(range(1, 7))
+
+
+@pytest.mark.asyncio
+async def test_design_and_implementation_share_one_gap_replanning_allowance(context):
+    from experimental.curator.generation.run import GapReportedError
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("report_gap", {"reason": "The planned reader is unavailable."}),
+        response("submit_plan", plan("action.strategy")),
+        response("report_gap", {"reason": "No supported implementation satisfies the requirement."}),
+    )
+    validator = AsyncMock()
+    with pytest.raises(GapReportedError, match="No supported implementation") as caught:
+        await generate(context, provider, validate=validator)
+    assert caught.value.stage == "implement"
+    validator.assert_not_awaited()
+    assert len([row for row in caught.value.trace if row["event"] == "design.reconsider"]) == 1
+
+
+@pytest.mark.asyncio
+async def test_implementation_gap_replanning_survives_resume_without_resetting_budget(context):
+    from experimental.curator.generation.run import GapReportedError, GenerationPausedError
+    from experimental.curator.generation.state import GenerationState
+
+    provider = Provider(
+        response("submit_selection", selection("action.strategy")),
+        response("submit_plan", plan("action.strategy")),
+        response("report_gap", {"reason": "The planned implementation lacks its required dependency."}),
+    )
+    with pytest.raises(GenerationPausedError) as paused:
+        await generate(context, provider, validate=None, limits=Limits(max_calls=3))
+    state = GenerationState.model_validate_json(paused.value.state.model_dump_json())
+    assert state.stage == "design" and state.plan is None
+    assert state.calls == 3 and state.design_replans == 1
+    assert state.staged == {} and state.edited == []
+    unused = Provider()
+    with pytest.raises(GenerationPausedError):
+        await generate(context, unused, validate=None, limits=Limits(max_calls=3), resume=state)
+    assert unused.requests == []
+    resumed = Provider(response("report_gap", {"reason": "The concrete dependency remains unavailable."}))
+    with pytest.raises(GapReportedError):
+        await generate(context, resumed, validate=None, limits=Limits(max_calls=4), resume=state)
