@@ -7,7 +7,7 @@ import pytest
 
 from experimental.analyst.feedback import Feedback
 from experimental.analyst.materials import RECORDS, read_records
-from experimental.analyst.run import NAME, Limits, analyse, triage, vet
+from experimental.analyst.run import NAME, Limits, analyse, identified, triage, vet
 from experimental.curator.harness import Plan, Task
 from experimental.curator.raven_adapter.worker import Execution
 from experimental.iteration.exchange import ExchangeError
@@ -309,6 +309,34 @@ async def test_requirements_get_the_loops_ids_and_a_repeat_keeps_the_earlier_one
     schema = next(t for t in provider.requests[0]["tools"] if t["function"]["name"] == NAME)["function"]["parameters"]
     requirement = schema["$defs"]["Requirement"]
     assert "id" not in requirement["properties"] and "situation" in requirement["required"]
+
+
+def test_sparse_history_ids_allocate_above_the_largest_and_keep_old_repeats():
+    feedback = Feedback(
+        decision="curate", reason="r", requirements=(REQUIREMENT, REQUIREMENT, REQUIREMENT | {"repeats": "R4"})
+    )
+    result = identified(feedback, ["R2", "R4"])
+    assert [item.id for item in result.requirements] == ["R5", "R6", "R4"]
+    with pytest.raises(ValueError, match="no earlier requirement"):
+        identified(
+            Feedback(decision="curate", reason="r", requirements=(REQUIREMENT, REQUIREMENT | {"repeats": "R5"})), ["R4"]
+        )
+
+
+async def test_duplicate_repeats_are_rejected_and_the_analyst_can_correct_them(tmp_path, sessions):
+    history = (
+        Entry(
+            round=1, requirements=(Raised(id="R1", behavior="Ask the budget.", strength="must_hold", acceptance="a"),)
+        ),
+    )
+    repeated = REQUIREMENT | {"repeats": "R1", "expectation": "unmet", "recurrence": 1}
+    provider = Provider(
+        response(NAME, {"decision": "curate", "reason": "r", "requirements": [repeated, repeated]}),
+        response(NAME, {"decision": "curate", "reason": "r", "requirements": [repeated]}),
+    )
+    feedback = await analyse(FakeWorker(tmp_path), provider, (Signal("human", "Still no."),), sessions, history=history)
+    assert [item.id for item in feedback.requirements] == ["R1"]
+    assert "requirement ids must be unique" in rejections(provider)[0]
 
 
 async def test_what_is_bound_for_the_curator_may_not_carry_what_the_evaluation_side_holds(tmp_path, sessions):

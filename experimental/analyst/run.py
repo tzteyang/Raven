@@ -54,15 +54,21 @@ def known_ids(history) -> list[str]:
 def identified(feedback: Feedback, known) -> Feedback:
     """The feedback with its requirements' ids assigned: the earlier id when one repeats, the next number otherwise."""
     known = list(known)
+    next_number = max((int(match[1]) for id in known if (match := re.fullmatch(r"R(\d+)", id))), default=0)
     requirements = []
+    assigned = set()
     for requirement in feedback.requirements:
         if requirement.repeats is not None:
             if requirement.repeats not in known:
                 raise ValueError(f"repeats names no earlier requirement: {requirement.repeats!r}; known ids: {known}")
-            requirements.append(requirement.model_copy(update={"id": requirement.repeats}))
-            continue
-        known.append(f"R{len(known) + 1}")
-        requirements.append(requirement.model_copy(update={"id": known[-1]}))
+            id = requirement.repeats
+        else:
+            next_number += 1
+            id = f"R{next_number}"
+        if id in assigned:
+            raise ValueError(f"requirement ids must be unique in a round: {id}")
+        assigned.add(id)
+        requirements.append(requirement.model_copy(update={"id": id}))
     return (
         feedback
         if tuple(requirements) == feedback.requirements
