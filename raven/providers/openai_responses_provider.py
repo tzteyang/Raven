@@ -23,7 +23,7 @@ from raven.providers.openai_codex_provider import (
 )
 from raven.providers.usage import responses_usage
 
-_GPT_VERSION = re.compile(r"(?:^|/)gpt-(\d+)\.(\d+)(?:$|[-/])", re.IGNORECASE)
+_GPT_VERSION = re.compile(r"(?:^|/)gpt-(\d+)(?:\.(\d+))?(?:$|[-/])", re.IGNORECASE)
 _DEFAULT_BASE = "https://api.openai.com/v1"
 
 
@@ -169,7 +169,7 @@ class OpenAIResponsesProvider(LLMProvider):
 
 def _uses_gpt56_profile(model: str) -> bool:
     match = _GPT_VERSION.search(model)
-    return bool(match and (int(match.group(1)), int(match.group(2))) >= (5, 6))
+    return bool(match and (int(match.group(1)), int(match.group(2) or 0)) >= (5, 6))
 
 
 def _prompt_cache_key(instructions: str, model: str) -> str:

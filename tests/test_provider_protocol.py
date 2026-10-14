@@ -15,6 +15,37 @@ from raven.providers.protocol import effective_protocol
 from raven.providers.wire import wire_model
 
 
+@pytest.mark.parametrize("model", ["gpt-6-astra", "custom/gpt-6-astra", "gpt-5.6-sol"])
+async def test_responses_reasoning_models_omit_sampling_and_keep_tools(monkeypatch, model):
+    seen = []
+
+    def handler(request):
+        seen.append((request.url.path, json.loads(request.content)))
+        return httpx.Response(
+            200,
+            content=_anthropic_sse(
+                {"type": "response.output_text.delta", "delta": "ok"},
+                {"type": "response.completed", "response": {"status": "completed"}},
+            ),
+        )
+
+    real_client = httpx.AsyncClient
+    monkeypatch.setattr(httpx, "AsyncClient", lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw))
+    config = _config(model)
+    config.agents.defaults.reasoning_effort = "high"
+    provider = make_provider(config)
+    reply = await provider.chat_with_retry(
+        [{"role": "user", "content": "check"}],
+        tools=[{"type": "function", "function": {"name": "check", "parameters": {"type": "object", "properties": {}}}}],
+    )
+    assert reply.content == "ok"
+    path, body = seen[0]
+    assert path.endswith("/responses")
+    assert body["reasoning"] == {"effort": "high"}
+    assert "temperature" not in body and "top_p" not in body
+    assert body["tools"][0]["name"] == "check"
+
+
 def _config(model: str, *, override: str | None = None) -> Config:
     custom = {
         "apiKey": "test-key",
