@@ -430,6 +430,56 @@ def test_requirement_authority_comes_from_supplied_evidence_not_a_model_claim():
         sourced(feedback("assessor:absent"), [external])
 
 
+@pytest.mark.parametrize("prefix", ["check", "case"])
+def test_an_item_id_with_a_colon_is_cited_as_the_item_not_an_assessor(prefix, sessions):
+    from experimental.analyst.run import sourced
+
+    signals = (
+        Signal(
+            "assessor",
+            items=(Item("assessor:review", "unknown"), Item("tax", "fail", authority="external")),
+        ),
+    )
+
+    def feedback(*grounds):
+        return identified(
+            Feedback(
+                decision="curate",
+                reason="A concrete intake gap.",
+                requirements=(REQUIREMENT | {"grounds": list(grounds)},),
+            ),
+            (),
+        )
+
+    cited = sourced(feedback(f"{prefix}:assessor:review"), signals).requirements[0]
+    assert cited.grounds == (f"{prefix}:assessor:review",) and cited.authority == "model"
+    # The id written bare reads like an assessor named `review`; no such assessor exists, so it means the item.
+    bare = sourced(feedback("assessor:review", "check:tax"), signals)
+    assert bare.requirements[0].grounds == ("check:assessor:review", "check:tax")
+    assert bare.requirements[0].authority == "model"
+    vet(bare, signals, sessions)
+    assert sourced(feedback("tax"), signals).requirements[0].grounds == ("check:tax",)
+    assert sourced(feedback("tax"), signals).requirements[0].authority == "external"
+    assert sourced(feedback("assessor:assessor"), signals).requirements[0].grounds == ("assessor:assessor",)
+    with pytest.raises(ValueError, match="no supplied judgement: \\['check:review'\\]"):
+        sourced(feedback("check:review"), signals)
+
+
+def test_an_assessor_ground_wins_over_an_item_of_the_same_spelling():
+    from experimental.analyst.run import sourced
+
+    signals = (
+        Signal("review", "Looks incomplete.", authority="external"),
+        Signal("assessor", items=(Item("assessor:review", "unknown"),)),
+    )
+    request = Feedback(
+        decision="curate",
+        reason="A concrete intake gap.",
+        requirements=(REQUIREMENT | {"grounds": ["assessor:review"]},),
+    )
+    assert sourced(request, signals).requirements[0].grounds == ("assessor:review",)
+
+
 def test_original_external_authority_survives_history_and_model_restating():
     from experimental.analyst.run import sourced
     from experimental.assessor.standard import Standard

@@ -77,6 +77,19 @@ def identified(feedback: Feedback, known) -> Feedback:
     )
 
 
+def itemized(requirement, known):
+    """The requirement with each ground that names no judgement but is an item's id written without its `check:`
+    prefix cited as that item. An item id may carry a colon, as the assessor's own `assessor:review` does, and then
+    reads like an assessor-level ground; when no assessor of that name exists the item is the only judgement it can
+    mean, and its authority still comes from the item."""
+    grounds = tuple(
+        dict.fromkeys(
+            f"check:{ref}" if ref not in known and f"check:{ref}" in known else ref for ref in requirement.grounds
+        )
+    )
+    return requirement if grounds == requirement.grounds else requirement.model_copy(update={"grounds": grounds})
+
+
 def sourced(feedback: Feedback, signals, history=()) -> Feedback:
     """Bind authority to actual input origins, never to the model's claim or a source's display name."""
     for requirement in feedback.external_requirements:
@@ -102,9 +115,13 @@ def sourced(feedback: Feedback, signals, history=()) -> Feedback:
     for requirement in feedback.requirements:
         previous = protected.get(requirement.id)
         inherited = set(previous.grounds) if previous is not None else set()
+        requirement = itemized(requirement, origins.keys() | inherited)
         missing = set(requirement.grounds) - origins.keys() - inherited
         if missing:
-            raise ValueError(f"requirement grounds name no supplied judgement: {sorted(missing)}")
+            raise ValueError(
+                f"requirement grounds name no supplied judgement: {sorted(missing)}; cite an assessor as "
+                "`assessor:<signals[].source>` and an item as `check:<signals[].items[].id>`"
+            )
         criteria = tuple(ref for ref in requirement.grounds if ref.startswith(("check:", "case:")))
         basis = criteria or requirement.grounds
         external = bool(basis) and all(
