@@ -23,6 +23,8 @@ import httpx
 import json_repair
 from loguru import logger
 
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers.base import (
     LLMProvider,
     LLMResponse,
@@ -139,6 +141,8 @@ class OpenAICodexProvider(LLMProvider):
                 tool_calls=tool_calls,
                 finish_reason=finish_reason,
             )
+        except LedgerError:
+            raise
         except Exception as e:
             classification = self.classify_error(e)
             return LLMResponse(
@@ -190,14 +194,26 @@ async def _request_codex(
     ``first_byte`` bounds the wait for that stream's first event. ``timeout``
     may be an ``httpx.Timeout`` so the pre-generation phases can be narrower
     than the read."""
-    async with httpx.AsyncClient(timeout=timeout, verify=verify) as client:
-        async with client.stream("POST", url, headers=headers, json=body) as response:
-            if response.status_code != 200:
-                text = await response.aread()
-                raise ProviderHTTPError(
-                    response.status_code, _friendly_error(response.status_code, text.decode("utf-8", "ignore"))
+    with execution.attempt("openai_codex", body.get("model")) as accounting:
+        async with httpx.AsyncClient(timeout=timeout, verify=verify) as client:
+            async with client.stream("POST", url, headers=headers, json=body) as response:
+                accounting.status(response.status_code)
+                if response.status_code != 200:
+                    text = await response.aread()
+                    from raven.providers.usage import responses_usage
+
+                    provider_usage.capture_error(accounting, response, responses_usage)
+                    raise ProviderHTTPError(
+                        response.status_code, _friendly_error(response.status_code, text.decode("utf-8", "ignore"))
+                    )
+                result = await _consume_sse(
+                    response,
+                    idle_timeout or timeout,
+                    first_byte=first_byte,
+                    **({"accounting": accounting} if accounting else {}),
                 )
-            return await _consume_sse(response, idle_timeout or timeout, first_byte=first_byte)
+                accounting.status(result[2])
+                return result
 
 
 def _convert_tools(tools: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -438,6 +454,7 @@ async def _consume_sse(
     *,
     usage_sink: dict[str, Any] | None = None,
     first_byte: float = 0.0,
+    accounting=None,
 ) -> tuple[str, list[ToolCallRequest], str]:
     content = ""
     tool_calls: list[ToolCallRequest] = []
@@ -449,6 +466,18 @@ async def _consume_sse(
         if usage_sink is not None and isinstance(raw_usage, dict):
             usage_sink.update(merge_usage(usage_sink, raw_usage))
         event_type = event.get("type")
+        if accounting is not None:
+            from raven.providers.usage import responses_usage
+
+            reported = event.get("response") or {}
+            if isinstance(raw_usage, dict) or reported.get("id") or reported.get("model"):
+                accounting.usage(
+                    responses_usage(raw_usage) if isinstance(raw_usage, dict) else {},
+                    raw=raw_usage,
+                    response_id=reported.get("id"),
+                    served_model=reported.get("model"),
+                    complete=event_type in {"response.completed", "response.done"},
+                )
         if event_type == "response.output_item.added":
             item = event.get("item") or {}
             if item.get("type") == "function_call":

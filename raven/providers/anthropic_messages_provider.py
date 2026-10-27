@@ -21,6 +21,8 @@ import httpx
 import json_repair
 from loguru import logger
 
+from raven.observability import execution, provider_usage
+from raven.observability.ledger import LedgerError
 from raven.providers.base import (
     ChatDelta,
     LLMProvider,
@@ -751,7 +753,7 @@ async def _iter_sse(response: httpx.Response, timeout: float, first_byte: float 
 
 
 async def consume_message_stream(
-    response: httpx.Response, timeout: float, first_byte: float = 0.0
+    response: httpx.Response, timeout: float, first_byte: float = 0.0, *, accounting=None
 ) -> AsyncIterator[ChatDelta]:
     """Normalize Anthropic SSE events into Raven stream deltas."""
     tool_indices: dict[int, int] = {}
@@ -767,6 +769,13 @@ async def consume_message_stream(
         if kind == "message_start":
             message = event.get("message") or {}
             _merge_usage(usage, _get(message, "usage"))
+            if accounting is not None:
+                accounting.usage(
+                    provider_usage.anthropic(message.get("usage")),
+                    raw=message.get("usage"),
+                    response_id=message.get("id"),
+                    served_model=message.get("model"),
+                )
             continue
         if kind == "content_block_start":
             index = int(event.get("index", 0) or 0)
@@ -827,6 +836,12 @@ async def consume_message_stream(
             delta = event.get("delta") or {}
             _merge_usage(usage, event.get("usage"))
             reason_value = delta.get("stop_reason")
+            if accounting is not None:
+                accounting.usage(
+                    provider_usage.anthropic(event.get("usage")),
+                    raw=event.get("usage"),
+                    complete=reason_value is not None,
+                )
             if reason_value is None:
                 yield ChatDelta(content=None, usage=usage or None)
                 continue
@@ -1006,19 +1021,37 @@ class AnthropicMessagesProvider(LLMProvider):
             # same number on all four phases, so a dead route cost 1800s.
             async with httpx.AsyncClient(timeout=httpx_timeout(self.generation) or self.generation.timeout) as client:
                 for _attempt in range(3):
-                    response = await asyncio.wait_for(
-                        client.post(url, headers=build_headers(self.api_key or "", url, self.extra_headers), json=body),
-                        self.generation.timeout,
-                    )
-                    repair = rewrite_on_400(body, _error_text(response)) if response.status_code == 400 else None
-                    if repair:
-                        if repair == "ceiling":
-                            self._remember_ceiling(body)
-                        continue
-                    break
-            if response.status_code != 200:
+                    with execution.attempt(self._provider_name, body["model"]) as accounting:
+                        response = await asyncio.wait_for(
+                            client.post(
+                                url, headers=build_headers(self.api_key or "", url, self.extra_headers), json=body
+                            ),
+                            self.generation.timeout,
+                        )
+                        accounting.status(response.status_code)
+                        if response.status_code != 200:
+                            provider_usage.capture_error(accounting, response, provider_usage.anthropic)
+                        repair = rewrite_on_400(body, _error_text(response)) if response.status_code == 400 else None
+                        if repair:
+                            if repair == "ceiling":
+                                self._remember_ceiling(body)
+                            continue
+                        if response.status_code != 200:
+                            raise ProviderHTTPError(response.status_code, _error_text(response))
+                        payload = response.json()
+                        accounting.usage(
+                            provider_usage.anthropic(payload.get("usage")),
+                            raw=payload.get("usage"),
+                            response_id=payload.get("id"),
+                            served_model=payload.get("model"),
+                            complete=True,
+                        )
+                        result = self._parse_response(payload)
+                        accounting.status(result.finish_reason)
+                        return result
                 raise ProviderHTTPError(response.status_code, _error_text(response))
-            return self._parse_response(response.json())
+        except LedgerError:
+            raise
         except Exception as exc:
             return self._error_response(exc)
 
@@ -1059,9 +1092,12 @@ class AnthropicMessagesProvider(LLMProvider):
             async with httpx.AsyncClient(timeout=httpx_timeout(self.generation) or self.generation.timeout) as client:
                 for _attempt in range(3):
                     async with contextlib.AsyncExitStack() as opened:
+                        accounting = opened.enter_context(execution.attempt(self._provider_name, body["model"]))
                         response = await self._open_stream(opened, client, url, body, first_byte)
+                        accounting.status(response.status_code)
                         if response.status_code != 200:
                             detail = await _error_text_async(response)
+                            provider_usage.capture_error(accounting, response, provider_usage.anthropic)
                             repair = rewrite_on_400(body, detail) if response.status_code == 400 else None
                             if repair:
                                 if repair == "ceiling":
@@ -1075,10 +1111,17 @@ class AnthropicMessagesProvider(LLMProvider):
                         # GenerationSettings from before the field falls back to
                         # the call budget.
                         idle_timeout = getattr(self.generation, "stream_idle_timeout", None) or self.generation.timeout
-                        async for delta in consume_message_stream(response, idle_timeout, first_byte=first_byte):
+                        async for delta in consume_message_stream(
+                            response,
+                            idle_timeout,
+                            first_byte=first_byte,
+                            **({"accounting": accounting} if accounting else {}),
+                        ):
                             yield delta
                     break
         except asyncio.CancelledError:
+            raise
+        except LedgerError:
             raise
         except Exception as exc:
             classification = self.classify_error(exc)

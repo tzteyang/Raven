@@ -748,6 +748,15 @@ class WiringMixin:
         self._image_tool_result_ok.clear()
         self._vision_ok.clear()
 
+    def bind_execution_context(self, session_key: str, payload: Any) -> None:
+        """Stage one dispatch's accounting identity until its scheduled turn starts."""
+        if not hasattr(self, "_execution_contexts"):
+            self._execution_contexts = {}
+        if isinstance(payload, dict):
+            self._execution_contexts[session_key] = payload
+        else:
+            self._execution_contexts.pop(session_key, None)
+
     def bind_session_charter(self, session_key: str, payload: Any) -> None:
         """Hold the charter a dispatch brought, for that session's next turn.
 
