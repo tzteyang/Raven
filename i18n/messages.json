@@ -11786,6 +11786,162 @@
     "cancel": {
       "zh": "取消"
     },
+    "newModels": {
+      "zh": "模型"
+    },
+    "newModelsManage": {
+      "zh": "服务设置…"
+    },
+    "newModelsNone": {
+      "zh": "还没有模型服务：先添加一个，就能让员工或各角色改用你自己的模型。"
+    },
+    "modelRoles.partner": {
+      "zh": "员工"
+    },
+    "modelRoles.curator": {
+      "zh": "改造师"
+    },
+    "modelRoles.attribution": {
+      "zh": "诊断"
+    },
+    "modelRoles.analyst": {
+      "zh": "分析师"
+    },
+    "modelRoles.assessor": {
+      "zh": "评审"
+    },
+    "modelKept": {
+      "zh": "沿用配置"
+    },
+    "modelKeptOf": {
+      "zh": "沿用配置（{0}）"
+    },
+    "modelEndpoint": {
+      "zh": "服务"
+    },
+    "modelName": {
+      "zh": "模型名"
+    },
+    "modelEffort": {
+      "zh": "推理强度"
+    },
+    "modelEffortKept": {
+      "zh": "默认强度"
+    },
+    "efforts.low": {
+      "zh": "低"
+    },
+    "efforts.medium": {
+      "zh": "中"
+    },
+    "efforts.high": {
+      "zh": "高"
+    },
+    "endpointsTitle": {
+      "zh": "模型服务"
+    },
+    "endpointsNote": {
+      "zh": "每个服务是一个兼容 OpenAI 或 Anthropic 接口的地址和它的 Key。Key 只保存在服务器上，页面只显示最后四位；会话只记录模型名，不记录 Key。"
+    },
+    "endpointsNone": {
+      "zh": "还没有模型服务。"
+    },
+    "endpointAdd": {
+      "zh": "添加服务"
+    },
+    "endpointEditing": {
+      "zh": "编辑 {0}"
+    },
+    "endpointName": {
+      "zh": "名称"
+    },
+    "endpointBase": {
+      "zh": "地址（Base URL）"
+    },
+    "endpointKey": {
+      "zh": "Key"
+    },
+    "endpointKeyKeep": {
+      "zh": "留空则不改"
+    },
+    "endpointKeyTail": {
+      "zh": "Key {0}"
+    },
+    "endpointProtocol": {
+      "zh": "协议"
+    },
+    "endpointModels": {
+      "zh": "模型名，每行一个"
+    },
+    "endpointNoModels": {
+      "zh": "未填写模型名"
+    },
+    "endpointSave": {
+      "zh": "保存"
+    },
+    "endpointEdit": {
+      "zh": "编辑"
+    },
+    "endpointDelete": {
+      "zh": "删除"
+    },
+    "endpointDeleteAsk": {
+      "zh": "删除服务 {0}？用它启动的会话在重新登记前无法继续。"
+    },
+    "endpointTest": {
+      "zh": "测试"
+    },
+    "endpointTesting": {
+      "zh": "测试中…"
+    },
+    "endpointOk": {
+      "zh": "{0} 已响应，用时 {1} 秒：{2}"
+    },
+    "endpointFailed": {
+      "zh": "不通：{0}"
+    },
+    "endpointError": {
+      "zh": "保存失败：{0}"
+    },
+    "endpointBack": {
+      "zh": "返回"
+    },
+    "endpointCancelEdit": {
+      "zh": "取消编辑"
+    },
+    "servicesTitle": {
+      "zh": "模型和搜索服务"
+    },
+    "searchTitle": {
+      "zh": "搜索服务"
+    },
+    "searchNote": {
+      "zh": "员工和调研同事联网搜索用的服务，所有会话共用；改动在会话下次启动时生效。Key 和模型服务的一样只保存在服务器上。"
+    },
+    "searchProvider": {
+      "zh": "服务商"
+    },
+    "searchKey": {
+      "zh": "搜索 Key"
+    },
+    "searchSave": {
+      "zh": "保存搜索服务"
+    },
+    "searchTest": {
+      "zh": "试搜一次"
+    },
+    "searchDelete": {
+      "zh": "删除搜索服务"
+    },
+    "searchDeleteAsk": {
+      "zh": "删除搜索服务？之后启动的会话不再带这个 Key。"
+    },
+    "newSearch": {
+      "zh": "联网搜索：{0}"
+    },
+    "newSearchNone": {
+      "zh": "联网搜索：未登记（调研同事需要它）"
+    },
     "archiveTitle": {
       "zh": "归档当前智能体"
     },

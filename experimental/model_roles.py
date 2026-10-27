@@ -8,7 +8,9 @@ in full who ran on what; a run keeps it in its `settings.json` (`recorded`).
 from collections.abc import Mapping
 from dataclasses import dataclass
 
-from raven.providers.factory import make_lazy_provider, make_resolving_provider
+from raven.providers.factory import make_lazy_provider, make_provider, make_resolving_provider
+from raven.providers.lazy import LazyProvider
+from raven.providers.resolving_provider import ResolvingProvider
 
 PARTNER = "partner"
 ROLES = (
@@ -92,15 +94,41 @@ def recorded(choices: dict[str, Choice]) -> dict:
     }
 
 
-def provider(config, choices: dict[str, Choice]):
+class Routed(ResolvingProvider):
+    """A resolving provider that sends each model named in `routes` through the configuration given for it, and every
+    other model by its vendor: how a Studio session reaches a model it put on an endpoint of its own
+    (`experimental.webui.endpoints`)."""
+
+    def __init__(self, config, routes: Mapping):
+        super().__init__(config)
+        self._routes = dict(routes)
+        self._by_model: dict = {}
+
+    def _pick(self, model: str | None):
+        effective = model or self._default_model
+        routed = self._routes.get(effective)
+        if routed is None:
+            return super()._pick(model)
+        built = self._by_model.get(effective)
+        if built is None:
+            built = self._by_model[effective] = LazyProvider(
+                factory=lambda: make_provider(routed, effective), default_model=effective, generation=self.generation
+            )
+        return built
+
+
+def provider(config, choices: dict[str, Choice], routes: Mapping | None = None):
     """The provider the run's model roles call through: the partner's configuration on the Curator's model and effort,
     because the Curator's generation steps its effort down from the provider's own; every other role names its model
     and effort on each call. Once a role runs on a model other than the partner's, each call's vendor follows its
-    model id, so roles can run on a gateway while others stay on the partner's vendor."""
+    model id, so roles can run on a gateway while others stay on the partner's vendor. A model in `routes` goes
+    through the configuration routed for it instead (`Routed`)."""
     config = config.model_copy(deep=True)
     defaults = config.agents.defaults
     own = any(choice.model != choices[PARTNER].model for role, choice in choices.items() if role not in IN_PARTNER)
-    if own:
+    if own or routes:
         defaults.provider = "auto"
     defaults.model, defaults.reasoning_effort = choices["curator"].model, choices["curator"].effort
+    if routes:
+        return Routed(config, routes)
     return make_resolving_provider(config) if own else make_lazy_provider(config)

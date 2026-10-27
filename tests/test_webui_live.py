@@ -17,14 +17,18 @@ from urllib.request import Request, urlopen
 
 import pytest
 
+from experimental import model_roles
 from experimental.curator.generation.run import GenerationPausedError
 from experimental.curator.harness import Task
 from experimental.iteration import session as stepping
 from experimental.simulation.scenario import BUNDLED
 from experimental.webui import employ, session_host
+from experimental.webui import live as live_module
+from experimental.webui.endpoints import Endpoints
 from experimental.webui.live import Handle, Live, LiveConfig
 from experimental.webui.serve import Handler
 from experimental.webui.session_host import Host
+from raven.config.loader import load_config
 from raven.config.schema import Config
 from tests.test_iteration_run import CURATE, FakeWorker
 from tests.test_iteration_run import analyses as analyses  # noqa: F401 -- the loop test's Analyst stand-in
@@ -1406,3 +1410,154 @@ def test_with_a_token_every_request_needs_it_and_opening_with_it_sets_a_cookie(t
     finally:
         server.shutdown()
         server.server_close()
+
+
+ENDPOINT_KEY = "sk-test-0123456789abcdef"
+
+
+def register(path):
+    store = Endpoints(path)
+    store.save({"name": "gateway", "base": "https://gw.example.com/v1", "key": ENDPOINT_KEY, "models": ["gpt-x"]})
+    return store
+
+
+async def test_a_session_on_endpoints_hires_its_employee_on_its_own_configuration_and_routes_its_roles(
+    tmp_path, curations, analyses
+):
+    values = spec(tmp_path)
+    store = register(tmp_path / "studio-endpoints.json")
+    chosen = {
+        "partner": {"endpoint": "gateway", "model": "gpt-x", "effort": "high"},
+        "analyst": {"endpoint": "gateway", "model": "gpt-y"},
+    }
+    host = Host(
+        {**values, "endpoints": str(store.path), "endpoint_choices": chosen, "models": {"analyst": "gpt-y"}},
+        employment([]),
+    )
+    await host.boot()
+    try:
+        assert host.state()["failed"] is None
+        own = store.session_config(SESSION)
+        assert host.spec["config"] == str(own) and json.loads(own.read_text())["agents"]["defaults"]["model"] == "gpt-x"
+        settings = json.loads((host.root / "settings.json").read_text())
+        assert settings["models"]["partner"] == "gpt-x" and settings["efforts"]["partner"] == "high"
+        assert settings["models"]["analyst"] == "gpt-y" and settings["models"]["curator"] == "gpt-x"
+        assert ENDPOINT_KEY not in json.dumps(settings) and not list(host.root.rglob("studio-endpoints.json"))
+        assert isinstance(host.provider, model_roles.Routed) and set(host.provider._routes) == {"gpt-x", "gpt-y"}
+    finally:
+        await host.close()
+
+    store.delete("gateway")
+    again = Host({**values, "endpoints": str(store.path), "endpoint_choices": chosen}, employment([]))
+    await again.boot()
+    assert again.state()["failed"] == "starting" and "no longer registered" in again.state()["error"]
+    await again.close()
+
+
+def test_the_page_registers_tests_and_removes_endpoints_and_a_session_keeps_its_choices_without_keys(
+    studio, monkeypatch
+):
+    status, info = call(studio.base)
+    assert (
+        status == 200
+        and info["endpoints"] == []
+        and set(info["roles"]) == {"curator", "attribution", "analyst", "assessor"}
+    )
+    status, saved = call(
+        f"{studio.base}/endpoints",
+        {"name": "gateway", "base": "https://gw.example.com/v1", "key": ENDPOINT_KEY, "models": ["gpt-x"]},
+    )
+    assert status == 200 and saved["endpoints"][0]["key"] == "...cdef" and ENDPOINT_KEY not in json.dumps(saved)
+    assert ENDPOINT_KEY not in json.dumps(call(studio.base)[1])
+    assert call(f"{studio.base}/endpoints", {"name": "bad name", "base": "https://x.example", "key": "k"})[0] == 400
+    assert call(f"{studio.base}/endpoints", {"name": "x"}, headers={"Origin": "http://elsewhere.example"})[0] == 403
+
+    async def probe(config, endpoint, model):
+        return {"ok": True, "seconds": 0.1, "reply": f"{endpoint.name}:{model}"}
+
+    monkeypatch.setattr(live_module, "probe", probe)
+    assert call(f"{studio.base}/endpoints/test", {"name": "gateway"}) == (
+        200,
+        {"ok": True, "seconds": 0.1, "reply": "gateway:gpt-x"},
+    )
+    assert call(f"{studio.base}/endpoints/test", {"name": "missing"})[0] == 404
+
+    status, refused = call(
+        studio.base, {"title": "A", "task": "Serve", "models": {"curator": {"endpoint": "missing", "model": "m"}}}
+    )
+    assert status == 400 and "no endpoint named" in refused["error"]
+    status, created = call(
+        studio.base,
+        {
+            "title": "A",
+            "task": "Serve",
+            "models": {
+                "partner": {"endpoint": "gateway", "model": "gpt-x"},
+                "curator": {"endpoint": "gateway", "model": "gpt-z", "effort": "high"},
+            },
+        },
+    )
+    assert status == 201
+    meta = json.loads((studio.live.runs / created["id"] / "studio.json").read_text())
+    assert meta["models"]["curator"] == {"endpoint": "gateway", "model": "gpt-z", "effort": "high"}
+    assert ENDPOINT_KEY not in (studio.live.runs / created["id"] / "studio.json").read_text()
+    session = f"{studio.base}/{created['id']}"
+    poll(session, lambda body: body["state"] and body["state"]["step"] is None and "record" in body)
+    own = studio.live.endpoints.session_config(created["id"])
+    assert own.is_file() and ENDPOINT_KEY not in json.dumps(call(session)[1])
+    stamp = own.with_name(f"{own.stem}.migrations.json")
+    stamp.write_text('{"version": 1}')
+    locks = [own.parent / ".lock" / f"{path.name}.lock" for path in (own, stamp)]
+    for lock in locks:
+        lock.parent.mkdir(exist_ok=True)
+        lock.touch()
+    assert call(f"{session}/delete", {})[0] == 200
+    assert not any(path.exists() for path in (own, stamp, *locks))
+
+    assert call(f"{studio.base}/endpoints/delete", {"name": "gateway"})[1] == {"endpoints": []}
+    assert call(f"{studio.base}/endpoints/delete", {"name": "gateway"})[0] == 404
+
+
+SEARCH_KEY = "serper-test-9876543210fedcba"
+
+
+async def test_a_registered_search_service_reaches_a_session_that_keeps_its_configured_model(
+    tmp_path, curations, analyses
+):
+    values = spec(tmp_path)
+    store = Endpoints(tmp_path / "studio-endpoints.json")
+    store.save_search({"provider": "serper", "key": SEARCH_KEY})
+    host = Host({**values, "endpoints": str(store.path)}, employment([]))
+    await host.boot()
+    try:
+        assert host.state()["failed"] is None
+        own = store.session_config(SESSION)
+        assert host.spec["config"] == str(own)
+        made, base = json.loads(own.read_text()), json.loads(Path(values["config"]).read_text())
+        assert {key: value for key, value in made.items() if key != "tools"} == {
+            key: value for key, value in base.items() if key != "tools"
+        }
+        assert load_config(own).tools.web.providers.key_for("serper") == SEARCH_KEY
+        assert SEARCH_KEY not in (host.root / "settings.json").read_text()
+        assert not isinstance(host.provider, model_roles.Routed)
+    finally:
+        await host.close()
+
+
+def test_the_page_registers_tests_and_removes_the_search_service(studio, monkeypatch):
+    status, info = call(studio.base)
+    assert status == 200 and info["search"]["service"] is None and "serper" in info["search"]["vendors"]
+    assert call(f"{studio.base}/search/test", {})[0] == 404
+    assert call(f"{studio.base}/search", {"provider": "google", "key": SEARCH_KEY})[0] == 400
+    status, saved = call(f"{studio.base}/search", {"provider": "serper", "key": SEARCH_KEY})
+    assert status == 200 and saved == {"search": {"provider": "serper", "key": "...dcba"}}
+    assert call(studio.base)[1]["search"]["service"] == {"provider": "serper", "key": "...dcba"}
+    assert SEARCH_KEY not in json.dumps(call(studio.base)[1])
+
+    async def probe_search(service):
+        return {"ok": service.key == SEARCH_KEY, "seconds": 0.1, "reply": "1 result(s)"}
+
+    monkeypatch.setattr(live_module, "probe_search", probe_search)
+    assert call(f"{studio.base}/search/test", {}) == (200, {"ok": True, "seconds": 0.1, "reply": "1 result(s)"})
+    assert call(f"{studio.base}/search/delete", {}) == (200, {"search": None})
+    assert call(f"{studio.base}/search/delete", {})[0] == 404
