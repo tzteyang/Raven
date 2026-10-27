@@ -84,7 +84,7 @@ uv run python -m unittest discover -s experts/common -p 'test_*.py' # 最后一�
 |---|---|---|
 | 模型服务 key（OpenRouter） | 一直需要。一个 OpenRouter key 就能调到下面三个模型 | `<ws>/secrets/raven-experts.json` 的 `providers.openrouter.apiKey`；用专家时还要放进宿主的 `~/.raven/config.json`（第 6 节） |
 | Studio 访问口令 | 流水线必需；手动 Studio 开放给别的机器访问时需要 | `<ws>/secrets/experts.token`，流水线固定读这个文件 |
-| 网页搜索 key | 只有手动 Studio 开了 `"information": "research"` 时需要；流水线用不到 | Raven 配置的 `tools.web`（第 4.4 节） |
+| 网页搜索 key | 手动 Studio 里员工要委托调研同事时（例如自带的海岚旅行场景，`delegation` 默认开启），或开了 `"information": "research"` 时需要；流水线用不到 | Studio 页面「服务设置…」里的搜索服务（第 4.3 节第 2 步），或 Raven 配置的 `tools.web`（第 4.4 节） |
 
 除此之外不需要别的 key。
 
@@ -226,8 +226,9 @@ EOF
   仓库里还带了 `brand_strategist` 场景。培养自己的员工，就在页面上新建场景（4.3 第 1 步）。
 - 只认这些键：`config`、`root`、`scenario`、`rounds`（默认 4）、`turns`（8）、`timeout`（600）、`models`、`efforts`、`curator_calls`（48）、
   `curator_queries`（72）、`attribution_calls`（8）、`attribution_queries`（24）、`standard`、`evaluation_memory`、`experience_memory`、
-  `experience_scope`、`experience_migrate`、`delegation`（true）、`scripts`、`assessor`、`versions`、`information`、`title`
-  （`experimental/webui/live.py` 的 `LiveConfig`），写别的键会直接报错。
+  `experience_scope`、`experience_migrate`、`delegation`（true）、`scripts`、`assessor`、`versions`、`information`、`title`、
+  `endpoints`（`experimental/webui/live.py` 的 `LiveConfig`），写别的键会直接报错。
+- `endpoints` 是页面上登记的模型服务存放的文件，不写时是 `config` 同目录下的 `studio-endpoints.json`（见 4.3 第 2 步）。
 
 ### 4.2 启动
 
@@ -254,6 +255,22 @@ tmux new-session -d -s studio "cd $PWD && uv run python -m experimental.webui.se
 
    填完点「建好场景」。自建场景自带评审，按验收项和你后来选定的规矩打分。
 2. **新建会话**：在「新建培养」对话框里填名称、选场景，起点选「干净的 Raven 基线」，写好岗位说明，点「创建」。
+   - **换模型**（可选）：对话框的「模型」区给员工、改造师、诊断、分析师、评审分别选服务、填模型名、选推理强度。
+     不选的沿用 Raven 配置和 `live.json` 的设置。只对这一个会话生效，创建后不能再改。
+   - **登记服务**：点「服务设置…」，填名称、地址（Base URL，例如 `https://api.example.com/v1`）、Key、协议
+     （OpenAI Chat Completions、OpenAI Responses 或 Anthropic Messages）和模型名（每行一个），点「保存」，
+     再点「测试」向第一个模型发一条请求，确认能通。改已登记的服务时 Key 留空表示不改。
+   - Key 只在服务器上：服务登记在 `studio-endpoints.json`（权限 600）；员工换了服务的会话，另有一份自己的 Raven 配置写在旁边的
+     `studio-sessions/` 里（目录 700，每次启动会话时重写，删除会话时一起删掉）。页面只显示 Key 的最后四位；会话记录、设置和导出的
+     员工包只有模型名，没有地址和 Key，员工包拿到别处运行时，那台机器要自己配好能调这个模型的服务。和直接用 Raven 配置时一样，
+     员工运行时会把自己的整份配置（含 Key）展开到会话目录的 `employee/` 下（文件 600，目录 700），删除会话后随会话一起进回收目录。
+   - 一个会话里同一个模型名只能由一个服务提供。删掉某个服务后，用它创建的会话下次启动（例如重启 Studio 后）会报错，
+     重新登记同名服务即可继续。
+   - 「评审」一栏只换 Studio 自带的标准评审。`live.json` 里 `assessor` 指定的评审插件（例如专家流水线的 examiner）按自己的设置选模型，不受影响。
+   - **搜索服务**：同一个窗口下方登记，选服务商（默认 serper）、填搜索 Key，点「保存搜索服务」，再点「试搜一次」确认能用。
+     所有会话共用：它写进每个会话自己的员工配置 `tools.web`，员工自己的联网搜索、调研同事和入职前的调研（4.4）都用它，
+     新会话马上生效，已有会话下次启动时生效。登记了搜索服务后，员工没换模型的会话也会改用自己的一份配置。
+   - 从别的机器打开 Studio 时，Key 会经 HTTP 明文发到服务器，最好在服务器本机或通过 SSH 隧道登记服务。
 3. **入职**：在输入框（提示“描述岗位，并附上入职材料”）里写岗位要求，用「附件」附上材料，然后发送。改造师据此做出第一个版本。
 4. **演练和批注**（每轮都做）：
    - 「开一场演练」，扮演给员工派活的人，不知道问什么就点「AI 出题」，问完点「结束演练」；
@@ -276,7 +293,7 @@ tmux new-session -d -s studio "cd $PWD && uv run python -m experimental.webui.se
 ### 4.4 可选：入职前先收集信息
 
 在 `live.json` 里加 `"information": "ask"`，入职前页面会出现「入职前，AI 想先问你」，逐条回答或点「跳过」。
-写成 `"research"` 还会上网调研，这时 Raven 配置里要有搜索服务的 key：
+写成 `"research"` 还会上网调研，这时要有搜索服务的 key：在页面「服务设置…」里登记（4.3 第 2 步），或者写进 Raven 配置：
 
 ```json
 "tools": {"restrictToWorkspace": false, "web": {"search": {"provider": "serper"}, "providers": {"serper": {"apiKey": "<key>"}}}}

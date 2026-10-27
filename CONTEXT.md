@@ -236,6 +236,18 @@ handed materials. Raven discovers its `subagent.json` and serves it over ACP usi
 installed source checkout. The package keeps the employee's model settings; provider selection, credentials and
 tool configuration come from the host. The first launch restores the saved state; later launches preserve progress.
 
+**Studio endpoint** (`experimental/webui/endpoints.py`):
+A model service a person registers on the Studio page: a name, a base URL, a key, the wire protocol and the model
+names it serves, kept in one owner-only file beside the employee's Raven configuration (`LiveConfig.endpoints`). A new
+session may put its employee and the roles of `ENDPOINT_ROLES` on models of endpoints: the employee then runs on a Raven
+configuration of its own, written beside the endpoints file at each boot, and a role's model is sent to its endpoint
+by `model_roles.Routed`. Within a session a model name is served by one endpoint. The page sees a key's last four
+characters only; a session's meta, settings and exported package carry model names, never a key or an address.
+The same file keeps the page's one **search service** (`SearchService`), a web search vendor and its key, which every
+session's employee configuration carries under `tools.web`: the employee's own search, its research colleague and the
+information research read it there, so a session runs on a configuration of its own whenever one is registered.
+_Avoid_: calling it a provider, which is the Raven adapter (`raven/providers/`) an endpoint is reached through.
+
 **Cultivation scenario** (`experimental/scenario/`):
 The closed set of inputs one cultivation may consist of: the profile, cases, norms, facts,
 exemplars, counterexamples, checks, the exchange's schedule and wording, the prior and the

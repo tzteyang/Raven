@@ -54,6 +54,8 @@ from ..requirements import ExternalRequirement
 from ..scenario import ROLES, load
 from ..scenario.sealed import sealed_for
 from . import employ
+from .endpoints import Endpoints, write_employee_config
+from .endpoints import routes as endpoint_routes
 from .live import MODEL_ROLES, scripts
 from .process import redact
 from .studio import slim_exchange
@@ -209,6 +211,22 @@ class Host:
         boundaries = Boundaries(
             {role: sealed_for(contract, role) for role in ROLES}, policy="warn", log=self.root / "boundaries.jsonl"
         )
+        # A session that put its employee on an endpoint, or a Studio with a search service registered, hires the
+        # employee, and every replica of it, on a configuration of its own; the roles keep routing through the
+        # configured one, the models they put on endpoints excepted.
+        store = Endpoints(Path(spec["endpoints"])) if spec.get("endpoints") else None
+        base, chosen = Path(spec["config"]), spec.get("endpoint_choices") or {}
+        registered = store.all() if store and chosen else {}
+        search = store.search() if store else None
+        partner = chosen.get(model_roles.PARTNER) or {}
+        endpoint = registered.get(partner.get("endpoint"))
+        if partner and endpoint is None:
+            raise StepError(f"the endpoint {partner['endpoint']!r} the employee runs on is no longer registered")
+        if endpoint or search:
+            own = store.session_config(self.root.name)
+            spec["config"] = str(
+                write_employee_config(own, base, endpoint, partner.get("model"), partner.get("effort"), search)
+            )
         roles = model_roles.resolve(
             spec["models"],
             spec["efforts"],
@@ -255,7 +273,10 @@ class Host:
                 if item.pop("busy", None):
                     item["error"] = "the answer was interrupted when the session stopped"
                 self.inquiries.append(item)
-        provider = self.provider = model_roles.provider(self.employee.baseline.config, roles)
+        routing = load_config(base) if chosen else self.employee.baseline.config
+        provider = self.provider = model_roles.provider(
+            routing, roles, routes=endpoint_routes(routing, registered, chosen) if chosen else None
+        )
         assessor_role, builder_role = roles["assessor"], roles["rubric_builder"]
         if spec.get("standard"):
             memory = (

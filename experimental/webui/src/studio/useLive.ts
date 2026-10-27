@@ -11,7 +11,7 @@ import { buildScenario, createLive, liveInfo, liveSnapshot, liveStep } from './a
 import { liveThread } from './live'
 
 import type { Run } from '../model'
-import type { LiveInfo, LiveScenario, LiveSnapshot, LiveState, ScenarioDraft, StepReply } from './api'
+import type { LiveInfo, LiveScenario, LiveSnapshot, LiveState, ModelChoice, ScenarioDraft, StepReply } from './api'
 import type { LiveSession } from './live'
 
 export const PACE = { info: 15000, active: 1000, idle: 4000, still: 20000 }
@@ -27,7 +27,7 @@ export interface Live {
   /** What a new session starts from; null when the server serves recorded runs only, undefined while it is asked. */
   info: LiveInfo | null | undefined
   sessions: LiveSession[]
-  create: (title: string, task: string, version?: string, scenario?: string) => Promise<string>
+  create: (title: string, task: string, version?: string, scenario?: string, models?: Record<string, ModelChoice>) => Promise<string>
   /** Build a scenario from what the person gave, and offer it. */
   build: (draft: ScenarioDraft) => Promise<LiveScenario>
   take: (id: string, op: string, body?: Record<string, unknown>) => Promise<StepReply>
@@ -111,8 +111,8 @@ export function useLive(selected: string | null): Live {
   )
 
   const create = useCallback(
-    async (title: string, task: string, version?: string, scenario?: string) => {
-      const summary = await createLive(title, task, version, scenario)
+    async (title: string, task: string, version?: string, scenario?: string, models?: Record<string, ModelChoice>) => {
+      const summary = await createLive(title, task, version, scenario, models)
       reload()
       await refresh(summary.id)
       return summary.id

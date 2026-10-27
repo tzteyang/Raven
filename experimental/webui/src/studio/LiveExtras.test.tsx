@@ -221,3 +221,112 @@ test('a new session picks its scenario, and a scenario is built from the job, fi
   fireEvent.click(screen.getByRole('button', { name: T.create }))
   expect(onCreate).toHaveBeenCalledWith({ title: T.titleFrom('Write the weekly report.'), task: 'Write the weekly report.', scenario: 'scn-0a1b2c3d' })
 })
+
+test('a service registered from the new session dialog puts the employee and a role on its models, its key never shown', async () => {
+  const gateway = { name: 'gateway', base: 'https://gw.example.com/v1', protocol: 'chat', models: ['gpt-x', 'gpt-y'], key: '...cdef' }
+  const fetch = vi.fn(async (path: string, _init?: RequestInit) =>
+    new Response(JSON.stringify(path.endsWith('/test') ? { ok: true, seconds: 1.2, reply: 'ok' } : { endpoints: [gateway] })),
+  )
+  vi.stubGlobal('fetch', fetch)
+  const info: LiveInfo = {
+    enabled: true,
+    scenario: 'travel_agency',
+    task: 'the job',
+    materials: [],
+    settings: { rounds: 2, turns: 3, curator: null, analyst: 'gpt-a', standard: false },
+    endpoints: [],
+    roles: { curator: null, attribution: null, analyst: 'gpt-a', assessor: null },
+    sessions: [],
+  }
+  const onCreate = vi.fn()
+  render(<NewSessionDialog info={info} error={null} onCreate={onCreate} onCancel={vi.fn()} />)
+  expect(screen.getByText(T.newModelsNone)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: T.newModelsManage }))
+  const save = screen.getByRole('button', { name: T.endpointSave }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.change(screen.getByLabelText(T.endpointName), { target: { value: 'gateway' } })
+  fireEvent.change(screen.getByLabelText(T.endpointBase), { target: { value: 'https://gw.example.com/v1/' } })
+  fireEvent.change(screen.getByLabelText(T.endpointKey), { target: { value: 'sk-secret-0123456789abcdef' } })
+  fireEvent.change(screen.getByLabelText(T.endpointModels), { target: { value: 'gpt-x\ngpt-y, ' } })
+  fireEvent.click(save)
+  expect(fetch.mock.calls[0][0]).toBe('/api/studio/live/endpoints')
+  expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toEqual({
+    name: 'gateway',
+    base: 'https://gw.example.com/v1/',
+    protocol: 'chat',
+    models: ['gpt-x', 'gpt-y'],
+    key: 'sk-secret-0123456789abcdef',
+  })
+  expect(await screen.findByText(new RegExp(T.endpointKeyTail('...cdef').replace(/\./g, '\\.')))).toBeTruthy()
+  expect((screen.getByLabelText(T.endpointKey) as HTMLInputElement).value).toBe('')
+  fireEvent.click(screen.getByRole('button', { name: T.endpointTest }))
+  expect(await screen.findByText(T.endpointOk('gpt-x', 1.2, 'ok'))).toBeTruthy()
+  expect(JSON.parse(fetch.mock.calls[1][1]?.body as string)).toEqual({ name: 'gateway' })
+
+  fireEvent.click(screen.getByRole('button', { name: T.endpointBack }))
+  expect(screen.getByRole('option', { name: T.modelKeptOf('gpt-a') })).toBeTruthy()
+  fireEvent.change(screen.getByLabelText(`${T.modelRoles.partner} · ${T.modelEndpoint}`), { target: { value: 'gateway' } })
+  expect((screen.getByLabelText(`${T.modelRoles.partner} · ${T.modelName}`) as HTMLInputElement).value).toBe('gpt-x')
+  fireEvent.change(screen.getByLabelText(`${T.modelRoles.curator} · ${T.modelEndpoint}`), { target: { value: 'gateway' } })
+  const curator = screen.getByLabelText(`${T.modelRoles.curator} · ${T.modelName}`)
+  const create = screen.getByRole('button', { name: T.create }) as HTMLButtonElement
+  fireEvent.change(curator, { target: { value: ' ' } })
+  expect(create.disabled).toBe(true)
+  fireEvent.change(curator, { target: { value: ' gpt-y ' } })
+  fireEvent.change(screen.getByLabelText(`${T.modelRoles.curator} · ${T.modelEffort}`), { target: { value: 'high' } })
+  expect(screen.getByText(T.newSettings('travel_agency', 'gpt-y', 2))).toBeTruthy()
+  fireEvent.click(create)
+  expect(onCreate).toHaveBeenCalledWith({
+    title: T.titleFrom('the job'),
+    task: 'the job',
+    models: { partner: { endpoint: 'gateway', model: 'gpt-x' }, curator: { endpoint: 'gateway', model: 'gpt-y', effort: 'high' } },
+  })
+  vi.unstubAllGlobals()
+})
+
+test('the search service is registered, tried and deleted in the services dialog, and named in the new session dialog', async () => {
+  const replies: Record<string, unknown> = {
+    '/api/studio/live/search': { search: { provider: 'tavily', key: '...dcba' } },
+    '/api/studio/live/search/test': { ok: true, seconds: 0.8, reply: '1 result(s)' },
+    '/api/studio/live/search/delete': { search: null },
+  }
+  const fetch = vi.fn(async (path: string, _init?: RequestInit) => new Response(JSON.stringify(replies[path])))
+  vi.stubGlobal('fetch', fetch)
+  vi.spyOn(window, 'confirm').mockReturnValue(true)
+  const info: LiveInfo = {
+    enabled: true,
+    scenario: 'travel_agency',
+    task: 'the job',
+    materials: [],
+    settings: { rounds: 2, turns: 3, curator: null, analyst: null, standard: false },
+    endpoints: [],
+    search: { vendors: ['serper', 'tavily'], service: null },
+    sessions: [],
+  }
+  render(<NewSessionDialog info={info} error={null} onCreate={vi.fn()} onCancel={vi.fn()} />)
+  expect(screen.getByText(T.newSearchNone)).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: T.newModelsManage }))
+  const save = screen.getByRole('button', { name: T.searchSave }) as HTMLButtonElement
+  expect(save.disabled).toBe(true)
+  fireEvent.change(screen.getByLabelText(T.searchProvider), { target: { value: 'tavily' } })
+  fireEvent.change(screen.getByLabelText(T.searchKey), { target: { value: ' tvly-secret-9876543210fedcba ' } })
+  fireEvent.click(save)
+  expect(JSON.parse(fetch.mock.calls[0][1]?.body as string)).toEqual({ provider: 'tavily', key: 'tvly-secret-9876543210fedcba' })
+  expect(await screen.findByText(T.endpointKeyTail('...dcba'))).toBeTruthy()
+  const key = screen.getByLabelText(T.searchKey) as HTMLInputElement
+  expect(key.value).toBe('')
+  expect(key.placeholder).toBe(T.endpointKeyKeep)
+  fireEvent.click(screen.getByRole('button', { name: T.searchTest }))
+  expect(await screen.findByText(T.endpointOk('tavily', 0.8, '1 result(s)'))).toBeTruthy()
+  fireEvent.click(screen.getByRole('button', { name: T.endpointBack }))
+  expect(screen.getByText(T.newSearch('tavily'))).toBeTruthy()
+
+  fireEvent.click(screen.getByRole('button', { name: T.newModelsManage }))
+  fireEvent.click(screen.getByRole('button', { name: T.searchDelete }))
+  await vi.waitFor(() => expect(screen.queryByText(T.endpointKeyTail('...dcba'))).toBeNull())
+  fireEvent.click(screen.getByRole('button', { name: T.endpointBack }))
+  expect(screen.getByText(T.newSearchNone)).toBeTruthy()
+  expect(fetch.mock.calls.map(([path]) => path)).toEqual(Object.keys(replies))
+  vi.restoreAllMocks()
+  vi.unstubAllGlobals()
+})

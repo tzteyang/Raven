@@ -1335,6 +1335,18 @@ class Handler(SimpleHTTPRequestHandler):
         parts = url.path.removeprefix("/api/studio/live").strip("/").split("/")
         if parts == ["scenarios"]:
             status, value = self.live.build(body)
+        elif parts == ["endpoints"]:
+            status, value = self.live.save_endpoint(body)
+        elif parts == ["endpoints", "delete"]:
+            status, value = self.live.delete_endpoint(body)
+        elif parts == ["endpoints", "test"]:
+            status, value = self.live.test_endpoint(body)
+        elif parts == ["search"]:
+            status, value = self.live.save_search(body)
+        elif parts == ["search", "delete"]:
+            status, value = self.live.delete_search()
+        elif parts == ["search", "test"]:
+            status, value = self.live.test_search()
         elif parts == [""]:
             status, value = self.live.create(body)
         elif len(parts) == 2:

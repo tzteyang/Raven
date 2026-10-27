@@ -635,7 +635,7 @@ export function Studio(): JSX.Element {
           error={creating}
           onCreate={(input: NewSessionInput) => {
             setCreating(null)
-            live.create(input.title, input.task, input.version, input.scenario).then(
+            live.create(input.title, input.task, input.version, input.scenario, input.models).then(
               (id) => {
                 setSelected({ kind: 'live', id })
                 setDialog(null)

@@ -110,7 +110,44 @@ export interface LiveInfo {
   versions?: LiveVersion[]
   /** Every scenario offered, the configured one first. */
   scenarios?: LiveScenario[]
+  /** The model endpoints registered on the page, keys cut to their last four characters. */
+  endpoints?: LiveEndpoint[]
+  /** The model the configuration gives each role a session may put on an endpoint; null runs on the partner's. */
+  roles?: Record<string, string | null>
+  /** The web search vendors Raven routes, and the service registered on the page, which every session searches with. */
+  search?: { vendors: string[]; service: LiveSearch | null }
   sessions: LiveSummary[]
+}
+
+/** A model service registered on the page (endpoints.py): its address, wire protocol, the model names it serves and
+    the tail of its key, which never leaves the server whole. */
+export interface LiveEndpoint {
+  name: string
+  base: string
+  protocol: string
+  models: string[]
+  key: string
+}
+
+/** The web search service registered on the page, its key cut to its last four characters. */
+export interface LiveSearch {
+  provider: string
+  key: string
+}
+
+/** A new session's model of one role (or of the partner), on a registered endpoint. */
+export interface ModelChoice {
+  endpoint: string
+  model: string
+  effort?: string
+}
+
+/** What one test request to an endpoint's model gave back. */
+export interface EndpointProbe {
+  ok: boolean
+  seconds: number
+  reply?: string
+  error?: string
 }
 
 /** An exam's score of one version. */
@@ -266,8 +303,37 @@ async function post<T>(path: string, body: unknown): Promise<T> {
   return value
 }
 
-export const createLive = (title: string, task: string, version?: string, scenario?: string): Promise<LiveSummary> =>
-  post('/api/studio/live', { title, task, ...(version ? { version } : {}), ...(scenario ? { scenario } : {}) })
+export const createLive = (
+  title: string,
+  task: string,
+  version?: string,
+  scenario?: string,
+  models?: Record<string, ModelChoice>,
+): Promise<LiveSummary> =>
+  post('/api/studio/live', {
+    title,
+    task,
+    ...(version ? { version } : {}),
+    ...(scenario ? { scenario } : {}),
+    ...(models && Object.keys(models).length ? { models } : {}),
+  })
+
+/** Register an endpoint, or change one (no key keeps the registered one); every endpoint comes back. */
+export const saveEndpoint = (endpoint: Omit<LiveEndpoint, 'key'> & { key?: string }): Promise<{ endpoints: LiveEndpoint[] }> =>
+  post('/api/studio/live/endpoints', endpoint)
+
+export const deleteEndpoint = (name: string): Promise<{ endpoints: LiveEndpoint[] }> => post('/api/studio/live/endpoints/delete', { name })
+
+export const testEndpoint = (name: string, model?: string): Promise<EndpointProbe> =>
+  post('/api/studio/live/endpoints/test', { name, ...(model ? { model } : {}) })
+
+/** Register the search service, or change it (no key keeps the registered one of the same vendor). */
+export const saveSearch = (provider: string, key?: string): Promise<{ search: LiveSearch | null }> =>
+  post('/api/studio/live/search', { provider, ...(key ? { key } : {}) })
+
+export const deleteSearch = (): Promise<{ search: LiveSearch | null }> => post('/api/studio/live/search/delete', {})
+
+export const testSearch = (): Promise<EndpointProbe> => post('/api/studio/live/search/test', {})
 
 export const buildScenario = (draft: ScenarioDraft): Promise<LiveScenario> => post('/api/studio/live/scenarios', draft)
 

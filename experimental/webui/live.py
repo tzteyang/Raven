@@ -31,6 +31,9 @@ from ..iteration.records import RETRYABLE, retryable_step, runs
 from ..scenario import load as load_contract
 from ..scenario.contract import SKILL_FILE as SKILL
 from . import exporting
+from .endpoints import FILE as ENDPOINTS_FILE
+from .endpoints import SEARCH_VENDORS, EndpointError, Endpoints, probe, probe_search
+from .endpoints import choices as endpoint_choices
 from .process import redact
 from .rundir import curator_progress, pending_stage
 from .studio import studio_run
@@ -48,6 +51,8 @@ MODEL_ROLES = (
     "sub-harness",
     "collector",
 )
+# The roles a person may put on an endpoint from the page: the employee and the roles a session's turns depend on.
+ENDPOINT_ROLES = ("curator", "attribution", "analyst", "assessor")
 META = "studio.json"
 STEPS = (
     "onboard",
@@ -163,8 +168,9 @@ class LiveConfig:
     the session's process only, never shown or recorded), the `root` the sessions are kept under, the `scenario`
     directory whose contract bounds them and whose materials a person may hand over, and the run's settings, named as
     the automated run's command line names them; `models` and `efforts` map a model role of `MODEL_ROLES` to its model and
-    effort (`experimental.model_roles`), a role not named running on the partner's. A relative path is read from the
-    file's own directory."""
+    effort (`experimental.model_roles`), a role not named running on the partner's. `endpoints` is the private file
+    the model endpoints a person registers on the page are kept in (`experimental.webui.endpoints`), beside the Raven
+    configuration unless named. A relative path is read from the file's own directory."""
 
     config: Path
     root: Path
@@ -189,6 +195,7 @@ class LiveConfig:
     versions: dict[str, Path] = field(default_factory=dict)
     information: str | None = None
     title: str | None = None
+    endpoints: Path | None = None
 
     @classmethod
     def load(cls, path: Path) -> "LiveConfig":
@@ -203,7 +210,7 @@ class LiveConfig:
         if missing:
             raise ValueError(f"the live configuration needs {missing}")
         values = dict(raw)
-        for key in ("config", "root", "scenario", "evaluation_memory", "experience_memory", "scripts"):
+        for key in ("config", "root", "scenario", "evaluation_memory", "experience_memory", "scripts", "endpoints"):
             if values.get(key) is not None:
                 values[key] = (path.parent / Path(values[key]).expanduser()).resolve()
         if isinstance(values.get("versions"), dict):
@@ -350,6 +357,7 @@ class Live:
         self.handles: dict[str, Handle] = {}
         self.guard = threading.Lock()
         self.session_locks: dict[str, threading.RLock] = {}
+        self.endpoints = Endpoints(config.endpoints or Path(config.config).parent / ENDPOINTS_FILE)
 
     def _session_lock(self, session: str):
         with self.guard:
@@ -369,6 +377,11 @@ class Live:
         and the standard assessor on its checks and the person's chosen ones, since the configured assessor is the
         configured scenario's."""
         spec = self.config.spec(directory, self.workdirs / directory.name, task, record, start)
+        spec["endpoints"] = str(self.endpoints.path)
+        chosen = meta.get("models") or {}
+        if chosen:
+            spec["endpoint_choices"] = chosen
+            spec["models"], spec["efforts"] = _over(spec["models"], spec["efforts"], chosen)
         name = meta.get("scenario")
         if name:
             scripts = self.scenarios / name / BUILT_SCRIPTS
@@ -522,6 +535,9 @@ class Live:
             "scenario": self.contract.root.name,
             "task": self.contract.situation.profile,
             "materials": self.materials(),
+            "endpoints": self._registered(),
+            "roles": {role: config.models.get(role) for role in ENDPOINT_ROLES},
+            "search": {"vendors": list(SEARCH_VENDORS), "service": self._search()},
             "settings": {
                 "rounds": config.rounds,
                 "turns": config.turns,
@@ -636,6 +652,16 @@ class Live:
             return 400, {"error": f"a session needs its task, at most {TASK_KEEP} characters"}
         if title is not None and (not isinstance(title, str) or len(title) > TITLE_KEEP):
             return 400, {"error": f"a title is at most {TITLE_KEEP} characters"}
+        try:
+            chosen = endpoint_choices(body.get("models"), self.endpoints.all(), MODEL_ROLES)
+            if chosen:
+                model_roles.resolve(
+                    *_over(self.config.models, self.config.efforts, chosen),
+                    model_roles.Choice("partner"),
+                    roles=MODEL_ROLES,
+                )
+        except (EndpointError, ValueError) as exc:
+            return 400, {"error": str(exc)}
         session = f"live-{time.strftime('%Y%m%d%H%M%S')}-{secrets.token_hex(3)}"
         directory = self.runs / session
         directory.mkdir()
@@ -646,6 +672,7 @@ class Live:
             "created": time.time(),
             **({"start": start[0]} if start else {}),
             **({"scenario": contract.root.name} if contract is not self.contract else {}),
+            **({"models": chosen} if chosen else {}),
         }
         (directory / META).write_text(json.dumps(meta, ensure_ascii=False, indent=2))
         self._launch(session, self._spec(meta, directory, meta["task"], start=start))
@@ -775,7 +802,84 @@ class Live:
             if kept.exists():
                 place.mkdir(parents=True, exist_ok=True)
                 os.replace(kept, place / session)
+        self.endpoints.forget(session)
         return 200, {"ok": True, "deleted": session}
+
+    def _registered(self) -> list[dict]:
+        try:
+            return self.endpoints.public()
+        except EndpointError:
+            return []
+
+    def _search(self) -> dict | None:
+        try:
+            service = self.endpoints.search()
+        except EndpointError:
+            return None
+        return service.public() if service else None
+
+    def save_search(self, body: dict) -> tuple[int, dict]:
+        """Register the search service every session searches with, or change it; the page gets its key's tail."""
+        try:
+            self.endpoints.save_search(body)
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        return 200, {"search": self._search()}
+
+    def delete_search(self) -> tuple[int, dict]:
+        try:
+            removed = self.endpoints.delete_search()
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        if not removed:
+            return 404, {"error": "no search service is registered"}
+        return 200, {"search": None}
+
+    def test_search(self) -> tuple[int, dict]:
+        """One real search through the registered service, the way a session's employee would search."""
+        import asyncio
+
+        try:
+            service = self.endpoints.search()
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        if service is None:
+            return 404, {"error": "no search service is registered"}
+        return 200, asyncio.run(probe_search(service))
+
+    def save_endpoint(self, body: dict) -> tuple[int, dict]:
+        """Register a model endpoint, or change one; the page gets every endpoint back, keys cut to their tails."""
+        try:
+            self.endpoints.save(body)
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        return 200, {"endpoints": self.endpoints.public()}
+
+    def delete_endpoint(self, body: dict) -> tuple[int, dict]:
+        try:
+            removed = self.endpoints.delete(body.get("name"))
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        if not removed:
+            return 404, {"error": "no such endpoint"}
+        return 200, {"endpoints": self.endpoints.public()}
+
+    def test_endpoint(self, body: dict) -> tuple[int, dict]:
+        """One short request to a model of an endpoint, the way a session would send it."""
+        import asyncio
+
+        from raven.config.schema import Config
+
+        try:
+            endpoint = self.endpoints.get(body.get("name"))
+        except EndpointError as exc:
+            return 400, {"error": str(exc)}
+        if endpoint is None:
+            return 404, {"error": "no such endpoint"}
+        model = body.get("model") or (endpoint.models[0] if endpoint.models else None)
+        if not isinstance(model, str) or not model.strip():
+            return 400, {"error": "name a model to test"}
+        return 200, asyncio.run(probe(Config(), endpoint, model.strip()))
 
     def close(self) -> None:
         """Stop every session's process this server started."""
@@ -786,6 +890,16 @@ class Live:
             thread.start()
         for thread in threads:
             thread.join()
+
+
+def _over(models: dict, efforts: dict, chosen: dict) -> tuple[dict, dict]:
+    """The configuration's role models and efforts with a session's endpoint choices over them; the partner's choice
+    is its own configuration's (`experimental.webui.endpoints.employee_config`), not a role's."""
+    roles = {role: choice for role, choice in chosen.items() if role != model_roles.PARTNER}
+    return (
+        {**models, **{role: choice["model"] for role, choice in roles.items()}},
+        {**efforts, **{role: choice["effort"] for role, choice in roles.items() if choice.get("effort")}},
+    )
 
 
 def _models(directory: Path) -> dict[str, str]:
